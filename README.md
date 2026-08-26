@@ -71,6 +71,16 @@ Each configured group produces:
 | `sensor.<id>_last_activity` | Diagnostic: timestamp of the group's most recent note-on. |
 | `sensor.<id>_cooldown_at` | Diagnostic: when the group's release/cooldown is expected to finish. |
 | `button.<id>_trigger` | Diagnostic: manually fires the group's synthetic trigger voice. |
+| `sensor.<id>_expected_activity` | The level the profile expects right now. Attributes: `p25`, `p75`, `day_type`, `ready`, `producer`. `unknown` until the group is ready. |
+| `sensor.<id>_activity_anomaly` | How far today's real level sits outside that band, signed. `unknown` until the group is ready. |
+| `switch.<id>_presence_simulation` | Arms presence simulation for the group. Only created when the group has lights and its `simulation.enabled` is true. |
+
+And once, on the **Activity Levels** hub device:
+
+| Entity | Description |
+| --- | --- |
+| `switch.activity_levels_presence_simulation` | The master arm for presence simulation. |
+| `sensor.activity_levels_profile` | Diagnostic: when the profile was generated. Attributes: `producer`, `producer_version`, `groups_ready`, `groups_total`, `trained`, `ready`. |
 
 ## Services
 
@@ -78,6 +88,79 @@ Each configured group produces:
   (required), `peak` (optional, defaults to 1.0).
 - `activity_levels.reset` — clear all active voices back to idle. Fields: `group_id`
   (optional; omit to reset every group).
+- `activity_levels.rebuild_profile` — refit the learned profile now instead of waiting for
+  `rebuild_time`. Fields: `force` (optional; required to overwrite a profile that belongs
+  to an external producer).
+- `activity_levels.simulate_now` — sample and start a presence-simulation plan for one
+  group immediately, ignoring the switches. Fields: `group_id` (required). If a hard
+  precondition still fails it raises with the reason rather than doing nothing quietly.
+
+## Patterns & presence simulation
+
+Activity Levels learns what a normal day looks like for each group, and can replay that
+shape through the group's lights while nobody is home.
+
+**What it learns, and from where.** Once a day at `rebuild_time` (03:00 by default) the
+integration reads `history_days` of hourly long-term statistics for each
+`sensor.<id>_activity_level` — so the learner needs the **recorder** — plus the group's own
+light on/off history. It fits, per group and per day type, a 96-slot curve of the expected
+level (`p25`/`p50`/`p75` for each 15 minutes) and, per light, the probability of it being
+on in each slot together with the times it usually goes on and off. A group needs at least
+`min_days` (14) distinct days of history before it is marked **ready**; until then its
+expected and anomaly sensors stay `unknown` and it is never simulated.
+
+**Day types.** Every day is labelled by the first rule in `day_type_precedence` that
+matches: any configured calendar whose events cover the day (school holidays, a vacation,
+whatever you point it at), then `holiday`, `weekend` or `weekday`. A `workday_entity` (the
+Workday integration's binary sensor) overrides the weekday/weekend guess when present.
+Each calendar you list under `patterns.calendars` becomes a day type of its own, so a
+vacation week is learned separately from an ordinary one.
+
+**Presence simulation.** With the master switch and a group's own switch on, the group is
+simulated only while **all four** hard preconditions hold: the master switch is on, the
+group's switch is on, the configured `away_entity` is `on`, and the group's *real* level —
+its stimuli only, ignoring anything `activity_levels.trigger` contributed — is zero. When
+any of them drops, the plan is cancelled and the lights are left exactly where they are:
+somebody just came home, and fighting them for the switch is not a feature. Actions are
+never scheduled inside `quiet_hours`. Every executed action is written to a rolling log of
+the last 500, readable from the panel.
+
+**Plugging in your own producer.** The profile is a plain document, and any producer may
+replace it over the websocket API with `activity_levels/profile/save {profile}` — it is
+validated (shape, 96 slots per curve, value ranges) and rejected with a path per problem,
+exactly like a config save. The built-in learner will not overwrite a document whose
+`producer.name` is not `builtin` unless `rebuild_profile` is called with `force: true`.
+The shape:
+
+```jsonc
+{
+  "version": 1,
+  "producer": {"name": "my-forecaster", "version": "1.0.0"},
+  "generated_at": 1787800000.0,          // epoch seconds
+  "training_window": [1772000000.0, 1787800000.0],
+  "day_types": ["vacation", "holiday", "weekend", "weekday"],
+  "slot_minutes": 15,                     // fixed: 96 slots a day
+  "groups": {
+    "living_room": {
+      "ready": true,
+      "days": 91,                         // distinct days behind the fit
+      "expected": {"weekday": [[0.2, 1.1, 2.4], "...96 [p25, p50, p75] triples"]},
+      "lights": {
+        "light.living_room": {
+          "p_on": {"weekday": ["...96 probabilities in [0, 1]"]},
+          "on_starts": {"weekday": [1080, 1095]},   // minutes past local midnight
+          "off_starts": {"weekday": [1380]},
+          "brightness": 180                          // or null
+        }
+      }
+    }
+  }
+}
+```
+
+`activity_levels/profile/get` returns the stored document alongside `ready` (per group)
+and `trained`, and `activity_levels/timeseries` serves history, forecast, day-type spans
+and light/plan intervals for one group. Both are admin-only, like the rest of the API.
 
 ## Configuration reference
 
@@ -97,6 +180,16 @@ defaults:
   debounce: 0s               # minimum time between note-ons per stimulus
   safety_refresh: 60s        # periodic recompute as a self-heal
   min_wake_interval: 1s      # floor for the scheduler's timer delay
+  patterns:
+    rebuild_time: "03:00"    # local time the nightly refit runs
+    history_days: 180        # how much long-term history each refit reads (30–730)
+    min_days: 14             # distinct days a group needs before it is ready (3–90)
+    calendars: []            # - {id: vacation, entity: calendar.school_holidays}
+    day_type_precedence: null # defaults to [<calendar ids…>, holiday, weekend, weekday]
+    workday_entity: null     # binary_sensor from the Workday integration, if you have one
+  simulation:
+    away_entity: null        # binary_sensor that is `on` when the house is empty
+    quiet_hours: ["01:00", "05:30"]  # no light actions inside this window; null to disable
 envelopes:
   - id: default
     attack: 0s
@@ -118,6 +211,11 @@ groups:
         gain: 1.0            # peak level (velocity)
         envelope: default    # preset; any envelope field may be overridden inline
         key: null            # required only when the same entity appears twice in a group
+    simulation:
+      enabled: true          # false = no presence-simulation switch for this group
+      lights:
+        include: []          # extra lights beyond the ones in the group's area
+        exclude: []          # lights in the area to leave out
     children:
       - id: living_room
         gain: 1.0            # this subgroup's channel gain into the parent

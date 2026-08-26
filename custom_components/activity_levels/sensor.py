@@ -27,6 +27,7 @@ from .const import (
     ATTR_PRODUCER,
     ATTR_PRODUCER_VERSION,
     ATTR_READY,
+    ATTR_TRAINED,
     DOMAIN,
 )
 from .coordinator import ActivityLevelsCoordinator
@@ -227,6 +228,10 @@ class ProfileSensor(SensorEntity):
             ATTR_PRODUCER_VERSION: producer.get("version"),
             ATTR_GROUPS_READY: self.patterns.groups_ready(),
             ATTR_GROUPS_TOTAL: len(self.patterns.coordinator.tree.groups),
+            # the empty document written at setup time is valid but carries no group,
+            # which is what tells "not trained yet" apart from "trained, nothing ready"
+            ATTR_TRAINED: self.patterns.trained,
+            ATTR_READY: self.patterns.ready_map(),
         }
 
     async def async_added_to_hass(self) -> None:

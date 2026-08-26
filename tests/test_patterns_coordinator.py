@@ -158,6 +158,12 @@ async def test_expected_and_anomaly_sensors_publish(
     assert profile_sensor.attributes["producer"] == "builtin"
     assert profile_sensor.attributes["groups_total"] == 3
     assert profile_sensor.attributes["groups_ready"] == 1
+    assert profile_sensor.attributes["trained"] is True
+    assert profile_sensor.attributes["ready"] == {
+        "house": False,
+        "living_room": False,
+        "kitchen": True,
+    }
 
 
 async def test_anomaly_is_unknown_until_the_group_is_ready(

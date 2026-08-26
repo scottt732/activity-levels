@@ -11,17 +11,28 @@ from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
 from .coordinator import ActivityLevelsCoordinator
+from .patterns.profile import ProfileError
+from .runtime import RuntimeData
 from .schema import ConfigError, validate_config
+from .simulation import MAX_LOG_ROWS
 from .tree import build_tree
 
 _REGISTERED = f"{DOMAIN}_websocket_registered"
 
+DAY_SECONDS = 86400.0
+"""The widest window 5-minute recorder history is served over."""
+
+
+def _runtime(hass: HomeAssistant) -> RuntimeData | None:
+    for entry in hass.config_entries.async_loaded_entries(DOMAIN):
+        runtime: RuntimeData = entry.runtime_data
+        return runtime
+    return None
+
 
 def _coordinator(hass: HomeAssistant) -> ActivityLevelsCoordinator | None:
-    for entry in hass.config_entries.async_loaded_entries(DOMAIN):
-        coordinator: ActivityLevelsCoordinator = entry.runtime_data.coordinator
-        return coordinator
-    return None
+    runtime = _runtime(hass)
+    return None if runtime is None else runtime.coordinator
 
 
 @callback
@@ -34,6 +45,11 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_config_validate)
     websocket_api.async_register_command(hass, ws_config_save)
     websocket_api.async_register_command(hass, ws_state)
+    websocket_api.async_register_command(hass, ws_profile_get)
+    websocket_api.async_register_command(hass, ws_profile_save)
+    websocket_api.async_register_command(hass, ws_profile_rebuild)
+    websocket_api.async_register_command(hass, ws_timeseries)
+    websocket_api.async_register_command(hass, ws_simulation_log)
 
 
 @websocket_api.require_admin
@@ -117,4 +133,150 @@ def ws_state(
     connection.send_result(
         msg["id"],
         {"now": now, "groups": groups, "voices": coordinator.voice_states(now)},
+    )
+
+
+def _loaded(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> RuntimeData | None:
+    """The loaded entry's runtime, or None after answering the caller with why not."""
+    runtime = _runtime(hass)
+    if runtime is None:
+        connection.send_error(msg["id"], "not_found", "Activity Levels is not loaded")
+    return runtime
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/profile/get"})
+@callback
+def ws_profile_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    patterns = runtime.patterns
+    # `trained` separates "no profile yet" from the perfectly valid empty document the
+    # integration writes at setup time, which a panel would otherwise render as a profile.
+    connection.send_result(
+        msg["id"],
+        {
+            "profile": patterns.profile,
+            "ready": patterns.ready_map(),
+            "trained": patterns.trained,
+        },
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): f"{DOMAIN}/profile/save", vol.Required("profile"): dict}
+)
+@websocket_api.async_response
+async def ws_profile_save(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    try:
+        await runtime.patterns.async_set_profile(msg["profile"])
+    except ProfileError as err:  # same pathed shape as config/save
+        connection.send_result(msg["id"], {"ok": False, "errors": err.errors})
+        return
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/profile/rebuild",
+        vol.Optional("force", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_profile_rebuild(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    # False is an answer, not a failure: no recorder, or a document another producer owns.
+    rebuilt = await runtime.patterns.async_rebuild(force=msg["force"])
+    connection.send_result(msg["id"], {"rebuilt": rebuilt})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/timeseries",
+        vol.Required("group_id"): str,
+        vol.Required("start"): vol.Coerce(float),
+        vol.Required("end"): vol.Coerce(float),
+        vol.Required("resolution"): vol.In(("5m", "1h")),
+        vol.Optional("include_children", default=False): bool,
+        vol.Optional("forecast_until", default=None): vol.Any(None, vol.Coerce(float)),
+    }
+)
+@websocket_api.async_response
+async def ws_timeseries(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    group_id: str = msg["group_id"]
+    if group_id not in runtime.coordinator.tree.groups:
+        connection.send_error(msg["id"], "not_found", f"Unknown group '{group_id}'")
+        return
+    start: float = msg["start"]
+    end: float = msg["end"]
+    if end <= start:
+        connection.send_error(msg["id"], "invalid_range", "end must be after start")
+        return
+    # 5-minute points come from raw recorder history, which is far too much of it to
+    # read (and to draw) over more than a day; longer windows have to ask for hours.
+    if msg["resolution"] == "5m" and end - start > DAY_SECONDS:
+        connection.send_error(
+            msg["id"], "invalid_range", "5m resolution is limited to a 24-hour window"
+        )
+        return
+    result = await runtime.patterns.async_timeseries(
+        group_id,
+        start,
+        end,
+        msg["resolution"],
+        include_children=msg["include_children"],
+        forecast_until=msg["forecast_until"],
+    )
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/simulation/log",
+        vol.Optional("group_id"): str,
+        vol.Optional("limit", default=50): vol.All(int, vol.Range(min=1, max=MAX_LOG_ROWS)),
+    }
+)
+@callback
+def ws_simulation_log(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    group_id: str | None = msg.get("group_id")
+    if group_id is not None and group_id not in runtime.coordinator.tree.groups:
+        connection.send_error(msg["id"], "not_found", f"Unknown group '{group_id}'")
+        return
+    gids = [group_id] if group_id is not None else list(runtime.coordinator.tree.groups)
+    simulation = runtime.patterns.simulation
+    # narrowed first, then cut to `limit`, so asking about one group does not hand back
+    # fewer rows than asked for just because other groups were busier
+    wanted = set(gids)
+    entries = [row for row in simulation.log(MAX_LOG_ROWS) if row.get("group_id") in wanted]
+    connection.send_result(
+        msg["id"],
+        {
+            "entries": entries[: msg["limit"]],
+            "active": {gid: simulation.is_active(gid) for gid in gids},
+            "blocked": {gid: simulation.blocked_reason(gid) for gid in gids},
+        },
     )

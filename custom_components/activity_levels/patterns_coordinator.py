@@ -570,6 +570,20 @@ class PatternsCoordinator:
         groups: Mapping[str, Any] = self.profile.get("groups", {})
         return sum(1 for group in groups.values() if group.get("ready"))
 
+    def ready_map(self) -> dict[str, bool]:
+        """Readiness per *configured* group, so a caller sees the ones with no entry too."""
+        return {gid: group_ready(self.profile, gid) for gid in self.coordinator.tree.groups}
+
+    @property
+    def trained(self) -> bool:
+        """Whether the document carries any group at all.
+
+        The empty document written at setup time is perfectly valid, so "has a profile"
+        is a different question from "has ever been trained"; this is the second one.
+        """
+        groups: Mapping[str, Any] = self.profile.get("groups", {})
+        return bool(groups)
+
     def _slot_now(self) -> int:
         local = dt_util.now()
         return slot_of(local.hour * 60 + local.minute)
@@ -717,12 +731,14 @@ class PatternsCoordinator:
             series = await self._history_5m(gids, start, end)
         else:
             series = await self._history_1h(gids, start, end)
+        # the day-type ribbon runs under the forecast as well as the history, so it is
+        # drawn across the whole span the caller asked to see
         return {
             "series": series,
             "forecast": self._forecast(gid, end, forecast_until),
-            "day_types": self._day_type_spans(start, end),
+            "day_types": self._day_type_spans(start, max(end, forecast_until or end)),
             "lights": self._light_spans(gid, start, end),
-            "plan": [],
+            "plan": self._plan_spans(gid),
         }
 
     def _subtree(self, gid: str) -> list[str]:
@@ -825,6 +841,23 @@ class PatternsCoordinator:
                 spans.append([opened, end])
             out[entity_id] = spans
         return out
+
+    def _plan_spans(self, gid: str) -> list[list[Any]]:
+        """The running simulation plan as ``[on_t, off_t, entity]`` intervals.
+
+        An ON the plan never turns back off leaves the light lit past the window, which
+        the panel draws as an open-ended bar; that is what a ``None`` end means here.
+        """
+        opened: dict[str, float] = {}
+        spans: list[list[Any]] = []
+        for action in sorted(self.simulation.plan_for(gid), key=lambda a: a.t):
+            if action.on:
+                opened.setdefault(action.entity_id, action.t)
+            elif (began := opened.pop(action.entity_id, None)) is not None:
+                spans.append([began, action.t, action.entity_id])
+        spans.extend([began, None, entity_id] for entity_id, began in opened.items())
+        spans.sort(key=lambda span: span[0])
+        return spans
 
 
 def _resample(

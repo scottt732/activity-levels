@@ -29,3 +29,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   problems on the fields that caused them, then reloads the integration. The live view
   overlays each group's level and gate, and each voice's envelope phase and countdown,
   onto the tree and the stimulus editor.
+- **Patterns** — learned expected-activity/anomaly sensors, presence simulation switches,
+  profile/timeseries websocket API.

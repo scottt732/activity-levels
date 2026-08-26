@@ -65,6 +65,7 @@ ATTR_PRODUCER = "producer"
 ATTR_PRODUCER_VERSION = "producer_version"
 ATTR_GROUPS_READY = "groups_ready"
 ATTR_GROUPS_TOTAL = "groups_total"
+ATTR_TRAINED = "trained"
 
 PANEL_URL_PATH = "activity-levels"
 PANEL_ELEMENT = "activity-levels-panel"
