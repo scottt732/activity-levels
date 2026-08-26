@@ -17,8 +17,8 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import STORAGE_VERSION, storage_key
-from .engine import Group, Phase
+from .const import STORAGE_VERSION, TRIGGER_KEY, storage_key
+from .engine import Group, Phase, Voice
 from .tree import Tree, VoiceRef
 
 _LOGGER = logging.getLogger(__name__)
@@ -283,21 +283,25 @@ class ActivityLevelsCoordinator:
         t = self.now()
         out: dict[str, list[dict[str, Any]]] = {gid: [] for gid in self.tree.groups}
         for ref in self.tree.all_voice_refs():
-            v = ref.voice
-            v.is_active(t)  # advance the state machine before reading .phase
-            out[ref.group_id].append(
-                {
-                    "label": ref.label,
-                    "entity": ref.entity_id,
-                    "phase": v.phase.value,
-                    "value": v.value_at(t),
-                    "gain": v.gain,
-                    "gate": v.gate,
-                    "phase_started": v.phase_start_t if v.phase is not Phase.IDLE else None,
-                    "phase_ends": v.next_boundary(t),
-                }
-            )
+            out[ref.group_id].append(self._voice_state(ref.label, ref.entity_id, ref.voice, t))
+        for info in self.tree.groups.values():
+            # the trigger voice has no entity behind it, but it still moves the value
+            out[info.id].append(self._voice_state(TRIGGER_KEY, None, info.trigger, t))
         return out
+
+    @staticmethod
+    def _voice_state(label: str, entity_id: str | None, v: Voice, t: float) -> dict[str, Any]:
+        v.is_active(t)  # advance the state machine before reading .phase
+        return {
+            "label": label,
+            "entity": entity_id,
+            "phase": v.phase.value,
+            "value": v.value_at(t),
+            "gain": v.gain,
+            "gate": v.gate,
+            "phase_started": v.phase_start_t if v.phase is not Phase.IDLE else None,
+            "phase_ends": v.next_boundary(t),
+        }
 
 
 type ActivityLevelsConfigEntry = ConfigEntry[ActivityLevelsCoordinator]
