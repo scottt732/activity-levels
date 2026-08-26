@@ -8,7 +8,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 
 from .const import DOMAIN
-from .schema import default_options
+from .schema import default_options, validate_config
 
 
 class ActivityLevelsConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -22,4 +22,6 @@ class ActivityLevelsConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="single_instance_allowed")
         if user_input is None:
             return self.async_show_form(step_id="user", data_schema=vol.Schema({}))
-        return self.async_create_entry(title="Activity Levels", data={}, options=default_options())
+        return self.async_create_entry(
+            title="Activity Levels", data={}, options=validate_config(default_options())
+        )

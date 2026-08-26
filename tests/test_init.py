@@ -51,6 +51,9 @@ async def test_config_flow_creates_single_entry(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] == "create_entry"
     assert result["options"]["envelopes"][0]["id"] == "default"
+    # options are stored normalized, so config/get has one stable shape from the first call
+    assert result["options"]["defaults"]["min_wake_interval"] == 1.0
+    assert result["options"]["envelopes"][0]["release"] == 1800.0
     result2 = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     assert result2["type"] == "abort"
 
