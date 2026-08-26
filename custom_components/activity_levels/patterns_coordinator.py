@@ -8,6 +8,7 @@ runs the fit in the executor, keeps the resulting profile document in a
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -228,23 +229,35 @@ class PatternsCoordinator:
         self._day_type_cache: dict[str, str] = {}
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[CALLBACK_TYPE] = []
+        self._light_entities: list[str] = []
+        self._needs_backfill = False
+        self._today: date | None = None
+        self._rebuild_lock = asyncio.Lock()
+        self._generation = 0
         self._stopped = False
 
     # -- lifecycle -----------------------------------------------------------
 
     async def async_start(self) -> None:
-        """Load what is stored, wire the timers up and catch up if the profile is old."""
+        """Load what is stored, wire the timers up and queue the slow work for later."""
         await self._load()
         await self.lightlog.async_load()
 
-        entity_ids = sorted({e for lights in self.lights.values() for e in lights})
-        if entity_ids:
-            await self._backfill(entity_ids)
-            self._record_current(entity_ids)
+        self._light_entities = sorted({e for lights in self.lights.values() for e in lights})
+        # decide this before _record_current writes a row per entity, or the log always
+        # looks populated and the recorder's history would never be pulled in at all
+        self._needs_backfill = not self.lightlog.transitions(self._light_entities, 0.0, math.inf)
+        if self._light_entities:
+            # the subscription has to be live before setup returns or transitions are
+            # lost; the recorder back-fill is a history_days-wide query and can wait
+            self._record_current(self._light_entities)
             self._unsubs.append(
-                async_track_state_change_event(self.hass, entity_ids, self._handle_light_event)
+                async_track_state_change_event(
+                    self.hass, self._light_entities, self._handle_light_event
+                )
             )
 
+        self._today = dt_util.now().date()
         hour, _, minute = self.rebuild_time.partition(":")
         self._unsubs.append(
             async_track_time_change(
@@ -256,8 +269,7 @@ class PatternsCoordinator:
                 self.hass, self._bucket_tick, minute=list(range(0, 60, SLOT_MINUTES)), second=0
             )
         )
-        if self._is_stale():
-            self._schedule_catch_up()
+        self._schedule_start_work()
 
     async def async_stop(self) -> None:
         """Cancel every timer and flush the light log. Idempotent."""
@@ -296,16 +308,17 @@ class PatternsCoordinator:
         generated_at = float(self.profile.get("generated_at", 0.0))
         return dt_util.utcnow().timestamp() - generated_at > STALE_AFTER
 
-    def _schedule_catch_up(self) -> None:
+    def _schedule_start_work(self) -> None:
+        """Queue the work that must not delay setup, once Home Assistant has settled."""
         if self.hass.state is CoreState.running:
-            self._unsubs.append(async_call_later(self.hass, START_DELAY, self._catch_up))
+            self._unsubs.append(async_call_later(self.hass, START_DELAY, self._start_work))
             return
 
         @callback
         def on_started(_event: Event[Any]) -> None:
             if self._stopped:
                 return
-            self._unsubs.append(async_call_later(self.hass, START_DELAY, self._catch_up))
+            self._unsubs.append(async_call_later(self.hass, START_DELAY, self._start_work))
 
         self._unsubs.append(
             self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, on_started)
@@ -314,8 +327,25 @@ class PatternsCoordinator:
     # -- timers --------------------------------------------------------------
 
     @callback
-    def _catch_up(self, _now: datetime) -> None:
-        self._queue_rebuild(force=False)
+    def _start_work(self, _now: datetime) -> None:
+        if self._stopped:
+            return
+        self.entry.async_create_background_task(
+            self.hass, self._start_work_task(), f"{DOMAIN}_start_work"
+        )
+
+    async def _start_work_task(self) -> None:
+        """Back-fill the light history, then catch the profile up when it is stale.
+
+        Neither belongs in ``async_setup_entry``: the back-fill is a history_days-wide
+        recorder query and the rebuild is a full fit, and blocking setup on either
+        delays every other entity in the house.
+        """
+        if self._light_entities and self._needs_backfill:
+            self._needs_backfill = False
+            await self._backfill(self._light_entities)
+        if self._is_stale():
+            await self._rebuild_task(force=False)
 
     @callback
     def _nightly(self, _now: datetime) -> None:
@@ -324,6 +354,34 @@ class PatternsCoordinator:
 
     @callback
     def _bucket_tick(self, _now: datetime) -> None:
+        day = dt_util.now().date()
+        if day != self._today:
+            # the local date rolled: label it from the calendars now, rather than leave
+            # the whole day up to the live fallback in _calendars_active_now
+            self._today = day
+            self._queue_day_refresh(day)
+        self._notify()
+
+    def _queue_day_refresh(self, day: date) -> None:
+        if self._stopped:
+            return
+        self.entry.async_create_background_task(
+            self.hass, self._refresh_today(day), f"{DOMAIN}_day_type"
+        )
+
+    async def _refresh_today(self, day: date) -> None:
+        """Label one new local date from the calendars: one day, so one cheap query."""
+        try:
+            start = datetime.combine(day, time(0, 0), tzinfo=self.timezone)
+            calendars = await self._calendar_days(start, start + timedelta(days=1))
+            inputs = DayTypeInputs(
+                day.weekday(), self._workday_now(), calendars.get(day.isoformat(), frozenset())
+            )
+            self._day_type_cache[day.isoformat()] = resolve_day_type(inputs, self.day_types)
+            await self._save()
+        except Exception:  # a background task must never take the entry down
+            _LOGGER.exception("Labelling %s from the calendars failed", day)
+            return
         self._notify()
 
     def _queue_rebuild(self, *, force: bool) -> None:
@@ -370,8 +428,6 @@ class PatternsCoordinator:
             self.lightlog.record(entity_id, self.hass.states.get(entity_id), now)
 
     async def _backfill(self, entity_ids: list[str]) -> None:
-        if self.lightlog.transitions(entity_ids, 0.0, math.inf):
-            return  # already have history; the recorder's copy would only duplicate it
         if self._recorder() is None:
             return
         since = dt_util.utcnow() - timedelta(days=self.history_days)
@@ -394,16 +450,27 @@ class PatternsCoordinator:
             return None
         return state.state == "on"
 
-    def day_type_now(self) -> str:
-        """Today's day type, with the workday sensor read live.
+    def _calendars_active_now(self, day: date) -> frozenset[str]:
+        """Which configured calendars cover ``day``, resolved as late as possible.
 
-        Calendars are only known from the last rebuild, so a cached calendar day type
-        is fed back in as an active calendar; everything else is decided from scratch.
+        Only a rebuild fills the cache, so between local midnight and the tick that
+        relabels the new date there is no entry for it, and falling back to the
+        weekday/weekend answer would silently drop a vacation for those minutes. A
+        calendar entity's own state is the live answer in that gap.
         """
-        day = dt_util.now().date()
         cached = self._day_type_cache.get(day.isoformat())
-        active = frozenset({cached}) if cached in self._calendar_ids else frozenset[str]()
-        inputs = DayTypeInputs(day.weekday(), self._workday_now(), active)
+        if cached is not None:
+            return frozenset({cached}) if cached in self._calendar_ids else frozenset()
+        return frozenset(
+            cal["id"]
+            for cal in self._calendars
+            if (state := self.hass.states.get(cal["entity"])) is not None and state.state == "on"
+        )
+
+    def day_type_now(self) -> str:
+        """Today's day type, with the workday sensor and the calendars both read live."""
+        day = dt_util.now().date()
+        inputs = DayTypeInputs(day.weekday(), self._workday_now(), self._calendars_active_now(day))
         return resolve_day_type(inputs, self.day_types)
 
     def day_type_of(self, day: date) -> str:
@@ -526,7 +593,22 @@ class PatternsCoordinator:
         self._notify()
 
     async def async_rebuild(self, *, force: bool = False) -> bool:
-        """Run the built-in learner. Returns False when it declined to run."""
+        """Run the built-in learner. Returns False when it declined to run.
+
+        Serialized: a second caller waits for the rebuild already in flight and takes
+        its result, rather than fitting the very same window all over again.
+        """
+        generation = self._generation
+        async with self._rebuild_lock:
+            if self._generation != generation:
+                _LOGGER.debug("A rebuild finished while this one waited; not refitting")
+                return False
+            if not await self._run_rebuild(force=force):
+                return False
+            self._generation += 1
+            return True
+
+    async def _run_rebuild(self, *, force: bool) -> bool:
         if self.producer != BUILTIN_PRODUCER and not force:
             _LOGGER.debug("Profile belongs to producer %s; not rebuilding", self.producer)
             return False
@@ -608,9 +690,7 @@ class PatternsCoordinator:
         self, instance: Recorder, start: datetime, end: datetime, gids: Iterable[str] | None = None
     ) -> dict[str, list[StatisticsRow]]:
         ids = {statistic_id(gid) for gid in (gids or self.coordinator.tree.groups)}
-        job = partial(
-            statistics_during_period, self.hass, start, end, ids, "hour", None, {"mean", "max"}
-        )
+        job = partial(statistics_during_period, self.hass, start, end, ids, "hour", None, {"mean"})
         result: dict[str, list[StatisticsRow]] = await instance.async_add_executor_job(job)
         return result
 

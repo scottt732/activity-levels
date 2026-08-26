@@ -299,3 +299,23 @@ async def test_async_backfill_merges_without_duplicating_existing_rows(
     assert second == 0
     rows = log.transitions(["light.kitchen"], 0, since.timestamp() + 3600)
     assert len(rows) == 1
+
+
+async def test_prune_schedules_a_delayed_save(
+    hass: HomeAssistant, hass_storage: dict, freezer: FrozenDateTimeFactory
+) -> None:
+    log = LightLog(hass, "entry1", history_days=1)
+    await log.async_load()
+    now = T0 + 10 * 86400
+    log.record("light.kitchen", _state("light.kitchen", True), now - 2 * 86400)
+    log.record("light.kitchen", _state("light.kitchen", False), now - 3600)
+    await log.async_save()  # flush what record() scheduled, so only prune's save is left
+
+    log.prune(now)
+    freezer.tick(timedelta(seconds=11))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert hass_storage["activity_levels.lights.entry1"]["data"]["rows"] == [
+        [now - 3600, "light.kitchen", False, None]
+    ]

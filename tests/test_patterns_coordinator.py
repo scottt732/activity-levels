@@ -8,16 +8,25 @@ tests cannot provide, while importing hourly rows directly writes exactly the
 
 from __future__ import annotations
 
+import asyncio
 import math
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from itertools import pairwise
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.recorder.models import StatisticMeanType
 from homeassistant.components.recorder.statistics import async_import_statistics
-from homeassistant.core import HomeAssistant, ServiceResponse, SupportsResponse
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import (
+    CoreState,
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
@@ -25,8 +34,11 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
+from custom_components.activity_levels import patterns_coordinator
 from custom_components.activity_levels.const import DOMAIN
+from custom_components.activity_levels.lightlog import LightLog
 from custom_components.activity_levels.patterns.profile import SLOTS, ProfileError, empty_profile
+from custom_components.activity_levels.patterns_coordinator import START_DELAY
 from custom_components.activity_levels.schema import validate_config
 from tests.fixtures import house_config
 
@@ -136,7 +148,9 @@ async def test_expected_and_anomaly_sensors_publish(
 
     anomaly = hass.states.get("sensor.kitchen_activity_anomaly")
     assert anomaly is not None
-    assert isinstance(float(anomaly.state), float)
+    # band-normalized, and anomaly_score floors each half-width at 5% of max_value,
+    # so a score can never leave +/- 20 however collapsed the learned band is
+    assert -20.0 <= float(anomaly.state) <= 20.0
 
     profile_sensor = hass.states.get("sensor.activity_levels_profile")
     assert profile_sensor is not None
@@ -411,3 +425,178 @@ async def test_startup_and_nightly_rebuilds_are_scheduled(
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
     assert calls == [False]
+
+
+# -- live calendar day types --------------------------------------------------
+
+
+async def test_day_type_now_reads_the_live_calendar_before_any_rebuild(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Between local midnight and rebuild_time nothing has labelled the new date yet."""
+    await hass.config.async_set_time_zone("UTC")
+    freezer.move_to(datetime(2026, 6, 17, 0, 30, tzinfo=UTC))  # a Wednesday, just past midnight
+    hass.states.async_set("binary_sensor.workday", "on")
+    hass.states.async_set("calendar.family_vacation", "on")
+
+    entry = await _add_entry(hass, _calendar_config("calendar.family_vacation"))
+    patterns = entry.runtime_data.patterns
+
+    assert patterns.day_type_now() == "vacation"
+    expected = hass.states.get("sensor.kitchen_expected_activity")
+    assert expected.attributes["day_type"] == "vacation"
+
+    hass.states.async_set("calendar.family_vacation", "off")
+    await hass.async_block_till_done()
+    assert patterns.day_type_now() == "weekday"
+
+
+async def test_bucket_tick_relabels_today_once_the_date_rolls(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    await hass.config.async_set_time_zone("UTC")
+    freezer.move_to(datetime(2026, 6, 17, 23, 50, tzinfo=UTC))  # Wednesday evening
+    windows: list[tuple[str, str]] = []
+
+    async def get_events(call: ServiceCall) -> ServiceResponse:
+        windows.append((call.data["start_date_time"], call.data["end_date_time"]))
+        return {
+            "calendar.family_vacation": {
+                "events": [
+                    {
+                        "start": "2026-06-18T00:00:00+00:00",
+                        "end": "2026-06-19T00:00:00+00:00",
+                        "summary": "Away",
+                    }
+                ]
+            }
+        }
+
+    hass.services.async_register(
+        "calendar", "get_events", get_events, supports_response=SupportsResponse.ONLY
+    )
+    entry = await _add_entry(hass, _calendar_config("calendar.family_vacation"))
+    patterns = entry.runtime_data.patterns
+    assert patterns.day_type_of(date(2026, 6, 18)) == "weekday"  # nothing cached for it yet
+
+    freezer.move_to(datetime(2026, 6, 18, 0, 0, 30, tzinfo=UTC))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert patterns.day_type_of(date(2026, 6, 18)) == "vacation"
+    assert patterns.day_type_now() == "vacation"
+    # only the new day was asked for, not the whole training window
+    assert windows == [("2026-06-18T00:00:00+00:00", "2026-06-19T00:00:00+00:00")]
+
+
+# -- startup scheduling -------------------------------------------------------
+
+
+async def test_catch_up_waits_for_home_assistant_to_start(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    await hass.config.async_set_time_zone("UTC")
+    freezer.move_to(datetime(2026, 6, 17, 2, 0, tzinfo=UTC))
+    hass.set_state(CoreState.not_running)
+    entry = await _add_entry(hass)
+    patterns = entry.runtime_data.patterns
+    calls: list[bool] = []
+
+    async def fake_rebuild(*, force: bool = False) -> bool:
+        calls.append(force)
+        return True
+
+    patterns.async_rebuild = fake_rebuild  # type: ignore[method-assign]
+
+    # the settle delay alone means nothing while Home Assistant is still starting
+    freezer.move_to(datetime(2026, 6, 17, 2, 2, tzinfo=UTC))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert calls == []
+
+    hass.set_state(CoreState.running)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert calls == []  # the settle delay starts now
+
+    freezer.move_to(datetime(2026, 6, 17, 2, 3, 5, tzinfo=UTC))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert calls == [False]
+
+
+def _slotted_profile(day_types: list[str]) -> dict[str, Any]:
+    """A profile whose kitchen p50 is the slot number, so every tick moves it."""
+    doc = empty_profile(day_types=day_types)
+    doc["groups"]["kitchen"] = {
+        "ready": True,
+        "days": 30,
+        "expected": {"weekday": [[float(s), s + 1.0, s + 2.0] for s in range(SLOTS)]},
+        "lights": {},
+    }
+    return doc
+
+
+async def test_bucket_tick_rewrites_the_expected_sensor(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    await hass.config.async_set_time_zone("UTC")
+    freezer.move_to(datetime(2026, 6, 17, 8, 0, 5, tzinfo=UTC))  # Wednesday, slot 32
+    entry = await _add_entry(hass)
+    patterns = entry.runtime_data.patterns
+    await patterns.async_set_profile(_slotted_profile(patterns.day_types))
+    await hass.async_block_till_done()
+
+    assert float(hass.states.get("sensor.kitchen_expected_activity").state) == 33.0
+
+    freezer.move_to(datetime(2026, 6, 17, 8, 15, 5, tzinfo=UTC))  # slot 33
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert float(hass.states.get("sensor.kitchen_expected_activity").state) == 34.0
+
+
+async def test_light_backfill_is_deferred_until_after_start(
+    recorder_ready: None, hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    config = house_config()
+    config["groups"][0]["children"][1]["simulation"] = {"lights": {"include": ["light.kitchen"]}}
+    asked: list[list[str]] = []
+
+    async def fake_backfill(self: LightLog, entity_ids: list[str], since: datetime) -> int:
+        asked.append(list(entity_ids))
+        return 0
+
+    with patch.object(LightLog, "async_backfill", fake_backfill):
+        await _add_entry(hass, config)
+        assert asked == []  # setup never blocks on a 180-day history query
+
+        freezer.tick(timedelta(seconds=START_DELAY + 5))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+        assert asked == [["light.kitchen"]]
+
+
+# -- rebuild lock -------------------------------------------------------------
+
+
+async def test_concurrent_rebuilds_fit_only_once(
+    trained: MockConfigEntry, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    patterns = trained.runtime_data.patterns
+    fits = 0
+    real = patterns_coordinator.fit_groups
+
+    def counting_fit(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        nonlocal fits
+        fits += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(patterns_coordinator, "fit_groups", counting_fit)
+
+    results = await asyncio.gather(patterns.async_rebuild(), patterns.async_rebuild())
+
+    # the second caller waits, sees the fresh document and does not refit
+    assert sorted(results, reverse=True) == [True, False]
+    assert fits == 1

@@ -134,6 +134,7 @@ class LightLog:
         if len(kept) != len(self._rows):
             self._rows = kept
             self._reindex()
+            self._store.async_delay_save(self._data, _SAVE_DELAY)
 
     async def async_backfill(self, entity_ids: list[str], since: datetime) -> int:
         """Back-fill transitions for ``entity_ids`` from the recorder's history.
