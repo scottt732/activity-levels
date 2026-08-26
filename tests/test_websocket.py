@@ -50,7 +50,8 @@ async def test_config_get_validate_save(
 
     await client.send_json_auto_id({"type": "activity_levels/config/save", "config": bad})
     msg = await client.receive_json()
-    assert not msg["success"] and msg["error"]["code"] == "invalid_config"
+    assert msg["success"] and msg["result"]["ok"] is False
+    assert msg["result"]["errors"][0]["path"] == "groups/0/id"
 
 
 async def test_config_save_rejects_engine_build_failure(

@@ -81,8 +81,12 @@ async def ws_config_save(
         return
     try:
         config = validate_config(msg["config"])
+    except ConfigError as err:  # same pathed shape as config/validate
+        connection.send_result(msg["id"], {"ok": False, "errors": err.errors})
+        return
+    try:
         build_tree(config)
-    except (ConfigError, ValueError) as err:
+    except Exception as err:  # a validated config that still will not build
         connection.send_error(msg["id"], "invalid_config", str(err))
         return
     hass.config_entries.async_update_entry(entries[0], options=config)
