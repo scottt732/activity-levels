@@ -22,6 +22,12 @@ CONF_VERSION = "version"
 CONF_DEFAULTS = "defaults"
 CONF_ENVELOPES = "envelopes"
 CONF_GROUPS = "groups"
+CONF_PATTERNS = "patterns"
+CONF_SIMULATION = "simulation"
+
+BUILTIN_DAY_TYPES = ("weekday", "weekend", "holiday")
+SLOT_MINUTES = 15
+SLOTS_PER_DAY = 96
 
 DEFAULT_ENVELOPE_ID = "default"
 DEFAULT_MAX_VALUE = 5.0

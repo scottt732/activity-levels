@@ -87,3 +87,37 @@ def test_version_must_be_one() -> None:
     cfg = house_config()
     cfg["version"] = 2
     assert "version" in errors_of(cfg)
+
+
+def test_patterns_and_simulation_defaults() -> None:
+    cfg = validate_config(default_options())
+    p = cfg["defaults"]["patterns"]
+    assert p["rebuild_time"] == "03:00" and p["history_days"] == 180 and p["min_days"] == 14
+    assert p["calendars"] == [] and p["day_type_precedence"] == ["holiday", "weekend", "weekday"]
+    assert cfg["defaults"]["simulation"] == {"away_entity": None, "quiet_hours": ["01:00", "05:30"]}
+
+
+def test_group_simulation_and_calendar_validation() -> None:
+    cfg = house_config()
+    cfg["defaults"]["patterns"] = {
+        "calendars": [{"id": "school_year", "entity": "calendar.school"}]
+    }
+    cfg["groups"][0]["simulation"] = {"lights": {"include": ["light.hall"]}}
+    out = validate_config(cfg)
+    assert out["defaults"]["patterns"]["day_type_precedence"] == [
+        "school_year",
+        "holiday",
+        "weekend",
+        "weekday",
+    ]
+    assert out["groups"][0]["simulation"] == {
+        "enabled": True,
+        "lights": {"include": ["light.hall"], "exclude": []},
+    }
+    cfg["defaults"]["patterns"]["calendars"].append({"id": "school_year", "entity": "calendar.x"})
+    assert "defaults/patterns/calendars/1/id" in errors_of(cfg)
+    cfg["defaults"]["patterns"]["calendars"] = [{"id": "bad", "entity": "sensor.not_a_calendar"}]
+    assert "defaults/patterns/calendars/0/entity" in errors_of(cfg)
+    cfg["defaults"]["patterns"] = {}
+    cfg["defaults"]["simulation"] = {"quiet_hours": ["25:00", "05:00"]}
+    assert "defaults/simulation/quiet_hours" in errors_of(cfg)

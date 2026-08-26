@@ -11,9 +11,12 @@ import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    BUILTIN_DAY_TYPES,
     CONF_DEFAULTS,
     CONF_ENVELOPES,
     CONF_GROUPS,
+    CONF_PATTERNS,
+    CONF_SIMULATION,
     CONF_VERSION,
     DEFAULT_ENVELOPE_ID,
     DEFAULT_MAX_VALUE,
@@ -26,6 +29,7 @@ from .duration import parse_duration
 from .engine import Mix, NullHandling, Retrigger, Unavailable
 
 GROUP_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+HHMM_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 class ConfigError(Exception):
@@ -64,6 +68,23 @@ def _to_states(value: Any) -> list[str]:
     if not isinstance(value, list) or not value or not all(isinstance(s, str) and s for s in value):
         raise vol.Invalid("must be a non-empty state string or list of state strings")
     return [str(s) for s in value]
+
+
+def _hhmm(value: Any) -> str:
+    if not isinstance(value, str) or not HHMM_RE.match(value):
+        raise vol.Invalid("must be HH:MM (24h)")
+    return value
+
+
+_calendar_entity = vol.All(cv.entity_id, cv.entity_domain("calendar"))
+
+
+def _quiet_hours(value: Any) -> list[str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list) or len(value) != 2:
+        raise vol.Invalid("must be a [start, end] pair of HH:MM times")
+    return [_hhmm(v) for v in value]
 
 
 _ENUM = {
@@ -105,6 +126,43 @@ STIMULUS_SCHEMA = vol.Schema(
     }
 )
 
+CALENDAR_SCHEMA = vol.Schema(
+    {
+        vol.Required("id"): _group_id,
+        vol.Required("entity"): _calendar_entity,
+    }
+)
+
+PATTERNS_SCHEMA = vol.Schema(
+    {
+        vol.Optional("rebuild_time", default="03:00"): _hhmm,
+        vol.Optional("history_days", default=180): vol.All(int, vol.Range(min=30, max=730)),
+        vol.Optional("min_days", default=14): vol.All(int, vol.Range(min=3, max=90)),
+        vol.Optional("calendars", default=list): [CALENDAR_SCHEMA],
+        vol.Optional("day_type_precedence", default=None): vol.Any(None, [str]),
+        vol.Optional("workday_entity", default=None): vol.Any(None, cv.entity_id),
+    }
+)
+
+SIMULATION_DEFAULTS_SCHEMA = vol.Schema(
+    {
+        vol.Optional("away_entity", default=None): vol.Any(None, cv.entity_id),
+        vol.Optional("quiet_hours", default=["01:00", "05:30"]): _quiet_hours,
+    }
+)
+
+GROUP_SIMULATION_SCHEMA = vol.Schema(
+    {
+        vol.Optional("enabled", default=True): cv.boolean,
+        vol.Optional("lights", default=dict): vol.Schema(
+            {
+                vol.Optional("include", default=list): [cv.entity_id],
+                vol.Optional("exclude", default=list): [cv.entity_id],
+            }
+        ),
+    }
+)
+
 DEFAULTS_SCHEMA = vol.Schema(
     {
         vol.Optional("envelope", default=DEFAULT_ENVELOPE_ID): _group_id,
@@ -119,6 +177,8 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional("min_wake_interval", default=DEFAULT_MIN_WAKE_INTERVAL): vol.All(
             parse_duration, vol.Range(min=0.1, max=60.0)
         ),
+        vol.Optional(CONF_PATTERNS, default=dict): PATTERNS_SCHEMA,
+        vol.Optional(CONF_SIMULATION, default=dict): SIMULATION_DEFAULTS_SCHEMA,
     }
 )
 
@@ -139,6 +199,7 @@ def _group_schema(value: Any) -> dict[str, Any]:
             vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
             vol.Optional("stimuli", default=list): [STIMULUS_SCHEMA],
             vol.Optional("children", default=list): [_group_schema],
+            vol.Optional(CONF_SIMULATION, default=dict): GROUP_SIMULATION_SCHEMA,
         }
     )
     result: dict[str, Any] = schema(value)
@@ -180,6 +241,14 @@ def _stringify_enums(obj: Any) -> Any:
     return obj
 
 
+def _apply_pattern_defaults(cfg: dict[str, Any]) -> None:
+    """Fill in derived defaults that depend on other already-validated fields."""
+    patterns = cfg[CONF_DEFAULTS][CONF_PATTERNS]
+    if patterns["day_type_precedence"] is None:
+        calendar_ids = [cal["id"] for cal in patterns["calendars"]]
+        patterns["day_type_precedence"] = [*calendar_ids, "holiday", "weekend", "weekday"]
+
+
 def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
     envelope_ids: set[str] = set()
@@ -191,6 +260,26 @@ def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
         envelope_ids.add(env["id"])
     if cfg[CONF_DEFAULTS]["envelope"] not in envelope_ids:
         errors.append({"path": _path([CONF_DEFAULTS, "envelope"]), "message": "unknown envelope"})
+
+    patterns = cfg[CONF_DEFAULTS][CONF_PATTERNS]
+    calendar_ids: set[str] = set()
+    for i, cal in enumerate(patterns["calendars"]):
+        if cal["id"] in calendar_ids:
+            errors.append(
+                {
+                    "path": _path([CONF_DEFAULTS, CONF_PATTERNS, "calendars", i, "id"]),
+                    "message": "duplicate calendar id",
+                }
+            )
+        calendar_ids.add(cal["id"])
+    valid_day_types = set(BUILTIN_DAY_TYPES) | calendar_ids
+    if any(dt not in valid_day_types for dt in patterns["day_type_precedence"]):
+        errors.append(
+            {
+                "path": _path([CONF_DEFAULTS, CONF_PATTERNS, "day_type_precedence"]),
+                "message": "must be built-in day types or configured calendar ids",
+            }
+        )
 
     seen_groups: set[str] = set()
 
@@ -226,6 +315,16 @@ def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
                 )
             labels.add(child["id"])
             walk(child, [*path, "children", i])
+        lights = group[CONF_SIMULATION]["lights"]
+        for key in ("include", "exclude"):
+            for i, entity in enumerate(lights[key]):
+                if not entity.startswith("light."):
+                    errors.append(
+                        {
+                            "path": _path([*path, CONF_SIMULATION, "lights", key, i]),
+                            "message": "must be a light entity",
+                        }
+                    )
 
     for i, group in enumerate(cfg[CONF_GROUPS]):
         walk(group, [CONF_GROUPS, i])
@@ -240,6 +339,7 @@ def validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError([{"path": _path(e.path), "message": e.msg} for e in exc.errors]) from exc
     except vol.Invalid as exc:
         raise ConfigError([{"path": _path(exc.path), "message": exc.msg}]) from exc
+    _apply_pattern_defaults(cfg)
     errors = _cross_checks(cfg)
     if errors:
         raise ConfigError(errors)
