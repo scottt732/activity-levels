@@ -52,6 +52,9 @@ Each configured group produces:
 
 Durations accept `30s`, `5m`, `2h`, `1d`, `HH:MM:SS`, or a plain number of seconds.
 
+Renaming a group's `id` creates new entities (history is not carried over); `area` is
+applied only when a group's device is first created.
+
 ```yaml
 version: 1
 defaults:
