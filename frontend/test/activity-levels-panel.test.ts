@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { HA_ELEMENTS } from "../src/ha-elements";
+import type { Config } from "../src/types";
 
 // Registered before the panel module loads: `ensureHaElements` then returns without
 // waiting, which is what a real Home Assistant frontend gives us.
@@ -11,9 +12,12 @@ for (const tag of HA_ELEMENTS) {
 await import("../src/activity-levels-panel");
 await import("../src/al-tree");
 
+const { alChange } = await import("../src/events");
+const { newGroup } = await import("../src/model");
+
 type Panel = HTMLElement & { hass: unknown; updateComplete: Promise<boolean> };
 
-const config = () => ({
+const config = (): Config => ({
   version: 1,
   defaults: {
     envelope: "default",
@@ -29,6 +33,9 @@ const config = () => ({
   groups: [],
 });
 
+/** What `config/validate` answers next; reset per test. */
+let validateResult: { ok: boolean; errors: { path: string; message: string }[] } = { ok: true, errors: [] };
+
 const hass = () => ({
   states: {},
   areas: {},
@@ -36,9 +43,11 @@ const hass = () => ({
   user: { is_admin: true, name: "Test" },
   language: "en",
   localize: (k: string) => k,
-  callWS: vi.fn(async (msg: { type: string }) =>
-    msg.type === "activity_levels/config/get" ? { config: config() } : {},
-  ),
+  callWS: vi.fn(async (msg: { type: string }) => {
+    if (msg.type === "activity_levels/config/get") return { config: config() };
+    if (msg.type === "activity_levels/config/validate") return validateResult;
+    return {};
+  }),
 });
 
 let el: Panel;
@@ -66,6 +75,7 @@ const press = async (key: string): Promise<void> => {
 };
 
 beforeEach(async () => {
+  validateResult = { ok: true, errors: [] };
   await mount();
 });
 
@@ -116,6 +126,34 @@ describe("activity-levels-panel notices", () => {
     const tree = el.shadowRoot?.querySelector("al-tree");
     const button = tree?.shadowRoot?.querySelector("ha-button");
     expect(button?.textContent?.trim()).toBe("Add your first group");
+  });
+});
+
+describe("activity-levels-panel validation errors", () => {
+  const tree = (): (HTMLElement & { errors?: unknown[] }) | null =>
+    el.shadowRoot?.querySelector("al-tree") ?? null;
+
+  /** An edit arriving from the tree, exactly as the tree dispatches it. */
+  const change = async (structural?: true): Promise<void> => {
+    tree()?.dispatchEvent(alChange({ ...config(), groups: [newGroup("x")] }, undefined, structural));
+    await el.updateComplete;
+  };
+
+  const save = async (): Promise<void> => {
+    const buttons = el.shadowRoot?.querySelectorAll<HTMLElement>("ha-button");
+    buttons?.[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    for (let i = 0; i < 5; i++) await el.updateComplete;
+  };
+
+  it("clears errors on a structural edit but keeps them on a field edit", async () => {
+    validateResult = { ok: false, errors: [{ path: "groups/0", message: "bad" }] };
+    await change();
+    await save();
+    expect(tree()?.errors).toHaveLength(1);
+    await change();
+    expect(tree()?.errors).toHaveLength(1);
+    await change(true);
+    expect(tree()?.errors).toHaveLength(0);
   });
 });
 

@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/al-tree";
 import { newGroup, newStimulus } from "../src/model";
 import type { AlTree } from "../src/al-tree";
+import type { AlChangeEvent } from "../src/events";
 import type { Config, LiveState, Path } from "../src/types";
 
 const baseConfig = (): Config => ({
@@ -25,17 +26,22 @@ const baseConfig = (): Config => ({
 let el: AlTree;
 let config: Config;
 let changes: Config[];
+let changeEvents: AlChangeEvent[];
 let selects: (Path | null)[];
 
 beforeEach(async () => {
   document.body.innerHTML = "";
   config = baseConfig();
   changes = [];
+  changeEvents = [];
   selects = [];
   el = document.createElement("al-tree");
   el.config = config;
   el.errors = [];
-  el.addEventListener("al-change", (e) => changes.push((e as CustomEvent<Config>).detail));
+  el.addEventListener("al-change", (e) => {
+    changes.push((e as CustomEvent<Config>).detail);
+    changeEvents.push(e as AlChangeEvent);
+  });
   el.addEventListener("al-select", (e) => selects.push((e as CustomEvent<Path | null>).detail));
   document.body.appendChild(el);
   await el.updateComplete;
@@ -82,6 +88,32 @@ describe("al-tree", () => {
     expect(selects).toEqual([["groups", 0, "stimuli", 0]]);
   });
 });
+describe("al-tree structural changes", () => {
+  const twoGroups = (): Config => ({ ...baseConfig(), groups: [newGroup("a"), newGroup("b")] });
+
+  it("flags an add, so the shell can drop path-keyed errors that no longer line up", async () => {
+    await click("ha-button");
+    expect(changeEvents[0]?.structural).toBe(true);
+  });
+
+  it("flags a move", async () => {
+    el.config = twoGroups();
+    await el.updateComplete;
+    await click('ha-icon-button[label="Move down"]');
+    expect(changeEvents[0]?.structural).toBe(true);
+  });
+
+  it("flags a delete", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      await click('ha-icon-button[label="Delete stimulus"]');
+      expect(changeEvents[0]?.structural).toBe(true);
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+});
+
 describe("al-tree live view", () => {
   const live: LiveState = {
     now: 1000,

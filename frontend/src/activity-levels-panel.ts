@@ -65,6 +65,16 @@ export class ActivityLevelsPanel extends LitElement {
     }
   }
 
+  /**
+   * Applies an edit from an editor. A structural one - a node added, removed or moved -
+   * invalidates the path-keyed validation errors, which would otherwise stay pinned to
+   * rows that have since shifted.
+   */
+  private onChange = (ev: AlChangeEvent): void => {
+    if (ev.structural) this.errors = [];
+    this.setConfig(ev.detail, ev.coalesceKey);
+  };
+
   private setConfig(next: Config, coalesceKey?: string): void {
     this.draft?.set(next, coalesceKey);
     this.syncSelection();
@@ -283,7 +293,6 @@ export class ActivityLevelsPanel extends LitElement {
   }
 
   private renderTab(d: Draft) {
-    const onChange = (e: AlChangeEvent) => this.setConfig(e.detail, e.coalesceKey);
     switch (this.tab) {
       case "groups":
         return html`<div class="layout ${this.narrow ? "narrow" : ""}">
@@ -296,7 +305,7 @@ export class ActivityLevelsPanel extends LitElement {
             @al-select=${(e: CustomEvent<Path>) => {
               this.selection = e.detail;
             }}
-            @al-change=${onChange}
+            @al-change=${this.onChange}
           ></al-tree>
           <div>${this.renderEditor(d)}</div>
         </div>`;
@@ -306,14 +315,14 @@ export class ActivityLevelsPanel extends LitElement {
           .config=${d.config}
           .errors=${this.errors}
           .narrow=${this.narrow}
-          @al-change=${onChange}
+          @al-change=${this.onChange}
         ></al-envelopes>`;
       case "defaults":
         return html`<al-defaults
           .hass=${this.hass}
           .config=${d.config}
           .errors=${this.errors}
-          @al-change=${onChange}
+          @al-change=${this.onChange}
         ></al-defaults>`;
     }
   }
@@ -321,7 +330,6 @@ export class ActivityLevelsPanel extends LitElement {
   private renderEditor(d: Draft) {
     const selection = this.selection;
     if (!selection) return html`<ha-card><span class="muted">Select a group or stimulus.</span></ha-card>`;
-    const onChange = (e: AlChangeEvent) => this.setConfig(e.detail, e.coalesceKey);
     const isStimulus = selection[selection.length - 2] === "stimuli";
     return isStimulus
       ? html`<al-stimulus-editor
@@ -330,14 +338,14 @@ export class ActivityLevelsPanel extends LitElement {
           .path=${selection}
           .errors=${this.errors}
           .live=${this.live}
-          @al-change=${onChange}
+          @al-change=${this.onChange}
         ></al-stimulus-editor>`
       : html`<al-group-editor
           .hass=${this.hass}
           .config=${d.config}
           .path=${selection}
           .errors=${this.errors}
-          @al-change=${onChange}
+          @al-change=${this.onChange}
           @al-select=${(e: CustomEvent<Path | null>) => {
             this.selection = e.detail;
           }}

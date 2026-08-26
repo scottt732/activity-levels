@@ -109,8 +109,9 @@ export class AlTree extends LitElement {
   @property({ attribute: false }) errors: ValidationError[] = [];
   @property({ attribute: false }) live: LiveState | null = null;
 
+  /** Every edit the tree makes is structural: it adds, removes or reorders a node. */
   private emitChange(next: Config): void {
-    this.dispatchEvent(alChange(next));
+    this.dispatchEvent(alChange(next, undefined, true));
   }
 
   private emitSelect(path: Path | null): void {
