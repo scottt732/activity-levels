@@ -10,6 +10,7 @@ import {
   saveConfig,
   validateConfig,
 } from "./api";
+import { simSwitchId } from "./entities";
 import { ensureHaElements } from "./ha-elements";
 import { groupAt } from "./model";
 import { busPathFor, initialNav, reduce } from "./navigation";
@@ -46,8 +47,6 @@ const TIMELINE_KEY = "activity_levels.timeline";
 const RANGES: Range[] = ["24h", "7d", "30d"];
 const HORIZONS: Horizon[] = ["off", "24h", "7d"];
 const DEFAULT_TIMELINE: TimelineRangeDetail = { range: "7d", horizon: "24h", showChannels: true, showLights: true };
-
-const simEntityId = (gid: string): string => `switch.${gid}_presence_simulation`;
 
 /** Reads back stored timeline settings, rejecting anything this build does not offer. */
 function parseTimeline(raw: string | null): TimelineRangeDetail | null {
@@ -100,6 +99,8 @@ export class ActivityLevelsPanel extends LitElement {
     const { ok, missing } = await ensureHaElements();
     this.missing = ok ? [] : missing;
     await this.load();
+    // Both awaits can outlive the panel: a disconnected element must not start timers.
+    if (!this.isConnected) return;
     this.updatePolling();
     void this.refreshProfile();
   }
@@ -143,14 +144,18 @@ export class ActivityLevelsPanel extends LitElement {
   /**
    * Re-points the navigation at the current config after an edit, and keeps the shared
    * selection with it: a node that is gone can neither be the current bus nor be shown in
-   * the editor pane, so the reducer walks up to something that still exists.
+   * the editor pane, so the reducer walks up to something that still exists. Nothing
+   * selected stays nothing selected, though - the reducer falls back to the bus, which
+   * is right after a deletion but would make the Groups tab's editor pane open itself
+   * on the first edit the user makes with no row selected.
    */
   private syncNav(): void {
     const config = this.draft?.config;
     if (!config) return;
-    const nav = reduce({ busPath: this.nav.busPath, selection: this.selection }, { type: "sync", config });
-    this.nav = nav;
-    this.selection = nav.selection !== null && nav.selection.length > 0 ? nav.selection : null;
+    const had = this.selection;
+    const nav = reduce({ busPath: this.nav.busPath, selection: had }, { type: "sync", config });
+    this.nav = had === null ? { busPath: nav.busPath, selection: null } : nav;
+    this.selection = this.nav.selection !== null && this.nav.selection.length > 0 ? this.nav.selection : null;
   }
 
   /** One selection for both views: the mixer's bus follows what the tree picked, and back. */
@@ -232,7 +237,7 @@ export class ActivityLevelsPanel extends LitElement {
    * frame describes) and the tab is actually on screen. Pausing keeps the last frame, so
    * resuming redraws immediately rather than blanking the meters.
    */
-  private updateLivePolling(awake = !this.busy && document.visibilityState === "visible"): void {
+  private updateLivePolling(awake: boolean): void {
     if (!((this.liveOn || this.tab === "mixer") && awake)) {
       this.clearLiveTimer();
       return;
@@ -243,7 +248,7 @@ export class ActivityLevelsPanel extends LitElement {
   }
 
   /** The simulation log moves at the pace of light switches, so it gets its own slower timer. */
-  private updateSimPolling(awake = !this.busy && document.visibilityState === "visible"): void {
+  private updateSimPolling(awake: boolean): void {
     if (!(this.patternsVisible && awake)) {
       this.clearSimTimer();
       return;
@@ -309,7 +314,7 @@ export class ActivityLevelsPanel extends LitElement {
   private onSimToggle = async (ev: CustomEvent<{ gid: string; on: boolean }>): Promise<void> => {
     const { gid, on } = ev.detail;
     try {
-      await callService(this.hass, "switch", on ? "turn_on" : "turn_off", { entity_id: simEntityId(gid) });
+      await callService(this.hass, "switch", on ? "turn_on" : "turn_off", { entity_id: simSwitchId(gid) });
     } catch (err) {
       this.banner = {
         kind: "error",
@@ -318,14 +323,14 @@ export class ActivityLevelsPanel extends LitElement {
     }
   };
 
-  /** What the mixer needs beyond the live frame: the switch's state and why it is blocked. */
+  /**
+   * What the mixer needs beyond the live frame. Whether the simulation is running is not
+   * in here: the strips read that off the switch entity they are given.
+   */
   private simStates(config: Config): Record<string, SimState> {
     const states: Record<string, SimState> = {};
     const walk = (g: Group): void => {
-      states[g.id] = {
-        on: this.hass?.states[simEntityId(g.id)]?.state === "on",
-        blocked: this.simLog?.blocked[g.id] ?? null,
-      };
+      states[g.id] = { blocked: this.simLog?.blocked[g.id] ?? null };
       g.children.forEach(walk);
     };
     config.groups.forEach(walk);
@@ -352,6 +357,9 @@ export class ActivityLevelsPanel extends LitElement {
   private selectTab(index: number): void {
     const next = TABS[index];
     if (next === undefined) return;
+    // The Mixer polls whether or not Live is on, so leaving it with Live off would strand
+    // the last frame on the other tabs' meters, where it would read as current.
+    if (next !== "mixer" && !this.liveOn) this.live = null;
     this.tab = next;
     this.tabFocus = index;
     this.updatePolling();
@@ -525,7 +533,7 @@ export class ActivityLevelsPanel extends LitElement {
     const config = d.config;
     const busPath = busPathFor(this.selection ?? this.nav.busPath);
     const group = groupAt(config, busPath);
-    return html`<div class="rows ${this.narrow ? "narrow" : ""}">
+    return html`<div class="rows">
       <al-timeline
         .hass=${this.hass}
         .groupId=${group?.id ?? null}

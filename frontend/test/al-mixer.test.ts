@@ -462,7 +462,7 @@ describe("al-mixer simulation", () => {
   it("takes the switch's own state and the shell's block reason", async () => {
     el.hass = hassStub({ "switch.property_presence_simulation": { state: "on" } });
     el.live = { now: 0, groups: { property: groupLive({ lights: 4 }) }, voices: {} };
-    el.simState = { property: { on: true, blocked: "quiet hours" } };
+    el.simState = { property: { blocked: "quiet hours" } };
     await el.updateComplete;
     expect(master()?.simOn).toBe(true);
     expect(master()?.blockedReason).toBe("quiet hours");

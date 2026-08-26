@@ -68,6 +68,10 @@ let validateResult: { ok: boolean; errors: { path: string; message: string }[] }
 let current: Config = config();
 /** What `profile/rebuild` answers next. */
 let rebuilt = true;
+/** Set to make `profile/rebuild` fail. */
+let rebuildError: Error | null = null;
+/** Set to make every service call fail. */
+let serviceError: Error | null = null;
 
 const hass = () => ({
   states: {},
@@ -85,6 +89,7 @@ const hass = () => ({
       case "activity_levels/profile/get":
         return profileState();
       case "activity_levels/profile/rebuild":
+        if (rebuildError) throw rebuildError;
         return { rebuilt };
       case "activity_levels/simulation/log":
         return { entries: [], active: {}, blocked: {} };
@@ -94,7 +99,10 @@ const hass = () => ({
         return {};
     }
   }),
-  callService: vi.fn(async () => undefined),
+  callService: vi.fn(async () => {
+    if (serviceError) throw serviceError;
+    return undefined;
+  }),
 });
 
 let el: Panel;
@@ -128,6 +136,8 @@ const wsCalls = (type: string): Record<string, unknown>[] =>
     .map((call) => call[0] as Record<string, unknown>)
     .filter((msg) => msg.type === type);
 
+const mixerNav = (): MixerNav => (el.shadowRoot?.querySelector("al-mixer") as unknown as { nav: MixerNav }).nav;
+
 const press = async (key: string): Promise<void> => {
   el.shadowRoot?.querySelector('[role="tablist"]')?.dispatchEvent(
     new KeyboardEvent("keydown", { key, bubbles: true, composed: true }),
@@ -139,6 +149,8 @@ const press = async (key: string): Promise<void> => {
 beforeEach(async () => {
   validateResult = { ok: true, errors: [] };
   rebuilt = true;
+  rebuildError = null;
+  serviceError = null;
   localStorage.clear();
   await mount();
 });
@@ -224,7 +236,18 @@ describe("activity-levels-panel validation errors", () => {
 });
 
 describe("activity-levels-panel shared selection", () => {
-  const mixerNav = (): MixerNav => (el.shadowRoot?.querySelector("al-mixer") as unknown as { nav: MixerNav }).nav;
+  it("leaves an unselected editor pane unselected after an edit, and still moves the bus", async () => {
+    await selectTab(1);
+    const placeholder = (): string | undefined => el.shadowRoot?.querySelector("ha-card span.muted")?.textContent?.trim();
+    expect(placeholder()).toBe("Select a group or stimulus.");
+    el.shadowRoot
+      ?.querySelector("al-tree")
+      ?.dispatchEvent(alChange({ ...config(), groups: [newGroup("x")] }, undefined, true));
+    await settle();
+    expect(placeholder()).toBe("Select a group or stimulus.");
+    await selectTab(0);
+    expect(mixerNav()).toEqual({ busPath: ["groups", 0], selection: null });
+  });
 
   it("starts on the first root bus", async () => {
     await mount(houseConfig());
@@ -262,6 +285,26 @@ describe("activity-levels-panel shared selection", () => {
     expect(timeline.groupId).toBe("house");
     expect(timeline.title).toBe("House");
     expect(timeline.maxValue).toBe(8);
+  });
+});
+
+describe("activity-levels-panel live frame", () => {
+  const treeLive = (): unknown => (el.shadowRoot?.querySelector("al-tree") as unknown as { live: unknown }).live;
+
+  it("drops the last frame when leaving the Mixer with Live off, rather than showing it as live", async () => {
+    await selectTab(1);
+    expect(treeLive()).toBeNull();
+  });
+
+  it("keeps the frame when Live is on", async () => {
+    await selectTab(1);
+    const sw = el.shadowRoot?.querySelector("ha-switch") as (HTMLElement & { checked?: boolean }) | null;
+    if (sw) sw.checked = true;
+    sw?.dispatchEvent(new Event("change"));
+    await settle();
+    await selectTab(0);
+    await selectTab(1);
+    expect(treeLive()).not.toBeNull();
   });
 });
 
@@ -348,6 +391,24 @@ describe("activity-levels-panel patterns", () => {
     el.shadowRoot?.querySelector("al-strip-controls")?.dispatchEvent(alRebuild());
     await settle();
     expect(el.shadowRoot?.querySelector("ha-alert")?.textContent).toContain("Rebuild skipped");
+  });
+
+  it("says when the simulation switch would not move", async () => {
+    serviceError = new Error("no such switch");
+    await mount(houseConfig());
+    el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(alSimToggle("kitchen", true));
+    await settle();
+    expect(el.shadowRoot?.querySelector("ha-alert")?.textContent).toContain(
+      "Could not start the simulation for kitchen: no such switch",
+    );
+  });
+
+  it("says when the rebuild itself failed", async () => {
+    rebuildError = new Error("busy");
+    await mount(houseConfig());
+    el.shadowRoot?.querySelector("al-strip-controls")?.dispatchEvent(alRebuild());
+    await settle();
+    expect(el.shadowRoot?.querySelector("ha-alert")?.textContent).toContain("Could not rebuild the profile: busy");
   });
 
   it("polls the simulation log while the Mixer tab is open", async () => {

@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { anomalySensorId, expectedSensorId, simSwitchId } from "./entities";
 import { fieldErrors, pathKey } from "./errors";
 import { alChange, alRebuild, alSimToggle } from "./events";
 import {
@@ -62,8 +63,6 @@ const LOG_ROWS = 5;
 
 /** The engine's own default training window, used when the config does not name one. */
 const DEFAULT_MIN_DAYS = 14;
-
-const simEntityId = (gid: string): string => `switch.${gid}_presence_simulation`;
 
 /** A stimulus is a channel; anything else selectable in the mixer is a bus. */
 const isChannel = (path: Path): boolean => path[path.length - 2] === "stimuli";
@@ -319,7 +318,7 @@ export class AlStripControls extends LitElement {
   private renderStatus(config: Config, group: Group): TemplateResult {
     const gid = group.id;
     const lights = this.live?.groups[gid]?.lights ?? 0;
-    const sim: HassEntity | undefined = this.hass?.states[simEntityId(gid)];
+    const sim: HassEntity | undefined = this.hass?.states[simSwitchId(gid)];
     const blocked = this.simLog?.blocked[gid] ?? null;
     const entries = (this.simLog?.entries ?? [])
       .filter((e) => e.group_id === gid)
@@ -346,8 +345,8 @@ export class AlStripControls extends LitElement {
             </div>`
           : nothing}
         ${blocked !== null ? html`<div class="muted blocked">Blocked: ${blocked}</div>` : nothing}
-        ${this.renderSensor("expected", "Expected", `sensor.${gid}_expected_activity`)}
-        ${this.renderSensor("anomaly", "Anomaly", `sensor.${gid}_activity_anomaly`)}
+        ${this.renderSensor("expected", "Expected", expectedSensorId(gid))}
+        ${this.renderSensor("anomaly", "Anomaly", anomalySensorId(gid))}
         <div class="muted readiness">${this.readiness(config, gid)}</div>
         ${entries.length > 0
           ? html`<ol class="log">

@@ -3,6 +3,7 @@ import type { PropertyValues, TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import "./al-master-strip";
 import "./al-strip";
+import { simSwitchId } from "./entities";
 import { pathKey, subtreeErrorCount } from "./errors";
 import { alChange, alNav, alSimToggle } from "./events";
 import { groupAt, resolvedEnvelope, stimulusAt } from "./model";
@@ -16,13 +17,11 @@ import type { Config, Group, HomeAssistant, LiveState, Mix, Path, ValidationErro
 
 /** What the shell knows about a group's presence simulation, beyond the switch entity itself. */
 export interface SimState {
-  on: boolean;
+  /** Why the group cannot be simulated right now, or null when nothing is stopping it. */
   blocked: string | null;
 }
 
 /** The entity Home Assistant exposes for a group's presence simulation. */
-const simEntityId = (gid: string): string => `switch.${gid}_presence_simulation`;
-
 /** What every strip needs regardless of what it stands for. */
 interface SharedStrip {
   index: number;
@@ -356,7 +355,7 @@ export class AlMixer extends LitElement {
   private renderMaster(config: Config, bus: Group): TemplateResult {
     const live = this.live?.groups[bus.id];
     const level: StripLevel | null = live ? { value: live.value, max: live.max_value, gated: live.gated } : null;
-    const entityId = simEntityId(bus.id);
+    const entityId = simSwitchId(bus.id);
     const selected = this.isSelected(this.nav.busPath);
     return html`
       <al-master-strip

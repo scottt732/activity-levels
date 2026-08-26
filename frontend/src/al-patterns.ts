@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { expectedSensorId } from "./entities";
 import { alRebuild } from "./events";
 import { sharedStyles } from "./styles";
 import type { TemplateResult } from "lit";
@@ -162,7 +163,7 @@ export class AlPatterns extends LitElement {
   private renderRow(row: Row, loaded: ProfileState, minDays: number): TemplateResult {
     const ready = loaded.ready[row.id] === true;
     const days = loaded.profile.groups[row.id]?.days ?? 0;
-    const expected = this.hass?.states[`sensor.${row.id}_expected_activity`]?.state;
+    const expected = this.hass?.states[expectedSensorId(row.id)]?.state;
     return html`<tr>
       <td class="group">${row.label}</td>
       <td class="ready ${ready ? "yes" : "no"}" title=${ready ? "Ready" : `Needs ${minDays} days`}>
