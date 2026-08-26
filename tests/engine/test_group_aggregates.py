@@ -107,10 +107,10 @@ def test_next_display_change_uses_rounding_steps_and_boundaries() -> None:
     assert g.next_display_change(0.0) is None
     a.note_on(0.0)
     # value 1.0 falling 0.01/s; display flips to 0.9 when value < 0.95 -> t=5
-    assert g.next_display_change(0.0) == pytest.approx(5.0)
-    assert g.next_display_change(5.0) == pytest.approx(15.0)
+    assert g.next_display_change(0.0) == pytest.approx(5.0, abs=2e-3)
+    assert g.next_display_change(5.0) == pytest.approx(15.0, abs=2e-3)
     # near the end the phase boundary (t=100) wins over the next rounding step
-    assert g.next_display_change(96.0) == pytest.approx(100.0)
+    assert g.next_display_change(96.0) == pytest.approx(100.0, abs=2e-3)
 
 
 def test_next_display_change_when_slope_zero_returns_boundary() -> None:
@@ -134,10 +134,14 @@ def test_find_group_and_reset() -> None:
     assert outer.value_at(1.0) == 0.0
 
 
-def test_next_display_change_rising_edge_advances_a_full_step() -> None:
+def test_next_display_change_rising_edge_crosses_immediately() -> None:
+    # A wake scheduled *at* a display threshold lands an ulp before it: dt is ~0 and
+    # the crossing is imminent, not already spent. Scheduling a full step ahead there
+    # would leave the display stale for a whole step.
     a = Voice(id="a", gain=1.0, envelope=Envelope(attack=100.0))
     g = Group(id="g", channels=[Channel(a)], precision=1)
     a.note_on(0.0)
-    assert g.next_display_change(15.0) == pytest.approx(25.0)
-    assert g.next_display_change(35.0) == pytest.approx(45.0)
-    assert g.next_display_change(0.0) == pytest.approx(5.0)
+    assert g.next_display_change(15.0) == pytest.approx(15.0, abs=2e-3)
+    assert g.next_display_change(35.0) == pytest.approx(35.0, abs=2e-3)
+    # rising from 0.0 at 0.01/s at precision 1: 0.05 is reached at t=5
+    assert g.next_display_change(0.0) == pytest.approx(5.0, abs=2e-3)

@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from .envelope import Mix, NullHandling, Phase
 from .voice import Voice
 
-_MIN_DT = 1e-6
+_MIN_DT = 1e-3  # 1 ms: wakes are scheduled just *past* a threshold, never on it
 
 
 @dataclass
@@ -147,18 +147,27 @@ class Group:
         return slope
 
     def next_display_change(self, t: float) -> float | None:
+        """Earliest time at which ``display_value_at`` can differ from its value now.
+
+        Worked in *display* space: from the currently shown value, find the rounding
+        edge the value is heading for and aim ``_MIN_DT`` past it. Aiming past the
+        edge (rather than at it) means the next wake sees the crossing as done, so a
+        wake landing an ulp short of a threshold no longer skips a whole step.
+        """
         boundary = self.next_boundary(t)
         slope = self.slope_at(t)
         if slope == 0.0:
             return boundary
         step = 10.0**-self.precision
         value = self.value_at(t)
-        k = round(value / step)
-        edge = (k + 0.5) * step if slope > 0.0 else (k - 0.5) * step
-        dt = (edge - value) / slope
-        if dt < _MIN_DT:
-            dt += step / abs(slope)
-        candidate = t + dt
+        shown = round(value, self.precision)
+        edge = (shown / step + (0.5 if slope > 0.0 else -0.5)) * step
+        dt = max((edge - value) / slope, 0.0)
+        for _ in range(3):
+            if round(value + slope * (dt + _MIN_DT), self.precision) != shown:
+                break
+            dt += step / abs(slope)  # half-even parity or an ulp blocked this threshold
+        candidate = t + dt + _MIN_DT
         if boundary is not None and boundary < candidate:
             return boundary
         return candidate
