@@ -137,7 +137,9 @@ export class AlMixer extends LitElement {
   private pendingFocus = false;
 
   private get bus(): Group | undefined {
-    return this.config ? groupAt(this.config, this.nav.busPath) : undefined;
+    // An empty bus path is "no bus", not the config document: `groupAt` would hand back
+    // the document itself, which has neither a name nor channels to draw.
+    return this.config && this.nav.busPath.length > 0 ? groupAt(this.config, this.nav.busPath) : undefined;
   }
 
   private get channels(): Path[] {

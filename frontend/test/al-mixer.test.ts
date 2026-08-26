@@ -248,6 +248,14 @@ describe("al-mixer rendering", () => {
     expect(master()?.hasAttribute("narrow")).toBe(true);
   });
 
+  it("says so rather than mixing the config document itself when the nav has no bus", async () => {
+    el.nav = { busPath: [], selection: null };
+    await el.updateComplete;
+    expect(strips()).toHaveLength(0);
+    expect(master()).toBeNull();
+    expect(el.shadowRoot?.textContent).toContain("No bus");
+  });
+
   it("says so rather than rendering an empty bus when there is no config", async () => {
     el.config = undefined;
     await el.updateComplete;

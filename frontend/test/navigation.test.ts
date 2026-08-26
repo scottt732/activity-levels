@@ -66,6 +66,10 @@ describe("channelPaths", () => {
   it("is empty when the bus path does not resolve to a group", () => {
     expect(channelPaths(houseConfig(), ["groups", 9])).toEqual([]);
   });
+  // An empty path reads the config document itself, which has no channels of its own.
+  it("is empty for an empty bus path", () => {
+    expect(channelPaths(houseConfig(), [])).toEqual([]);
+  });
 });
 
 describe("reduce: open / select / up", () => {
@@ -125,6 +129,11 @@ describe("reduce: arrow", () => {
   it("starts from the first channel when nothing is selected", () => {
     const nav: MixerNav = { busPath: ["groups", 0], selection: null };
     expect(reduce(nav, { type: "arrow", delta: 1, config }).selection).toEqual(list[0]);
+  });
+  // Left from nothing comes in at the other end of the row, which is the MASTER strip.
+  it("starts from the master strip when nothing is selected and the arrow goes left", () => {
+    const nav: MixerNav = { busPath: ["groups", 0], selection: null };
+    expect(reduce(nav, { type: "arrow", delta: -1, config }).selection).toEqual(list[list.length - 1]);
   });
 });
 

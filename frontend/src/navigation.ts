@@ -31,6 +31,9 @@ export function initialNav(config: Config): MixerNav {
 
 /** Channel strips for a bus, in config order: stimuli first, then child (sub-bus) groups. */
 export function channelPaths(config: Config, busPath: Path): Path[] {
+  // An empty path reads the config document itself, which is not a group and has no
+  // channels; without this it would be walked as one and blow up on `stimuli`.
+  if (busPath.length === 0) return [];
   const group = getAt<Group>(config, busPath);
   if (!group) return [];
   const paths: Path[] = [];
@@ -63,7 +66,10 @@ export function reduce(nav: MixerNav, action: NavAction): MixerNav {
     case "arrow": {
       const list = [...channelPaths(action.config, nav.busPath), nav.busPath];
       if (list.length === 0) return nav;
-      const idx = nav.selection ? list.findIndex((p) => pathEq(p, nav.selection!)) : -1;
+      const found = nav.selection ? list.findIndex((p) => pathEq(p, nav.selection!)) : -1;
+      // Nothing selected: the row is entered from the end the arrow came from, so right
+      // lands on the first channel and left on the MASTER, one past the end of the list.
+      const idx = found === -1 && action.delta < 0 ? list.length : found;
       const next = (((idx + action.delta) % list.length) + list.length) % list.length;
       return { ...nav, selection: list[next]! };
     }
