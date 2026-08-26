@@ -7,6 +7,9 @@ import type { Mix } from "./types";
 
 const MIXES: Mix[] = ["sum", "max", "mean"];
 
+/** The smallest ceiling the engine will accept; mirrored in the input's `min`. */
+const MIN_LIMIT = 0.1;
+
 /**
  * The MASTER strip: the current bus itself, at the right of the mixer.
  *
@@ -93,11 +96,20 @@ export class AlMasterStrip extends LitElement {
     this.dispatchEvent(alMixChanged((ev.target as HTMLSelectElement).value as Mix));
   }
 
-  /** An empty or unreadable box is a half-typed number, not a request for a ceiling of NaN. */
+  /**
+   * `min` on a number input is advice to the browser, not a guarantee to us: it does not stop
+   * a typed or pasted `0`, and `.value` reads back whatever is in the box. So the floor is
+   * enforced here, and a rejected entry — empty, unreadable, or below the floor — puts the
+   * committed ceiling back in the box rather than leaving a value we refused on screen.
+   */
   private onLimiter(ev: Event): void {
-    const raw = (ev.target as HTMLInputElement).value.trim();
+    const input = ev.target as HTMLInputElement;
+    const raw = input.value.trim();
     const value = Number(raw);
-    if (raw === "" || !Number.isFinite(value)) return;
+    if (raw === "" || !Number.isFinite(value) || value < MIN_LIMIT) {
+      input.value = String(this.maxValue);
+      return;
+    }
     this.dispatchEvent(alLimiterChanged(value));
   }
 
@@ -123,7 +135,7 @@ export class AlMasterStrip extends LitElement {
             id="limiter"
             class="limiter"
             type="number"
-            min="0.1"
+            min=${MIN_LIMIT}
             step="0.1"
             .value=${String(this.maxValue)}
             @change=${this.onLimiter}

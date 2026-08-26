@@ -100,6 +100,26 @@ describe("al-strip", () => {
     expect(root?.querySelector(".adsr")?.textContent).toContain("30m");
   });
 
+  it("falls back to a glyph per kind when the entity has no icon", async () => {
+    expect(el.shadowRoot?.querySelector("ha-icon")).toBeFalsy();
+    expect(el.shadowRoot?.querySelector(".icon")?.textContent?.trim()).toBe("⚡");
+    el.kind = "bus";
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector(".icon")?.textContent?.trim()).toBe("▤");
+  });
+
+  it("prefers the entity's own icon when it has one", async () => {
+    el.entityIcon = "mdi:sofa";
+    await el.updateComplete;
+    const icon = el.shadowRoot?.querySelector(".icon");
+    expect(icon?.tagName.toLowerCase()).toBe("ha-icon");
+    expect((icon as unknown as { icon?: string }).icon).toBe("mdi:sofa");
+    el.entityIcon = null;
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector("ha-icon")).toBeFalsy();
+    expect(el.shadowRoot?.querySelector(".icon")?.textContent?.trim()).toBe("⚡");
+  });
+
   it("is focusable so the mixer can hand it the roving tabindex", () => {
     expect(el.getAttribute("tabindex")).toBe("-1");
     el.tabIndex = 0;
@@ -196,16 +216,36 @@ describe("al-master-strip", () => {
     expect(mixes).toEqual([{ mix: "max" }]);
   });
 
-  it("commits the limiter ceiling on change and ignores an empty box", async () => {
+  it("commits the limiter ceiling on change", async () => {
     const input = el.shadowRoot?.querySelector<HTMLInputElement>(".limiter");
     expect(input?.value).toBe("5");
     expect(input?.min).toBe("0.1");
     if (input) input.value = "8";
     input?.dispatchEvent(new Event("change", { bubbles: true }));
-    if (input) input.value = "";
-    input?.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;
     expect(limits).toEqual([{ value: 8 }]);
+  });
+
+  it("accepts a fractional ceiling at the floor and above", async () => {
+    const input = el.shadowRoot?.querySelector<HTMLInputElement>(".limiter");
+    if (input) input.value = "2.5";
+    input?.dispatchEvent(new Event("change", { bubbles: true }));
+    if (input) input.value = "0.1";
+    input?.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(limits).toEqual([{ value: 2.5 }, { value: 0.1 }]);
+  });
+
+  // `min` is only advice to the browser: a typed or pasted 0 still reaches `.value`, and a
+  // ceiling of zero would divide every meter by nothing. Note jsdom sanitizes "abc" on a
+  // number input to "", so that case lands on the empty branch rather than the NaN one.
+  it.each(["0", "-3", "abc", ""])("refuses %o and puts the committed ceiling back", async (typed) => {
+    const input = el.shadowRoot?.querySelector<HTMLInputElement>(".limiter");
+    if (input) input.value = typed;
+    input?.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(limits).toEqual([]);
+    expect(input?.value).toBe("5");
   });
 
   it("hides the simulation switch for a bus with no lights", async () => {
