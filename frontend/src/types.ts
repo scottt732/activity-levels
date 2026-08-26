@@ -109,7 +109,11 @@ export interface ProfileDoc {
 /** `activity_levels/profile/get`. `trained` is false for the empty setup-time document. */
 export interface ProfileState { profile: ProfileDoc; ready: Record<string, boolean>; trained: boolean }
 
-export interface Forecast { t0: number; step: number; p25: number[]; p50: number[]; p75: number[] }
+export interface Forecast {
+  t0: number; step: number; p25: number[]; p50: number[]; p75: number[];
+  /** Present only when the requested horizon was cut back to the server cap. */
+  truncated?: true;
+}
 export type DayTypeSpan = [number, number, string];
 export type LightSpan = [number, number];
 /** `[on, off, entity]`; a null end is a light the plan never turns back off. */

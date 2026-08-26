@@ -81,6 +81,12 @@ REGISTRY_DEBOUNCE = 5.0
 Adopting one device rewrites the device registry and then every one of its entities,
 so a burst is the normal case and resolving membership per event would be pure waste."""
 MAX_EVENT_DAYS = 800
+MAX_FORECAST_POINTS = 2000
+"""Cap on one forecast: a bit under three weeks of 15-minute slots.
+
+The horizon is the caller's, and a caller asking for a year would be handed 35k points
+to render. Past the cap the answer is truncated and says so, rather than silently
+being a smaller window than was asked for."""
 
 
 def profile_storage_key(entry_id: str) -> str:
@@ -830,12 +836,17 @@ class PatternsCoordinator:
             series = await self._history_5m(gids, start, end)
         else:
             series = await self._history_1h(gids, start, end)
+        forecast = self._forecast(gid, end, forecast_until)
         # the day-type ribbon runs under the forecast as well as the history, so it is
-        # drawn across the whole span the caller asked to see
+        # drawn to wherever the forecast actually stopped -- not to the horizon a caller
+        # asked for and did not get
+        horizon = end
+        if forecast is not None:
+            horizon = float(forecast["t0"]) + len(forecast["p50"]) * SLOT_SECONDS
         return {
             "series": series,
-            "forecast": self._forecast(gid, end, forecast_until),
-            "day_types": self._day_type_spans(start, max(end, forecast_until or end)),
+            "forecast": forecast,
+            "day_types": self._day_type_spans(start, max(end, horizon)),
             "lights": self._light_spans(gid, start, end),
             "plan": self._plan_spans(gid),
         }
@@ -896,6 +907,9 @@ class PatternsCoordinator:
         # start on the first slot boundary at or after `end`, so a whole forecast day
         # is exactly 96 points however `end` happens to fall inside its bucket
         t0 = math.ceil(end / SLOT_SECONDS) * SLOT_SECONDS
+        horizon = t0 + MAX_FORECAST_POINTS * SLOT_SECONDS
+        truncated = forecast_until > horizon
+        forecast_until = min(forecast_until, horizon)
         tz = self.timezone
         bands: list[tuple[float, float, float]] = []
         t = float(t0)
@@ -905,13 +919,16 @@ class PatternsCoordinator:
             band = expected_at(self.profile, gid, self.day_type_of(local.date()), slot)
             bands.append(band or (0.0, 0.0, 0.0))
             t += SLOT_SECONDS
-        return {
+        forecast: dict[str, Any] = {
             "t0": float(t0),
             "step": SLOT_SECONDS,
             "p25": [b[0] for b in bands],
             "p50": [b[1] for b in bands],
             "p75": [b[2] for b in bands],
         }
+        if truncated:
+            forecast["truncated"] = True
+        return forecast
 
     def _day_type_spans(self, start: float, end: float) -> list[list[Any]]:
         tz = self.timezone

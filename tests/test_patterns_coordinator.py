@@ -41,7 +41,11 @@ from custom_components.activity_levels import patterns_coordinator
 from custom_components.activity_levels.const import DOMAIN
 from custom_components.activity_levels.lightlog import LightLog
 from custom_components.activity_levels.patterns.profile import SLOTS, ProfileError, empty_profile
-from custom_components.activity_levels.patterns_coordinator import REGISTRY_DEBOUNCE, START_DELAY
+from custom_components.activity_levels.patterns_coordinator import (
+    MAX_FORECAST_POINTS,
+    REGISTRY_DEBOUNCE,
+    START_DELAY,
+)
 from custom_components.activity_levels.schema import validate_config
 from tests.fixtures import house_config
 
@@ -761,3 +765,36 @@ async def test_a_reload_does_not_back_fill_again(
         await hass.async_block_till_done(wait_background_tasks=True)
 
         assert asked == [["light.kitchen"]], "the stored log is the record; do not refetch"
+
+
+# -- forecast horizon ---------------------------------------------------------
+
+
+async def test_a_long_forecast_is_truncated_and_says_so(
+    trained: MockConfigEntry, hass: HomeAssistant
+) -> None:
+    """A year of 15-minute slots is 35k points nobody asked to render."""
+    patterns = trained.runtime_data.patterns
+    end = dt_util.utcnow().timestamp()
+    result = await patterns.async_timeseries(
+        "kitchen", end - 86400, end, "1h", forecast_until=end + 365 * 86400
+    )
+
+    forecast = result["forecast"]
+    assert len(forecast["p50"]) == MAX_FORECAST_POINTS
+    assert len(forecast["p25"]) == len(forecast["p75"]) == MAX_FORECAST_POINTS
+    assert forecast["truncated"] is True
+    horizon = forecast["t0"] + MAX_FORECAST_POINTS * 900
+    # the day-type ribbon runs under the forecast, so it stops where the forecast does
+    assert result["day_types"][-1][1] <= horizon
+
+
+async def test_a_forecast_inside_the_cap_is_not_marked_truncated(
+    trained: MockConfigEntry, hass: HomeAssistant
+) -> None:
+    end = dt_util.utcnow().timestamp()
+    result = await trained.runtime_data.patterns.async_timeseries(
+        "kitchen", end - 86400, end, "1h", forecast_until=end + 86400
+    )
+
+    assert "truncated" not in result["forecast"]
