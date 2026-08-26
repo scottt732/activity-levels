@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Activity Levels",
+        "description": "Create the Activity Levels integration. Groups, envelopes and stimuli are configured afterwards in the Activity Levels sidebar panel."
+      }
+    },
+    "abort": { "single_instance_allowed": "Activity Levels is already configured." }
+  },
+  "entity": {
+    "sensor": {
+      "activity_level": { "name": "Activity level" },
+      "last_activity": { "name": "Last activity" },
+      "cooldown_at": { "name": "Cooldown at" }
+    },
+    "binary_sensor": { "active": { "name": "Active" } },
+    "button": { "trigger": { "name": "Trigger" } }
+  },
+  "services": {
+    "trigger": {
+      "name": "Trigger",
+      "description": "Fire a synthetic impulse on a group, as if a stimulus had activated.",
+      "fields": {
+        "group_id": { "name": "Group", "description": "The group id to trigger." },
+        "peak": { "name": "Peak", "description": "Peak level of the impulse." }
+      }
+    },
+    "reset": {
+      "name": "Reset",
+      "description": "Return all voices in a group (or all groups) to idle.",
+      "fields": { "group_id": { "name": "Group", "description": "Group id; omit to reset every group." } }
+    }
+  }
+}
