@@ -1,4 +1,5 @@
 import type { NavAction } from "./navigation";
+import type { Horizon, Range } from "./timeseries";
 import type { Config, Mix, Path } from "./types";
 
 /** `al-change` also carries an optional key that merges rapid edits of one field into a single undo step. */
@@ -62,6 +63,18 @@ export const alSimToggled = (on: boolean): CustomEvent<{ on: boolean }> => strip
  */
 export const alNav = (action: NavAction): CustomEvent<NavAction> =>
   new CustomEvent<NavAction>("al-nav", { detail: action, bubbles: true, composed: true });
+
+/** What the timeline's toolbar settled on. The chart applies it itself; the host persists it. */
+export interface TimelineRangeDetail {
+  range: Range;
+  horizon: Horizon;
+  showChannels: boolean;
+  showLights: boolean;
+}
+
+/** Reports a timeline toolbar change. Composed, so a card wrapping the chart still hears it. */
+export const alTimelineRange = (detail: TimelineRangeDetail): CustomEvent<TimelineRangeDetail> =>
+  new CustomEvent<TimelineRangeDetail>("al-timeline-range", { detail, bubbles: true, composed: true });
 
 /** Asks the shell to flip a group's presence simulation; only it may call the switch. */
 export const alSimToggle = (gid: string, on: boolean): CustomEvent<{ gid: string; on: boolean }> =>

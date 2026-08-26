@@ -10,3 +10,4 @@ import "./al-meter";
 import "./al-strip";
 import "./al-master-strip";
 import "./al-mixer";
+import "./al-timeline";
