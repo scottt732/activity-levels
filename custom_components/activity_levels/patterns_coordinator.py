@@ -31,6 +31,8 @@ from homeassistant.core import (
     State,
     callback,
 )
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
@@ -73,6 +75,11 @@ STALE_AFTER = 26 * 3600
 """A profile older than this at startup earns an immediate rebuild."""
 START_DELAY = 60.0
 """How long after Home Assistant is up the catch-up rebuild waits."""
+REGISTRY_DEBOUNCE = 5.0
+"""How long the light membership waits for the registries to stop moving.
+
+Adopting one device rewrites the device registry and then every one of its entities,
+so a burst is the normal case and resolving membership per event would be pure waste."""
 MAX_EVENT_DAYS = 800
 
 
@@ -219,7 +226,9 @@ class PatternsCoordinator:
         self.min_days: int = patterns["min_days"]
         self.day_types: list[str] = list(patterns["day_type_precedence"])
         self.profile: dict[str, Any] = empty_profile(day_types=self.day_types)
+        self._config = config
         self.lights = _group_lights(hass, config)
+        self._with_lights = {gid for gid, members in self.lights.items() if members}
         self.lightlog = LightLog(hass, entry.entry_id, self.history_days)
         self.simulation = SimulationRuntime(hass, entry, coordinator, self, config)
         self._calendars: list[dict[str, str]] = list(patterns["calendars"])
@@ -231,6 +240,8 @@ class PatternsCoordinator:
         self._day_type_cache: dict[str, str] = {}
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[CALLBACK_TYPE] = []
+        self._light_unsub: CALLBACK_TYPE | None = None
+        self._registry_timer: CALLBACK_TYPE | None = None
         self._light_entities: list[str] = []
         self._needs_backfill = False
         self._today: date | None = None
@@ -245,19 +256,19 @@ class PatternsCoordinator:
         await self._load()
         await self.lightlog.async_load()
 
-        self._light_entities = sorted({e for lights in self.lights.values() for e in lights})
+        entity_ids = sorted({e for lights in self.lights.values() for e in lights})
         # decide this before _record_current writes a row per entity, or the log always
         # looks populated and the recorder's history would never be pulled in at all
-        self._needs_backfill = not self.lightlog.transitions(self._light_entities, 0.0, math.inf)
-        if self._light_entities:
-            # the subscription has to be live before setup returns or transitions are
-            # lost; the recorder back-fill is a history_days-wide query and can wait
-            self._record_current(self._light_entities)
-            self._unsubs.append(
-                async_track_state_change_event(
-                    self.hass, self._light_entities, self._handle_light_event
-                )
-            )
+        self._needs_backfill = not self.lightlog.transitions(entity_ids, 0.0, math.inf)
+        # the subscription has to be live before setup returns or transitions are lost;
+        # the recorder back-fill is a history_days-wide query and can wait
+        self._subscribe_lights()
+        self._unsubs.append(
+            self.hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, self._registry_changed)
+        )
+        self._unsubs.append(
+            self.hass.bus.async_listen(dr.EVENT_DEVICE_REGISTRY_UPDATED, self._registry_changed)
+        )
 
         self._today = dt_util.now().date()
         hour, _, minute = self.rebuild_time.partition(":")
@@ -283,6 +294,12 @@ class PatternsCoordinator:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
+        if self._light_unsub is not None:
+            self._light_unsub()
+            self._light_unsub = None
+        if self._registry_timer is not None:
+            self._registry_timer()
+            self._registry_timer = None
         self._listeners.clear()
         await self.simulation.async_stop()
         await self.lightlog.async_save()
@@ -426,6 +443,62 @@ class PatternsCoordinator:
         self.lightlog.record(
             event.data["entity_id"], event.data["new_state"], dt_util.utcnow().timestamp()
         )
+
+    @callback
+    def _subscribe_lights(self) -> None:
+        """Point the light-log subscription at the current membership.
+
+        Entities that have just joined get their present state written to the log
+        straight away: without a starting point the first thing the learner sees is
+        whatever the light does next, which it would read as the whole window.
+        """
+        entity_ids = sorted({e for lights in self.lights.values() for e in lights})
+        if entity_ids == self._light_entities and self._light_unsub is not None:
+            return
+        joined = [e for e in entity_ids if e not in set(self._light_entities)]
+        self._light_entities = entity_ids
+        if self._light_unsub is not None:
+            self._light_unsub()
+            self._light_unsub = None
+        if not entity_ids:
+            return
+        self._record_current(joined)
+        self._light_unsub = async_track_state_change_event(
+            self.hass, entity_ids, self._handle_light_event
+        )
+
+    @callback
+    def _registry_changed(self, _event: Event[Any]) -> None:
+        """A registry moved. Debounced: adding one device fires a burst of these."""
+        if self._stopped:
+            return
+        if self._registry_timer is not None:
+            self._registry_timer()
+        self._registry_timer = async_call_later(self.hass, REGISTRY_DEBOUNCE, self._refresh_lights)
+
+    @callback
+    def _refresh_lights(self, _now: datetime) -> None:
+        """Re-resolve every group's lights after the registries settled."""
+        self._registry_timer = None
+        if self._stopped:
+            return
+        lights = _group_lights(self.hass, self._config)
+        if lights == self.lights:
+            return
+        for gid, members in lights.items():
+            if members and gid not in self._with_lights:
+                self._with_lights.add(gid)
+                # the switch platform ran once, at setup; creating entities outside it
+                # is a different job, so tell the user what to do about it instead
+                _LOGGER.info(
+                    "Group %s now has lights (%s); reload Activity Levels to give it a "
+                    "presence-simulation switch",
+                    gid,
+                    ", ".join(members),
+                )
+        self.lights = lights
+        self._subscribe_lights()
+        self.simulation.evaluate_all()
 
     def _record_current(self, entity_ids: Iterable[str]) -> None:
         now = dt_util.utcnow().timestamp()

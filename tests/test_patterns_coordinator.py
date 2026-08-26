@@ -27,7 +27,9 @@ from homeassistant.core import (
     ServiceResponse,
     SupportsResponse,
 )
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant_custom_component.components.recorder.common import (
@@ -38,7 +40,7 @@ from custom_components.activity_levels import patterns_coordinator
 from custom_components.activity_levels.const import DOMAIN
 from custom_components.activity_levels.lightlog import LightLog
 from custom_components.activity_levels.patterns.profile import SLOTS, ProfileError, empty_profile
-from custom_components.activity_levels.patterns_coordinator import START_DELAY
+from custom_components.activity_levels.patterns_coordinator import REGISTRY_DEBOUNCE, START_DELAY
 from custom_components.activity_levels.schema import validate_config
 from tests.fixtures import house_config
 
@@ -606,3 +608,54 @@ async def test_concurrent_rebuilds_fit_only_once(
     # the second caller waits, sees the fresh document and does not refit
     assert sorted(results, reverse=True) == [True, False]
     assert fits == 1
+
+
+# -- registry changes ---------------------------------------------------------
+
+
+async def test_a_new_light_joins_its_group_without_a_reload(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Lights bought after setup have to find their group on their own."""
+    area = ar.async_get(hass).async_get_or_create("kitchen")
+    config = house_config()
+    config["groups"][0]["children"][1]["area"] = area.id
+    entry = await _add_entry(hass, config)
+    patterns = entry.runtime_data.patterns
+    assert patterns.lights["kitchen"] == []
+
+    entities = er.async_get(hass)
+    light = entities.async_get_or_create("light", "demo", "late-lamp")
+    entities.async_update_entity(light.entity_id, area_id=area.id)
+    await hass.async_block_till_done()
+    assert patterns.lights["kitchen"] == []  # debounced, not immediate
+
+    freezer.tick(timedelta(seconds=REGISTRY_DEBOUNCE + 1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert patterns.lights["kitchen"] == [light.entity_id]
+    # the switch platform ran at setup; a group that has just grown its first light
+    # cannot be given one now, so say so rather than stay silently switch-less
+    assert "reload" in caplog.text
+
+
+async def test_a_light_leaving_its_area_leaves_the_group(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    area = ar.async_get(hass).async_get_or_create("kitchen")
+    entities = er.async_get(hass)
+    light = entities.async_get_or_create("light", "demo", "kitchen-lamp")
+    entities.async_update_entity(light.entity_id, area_id=area.id)
+    config = house_config()
+    config["groups"][0]["children"][1]["area"] = area.id
+    entry = await _add_entry(hass, config)
+    patterns = entry.runtime_data.patterns
+    assert patterns.lights["kitchen"] == [light.entity_id]
+
+    entities.async_update_entity(light.entity_id, area_id=None)
+    freezer.tick(timedelta(seconds=REGISTRY_DEBOUNCE + 1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert patterns.lights["kitchen"] == []
