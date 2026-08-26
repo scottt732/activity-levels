@@ -1,4 +1,4 @@
-import type { Config, Path } from "./types";
+import type { Config, Mix, Path } from "./types";
 
 /** `al-change` also carries an optional key that merges rapid edits of one field into a single undo step. */
 export interface AlChangeEvent extends CustomEvent<Config> {
@@ -26,3 +26,31 @@ export function alChange(config: Config, coalesceKey?: string, structural?: true
 /** Builds the `al-select` event: the path the editor pane should show, or `null` for nothing. */
 export const alSelect = (path: Path | null): CustomEvent<Path | null> =>
   new CustomEvent<Path | null>("al-select", { detail: path, bubbles: true, composed: true });
+
+/**
+ * Mixer strip events cross the shadow boundary and bubble, so `al-mixer` can listen once on
+ * the strip container instead of wiring a handler per strip. Which strip it was is the
+ * event's `target`: a strip does not know its own place in the bus.
+ */
+const stripEvent = <T>(type: string, detail: T): CustomEvent<T> =>
+  new CustomEvent<T>(type, { detail, bubbles: true, composed: true });
+
+/** A fader move: `live` is true while the pointer is still down, false for the value to keep. */
+export interface GainChangeDetail {
+  value: number;
+  live: boolean;
+}
+
+export const alSelectStrip = (): CustomEvent<null> => stripEvent<null>("al-select-strip", null);
+
+export const alOpenStrip = (): CustomEvent<null> => stripEvent<null>("al-open-strip", null);
+
+export const alGainChanged = (detail: GainChangeDetail): CustomEvent<GainChangeDetail> =>
+  stripEvent("al-gain-changed", detail);
+
+export const alMixChanged = (mix: Mix): CustomEvent<{ mix: Mix }> => stripEvent("al-mix-changed", { mix });
+
+export const alLimiterChanged = (value: number): CustomEvent<{ value: number }> =>
+  stripEvent("al-limiter-changed", { value });
+
+export const alSimToggled = (on: boolean): CustomEvent<{ on: boolean }> => stripEvent("al-sim-toggled", { on });

@@ -5,3 +5,7 @@ import "./al-stimulus-editor";
 import "./al-override-field";
 import "./al-envelopes";
 import "./al-defaults";
+import "./al-fader";
+import "./al-meter";
+import "./al-strip";
+import "./al-master-strip";

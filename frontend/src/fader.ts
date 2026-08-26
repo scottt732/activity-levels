@@ -9,6 +9,9 @@ const LOG_RANGE = LOG_MAX - LOG_MIN;
 const clamp = (v: number): number => Math.min(FADER_MAX, Math.max(FADER_MIN, v));
 const round2 = (v: number): number => Math.round(v * 100) / 100;
 
+/** A gain the fader can actually hold: inside [0.1, 10], rounded to 2 decimals. */
+export const clampGain = (value: number): number => round2(clamp(value));
+
 /** Value -> position in [0, 1]. `toPosition(1) === 0.5`. */
 export function toPosition(value: number): number {
   return (Math.log10(clamp(value)) - LOG_MIN) / LOG_RANGE;
