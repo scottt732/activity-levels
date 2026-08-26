@@ -547,6 +547,7 @@ export class ActivityLevelsPanel extends LitElement {
         .maxValue=${group?.max_value ?? config.defaults.max_value}
         .profileState=${this.profileState}
         .minDays=${config.defaults.patterns?.min_days ?? DEFAULT_MIN_DAYS}
+        .paused=${this.busy}
         .narrow=${this.narrow}
         @al-timeline-range=${this.onTimelineRange}
       ></al-timeline>

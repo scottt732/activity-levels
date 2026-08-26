@@ -105,6 +105,52 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("al-timeline refetch", () => {
+  const setVisibility = (value: string): void => {
+    Object.defineProperty(document, "visibilityState", { value, configurable: true });
+  };
+
+  afterEach(() => setVisibility("visible"));
+
+  /** One element on the 60 s refetch timer, with its first load already answered. */
+  const mounted = async (): Promise<{ el: AlTimeline; h: Harness }> => {
+    const gid = nextGid();
+    const h = hassStub(async (m) => makeResponse(m["group_id"] as string));
+    const el = await mount({ groupId: gid, range: "24h", horizon: "24h" }, h);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    return { el, h };
+  };
+
+  it("asks again on its own timer", async () => {
+    const { el, h } = await mounted();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    el.remove();
+  });
+
+  it("skips the tick while the tab is hidden", async () => {
+    const { el, h } = await mounted();
+    setVisibility("hidden");
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    setVisibility("visible");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    el.remove();
+  });
+
+  it("skips the tick while the host has it paused", async () => {
+    const { el, h } = await mounted();
+    el.paused = true;
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    el.paused = false;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    el.remove();
+  });
+});
+
 describe("al-timeline data loading", () => {
   it("asks for the window the range and horizon describe", async () => {
     const gid = nextGid();

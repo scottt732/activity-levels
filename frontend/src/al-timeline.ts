@@ -413,6 +413,11 @@ export class AlTimeline extends LitElement {
   @property({ attribute: false }) profileState: ProfileState | null = null;
   @property({ type: Number }) minDays = DEFAULT_MIN_DAYS;
   @property({ type: Boolean, reflect: true }) narrow = false;
+  /**
+   * Set by the host while a save is in flight: the config the current window describes is
+   * about to be replaced, so there is nothing worth refreshing into.
+   */
+  @property({ type: Boolean }) paused = false;
 
   /** The sample the cursor is on, or `null` for no cursor. Read by tests and the host. */
   @state() cursorIndex: number | null = null;
@@ -463,7 +468,12 @@ export class AlTimeline extends LitElement {
       });
       this.observer.observe(this);
     }
-    this.timer = setInterval(() => void this.load(), REFETCH_MS);
+    // A background tab has nobody watching the chart, and a save is about to replace the
+    // config this window describes: either way the tick is a wasted round trip.
+    this.timer = setInterval(() => {
+      if (this.paused || document.visibilityState !== "visible") return;
+      void this.load();
+    }, REFETCH_MS);
     void this.load();
   }
 
