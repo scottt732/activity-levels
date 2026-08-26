@@ -46,7 +46,9 @@ const HELPERS: Record<string, string> = {
 /** Fields the top form owns, checked in order to name the coalescing key. */
 const FORM_FIELDS: (keyof Stimulus)[] = ["entity", "gain", "key", "envelope"];
 
-const DURATION_SELECTOR: Selector = { duration: {} };
+/** Milliseconds stay on: the backend takes sub-second debounce, wake and A/D/R values,
+ * and a selector without the field would silently drop the `milliseconds` we hand it. */
+const DURATION_SELECTOR: Selector = { duration: { enable_millisecond: true } };
 const SUSTAIN_SELECTOR: Selector = { number: { min: 0, max: 1, step: 0.05, mode: "slider" } };
 const RETRIGGER_SELECTOR: Selector = {
   select: {

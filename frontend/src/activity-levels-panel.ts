@@ -228,6 +228,7 @@ export class ActivityLevelsPanel extends LitElement {
           .hass=${this.hass}
           .config=${d.config}
           .errors=${this.errors}
+          .narrow=${this.narrow}
           @al-change=${onChange}
         ></al-envelopes>`;
       case "defaults":

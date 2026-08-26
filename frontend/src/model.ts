@@ -87,11 +87,20 @@ export function presetReferences(config: Config, id: string): { defaults: boolea
 }
 
 /**
- * Renames a preset and every reference to it - `defaults.envelope` and each stimulus that
- * named it - so a rename lands as one config, never as a dangling reference.
+ * Renames the preset at `index` and every reference to it - `defaults.envelope` and each
+ * stimulus that named it - so a rename lands as one config, never as a dangling reference.
+ *
+ * References are only rewritten when the OLD id was unique among the presets. Typing an id
+ * passes through states where two presets share one (clear `default_slow`, type `default`),
+ * and in those the other preset's users must not be dragged along: the preset itself is
+ * renamed, everything pointing at the ambiguous id is left for the next keystroke to settle.
  */
-export function renamePreset(config: Config, oldId: string, newId: string): Config {
-  if (oldId === newId) return config;
+export function renamePreset(config: Config, index: number, newId: string): Config {
+  const preset = config.envelopes[index];
+  if (!preset || preset.id === newId) return config;
+  const oldId = preset.id;
+  const envelopes = config.envelopes.map((e, i) => (i === index ? { ...e, id: newId } : e));
+  if (config.envelopes.some((e, i) => i !== index && e.id === oldId)) return { ...config, envelopes };
   const renameGroup = (g: Group): Group => ({
     ...g,
     stimuli: g.stimuli.map((s) => (s.envelope === oldId ? { ...s, envelope: newId } : s)),
@@ -100,7 +109,7 @@ export function renamePreset(config: Config, oldId: string, newId: string): Conf
   return {
     ...config,
     defaults: config.defaults.envelope === oldId ? { ...config.defaults, envelope: newId } : config.defaults,
-    envelopes: config.envelopes.map((e) => (e.id === oldId ? { ...e, id: newId } : e)),
+    envelopes,
     groups: config.groups.map(renameGroup),
   };
 }

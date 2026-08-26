@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { durationToSeconds, secondsToDuration } from "./duration";
 import { fieldErrors, pathKey, subtreeErrorCount } from "./errors";
 import { alChange } from "./events";
-import { newPreset, presetReferences, renamePreset, resolvedEnvelope, uniquePresetId } from "./model";
+import { newPreset, presetReferences, renamePreset, uniquePresetId } from "./model";
 import { insertAt, removeAt, setAt } from "./store";
 import { sharedStyles } from "./styles";
 import "./al-envelope-sketch";
@@ -40,7 +40,9 @@ const HELPERS: Record<string, string> = {
 /** Fields the top form owns, checked in order to name the coalescing key. */
 const FORM_FIELDS: (keyof EnvelopePreset)[] = ["id", "attack", "decay", "sustain", "release", "impulse"];
 
-const DURATION_SELECTOR: Selector = { duration: {} };
+/** Milliseconds stay on: the backend takes sub-second debounce, wake and A/D/R values,
+ * and a selector without the field would silently drop the `milliseconds` we hand it. */
+const DURATION_SELECTOR: Selector = { duration: { enable_millisecond: true } };
 const SUSTAIN_SELECTOR: Selector = { number: { min: 0, max: 1, step: 0.05, mode: "slider" } };
 const IMPULSE_SELECTOR: Selector = { boolean: {} };
 const RETRIGGER_SELECTOR: Selector = {
@@ -149,14 +151,19 @@ export class AlEnvelopes extends LitElement {
   @property({ attribute: false }) hass?: HomeAssistant;
   @property({ attribute: false }) config?: Config;
   @property({ attribute: false }) errors: ValidationError[] = [];
+  @property({ type: Boolean }) narrow = false;
 
   /** Index into `config.envelopes`; this tab owns its own selection. */
   @state() private selected = 0;
   @state() private blocked: Blocked | null = null;
 
-  /** Keeps the selection pointing at a preset that still exists after an edit elsewhere. */
+  /**
+   * Keeps the selection pointing at a preset that still exists after an edit elsewhere, and
+   * drops the delete warning: the references it names were counted against the old config.
+   */
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (!changed.has("config")) return;
+    this.blocked = null;
     const count = this.config?.envelopes.length ?? 0;
     if (this.selected >= count) this.selected = Math.max(0, count - 1);
   }
@@ -219,7 +226,7 @@ export class AlEnvelopes extends LitElement {
     if (field === undefined) return;
     const path: Path = ["envelopes", index];
     // Rename first, so defaults.envelope and every stimulus follow the id in the same change.
-    const next = setAt(renamePreset(config, preset.id, merged.id), path, merged);
+    const next = setAt(renamePreset(config, index, merged.id), path, merged);
     this.emitChange(next, `${pathKey(path)}:${field}`);
   }
 
@@ -235,7 +242,7 @@ export class AlEnvelopes extends LitElement {
     const config = this.config;
     if (!config) return html`<ha-card><span class="muted">Loading…</span></ha-card>`;
     return html`
-      <div class="layout">
+      <div class="layout ${this.narrow ? "narrow" : ""}">
         <div>${this.renderList(config)}</div>
         <div>${this.renderEditor(config)}</div>
       </div>
@@ -297,7 +304,7 @@ export class AlEnvelopes extends LitElement {
           @value-changed=${this.onFormChanged}
         ></ha-form>
         <div class="sketch">
-          <al-envelope-sketch .envelope=${resolvedEnvelope(config, { envelope: preset.id })}></al-envelope-sketch>
+          <al-envelope-sketch .envelope=${preset}></al-envelope-sketch>
         </div>
 
         <h3>Behaviour</h3>

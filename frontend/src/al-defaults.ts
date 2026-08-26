@@ -48,7 +48,9 @@ const FORM_FIELDS: (keyof Defaults)[] = [
   "min_wake_interval",
 ];
 
-const DURATION_SELECTOR: Selector = { duration: {} };
+/** Milliseconds stay on: the backend takes sub-second debounce, wake and A/D/R values,
+ * and a selector without the field would silently drop the `milliseconds` we hand it. */
+const DURATION_SELECTOR: Selector = { duration: { enable_millisecond: true } };
 const MAX_VALUE_SELECTOR: Selector = { number: { min: 0.1, step: 0.1, mode: "box" } };
 const PRECISION_SELECTOR: Selector = {
   select: {

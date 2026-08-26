@@ -84,7 +84,7 @@ describe("presetReferences", () => {
 describe("renamePreset", () => {
   it("rewrites the preset, the defaults and every referencing stimulus at once", () => {
     const before = refCfg();
-    const after = renamePreset(before, "media", "cinema");
+    const after = renamePreset(before, 1, "cinema");
     expect(after.envelopes.map((e) => e.id)).toEqual(["default", "cinema"]);
     expect(after.defaults.envelope).toBe("cinema");
     expect(after.groups[0]!.stimuli[0]!.envelope).toBe("cinema");
@@ -92,7 +92,7 @@ describe("renamePreset", () => {
   });
 
   it("leaves unrelated references alone", () => {
-    const after = renamePreset(refCfg(), "media", "cinema");
+    const after = renamePreset(refCfg(), 1, "cinema");
     expect(after.groups[0]!.stimuli[1]!.envelope).toBeNull();
     expect(after.groups[0]!.children[1]!.stimuli[0]!.envelope).toBe("default");
   });
@@ -100,20 +100,34 @@ describe("renamePreset", () => {
   it("does not mutate the config it was given", () => {
     const before = refCfg();
     const snapshot = JSON.stringify(before);
-    const after = renamePreset(before, "media", "cinema");
+    const after = renamePreset(before, 1, "cinema");
     expect(JSON.stringify(before)).toBe(snapshot);
     expect(after).not.toBe(before);
   });
 
   it("is a no-op when the id is unchanged", () => {
     const before = refCfg();
-    expect(renamePreset(before, "media", "media")).toBe(before);
+    expect(renamePreset(before, 1, "media")).toBe(before);
   });
 
-  it("ignores a rename of an id no preset uses", () => {
+  it("ignores an index no preset sits at", () => {
     const before = refCfg();
-    const after = renamePreset(before, "nope", "cinema");
-    expect(after.envelopes.map((e) => e.id)).toEqual(["default", "media"]);
-    expect(after.defaults.envelope).toBe("media");
+    expect(renamePreset(before, 7, "cinema")).toBe(before);
+    expect(renamePreset(before, -1, "cinema")).toBe(before);
+  });
+
+  it("renames only the indexed preset while another preset still shares its old id", () => {
+    // Mid-typing: "media" has been cleared and retyped as "default", so two presets
+    // carry that id. The next keystroke must not drag the real "default"'s users along.
+    const base = refCfg();
+    const dup: Config = {
+      ...base,
+      defaults: { ...base.defaults, envelope: "default" },
+      envelopes: [base.envelopes[0]!, { ...base.envelopes[1]!, id: "default" }],
+    };
+    const after = renamePreset(dup, 1, "default_slow");
+    expect(after.envelopes.map((e) => e.id)).toEqual(["default", "default_slow"]);
+    expect(after.defaults.envelope).toBe("default");
+    expect(after.groups[0]!.children[1]!.stimuli[0]!.envelope).toBe("default");
   });
 });
