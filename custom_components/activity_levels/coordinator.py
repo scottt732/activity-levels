@@ -10,7 +10,6 @@ from functools import partial
 from math import isfinite
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
@@ -30,6 +29,7 @@ class GroupState:
     """What one group looks like right now, as published to listeners."""
 
     value: float
+    real_value: float
     active: bool
     gated: bool
     active_voices: int
@@ -178,6 +178,9 @@ class ActivityLevelsCoordinator:
         info = self.tree.groups[group.id]
         return GroupState(
             value=group.display_value_at(t),
+            # what the group would read without the synthetic trigger voice: the
+            # simulation must not mistake its own test impulses for real activity
+            real_value=round(group.value_at_excluding(t, TRIGGER_KEY), info.precision),
             active=group.active_at(t),
             gated=group.gated_at(t),
             active_voices=group.active_voices(t),
@@ -318,9 +321,6 @@ class ActivityLevelsCoordinator:
             "phase_started": v.phase_start_t if v.phase is not Phase.IDLE else None,
             "phase_ends": v.next_boundary(t),
         }
-
-
-type ActivityLevelsConfigEntry = ConfigEntry[ActivityLevelsCoordinator]
 
 
 def group_state_dict(state: GroupState) -> dict[str, Any]:

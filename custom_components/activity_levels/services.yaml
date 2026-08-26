@@ -20,3 +20,10 @@ reset:
       example: living_room
       selector:
         text:
+rebuild_profile:
+  fields:
+    force:
+      required: false
+      default: false
+      selector:
+        boolean:

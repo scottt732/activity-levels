@@ -68,7 +68,7 @@ export interface Config {
 export interface ValidationError { path: string; message: string }
 
 export interface GroupLive {
-  value: number; raw_value: number; active: boolean; gated: boolean; active_voices: number;
+  value: number; real_value: number; raw_value: number; active: boolean; gated: boolean; active_voices: number;
   last_activity: number | null; cooldown_at: number | null; contributors: Record<string, number>;
   name: string; parent_id: string | null; precision: number; max_value: number; mix: Mix; next_wake: number | null;
 }

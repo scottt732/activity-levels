@@ -135,3 +135,34 @@ def test_group_and_channel_numbers_must_be_finite() -> None:
         Group(id="g", max_value=float("inf"))
     with pytest.raises(ValueError):
         Channel(voice("a"), gain=float("nan"))
+
+
+def test_value_at_excluding_drops_one_channel_from_the_mix() -> None:
+    a, b = voice("a", 2.0), voice("trigger", 3.0)
+    g = Group(id="room", channels=[Channel(a), Channel(b, key="trigger")], max_value=5.0)
+    a.note_on(0.0)
+    b.note_on(0.0)
+    assert g.value_at(0.0) == pytest.approx(5.0)
+    assert g.value_at_excluding(0.0, "trigger") == pytest.approx(2.0)
+    assert g.value_at_excluding(0.0, "a") == pytest.approx(3.0)
+    assert g.value_at_excluding(0.0, "absent") == g.value_at(0.0)
+
+
+def test_value_at_excluding_remixes_max_and_mean() -> None:
+    a, b = voice("a", 1.0), voice("trigger", 4.0)
+    channels = [Channel(a), Channel(b, key="trigger")]
+    biggest = Group(id="max", channels=channels, mix=Mix.MAX)
+    average = Group(id="mean", channels=channels, mix=Mix.MEAN)
+    a.note_on(0.0)
+    b.note_on(0.0)
+    # not "raw - contribution": MAX falls back to the next channel, MEAN re-divides
+    assert biggest.value_at_excluding(0.0, "trigger") == pytest.approx(1.0)
+    assert average.value_at(0.0) == pytest.approx(2.5)
+    assert average.value_at_excluding(0.0, "trigger") == pytest.approx(1.0)
+
+
+def test_value_at_excluding_everything_is_zero() -> None:
+    a = voice("trigger", 2.0)
+    g = Group(id="room", channels=[Channel(a, key="trigger")])
+    a.note_on(0.0)
+    assert g.value_at_excluding(0.0, "trigger") == 0.0

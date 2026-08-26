@@ -1,6 +1,7 @@
 {
   "domain": "activity_levels",
   "name": "Activity Levels",
+  "after_dependencies": ["calendar", "recorder"],
   "codeowners": ["@scottt732"],
   "config_flow": true,
   "dependencies": ["http", "frontend", "panel_custom", "websocket_api"],

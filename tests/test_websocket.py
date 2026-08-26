@@ -117,7 +117,7 @@ async def test_state_reads_the_clock_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """One frame, one timestamp: the countdowns are measured against the reported now."""
-    coordinator = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     base = coordinator.now()
     calls: list[None] = []
 

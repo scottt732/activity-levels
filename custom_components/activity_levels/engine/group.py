@@ -96,6 +96,16 @@ class Group:
     def value_at(self, t: float) -> float:
         return self._limit(self._raw_value_at(t))
 
+    def value_at_excluding(self, t: float, label: str) -> float:
+        """The limited mix with the channel called ``label`` left out.
+
+        Mirrors :meth:`value_at` rather than subtracting a contribution, so MAX and
+        MEAN re-mix over the remaining channels instead of guessing. Used for a
+        group's "real" value: the level without the synthetic trigger voice.
+        """
+        remaining = [ch for ch in self.channels if ch.label != label]
+        return self._limit(self._mix([ch.source.value_at(t) * ch.gain for ch in remaining]))
+
     def display_value_at(self, t: float) -> float:
         return round(self.value_at(t), self.precision)
 

@@ -7,8 +7,9 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .coordinator import ActivityLevelsConfigEntry, ActivityLevelsCoordinator
+from .coordinator import ActivityLevelsCoordinator
 from .entity import ActivityLevelsEntity
+from .runtime import ActivityLevelsConfigEntry
 from .tree import GroupInfo
 
 
@@ -18,7 +19,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Create the active binary sensor every group gets."""
-    coordinator = entry.runtime_data
+    coordinator = entry.runtime_data.coordinator
     async_add_entities(
         ActiveBinarySensor(coordinator, info) for info in coordinator.tree.group_order()
     )

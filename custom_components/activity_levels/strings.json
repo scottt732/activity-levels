@@ -12,7 +12,10 @@
     "sensor": {
       "activity_level": { "name": "Activity level" },
       "last_activity": { "name": "Last activity" },
-      "cooldown_at": { "name": "Cooldown at" }
+      "cooldown_at": { "name": "Cooldown at" },
+      "expected_activity": { "name": "Expected activity" },
+      "activity_anomaly": { "name": "Activity anomaly" },
+      "profile": { "name": "Profile" }
     },
     "binary_sensor": { "active": { "name": "Active" } },
     "button": { "trigger": { "name": "Trigger" } }
@@ -30,6 +33,16 @@
       "name": "Reset",
       "description": "Return all voices in a group (or all groups) to idle.",
       "fields": { "group_id": { "name": "Group", "description": "Group id; omit to reset every group." } }
+    },
+    "rebuild_profile": {
+      "name": "Rebuild profile",
+      "description": "Retrain the built-in activity profile from long-term statistics now.",
+      "fields": {
+        "force": {
+          "name": "Force",
+          "description": "Overwrite a profile written by an external producer."
+        }
+      }
     }
   }
 }

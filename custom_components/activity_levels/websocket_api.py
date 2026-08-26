@@ -19,7 +19,7 @@ _REGISTERED = f"{DOMAIN}_websocket_registered"
 
 def _coordinator(hass: HomeAssistant) -> ActivityLevelsCoordinator | None:
     for entry in hass.config_entries.async_loaded_entries(DOMAIN):
-        coordinator: ActivityLevelsCoordinator = entry.runtime_data
+        coordinator: ActivityLevelsCoordinator = entry.runtime_data.coordinator
         return coordinator
     return None
 

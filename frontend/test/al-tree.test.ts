@@ -155,6 +155,7 @@ describe("al-tree live view", () => {
     groups: {
       house: {
         value: 2.5,
+        real_value: 2.5,
         raw_value: 2.5432,
         active: true,
         gated: true,

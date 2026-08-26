@@ -9,6 +9,8 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.B
 
 MANUFACTURER = "Activity Levels"
 MODEL = "Group"
+MODEL_HUB = "Hub"
+HUB_NAME = "Activity Levels"
 TRIGGER_KEY = "trigger"
 
 STORAGE_VERSION = 1
@@ -44,8 +46,19 @@ ATTR_CONTRIBUTORS = "contributors"
 
 SERVICE_TRIGGER = "trigger"
 SERVICE_RESET = "reset"
+SERVICE_REBUILD_PROFILE = "rebuild_profile"
 ATTR_GROUP_ID = "group_id"
 ATTR_PEAK = "peak"
+ATTR_FORCE = "force"
+
+ATTR_P25 = "p25"
+ATTR_P75 = "p75"
+ATTR_DAY_TYPE = "day_type"
+ATTR_READY = "ready"
+ATTR_PRODUCER = "producer"
+ATTR_PRODUCER_VERSION = "producer_version"
+ATTR_GROUPS_READY = "groups_ready"
+ATTR_GROUPS_TOTAL = "groups_total"
 
 PANEL_URL_PATH = "activity-levels"
 PANEL_ELEMENT = "activity-levels-panel"
