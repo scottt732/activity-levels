@@ -27,7 +27,9 @@ from pytest_homeassistant_custom_component.common import (
     mock_restore_cache,
 )
 
+from custom_components.activity_levels import simulation as simulation_module
 from custom_components.activity_levels.const import DOMAIN
+from custom_components.activity_levels.patterns.planner import PlannedAction
 from custom_components.activity_levels.patterns.profile import SLOTS
 from custom_components.activity_levels.schema import validate_config
 from custom_components.activity_levels.simulation import (
@@ -186,9 +188,13 @@ def _local(t: float) -> datetime:
     return dt_util.as_local(dt_util.utc_from_timestamp(t))
 
 
-def _minute_of_day(action: Any) -> int:
-    local = _local(action.t)
+def _minutes(t: float) -> int:
+    local = _local(t)
     return local.hour * 60 + local.minute
+
+
+def _minute_of_day(action: Any) -> int:
+    return _minutes(action.t)
 
 
 # -- entities -----------------------------------------------------------------
@@ -622,3 +628,81 @@ async def test_the_grace_only_starts_once_home_assistant_has(
 
     await _settle(hass, freezer)
     assert simulation.is_active("kitchen") is True
+
+
+# -- what the plan says it is doing --------------------------------------------
+
+
+async def test_plan_for_drops_actions_the_clock_already_passed(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rounding and jitter can place an action marginally behind the clock."""
+    entry = await _setup(hass, freezer)
+    simulation = entry.runtime_data.patterns.simulation
+    now = dt_util.utcnow().timestamp()
+    stale = PlannedAction(t=now - 60.0, entity_id=LIGHT, on=True, brightness=200)
+    ahead = PlannedAction(t=now + 3600.0, entity_id=LIGHT, on=False, brightness=None)
+    monkeypatch.setattr(simulation_module, "sample_plan", lambda *a, **k: [stale, ahead])
+
+    await _arm(hass)
+
+    # not just unscheduled: the panel must not draw a bar that never ran
+    assert simulation.plan_for("kitchen") == [ahead]
+
+
+async def test_plan_spans_cover_a_closed_interval(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    entry = await _setup(hass, freezer)
+    patterns = entry.runtime_data.patterns
+    await _arm(hass)
+
+    now = dt_util.utcnow().timestamp()
+    result = await patterns.async_timeseries("kitchen", now, now + 86400, "1h")
+
+    assert len(result["plan"]) == 1
+    began, ended, entity_id = result["plan"][0]
+    assert entity_id == LIGHT
+    assert ended is not None and began < ended
+    assert 18 * 60 - 20 <= _minutes(began) <= 18 * 60 + 20
+    assert 23 * 60 - 20 <= _minutes(ended) <= 23 * 60 + 20
+
+
+async def test_plan_spans_leave_an_unfinished_on_open_ended(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A light the plan never turns back off is drawn as a bar with no right edge."""
+    entry = await _setup(
+        hass, freezer, when=f"{FRIDAY} 22:00:00", lights=_friday_night(_window(32, 40))
+    )
+    patterns = entry.runtime_data.patterns
+    await _arm(hass)
+
+    now = dt_util.utcnow().timestamp()
+    result = await patterns.async_timeseries("kitchen", now, now + 7200, "1h")
+
+    assert len(result["plan"]) == 1
+    began, ended, entity_id = result["plan"][0]
+    assert entity_id == LIGHT
+    assert ended is None
+    assert _local(began).hour == 22
+
+
+async def test_a_forced_plan_does_not_survive_midnight(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """simulate_now is a one-off; it must not keep the switches overridden all night."""
+    async_mock_service(hass, "light", "turn_on")
+    entry = await _setup(
+        hass, freezer, when=f"{FRIDAY} 22:00:00", lights=_friday_night(_window(32, 40))
+    )
+    simulation = entry.runtime_data.patterns.simulation
+
+    await hass.services.async_call(DOMAIN, "simulate_now", {"group_id": "kitchen"}, blocking=True)
+    await hass.async_block_till_done()
+    assert simulation.is_active("kitchen") is True
+
+    await _advance(hass, freezer, f"{SATURDAY} 00:00:30")
+
+    assert simulation.is_active("kitchen") is False
+    assert simulation.blocked_reason("kitchen") == "the presence simulation switches are off"

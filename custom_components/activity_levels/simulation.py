@@ -320,7 +320,13 @@ class SimulationRuntime:
 
     @callback
     def _midnight(self, _now: datetime) -> None:
-        """A new local day: today's day type, and so its curves, are different."""
+        """A new local day: today's day type, and so its curves, are different.
+
+        simulate_now forces one plan, for the day somebody asked about. Carrying that
+        override into tomorrow would leave the switches meaning nothing for a whole
+        second day, so it expires here.
+        """
+        self._forced.clear()
         self._replan()
         self.evaluate_all()
 
@@ -387,9 +393,10 @@ class SimulationRuntime:
             start_slot=slot_of(now.hour * 60 + now.minute),
         )
         # the plan starts from the slot we are in, so only rounding and jitter can put
-        # an action marginally behind the clock; drop those rather than fire them late
+        # an action marginally behind the clock; drop those rather than fire them late,
+        # and drop them from the plan too so the panel never draws a bar that never ran
         pending = [action for action in plan if action.t >= now.timestamp()]
-        self._plans[gid] = plan
+        self._plans[gid] = list(pending)
         self._pending[gid] = pending
         if forced:
             self._forced.add(gid)
