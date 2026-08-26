@@ -44,3 +44,5 @@ Final: fix wave (10 addressed, 0 open; commits ed51b0d..bb426c7), re-review clea
 Final: parked — al-group-editor's own Delete button emits a non-structural al-change (stale errors not cleared) — Ruling: one-line follow-up (pass structural=true); deferred to the next hygiene pass. Cost: stale error badges after deleting via the editor until next validate.
 Final: deferred: loader worst case ~10.5 s; fieldErrors root paths; index-based tree keys; two tree walks per state; clearable selects show blank until re-render; unknown-preset label; countdown() duplication; caption overlap.
 Plan 3 complete at bb426c7 (125 vitests, 154 pytests).
+
+Post-release: Area selector in the group editor reported intermittently blank (3–5 attempts); not reproduced yet. Suspects: ha-selector lazy import only on selector-change; ha-area-picker context (floors) timing. Needs console evidence at failure time.
