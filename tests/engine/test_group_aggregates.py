@@ -156,3 +156,16 @@ def test_next_display_change_schedules_the_limiter_unpin() -> None:
     b.note_on(0.0)
     assert g.slope_at(0.0) == 0.0
     assert g.next_display_change(0.0) == pytest.approx(150.0, abs=2e-3)
+
+
+def test_next_display_change_schedules_max_crossover() -> None:
+    # a rises slowly from 0.5, b rises fast from 0 starting at t=500; b overtakes a at t≈555.6
+    a = Voice(id="a", gain=1.0, envelope=Envelope(attack=1000.0))
+    b = Voice(id="b", gain=1.0, envelope=Envelope(attack=100.0))
+    g = Group(id="g", channels=[Channel(a), Channel(b)], mix=Mix.MAX, precision=1)
+    a.note_on(0.0)
+    b.note_on(500.0)
+    # at t=550 a=0.55, b=0.5; a's display flips to 0.7 at 650 but b passes 0.65 at 565
+    nxt = g.next_display_change(550.0)
+    assert nxt is not None
+    assert nxt <= 565.01

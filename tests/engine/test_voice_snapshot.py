@@ -88,3 +88,11 @@ def test_restore_with_non_bool_gate_resets(bad_gate: object) -> None:
     )
     assert w.phase is Phase.IDLE
     assert w.gate is False
+
+
+def test_restore_gated_idle_with_zero_value_resets() -> None:
+    w = Voice(id="x", gain=1.0, envelope=Envelope())
+    w.restore({"phase": "idle", "phase_start_t": 10.0, "phase_start_value": 0.0, "gate": True})
+    assert w.phase is Phase.IDLE
+    assert w.gate is False
+    assert w.is_active(11.0) is False

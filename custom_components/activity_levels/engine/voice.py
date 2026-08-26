@@ -171,6 +171,9 @@ class Voice:
             if phase is Phase.IDLE:
                 value = 0.0
         elif raw_gate and phase in (Phase.RELEASE, Phase.IDLE):
+            if value <= 0.0:
+                self.reset()  # gated with nothing to hold; a phantom SUSTAIN at 0 never ends
+                return
             phase = Phase.SUSTAIN  # a gated voice is held, never decaying
         self._enter(phase, start_t, value)
         self.gate = raw_gate

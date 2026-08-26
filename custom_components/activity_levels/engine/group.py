@@ -137,6 +137,21 @@ class Group:
             out.append((ch.source.value_at(t) * ch.gain, ch.source.slope_at(t) * ch.gain))
         return out
 
+    def _next_max_crossover(self, t: float) -> float | None:
+        """Earliest future instant another channel overtakes the current MAX leader."""
+        pairs = self._channel_slopes(t)
+        if len(pairs) < 2:
+            return None
+        lead_c, lead_s = max(pairs, key=lambda p: (p[0], p[1]))
+        best: float | None = None
+        for c, s in pairs:
+            if s <= lead_s or c >= lead_c:
+                continue
+            dt = (lead_c - c) / (s - lead_s)
+            if dt > 0.0 and (best is None or dt < best):
+                best = dt
+        return None if best is None else t + best + _MIN_DT
+
     def _raw_slope_at(self, t: float) -> float:
         """Slope of the pre-limiter mix. No clamping, no pinning.
 
@@ -144,9 +159,9 @@ class Group:
 
         * MAX: the slope is that of the currently loudest channel. A crossover with
           another channel changes which channel leads, and that moment is not
-          scheduled. The mixed *value* is continuous across a crossover, so this can
-          only make a predicted display change land early (a redundant wake), never
-          late, whenever the incoming leader is the shallower of the two.
+          scheduled here: a steeper riser overtaking the leader is handled by
+          ``_next_max_crossover``; falling crossovers only cause an early, redundant
+          wake.
         * MEAN: a channel reaching zero changes the divisor under IGNORE (and the
           numerator under ZERO), a step this slope does not see. Voice phase
           boundaries are separately scheduled by ``next_boundary``, which is where
@@ -196,6 +211,8 @@ class Group:
         raw_slope = self._raw_slope_at(t)
         if raw > self.max_value and raw_slope < 0.0:
             candidates.append(t + (self.max_value - raw) / raw_slope + _MIN_DT)
+        if self.mix is Mix.MAX and (x := self._next_max_crossover(t)) is not None:
+            candidates.append(x)
         slope = self.slope_at(t)
         if slope == 0.0:
             return min(candidates) if candidates else None
