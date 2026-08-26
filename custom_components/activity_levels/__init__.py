@@ -21,6 +21,7 @@ from .const import (
     PLATFORMS,
     SERVICE_REBUILD_PROFILE,
     SERVICE_RESET,
+    SERVICE_SIMULATE_NOW,
     SERVICE_TRIGGER,
 )
 from .coordinator import ActivityLevelsCoordinator
@@ -39,6 +40,7 @@ SERVICE_TRIGGER_SCHEMA = vol.Schema(
 )
 SERVICE_RESET_SCHEMA = vol.Schema({vol.Optional(ATTR_GROUP_ID): cv.string})
 SERVICE_REBUILD_PROFILE_SCHEMA = vol.Schema({vol.Optional(ATTR_FORCE, default=False): cv.boolean})
+SERVICE_SIMULATE_NOW_SCHEMA = vol.Schema({vol.Required(ATTR_GROUP_ID): cv.string})
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntry) -> bool:
@@ -154,6 +156,11 @@ def _register_services(hass: HomeAssistant) -> None:
     async def handle_rebuild_profile(call: ServiceCall) -> None:
         await _runtime(hass).patterns.async_rebuild(force=call.data[ATTR_FORCE])
 
+    async def handle_simulate_now(call: ServiceCall) -> None:
+        runtime = _runtime(hass)
+        group_id = _resolve_group(runtime.coordinator, call.data[ATTR_GROUP_ID])
+        await runtime.patterns.simulation.async_simulate_now(group_id)
+
     hass.services.async_register(
         DOMAIN, SERVICE_TRIGGER, handle_trigger, schema=SERVICE_TRIGGER_SCHEMA
     )
@@ -163,4 +170,10 @@ def _register_services(hass: HomeAssistant) -> None:
         SERVICE_REBUILD_PROFILE,
         handle_rebuild_profile,
         schema=SERVICE_REBUILD_PROFILE_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SIMULATE_NOW,
+        handle_simulate_now,
+        schema=SERVICE_SIMULATE_NOW_SCHEMA,
     )

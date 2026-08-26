@@ -18,7 +18,11 @@
       "profile": { "name": "Profile" }
     },
     "binary_sensor": { "active": { "name": "Active" } },
-    "button": { "trigger": { "name": "Trigger" } }
+    "button": { "trigger": { "name": "Trigger" } },
+    "switch": {
+      "presence_simulation": { "name": "Presence simulation" },
+      "global_presence_simulation": { "name": "Presence simulation" }
+    }
   },
   "services": {
     "trigger": {
@@ -42,6 +46,13 @@
           "name": "Force",
           "description": "Overwrite a profile written by an external producer."
         }
+      }
+    },
+    "simulate_now": {
+      "name": "Simulate now",
+      "description": "Sample a presence-simulation plan for a group and start it immediately, ignoring the presence simulation switches.",
+      "fields": {
+        "group_id": { "name": "Group", "description": "The group id to simulate." }
       }
     }
   }

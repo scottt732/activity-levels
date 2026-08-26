@@ -27,3 +27,10 @@ rebuild_profile:
       default: false
       selector:
         boolean:
+simulate_now:
+  fields:
+    group_id:
+      required: true
+      example: living_room
+      selector:
+        text:

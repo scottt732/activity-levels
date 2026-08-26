@@ -5,7 +5,12 @@ from __future__ import annotations
 from homeassistant.const import Platform
 
 DOMAIN = "activity_levels"
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.SWITCH,
+]
 
 MANUFACTURER = "Activity Levels"
 MODEL = "Group"
@@ -47,6 +52,7 @@ ATTR_CONTRIBUTORS = "contributors"
 SERVICE_TRIGGER = "trigger"
 SERVICE_RESET = "reset"
 SERVICE_REBUILD_PROFILE = "rebuild_profile"
+SERVICE_SIMULATE_NOW = "simulate_now"
 ATTR_GROUP_ID = "group_id"
 ATTR_PEAK = "peak"
 ATTR_FORCE = "force"

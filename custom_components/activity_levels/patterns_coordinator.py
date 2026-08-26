@@ -61,6 +61,7 @@ from .patterns.profile import (
     slot_of,
     validate_profile,
 )
+from .simulation import SimulationRuntime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -220,6 +221,7 @@ class PatternsCoordinator:
         self.profile: dict[str, Any] = empty_profile(day_types=self.day_types)
         self.lights = _group_lights(hass, config)
         self.lightlog = LightLog(hass, entry.entry_id, self.history_days)
+        self.simulation = SimulationRuntime(hass, entry, coordinator, self, config)
         self._calendars: list[dict[str, str]] = list(patterns["calendars"])
         self._calendar_ids = {cal["id"] for cal in self._calendars}
         self._workday_entity: str | None = patterns["workday_entity"]
@@ -270,6 +272,8 @@ class PatternsCoordinator:
             )
         )
         self._schedule_start_work()
+        # last, so every precondition the runtime reads is already wired up
+        await self.simulation.async_start()
 
     async def async_stop(self) -> None:
         """Cancel every timer and flush the light log. Idempotent."""
@@ -280,6 +284,7 @@ class PatternsCoordinator:
             unsub()
         self._unsubs.clear()
         self._listeners.clear()
+        await self.simulation.async_stop()
         await self.lightlog.async_save()
 
     async def _load(self) -> None:
