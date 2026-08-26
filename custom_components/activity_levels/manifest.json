@@ -3,7 +3,7 @@
   "name": "Activity Levels",
   "codeowners": ["@scottt732"],
   "config_flow": true,
-  "dependencies": ["websocket_api"],
+  "dependencies": ["http", "frontend", "panel_custom", "websocket_api"],
   "documentation": "https://github.com/scottt732/activity-levels",
   "integration_type": "hub",
   "iot_class": "calculated",

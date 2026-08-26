@@ -20,6 +20,7 @@ from .const import (
     SERVICE_TRIGGER,
 )
 from .coordinator import ActivityLevelsConfigEntry, ActivityLevelsCoordinator
+from .panel import async_register_panel, async_unregister_panel
 from .schema import ConfigError, validate_config
 from .tree import Tree, build_tree
 from .websocket_api import async_register_websocket
@@ -53,6 +54,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _register_services(hass)
     async_register_websocket(hass)
+    await async_register_panel(hass)
+    entry.async_on_unload(lambda: async_unregister_panel(hass))
     return True
 
 
