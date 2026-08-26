@@ -2,8 +2,10 @@ import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { getConfig, getState, saveConfig, validateConfig } from "./api";
 import { ensureHaElements } from "./ha-elements";
+import { runSave } from "./save-flow";
 import { Draft } from "./store";
 import { sharedStyles } from "./styles";
+import type { Banner } from "./save-flow";
 import type { Config, HomeAssistant, LiveState, Path, ValidationError } from "./types";
 
 type Tab = "groups" | "envelopes" | "defaults";
@@ -11,11 +13,6 @@ type Tab = "groups" | "envelopes" | "defaults";
 const TABS: Tab[] = ["groups", "envelopes", "defaults"];
 const LIVE_POLL_MS = 2000;
 const RELOAD_GRACE_MS = 1500;
-
-interface Banner {
-  kind: "error" | "warning" | "info";
-  text: string;
-}
 
 @customElement("activity-levels-panel")
 export class ActivityLevelsPanel extends LitElement {
@@ -64,30 +61,21 @@ export class ActivityLevelsPanel extends LitElement {
     this.requestUpdate();
   }
 
-  private async validate(): Promise<boolean> {
-    if (!this.draft) return false;
-    const result = await validateConfig(this.hass, this.draft.config);
-    this.errors = result.errors;
-    return result.ok;
-  }
-
   private async save(): Promise<void> {
-    if (!this.draft) return;
+    const draft = this.draft;
+    if (!draft) return;
     this.busy = true;
     try {
-      if (!(await this.validate())) {
-        this.banner = { kind: "error", text: `${this.errors.length} problem(s) to fix before saving.` };
-        return;
+      const outcome = await runSave(draft.config, {
+        validate: (config) => validateConfig(this.hass, config),
+        save: (config) => saveConfig(this.hass, config),
+      });
+      if (outcome.errors !== null) this.errors = outcome.errors;
+      this.banner = outcome.banner;
+      if (outcome.reload) {
+        await new Promise<void>((resolve) => setTimeout(resolve, RELOAD_GRACE_MS));
+        await this.load();
       }
-      const result = await saveConfig(this.hass, this.draft.config);
-      if (!result.ok) {
-        this.errors = result.errors;
-        this.banner = { kind: "error", text: result.errors[0]?.message ?? "Save failed" };
-        return;
-      }
-      this.banner = { kind: "info", text: "Saved. Activity Levels is reloading." };
-      await new Promise<void>((resolve) => setTimeout(resolve, RELOAD_GRACE_MS));
-      await this.load();
     } finally {
       this.busy = false;
     }
@@ -143,7 +131,7 @@ export class ActivityLevelsPanel extends LitElement {
     const d = this.draft;
     return html`
       <ha-top-app-bar-fixed>
-        <ha-menu-button slot="navigationIcon" .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
+        <ha-menu-button slot="navigationIcon"></ha-menu-button>
         <div slot="title">Activity Levels</div>
         <div slot="actionItems" class="row">
           <span class="muted">Live</span>

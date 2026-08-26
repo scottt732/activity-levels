@@ -7,7 +7,6 @@ export const HA_ELEMENTS = [
   "ha-switch",
   "ha-expansion-panel",
   "ha-top-app-bar-fixed",
-  "ha-menu-button",
   "ha-form",
   "ha-selector",
 ] as const;
@@ -38,7 +37,7 @@ async function nudgeLoader(): Promise<void> {
 
 export async function ensureHaElements(timeoutMs = 8000): Promise<{ ok: boolean; missing: string[] }> {
   if (HA_ELEMENTS.every((t) => customElements.get(t))) return { ok: true, missing: [] };
-  await nudgeLoader();
+  await Promise.race([nudgeLoader(), sleep(timeoutMs)]);
   const results = await Promise.all(
     HA_ELEMENTS.map((t) =>
       Promise.race([customElements.whenDefined(t).then(() => true), sleep(timeoutMs).then(() => false)]),
