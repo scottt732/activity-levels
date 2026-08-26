@@ -32,7 +32,7 @@ from homeassistant.util import dt as dt_util
 from .const import CONF_DEFAULTS, CONF_SIMULATION, DOMAIN
 from .coordinator import ActivityLevelsCoordinator
 from .patterns.planner import PlannedAction, sample_plan
-from .patterns.profile import group_ready
+from .patterns.profile import group_ready, slot_of
 
 if TYPE_CHECKING:
     from .patterns_coordinator import PatternsCoordinator
@@ -91,6 +91,7 @@ class SimulationRuntime:
         self._global_on = False
         self._group_on: dict[str, bool] = {}
         self._plans: dict[str, list[PlannedAction]] = {}
+        self._pending: dict[str, list[PlannedAction]] = {}
         self._timers: dict[str, list[CALLBACK_TYPE]] = {}
         self._forced: set[str] = set()
         self._log: list[dict[str, Any]] = []
@@ -171,8 +172,12 @@ class SimulationRuntime:
     # -- reads ---------------------------------------------------------------
 
     def is_active(self, gid: str) -> bool:
-        """Whether a plan is currently running for this group."""
-        return gid in self._plans
+        """Whether this group has a plan with actions still ahead of it.
+
+        A group can be armed with nothing left to do -- every action fired, or the day
+        held none to begin with -- and that is not "active".
+        """
+        return bool(self._pending.get(gid))
 
     def plan_for(self, gid: str) -> list[PlannedAction]:
         """The actions this group's running plan was built from, executed ones included."""
@@ -196,15 +201,30 @@ class SimulationRuntime:
         state = self.coordinator.data.get(gid)
         return state is not None and state.real_value <= 0.0
 
-    def _allowed(self, gid: str, *, forced: bool) -> bool:
-        """Every precondition, in the order that makes a debug log most useful."""
+    def blocked_reason(self, gid: str, *, forced: bool = False) -> str | None:
+        """The first precondition this group fails, or None when it may be simulated.
+
+        Phrased for a person: the simulate_now service puts it straight in front of
+        whoever asked for a simulation that could not start.
+        """
         if not forced and not (self._global_on and self._group_on.get(gid, False)):
-            return False
-        if not self._enabled.get(gid, True) or not self.patterns.lights.get(gid):
-            return False
-        if not self._away() or not self._idle(gid):
-            return False
-        return group_ready(self.patterns.profile, gid)
+            return "the presence simulation switches are off"
+        if not self._enabled.get(gid, True):
+            return "presence simulation is disabled for this group"
+        if not self.patterns.lights.get(gid):
+            return "the group has no lights"
+        if self.away_entity is None:
+            return "no away entity is configured"
+        if not self._away():
+            return "the house is not empty"
+        if not self._idle(gid):
+            return "the group is active"
+        if not group_ready(self.patterns.profile, gid):
+            return "the group has no trained profile yet"
+        return None
+
+    def _allowed(self, gid: str, *, forced: bool) -> bool:
+        return self.blocked_reason(gid, forced=forced) is None
 
     @callback
     def _evaluate(self, gid: str) -> None:
@@ -272,14 +292,15 @@ class SimulationRuntime:
         """Sample and start a plan right now, ignoring the switches. For testing.
 
         Every other precondition still holds: the house must be empty, the group quiet,
-        its profile ready and its light membership non-empty.
+        its profile ready and its light membership non-empty. Returns whether anything
+        is now scheduled; :meth:`blocked_reason` says why not.
         """
-        if not self._allowed(gid, forced=True):
-            _LOGGER.debug("Not simulating %s now: a precondition is not met", gid)
+        if (reason := self.blocked_reason(gid, forced=True)) is not None:
+            _LOGGER.debug("Not simulating %s now: %s", gid, reason)
             return False
         self._cancel(gid)
         self._activate(gid, forced=True)
-        return True
+        return self.is_active(gid)
 
     @callback
     def _activate(self, gid: str, *, forced: bool) -> None:
@@ -295,6 +316,10 @@ class SimulationRuntime:
             if entity_id in members
         }
         if not light_profile:
+            # armed, but with nothing to drive; recorded so we do not re-sample on
+            # every publish
+            self._plans[gid] = []
+            self._pending[gid] = []
             return
 
         tz = self.patterns.timezone
@@ -305,30 +330,31 @@ class SimulationRuntime:
             and state.state == STATE_ON
             for entity_id in lights
         }
-        plan = [
-            action
-            for action in sample_plan(
-                np.random.default_rng(),
-                light_profile=light_profile,
-                day_type=self.patterns.day_type_now(),
-                day_start=day_start,
-                tz=tz,
-                quiet_hours=self.quiet_hours,
-                initial_state=initial_state,
-            )
-            if action.t > now.timestamp()
-        ]
+        plan = sample_plan(
+            np.random.default_rng(),
+            light_profile=light_profile,
+            day_type=self.patterns.day_type_now(),
+            day_start=day_start,
+            tz=tz,
+            quiet_hours=self.quiet_hours,
+            initial_state=initial_state,
+            start_slot=slot_of(now.hour * 60 + now.minute),
+        )
+        # the plan starts from the slot we are in, so only rounding and jitter can put
+        # an action marginally behind the clock; drop those rather than fire them late
+        pending = [action for action in plan if action.t >= now.timestamp()]
         self._plans[gid] = plan
+        self._pending[gid] = pending
         if forced:
             self._forced.add(gid)
         timers = self._timers.setdefault(gid, [])
-        for action in plan:
+        for action in pending:
             timers.append(
                 async_track_point_in_time(
                     self.hass, self._firing(gid, action), dt_util.utc_from_timestamp(action.t)
                 )
             )
-        _LOGGER.debug("Simulating %s with %d action(s), forced=%s", gid, len(plan), forced)
+        _LOGGER.debug("Simulating %s with %d action(s), forced=%s", gid, len(pending), forced)
 
     @callback
     def _cancel(self, gid: str) -> None:
@@ -336,6 +362,7 @@ class SimulationRuntime:
         for unsub in self._timers.pop(gid, []):
             unsub()
         self._plans.pop(gid, None)
+        self._pending.pop(gid, None)
         self._forced.discard(gid)
 
     # -- execution -----------------------------------------------------------
@@ -351,12 +378,15 @@ class SimulationRuntime:
         return fire
 
     async def _execute(self, gid: str, action: PlannedAction) -> None:
-        """Run one planned action, but only if every precondition still holds."""
-        if self._stopped or gid not in self._plans:
+        """Run one action, but only if it and every precondition still hold."""
+        pending = self._pending.get(gid)
+        # a re-plan between the timer being set and it firing supersedes the action
+        if self._stopped or pending is None or action not in pending:
             return
         if not self._allowed(gid, forced=gid in self._forced):
             self._cancel(gid)
             return
+        pending.remove(action)
         data: dict[str, Any] = {ATTR_ENTITY_ID: action.entity_id}
         if action.on and action.brightness is not None:
             data[ATTR_BRIGHTNESS] = action.brightness

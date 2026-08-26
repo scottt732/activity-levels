@@ -205,3 +205,24 @@ def test_unknown_day_type_falls_back_and_missing_curve_is_skipped():
         )
         == []
     )
+
+
+def test_start_slot_begins_the_walk_where_it_says():
+    """A plan sampled at 21:00 neither replays nor switches off the evening it missed."""
+    profile = _profile(_window(18 * 60, 23 * 60), on_starts=[18 * 60], off_starts=[23 * 60])
+    for seed in range(20):
+        plan = _plan(
+            seed, profile, initial_state={"light.lamp": False}, start_slot=slot_of(21 * 60)
+        )
+        assert [action.on for action in plan] == [True, False]
+        assert 21 * 60 <= _minute(plan[0]) <= 21 * 60 + 20
+        assert 23 * 60 - 20 <= _minute(plan[1]) <= 23 * 60 + 20
+
+
+def test_start_slot_takes_the_light_as_it_finds_it():
+    """Starting mid-evening with the light already on plans the OFF and no second ON."""
+    profile = _profile(_window(18 * 60, 23 * 60), on_starts=[18 * 60], off_starts=[23 * 60])
+    for seed in range(20):
+        plan = _plan(seed, profile, initial_state={"light.lamp": True}, start_slot=slot_of(21 * 60))
+        assert [action.on for action in plan] == [False]
+        assert 23 * 60 - 20 <= _minute(plan[0]) <= 23 * 60 + 20

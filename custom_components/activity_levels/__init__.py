@@ -159,7 +159,10 @@ def _register_services(hass: HomeAssistant) -> None:
     async def handle_simulate_now(call: ServiceCall) -> None:
         runtime = _runtime(hass)
         group_id = _resolve_group(runtime.coordinator, call.data[ATTR_GROUP_ID])
-        await runtime.patterns.simulation.async_simulate_now(group_id)
+        simulation = runtime.patterns.simulation
+        if not await simulation.async_simulate_now(group_id):
+            reason = simulation.blocked_reason(group_id, forced=True) or "there is nothing to do"
+            raise ServiceValidationError(f"Nothing to simulate: {reason}")
 
     hass.services.async_register(
         DOMAIN, SERVICE_TRIGGER, handle_trigger, schema=SERVICE_TRIGGER_SCHEMA

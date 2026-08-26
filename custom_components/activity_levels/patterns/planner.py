@@ -84,6 +84,7 @@ def sample_plan(
     quiet_hours: tuple[str, str] | None,
     jitter_minutes: int = 20,
     initial_state: Mapping[str, bool],
+    start_slot: int = 0,
 ) -> list[PlannedAction]:
     """Sample one day of light actions from ``light_profile``.
 
@@ -94,7 +95,14 @@ def sample_plan(
     planned, so a light is never stranded on. Actions come back sorted by time, with
     no two actions for the same light closer together than :data:`MIN_GAP_SECONDS`,
     and strictly alternating ON/OFF per light.
+
+    The walk begins at ``start_slot`` and ``initial_state`` describes the lights as
+    they are *there*, not at midnight: a plan sampled at 21:00 neither replays the
+    evening it missed nor inherits the state machine that would have run over it, and
+    it never places an action before its own start.
     """
+    start = max(0, min(SLOTS - 1, int(start_slot)))
+    start_minute = slot_minute(start)
     local_date = datetime.fromtimestamp(day_start, tz).date()
     actions: list[PlannedAction] = []
     for entity_id in sorted(light_profile):
@@ -106,7 +114,7 @@ def sample_plan(
         off_starts = _curve(spec.get("off_starts") or {}, day_type) or ()
         brightness = spec.get("brightness")
         state = bool(initial_state.get(entity_id, False))
-        for slot in range(SLOTS):
+        for slot in range(start, SLOTS):
             draw = float(rng.random())
             probability = float(p_on[slot])
             if not state and probability > draw:
@@ -117,7 +125,7 @@ def sample_plan(
                 continue
             minute = _pick_minute(rng, on_starts if turn_on else off_starts, slot)
             minute += int(rng.integers(-jitter_minutes, jitter_minutes + 1))
-            minute = max(0, min(MINUTES_PER_DAY - 1, minute))
+            minute = max(start_minute, min(MINUTES_PER_DAY - 1, minute))
             if turn_on and in_quiet_hours(minute, quiet_hours):
                 continue
             hour, in_hour = divmod(minute, 60)
