@@ -157,7 +157,7 @@ class Voice:
             start_value = float(data["phase_start_value"])
             raw_last = data.get("last_note_on")
             last = None if raw_last is None else float(raw_last)
-        except (KeyError, ValueError, TypeError):
+        except KeyError, ValueError, TypeError:
             self.reset()
             return
         if not (isfinite(start_t) and isfinite(start_value) and (last is None or isfinite(last))):

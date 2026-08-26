@@ -2,7 +2,7 @@
 name = "activity-levels"
 version = "0.0.0"
 description = "Home Assistant integration: ADSR-envelope activity levels for areas of your home"
-requires-python = ">=3.13"
+requires-python = ">=3.14.2"
 license = "MIT"
 dependencies = []
 
@@ -12,16 +12,19 @@ dev = [
   "hypothesis>=6.112",
   "ruff>=0.6",
   "mypy>=1.11",
+  "homeassistant==2026.8.3",
+  "pytest-homeassistant-custom-component==0.13.357",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-q"
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ANN"]
@@ -32,7 +35,7 @@ ignore = ["ANN401"]
 
 [tool.mypy]
 strict = true
-python_version = "3.13"
+python_version = "3.14"
 namespace_packages = true
 explicit_package_bases = true
-files = ["custom_components/activity_levels/engine"]
+files = ["custom_components/activity_levels"]

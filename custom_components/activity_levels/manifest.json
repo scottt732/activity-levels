@@ -1,0 +1,14 @@
+{
+  "domain": "activity_levels",
+  "name": "Activity Levels",
+  "codeowners": ["@scottt732"],
+  "config_flow": true,
+  "dependencies": ["websocket_api"],
+  "documentation": "https://github.com/scottt732/activity-levels",
+  "integration_type": "hub",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/scottt732/activity-levels/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.0.0"
+}
