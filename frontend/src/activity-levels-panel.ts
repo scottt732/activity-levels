@@ -89,6 +89,11 @@ export class ActivityLevelsPanel extends LitElement {
   private simTimer?: number;
   /** When the profile was last read, so switching tabs does not re-ask for it every time. */
   private profileAt = 0;
+  /**
+   * The last `simStates` answer. The Mixer re-renders on every live poll, and a fresh
+   * object each time would re-render every strip with it for nothing.
+   */
+  private simStatesMemo: { key: unknown[]; value: Record<string, SimState> } | null = null;
 
   private readonly onVisibilityChange = (): void => this.updatePolling();
 
@@ -328,12 +333,16 @@ export class ActivityLevelsPanel extends LitElement {
    * in here: the strips read that off the switch entity they are given.
    */
   private simStates(config: Config): Record<string, SimState> {
+    const key: unknown[] = [config, this.simLog, this.hass.states];
+    const memo = this.simStatesMemo;
+    if (memo && memo.key.every((v, i) => v === key[i])) return memo.value;
     const states: Record<string, SimState> = {};
     const walk = (g: Group): void => {
       states[g.id] = { blocked: this.simLog?.blocked[g.id] ?? null };
       g.children.forEach(walk);
     };
     config.groups.forEach(walk);
+    this.simStatesMemo = { key, value: states };
     return states;
   }
 
@@ -538,7 +547,7 @@ export class ActivityLevelsPanel extends LitElement {
       <al-timeline
         .hass=${this.hass}
         .groupId=${group?.id ?? null}
-        .title=${group ? (group.name ?? group.id) : ""}
+        .heading=${group ? (group.name ?? group.id) : ""}
         .range=${this.timeline.range}
         .horizon=${this.timeline.horizon}
         .showChannels=${this.timeline.showChannels}

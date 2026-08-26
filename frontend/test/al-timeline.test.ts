@@ -155,7 +155,7 @@ describe("al-timeline data loading", () => {
   it("asks for the window the range and horizon describe", async () => {
     const gid = nextGid();
     const h = hassStub(async () => makeResponse(gid));
-    await mount({ groupId: gid, title: "House", range: "24h", horizon: "24h" }, h);
+    await mount({ groupId: gid, heading: "House", range: "24h", horizon: "24h" }, h);
     expect(h.calls).toEqual([
       {
         type: "activity_levels/timeseries",
@@ -184,10 +184,10 @@ describe("al-timeline data loading", () => {
       if (m["group_id"] !== good) throw new Error("no recorder data");
       return makeResponse(good);
     });
-    const el = await mount({ groupId: good, title: "House", range: "24h", horizon: "24h" }, h);
+    const el = await mount({ groupId: good, heading: "House", range: "24h", horizon: "24h" }, h);
     expect(qa(el, "path.bus")).toHaveLength(1);
     el.groupId = bad;
-    el.title = "Garage";
+    el.heading = "Garage";
     await settle(el);
     expect(qa(el, "path.bus")).toHaveLength(0);
     expect(q(el, ".error")?.textContent).toContain("no recorder data");
@@ -300,7 +300,7 @@ describe("al-timeline rendering", () => {
   beforeEach(async () => {
     gid = nextGid();
     h = hassStub(async () => makeResponse(gid));
-    el = await mount({ groupId: gid, title: "House", range: "24h", horizon: "24h" }, h);
+    el = await mount({ groupId: gid, heading: "House", range: "24h", horizon: "24h" }, h);
   });
 
   it("draws the bus, the children, the forecast band and its median", () => {
@@ -353,7 +353,7 @@ describe("al-timeline cursor", () => {
 
   beforeEach(async () => {
     gid = nextGid();
-    el = await mount({ groupId: gid, title: "House", range: "24h", horizon: "24h" }, hassStub(async () => makeResponse(gid)));
+    el = await mount({ groupId: gid, heading: "House", range: "24h", horizon: "24h" }, hassStub(async () => makeResponse(gid)));
   });
 
   it("has no cursor until the pointer arrives", () => {
@@ -422,7 +422,7 @@ describe("al-timeline toolbar", () => {
   beforeEach(async () => {
     gid = nextGid();
     h = hassStub(async () => makeResponse(gid));
-    el = await mount({ groupId: gid, title: "House", range: "24h", horizon: "24h" }, h);
+    el = await mount({ groupId: gid, heading: "House", range: "24h", horizon: "24h" }, h);
     events = [];
     el.addEventListener("al-timeline-range", (e) => events.push((e as CustomEvent<TimelineRangeDetail>).detail));
   });
@@ -493,7 +493,7 @@ describe("al-timeline forecast readiness", () => {
   it("disables the forecast chips and shows a learning hint with no profile at all", async () => {
     const gid = nextGid();
     const el = await mount(
-      { groupId: gid, title: "House", range: "24h", horizon: "24h" },
+      { groupId: gid, heading: "House", range: "24h", horizon: "24h" },
       hassStub(async () => makeResponse(gid)),
     );
     expect(horizonChip(el, "off").disabled).toBe(false);
@@ -507,7 +507,7 @@ describe("al-timeline forecast readiness", () => {
   it("enables the forecast chips once the profile is trained and knows this group", async () => {
     const gid = nextGid();
     const el = await mount(
-      { groupId: gid, title: "House", range: "24h", horizon: "24h", profileState: trainedFor(gid, 30) },
+      { groupId: gid, heading: "House", range: "24h", horizon: "24h", profileState: trainedFor(gid, 30) },
       hassStub(async () => makeResponse(gid)),
     );
     expect(horizonChip(el, "24h").disabled).toBe(false);
@@ -518,7 +518,7 @@ describe("al-timeline forecast readiness", () => {
   it("still shows the hint for a trained profile that has no entry for this group", async () => {
     const gid = nextGid();
     const el = await mount(
-      { groupId: gid, title: "House", range: "24h", horizon: "24h", profileState: trainedFor(`${gid}-other`) },
+      { groupId: gid, heading: "House", range: "24h", horizon: "24h", profileState: trainedFor(`${gid}-other`) },
       hassStub(async () => makeResponse(gid)),
     );
     expect(horizonChip(el, "24h").disabled).toBe(true);
@@ -530,7 +530,7 @@ describe("al-timeline forecast readiness", () => {
     const el = await mount(
       {
         groupId: gid,
-        title: "House",
+        heading: "House",
         range: "24h",
         horizon: "24h",
         profileState: { ...trainedFor(gid, 5), trained: false },

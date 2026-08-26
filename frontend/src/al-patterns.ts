@@ -178,7 +178,9 @@ export class AlPatterns extends LitElement {
       (pair): pair is [string, string] => typeof pair[1] === "string",
     );
     if (blocked.length === 0) return nothing;
-    const label = (gid: string): string => groupRows(this.config).find((r) => r.id === gid)?.label ?? gid;
+    // One walk of the tree for the whole list, not one per blocked group.
+    const rows = groupRows(this.config);
+    const label = (gid: string): string => rows.find((r) => r.id === gid)?.label ?? gid;
     return html`<ul class="blocked">
       ${blocked.map(([gid, reason]) => html`<li><span class="group">${label(gid)}:</span> <span>${reason}</span></li>`)}
     </ul>`;

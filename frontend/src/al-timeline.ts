@@ -403,7 +403,8 @@ export class AlTimeline extends LitElement {
 
   @property({ attribute: false }) hass?: HomeAssistant;
   @property({ attribute: false }) groupId: string | null = null;
-  @property({ attribute: false }) title = "";
+  /** The bus this chart is of, named for the toolbar; `heading` so it is not the host's tooltip. */
+  @property({ attribute: false }) heading = "";
   @property({ attribute: false }) range: Range = "7d";
   @property({ attribute: false }) horizon: Horizon = "24h";
   @property({ type: Boolean }) showChannels = true;
@@ -679,7 +680,7 @@ export class AlTimeline extends LitElement {
     const hint = this.learningHint;
     return html`
       <div class="toolbar">
-        <span class="title">${this.title}</span>
+        <span class="title">${this.heading}</span>
         <div class="chips" role="group" aria-label="History range">
           ${RANGES.map(
             (r) => html`
@@ -733,7 +734,7 @@ export class AlTimeline extends LitElement {
     const nowX = p.x(this.nowAt(p));
     const stripY = p.plotH + STRIP_OFFSET;
     const cursorX = this.cursorIndex === null ? null : p.x(p.bus.points[this.cursorIndex]?.[0] ?? p.t0);
-    const label = `${this.title} activity, ${this.range} history, ${this.horizon} forecast`;
+    const label = `${this.heading} activity, ${this.range} history, ${this.horizon} forecast`;
     return html`
       <svg
         class="chart"
@@ -833,7 +834,7 @@ export class AlTimeline extends LitElement {
         <div class="tt-time">${new Date(t * 1000).toLocaleString()}</div>
         <div class="tt-row">
           <span class="tt-swatch" style="background: var(--primary-color)"></span>
-          <span class="tt-name">${this.title || p.busId}</span>
+          <span class="tt-name">${this.heading || p.busId}</span>
           <span class="tt-value">${tick(v)}</span>
         </div>
         ${p.children.map((c) => {
