@@ -6,13 +6,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.components.recorder import migration as _recorder_migration
-from homeassistant.components.recorder.core import Recorder as _Recorder
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import recorder as _recorder_helper
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -20,33 +17,10 @@ from pytest_homeassistant_custom_component.common import (
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
-from sqlalchemy.orm.session import Session as _Session
 
 from custom_components.activity_levels.lightlog import LightLog, resolve_group_lights
 
-# Python 3.14 evaluates deferred annotations eagerly when `unittest.mock.create_autospec`
-# inspects a function's signature. `recorder.migration` and `helpers.recorder` only import
-# `Recorder`/`Session` under `TYPE_CHECKING`, so the pytest-homeassistant-custom-component
-# recorder fixtures -- which autospec-patch several of their functions -- hit a `NameError`
-# before any of our code runs. Backfilling the names on the modules is enough for
-# annotation evaluation to succeed; it changes no behaviour.
-_recorder_migration.Recorder = _Recorder
-_recorder_helper.Recorder = _Recorder
-_recorder_helper.Session = _Session
-
 T0 = datetime(2026, 1, 1, tzinfo=UTC).timestamp()
-
-
-@pytest.fixture(autouse=True)
-def _auto_enable_custom_integrations() -> None:
-    """Override the project-wide autouse fixture (which pulls in ``hass``) for this file.
-
-    ``recorder_mock`` needs to prepare the recorder's database *before* the ``hass``
-    fixture body runs; nothing here sets up the ``activity_levels`` config entry through
-    the real component loader, so custom-integration loading is not needed and the
-    default override would otherwise force ``hass`` to initialize too early.
-    """
-    return None
 
 
 @pytest.fixture
