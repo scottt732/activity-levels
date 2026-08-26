@@ -59,5 +59,6 @@ so browsers pick up a new one immediately.
 | `al-override-field.ts` | One nullable "inherit or override" field. |
 | `navigation.ts` | The Mixer's breadcrumb/drill-down/selection reducer, shared with the tree. |
 | `store.ts`, `model.ts`, `convert.ts`, `errors.ts`, `duration.ts` | Draft history, config helpers, selector conversions, error lookup. |
+| `constants.ts` | Values more than one component needs to agree on. |
 | `api.ts`, `save-flow.ts` | Websocket commands and the validate-then-save sequence. |
 | `ha-elements.ts` | The one place that names Home Assistant's `ha-*` elements and waits for them to register. |
