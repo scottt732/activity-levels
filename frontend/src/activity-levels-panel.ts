@@ -218,7 +218,7 @@ export class ActivityLevelsPanel extends LitElement {
     if (this.missing.length) return this.renderMissing();
     const d = this.draft;
     return html`
-      <ha-top-app-bar-fixed>
+      <ha-top-app-bar-fixed .narrow=${this.narrow}>
         <ha-menu-button slot="navigationIcon"></ha-menu-button>
         <div slot="title">Activity Levels</div>
         <div slot="actionItems" class="row">
