@@ -11,7 +11,13 @@ for (const tag of HA_ELEMENTS) {
 }
 
 await import("../src/activity-levels-panel");
+// Every element the shell binds properties to is registered here, so the bindings are
+// exercised against the real components rather than against unknown tags.
 await import("../src/al-tree");
+await import("../src/al-mixer");
+await import("../src/al-timeline");
+await import("../src/al-strip-controls");
+await import("../src/al-patterns");
 
 const { alChange, alRebuild, alSelect, alSimToggle, alTimelineRange } = await import("../src/events");
 const { newGroup, newStimulus } = await import("../src/model");
@@ -95,6 +101,9 @@ const hass = () => ({
         return { entries: [], active: {}, blocked: {} };
       case "activity_levels/state":
         return { now: 1000, groups: {}, voices: {} };
+      // Enough for the timeline to draw an empty chart; its own tests cover the shapes.
+      case "activity_levels/timeseries":
+        return { series: {}, forecast: null, day_types: [], lights: {}, plan: [] };
       default:
         return {};
     }
@@ -344,6 +353,10 @@ describe("activity-levels-panel shared selection", () => {
     expect(timeline.groupId).toBe("house");
     expect(timeline.heading).toBe("House");
     expect(timeline.maxValue).toBe(8);
+    // The element is registered in this file, so the binding reached a live timeline and
+    // came out the other side as the toolbar heading.
+    const chart = el.shadowRoot?.querySelector("al-timeline") as HTMLElement;
+    expect(chart.shadowRoot?.querySelector(".title")?.textContent?.trim()).toBe("House");
   });
 });
 
