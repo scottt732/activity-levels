@@ -1,0 +1,137 @@
+# Example configuration (Scott's house), converted from the original C# config.
+# Load with:  uv run python scripts/load_config.py examples/house.yaml --url http://homeassistant.local:8123 --token "$HA_TOKEN"
+version: 1
+defaults:
+  envelope: default
+  max_value: 5.0
+  precision: 1
+  unavailable: hold
+  retrigger: only_in_release
+  debounce: 0s
+  safety_refresh: 60s
+  min_wake_interval: 1s
+
+envelopes:
+  - id: default          # 30 minutes to release from peak to zero
+    release: 30m
+  - id: fifteen_minutes
+    release: 15m
+  - id: hour
+    release: 1h
+  - id: two_hours
+    release: 2h
+  - id: four_hours
+    release: 4h
+  - id: eight_hours
+    release: 8h
+
+groups:
+  - id: property
+    name: Property
+    mix: max
+    children:
+      - id: house
+        name: House
+        mix: max
+        stimuli:
+          - entity: binary_sensor.smoke_detector
+            envelope: hour
+        children:
+          - id: basement
+            name: Basement
+            mix: max
+            children:
+              - id: play_room
+                name: Play Room
+                stimuli:
+                  - entity: binary_sensor.basement_hallway_door
+              - id: laundry_room
+                name: Laundry Room
+                stimuli:
+                  - entity: binary_sensor.basement_exterior_door
+                    gain: 2.5
+                  - entity: binary_sensor.basement_motion
+                    gain: 2.5
+          - id: downstairs
+            name: Downstairs
+            mix: max
+            children:
+              - id: living_room
+                name: Living Room
+                stimuli:
+                  - entity: binary_sensor.living_room_motion
+                    envelope: two_hours
+                  - entity: binary_sensor.living_room_windows
+                  - entity: binary_sensor.front_door
+                    envelope: fifteen_minutes
+              - id: office
+                name: Office
+                stimuli:
+                  - entity: binary_sensor.office_motion
+                    envelope: hour
+                    gain: 1.5
+                    debounce: 15s
+                  - entity: binary_sensor.office_window
+              - id: dining_room
+                name: Dining Room
+                stimuli:
+                  - entity: binary_sensor.dining_room_motion
+                    envelope: hour
+                  - entity: binary_sensor.dining_room_windows
+              - id: kitchen
+                name: Kitchen
+                stimuli:
+                  - entity: binary_sensor.kitchen_motion
+                    envelope: hour
+                  - entity: binary_sensor.kitchen_windows
+                  - entity: binary_sensor.back_door
+                    envelope: fifteen_minutes
+              - id: downstairs_hallway
+                name: Downstairs Hallway
+                stimuli:
+                  - entity: binary_sensor.basement_hallway_door
+          - id: upstairs
+            name: Upstairs
+            mix: max
+            children:
+              - id: guest_room
+                name: Guest Room
+                stimuli:
+                  - entity: binary_sensor.guest_room_motion
+                    envelope: hour
+              - id: main_bedroom
+                name: Main Bedroom
+                stimuli:
+                  - entity: binary_sensor.main_bedroom_door
+                    envelope: two_hours
+                  - entity: binary_sensor.main_bedroom_motion
+                    envelope: hour
+              - id: upstairs_hallway
+                name: Upstairs Hallway
+                stimuli:
+                  - entity: binary_sensor.upstairs_hallway_motion
+      - id: garage
+        name: Garage
+        stimuli:
+          - entity: binary_sensor.garage_door
+          - entity: binary_sensor.garage_motion
+          - entity: binary_sensor.garage_side_door
+      - id: outside
+        name: Outside
+        mix: max
+        children:
+          - id: front_yard
+            name: Front Yard
+            mix: max
+            stimuli:
+              - entity: binary_sensor.front_patio_motion
+              - entity: binary_sensor.front_yard_motion
+          - id: back_yard
+            name: Back Yard
+            mix: max
+            children:
+              # back_patio had no stimuli in the old config; add one here when you have a sensor for it.
+              - id: driveway
+                name: Driveway
+                stimuli:
+                  - entity: binary_sensor.driveway_motion
