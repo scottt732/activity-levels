@@ -1,4 +1,6 @@
+import logging
 from http import HTTPStatus
+from pathlib import Path
 
 import pytest
 from homeassistant.components import frontend
@@ -6,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
+from custom_components.activity_levels import panel as panel_module
 from custom_components.activity_levels.const import DOMAIN, PANEL_URL_PATH
 from custom_components.activity_levels.schema import default_options, validate_config
 
@@ -61,3 +64,22 @@ async def test_dev_server_override(hass: HomeAssistant, monkeypatch: pytest.Monk
     custom = hass.data[frontend.DATA_PANELS][PANEL_URL_PATH].config["_panel_custom"]
     assert custom["module_url"] == "http://localhost:5173/src/main.ts"
     assert custom["trust_external"] is True
+
+
+async def test_missing_bundle_logs_and_skips_the_panel(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """No bundle means no panel: a sidebar entry that only ever blanks is worse than none."""
+    monkeypatch.setattr(panel_module, "_FRONTEND_DIR", tmp_path)
+    caplog.set_level(logging.ERROR, logger=panel_module.__name__)
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validate_config(default_options()))
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert PANEL_URL_PATH not in hass.data.get(frontend.DATA_PANELS, {})
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert any("panel" in r.getMessage() for r in errors)

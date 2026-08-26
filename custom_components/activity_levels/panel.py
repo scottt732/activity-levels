@@ -28,15 +28,11 @@ _STATIC_REGISTERED = f"{DOMAIN}_static_registered"
 _FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 
-def _bundle_hash() -> str:
+def _bundle_hash() -> str | None:
+    """Cache-busting digest of the built bundle, or None when it is not there."""
     bundle = _FRONTEND_DIR / BUNDLE_NAME
     if not bundle.is_file():
-        _LOGGER.warning(
-            "Frontend bundle %s is missing, so the Activity Levels panel will not load. "
-            "Build it with 'pnpm build' in frontend/, or reinstall the integration",
-            bundle,
-        )
-        return "missing"
+        return None
     return hashlib.sha256(bundle.read_bytes()).hexdigest()[:12]
 
 
@@ -55,6 +51,16 @@ async def async_register_panel(hass: HomeAssistant) -> None:
         trust_external = True
     else:
         digest = await hass.async_add_executor_job(_bundle_hash)
+        if digest is None:
+            # A registered panel with no module behind it is a sidebar entry that only
+            # ever renders blank, so the panel is left out until the bundle is built.
+            _LOGGER.error(
+                "Frontend bundle %s is missing, so the Activity Levels panel is not "
+                "registered. Build it with 'pnpm build' in frontend/, or reinstall the "
+                "integration",
+                _FRONTEND_DIR / BUNDLE_NAME,
+            )
+            return
         module_url = f"{STATIC_URL}/{BUNDLE_NAME}?v={digest}"
         trust_external = False
     await panel_custom.async_register_panel(
