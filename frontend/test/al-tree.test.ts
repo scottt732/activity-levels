@@ -114,6 +114,41 @@ describe("al-tree structural changes", () => {
   });
 });
 
+describe("al-tree reordering", () => {
+  const threeGroups = (): Config => ({
+    ...baseConfig(),
+    groups: [newGroup("a"), { ...newGroup("b"), stimuli: [newStimulus("binary_sensor.b")] }, newGroup("c")],
+  });
+
+  /** Move the first group down, which swaps it with the second. */
+  const moveFirstDown = async (selection: Path | null): Promise<void> => {
+    el.config = threeGroups();
+    el.selection = selection;
+    await el.updateComplete;
+    await click('ha-icon-button[label="Move down"]');
+  };
+
+  it("follows the moved node when it was the selected one", async () => {
+    await moveFirstDown(["groups", 0]);
+    expect(selects).toEqual([["groups", 1]]);
+  });
+
+  it("follows the sibling that was pushed the other way, at any depth", async () => {
+    await moveFirstDown(["groups", 1, "stimuli", 0]);
+    expect(selects).toEqual([["groups", 0, "stimuli", 0]]);
+  });
+
+  it("leaves a selection outside the swap alone", async () => {
+    await moveFirstDown(["groups", 2]);
+    expect(selects).toEqual([]);
+  });
+
+  it("selects nothing when nothing was selected", async () => {
+    await moveFirstDown(null);
+    expect(selects).toEqual([]);
+  });
+});
+
 describe("al-tree live view", () => {
   const live: LiveState = {
     now: 1000,

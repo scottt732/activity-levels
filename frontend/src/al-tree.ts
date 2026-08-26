@@ -156,7 +156,27 @@ export class AlTree extends LitElement {
     const from = path[path.length - 1] as number;
     const to = from + delta;
     this.emitChange(moveAt(config, listPath, from, to));
-    this.emitSelect([...listPath, to]);
+    const next = this.selectionAfterSwap(listPath, from, to);
+    if (next !== null) this.emitSelect(next);
+  }
+
+  /**
+   * Where the selection lands after two adjacent siblings swap places, or `null` when it
+   * is untouched. Reordering is always a swap of neighbours, so only paths running through
+   * one of the two slots move - the moved node itself, or anything inside the sibling it
+   * displaced. Everything else keeps naming the same node and is left alone, rather than
+   * having the editor pane jump to whatever was just reordered.
+   */
+  private selectionAfterSwap(listPath: Path, from: number, to: number): Path | null {
+    const selection = this.selection;
+    if (selection === null || selection.length <= listPath.length) return null;
+    if (pathKey(selection.slice(0, listPath.length)) !== pathKey(listPath)) return null;
+    const index = selection[listPath.length];
+    const moved = index === from ? to : index === to ? from : null;
+    if (moved === null) return null;
+    const next = [...selection];
+    next[listPath.length] = moved;
+    return next;
   }
 
   private removeNode(path: Path, label: string): void {
