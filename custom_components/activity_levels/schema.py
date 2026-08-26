@@ -141,12 +141,7 @@ def _group_schema(value: Any) -> dict[str, Any]:
             vol.Optional("children", default=list): [_group_schema],
         }
     )
-    try:
-        result: dict[str, Any] = schema(value)
-    except vol.MultipleInvalid as exc:
-        raise vol.MultipleInvalid(exc.errors) from exc
-    except vol.Invalid as exc:
-        raise vol.Invalid(exc.msg, exc.path, exc.error_message, exc.error_type) from exc
+    result: dict[str, Any] = schema(value)
     if result["name"] is None:
         result["name"] = result["id"].replace("_", " ").title()
     return result
