@@ -48,6 +48,11 @@ export function yScale(max: number, height: number, pad = 4): (v: number) => num
  * (in time order), so spikes inside a bucket are never smoothed away.
  */
 export function decimate(points: [number, number][], maxPoints: number): [number, number][] {
+  // Below 4 there is no room for a first point, a last point and one bucket's min/max in
+  // between; the chart cannot resolve fewer than that anyway; and a maxPoints of 1 or 2
+  // handed in unclamped drove `perBucket` (and then `bucketSize`) to values that dropped
+  // the last-point patch-up below.
+  maxPoints = Math.max(4, maxPoints);
   const n = points.length;
   if (n <= maxPoints) return points;
   const perBucket = Math.max(1, Math.floor(maxPoints / 2));

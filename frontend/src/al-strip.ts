@@ -156,7 +156,10 @@ export class AlStrip extends LitElement {
   }
 
   override render() {
-    const e = this.envelope;
+    // A bus has no envelope of its own - the sketch and its A/D/S/R hint are a channel
+    // strip's story to tell - so a bus ignores whatever it was handed rather than trust
+    // every caller to remember to pass `null`.
+    const e = this.kind === "bus" ? null : this.envelope;
     return html`
       <div class="strip" @click=${this.select}>
         <div class="head">

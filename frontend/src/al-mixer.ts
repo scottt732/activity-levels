@@ -281,7 +281,11 @@ export class AlMixer extends LitElement {
         ${crumbs.map(
           (crumb, i) => html`
             ${i > 0 ? html`<span class="sep">›</span>` : nothing}
-            <button class="link crumb" @click=${() => this.navigate({ type: "open", path: crumb.path })}>
+            <button
+              class="link crumb"
+              aria-current=${i === crumbs.length - 1 ? "location" : nothing}
+              @click=${() => this.navigate({ type: "open", path: crumb.path })}
+            >
               ${crumb.label}
             </button>
           `,
@@ -316,7 +320,6 @@ export class AlMixer extends LitElement {
         ?narrow=${this.narrow}
         .label=${child.name ?? child.id}
         .sublabel=${`bus · ${child.stimuli.length + child.children.length}`}
-        .envelope=${resolvedEnvelope(config, {})}
         .gain=${child.gain}
         .live=${level}
         .selected=${shared.selected}

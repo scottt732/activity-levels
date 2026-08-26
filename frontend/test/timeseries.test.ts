@@ -60,6 +60,16 @@ describe("decimate", () => {
     const out = decimate(points, 20);
     expect(out.length).toBeLessThanOrEqual(20);
   });
+  it("floors an unreasonably small maxPoints rather than losing the last point", () => {
+    const points: [number, number][] = Array.from({ length: 50 }, (_, i) => [i, i]);
+    for (const cap of [0, 1, 2, 3]) {
+      const out = decimate(points, cap);
+      expect(out[0]).toEqual(points[0]);
+      expect(out[out.length - 1]).toEqual(points[points.length - 1]);
+      expect(out.length).toBeGreaterThan(0);
+    }
+  });
+
   it("keeps the first and last points and both the min and max of each bucket", () => {
     // 15 points, maxPoints=6 -> 3 buckets of 5, each contributing its min and max in time order.
     const values = [10, 2, 5, 3, 1, 4, 9, 0, 6, 2, 3, 8, 5, 7, 1];

@@ -166,6 +166,17 @@ describe("al-mixer rendering", () => {
     expect(el.shadowRoot?.querySelector<HTMLButtonElement>(".up")?.disabled).toBe(true);
   });
 
+  it("marks only the last breadcrumb as the current location", async () => {
+    el.nav = { busPath: ["groups", 0, "children", 0], selection: ["groups", 0, "children", 0] };
+    await el.updateComplete;
+    const crumbs = [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>(".crumb") ?? [])];
+    expect(crumbs.map((c) => c.getAttribute("aria-current"))).toEqual([null, "location"]);
+  });
+
+  it("gives a bus channel no envelope to sketch — that is a channel strip's story", () => {
+    expect(strips()[0]?.envelope).toBeNull();
+  });
+
   it("groups the strips for assistive technology", () => {
     expect(container()?.getAttribute("role")).toBe("group");
     expect(container()?.getAttribute("aria-label")).toBe("Mixer");

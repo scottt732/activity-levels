@@ -100,6 +100,13 @@ describe("al-strip", () => {
     expect(root?.querySelector(".adsr")?.textContent).toContain("30m");
   });
 
+  it("skips the envelope sketch and A/D/S/R hint for a bus, even if one was handed to it", async () => {
+    el.kind = "bus";
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector("al-envelope-sketch")).toBeFalsy();
+    expect(el.shadowRoot?.querySelector(".adsr")?.textContent?.trim()).toBe("");
+  });
+
   it("falls back to a glyph per kind when the entity has no icon", async () => {
     expect(el.shadowRoot?.querySelector("ha-icon")).toBeFalsy();
     expect(el.shadowRoot?.querySelector(".icon")?.textContent?.trim()).toBe("⚡");

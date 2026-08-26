@@ -18,7 +18,7 @@ import {
 import type { PropertyValues, TemplateResult } from "lit";
 import type { TimeseriesQuery } from "./api";
 import type { Horizon, Range } from "./timeseries";
-import type { HomeAssistant, LiveState, TimeseriesResponse } from "./types";
+import type { HomeAssistant, LiveState, ProfileState, TimeseriesResponse } from "./types";
 
 /** Room for the y tick labels at the left and the light strip + time labels at the foot. */
 const MARGIN_LEFT = 32;
@@ -36,6 +36,9 @@ const REFETCH_MS = 60_000;
 const CACHE_TTL_MS = 60_000;
 /** Enough for a few strips at a few ranges; past that the oldest entries are dropped. */
 const CACHE_MAX = 32;
+
+/** The engine's own default training window, used when the config does not name one. */
+const DEFAULT_MIN_DAYS = 14;
 
 const RANGES: Range[] = ["24h", "7d", "30d"];
 const HORIZONS: Horizon[] = ["off", "24h", "7d"];
@@ -281,6 +284,18 @@ export class AlTimeline extends LitElement {
         outline: 2px solid var(--primary-color);
         outline-offset: 1px;
       }
+      .chip:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .hint {
+        white-space: nowrap;
+      }
+      /* Too narrow for one row of chips: the forecast controls (and everything after
+         them) break onto a second row rather than the toolbar scrolling sideways. */
+      :host([narrow]) .chips.horizons {
+        flex-basis: 100%;
+      }
       svg.chart {
         display: block;
         width: 100%;
@@ -397,6 +412,8 @@ export class AlTimeline extends LitElement {
   @property({ type: Boolean }) showLights = true;
   @property({ attribute: false }) live: LiveState | null = null;
   @property({ type: Number }) maxValue = 5;
+  @property({ attribute: false }) profileState: ProfileState | null = null;
+  @property({ type: Number }) minDays = DEFAULT_MIN_DAYS;
   @property({ type: Boolean, reflect: true }) narrow = false;
 
   /** The sample the cursor is on, or `null` for no cursor. Read by tests and the host. */
@@ -414,6 +431,27 @@ export class AlTimeline extends LitElement {
 
   private get height(): number {
     return this.narrow ? NARROW_HEIGHT : HEIGHT;
+  }
+
+  /**
+   * A forecast is only worth showing once the profile has actually seen this group: a
+   * document that has never been trained, or one that has been trained but has nothing
+   * for this particular group yet (it was just added, say), both read the same way here.
+   * History is unaffected either way - it comes straight from the recorder, not the profile.
+   */
+  private get forecastReady(): boolean {
+    const gid = this.groupId;
+    const ps = this.profileState;
+    if (gid === null || !ps || !ps.trained) return false;
+    return ps.profile.groups[gid] !== undefined;
+  }
+
+  /** "learning… n/min_days days", or null once the forecast is worth asking for. */
+  private get learningHint(): string | null {
+    if (this.forecastReady) return null;
+    const gid = this.groupId;
+    const days = (gid !== null ? this.profileState?.profile.groups[gid]?.days : undefined) ?? 0;
+    return `learning… ${days}/${this.minDays} days`;
   }
 
   override connectedCallback(): void {
@@ -478,6 +516,10 @@ export class AlTimeline extends LitElement {
       this.seq++;
       this.loaded = { q, data: hit.data };
       this.error = null;
+      // A hit is still a use: re-inserting it keeps it off the front of the eviction
+      // queue, so a strip that is actually being watched does not lose its cache entry
+      // to one nobody has looked at since.
+      remember(key, hit.data);
       return;
     }
 
@@ -621,6 +663,7 @@ export class AlTimeline extends LitElement {
   }
 
   private renderChips(): TemplateResult {
+    const hint = this.learningHint;
     return html`
       <div class="toolbar">
         <span class="title">${this.title}</span>
@@ -638,20 +681,25 @@ export class AlTimeline extends LitElement {
             `,
           )}
         </div>
-        <div class="chips" role="group" aria-label="Forecast horizon">
-          ${HORIZONS.map(
-            (h) => html`
+        <div class="chips horizons" role="group" aria-label="Forecast horizon">
+          ${HORIZONS.map((h) => {
+            const disabled = h !== "off" && !this.forecastReady;
+            return html`
               <button
                 class="chip horizon"
                 data-horizon=${h}
                 aria-pressed=${this.horizon === h ? "true" : "false"}
+                ?disabled=${disabled}
+                aria-disabled=${disabled ? "true" : "false"}
+                title=${disabled ? (hint ?? "") : ""}
                 @click=${() => this.setHorizon(h)}
               >
                 ${h}
               </button>
-            `,
-          )}
+            `;
+          })}
         </div>
+        ${hint ? html`<span class="muted hint" title=${hint}>${hint}</span>` : nothing}
         <button
           class="chip channels"
           aria-pressed=${this.showChannels ? "true" : "false"}

@@ -31,23 +31,78 @@ is recomputed recursively at every level whenever a leaf voice changes.
 
 ## The panel
 
-The sidebar entry opens an admin-only editor for the whole configuration:
+The sidebar entry opens an admin-only editor for the whole configuration, landing on a
+DAW-style **Mixer**.
 
-- **Groups** — the tree of groups on the left, the editor for whatever you select on the
-  right. Each group row can add a stimulus, add a child group, move itself among its
-  siblings, or delete itself and everything under it. A red badge on a row counts the
-  validation problems inside it.
+### Mixer
+
+Three rows, stacked, for tuning the tree that's already there — adding, removing or
+moving groups and stimuli is done in **Groups** (below), not here:
+
+1. **Timeline** — the selected strip's history and forecast, overlaid on one chart.
+   Range chips (`24h` / `7d` / `30d`) and forecast chips (`off` / `24h` / `7d`) pick the
+   window; toggles turn the faint child-group lines and the light-history strip on and
+   off. Day types (weekday, weekend, holiday, any configured calendar) are shaded, with a
+   legend; a light-yellow band under the chart is history solid and the presence-
+   simulation plan faded. Hovering shows the value(s) at that instant and the day type; a
+   "now" line marks the present. The forecast chips are disabled, with a
+   "learning… *n*/14 days" hint in their place, until the pattern profile has actually
+   seen the selected group — the history half of the chart is unaffected either way.
+2. **Mixer** — a breadcrumb (`Property › House › Downstairs`, each crumb clickable, plus
+   "⌃ up") over the current bus's channels, drawn as console strips. The current bus
+   itself is the **MASTER** strip, at the right of the row:
+
+   | Config | Mixer |
+   | --- | --- |
+   | a stimulus | a channel strip (⚡), showing the entity's current state |
+   | a child group | a bus strip (▤, double border), with an "open ▸" to drill in |
+   | stimulus/child-group `gain` | the strip's **fader** — gain into the parent bus |
+   | envelope (preset + overrides) | the strip's envelope sketch and A/D/S/R hint |
+   | group `mix` | the MASTER strip's mix selector (`sum` / `max` / `mean`) |
+   | group `max_value` | the MASTER strip's **limiter** ceiling |
+   | group level | every strip's **meter**, live |
+   | `switch.<gid>_presence_simulation` | the MASTER strip's ⏻ — hidden if the group has no lights |
+
+   Clicking a strip selects it (the timeline and the controls row below follow);
+   clicking "open ▸" drills into a bus instead. A root group is a top-level bus; with
+   more than one, the breadcrumb starts with a root selector.
+3. **Controls** — everything about the selected strip that doesn't fit on it. For a
+   channel: the envelope preset, A/D/S/R, sustain, impulse, gain, trigger (`to`) states
+   and debounce, each override showing what preset it falls back to and a reset. For a
+   bus, including the MASTER: name, mix, null handling, limiter, precision, gain into its
+   parent (buses only, not the root), how many lights it owns, its presence-simulation
+   switch and the last few things it has done, the expected/anomaly readings, and a
+   "rebuild profile" button.
+
+Keyboard, in the mixer row: **←/→** moves the selection across the channel strips and the
+MASTER (wrapping), **Enter** opens the selected bus, **Backspace** goes up one bus,
+**Home**/**End** jump to the first channel or the MASTER. In the timeline: **←/→** move a
+cursor one sample at a time — the tooltip without a mouse — and **Esc** clears it.
+
+Groups, Envelopes and Defaults edit the same draft as the Mixer and share its selection —
+picking a strip here also opens it in Groups, and back:
+
+- **Groups** — the structure editor: the tree of groups on the left, the editor for
+  whatever you select on the right. Each group row can add a stimulus, add a child group,
+  move itself among its siblings, or delete itself and everything under it. A red badge
+  on a row counts the validation problems inside it.
 - **Envelopes** — the preset library, with a sketch of the selected preset's ADSR shape.
   Renaming a preset rewrites every stimulus and default that names it; a preset something
   still points at cannot be deleted until those references move.
 - **Defaults** — the site-wide fallbacks every group, preset and stimulus inherits from.
+- **Patterns** — the pattern profile's status (trained or still learning, when it was
+  generated, the window it learned from), a readiness table per group (ready or not, days
+  learned, the expected-activity sensor's current reading), which groups presence
+  simulation is currently blocked on and why, the simulation log, and a "rebuild profile"
+  button with a "force" switch for overwriting a profile an external producer owns.
 
 Edits are held as a draft: **Undo**/**Redo** walk it, **Discard** throws it away, and
 **Save** validates first — problems come back attached to the fields that caused them —
 then writes the configuration and reloads the integration, which re-creates entities and
-restores their state. The **Live** switch polls the engine every two seconds and overlays
-the current level, gate and envelope phase onto the tree and the stimulus editor; it
-pauses while a save is in flight and while the browser tab is in the background.
+restores their state. Meters and entity chips poll the engine every two seconds while the
+Mixer tab is open; the **Live** switch on the other tabs does the same for the tree and
+the stimulus editor, and pauses while a save is in flight and while the browser tab is in
+the background.
 
 ### Known limitations
 
@@ -59,6 +114,14 @@ pauses while a save is in flight and while the browser tab is in the background.
 - On a cold page load the panel can report that some Home Assistant UI components did not
   load. Home Assistant registers them lazily; visiting **Settings → Devices & services**
   once and reloading the page is enough to bring them in.
+- The timeline charts a group's own series; a channel strip has no series of its own, so
+  selecting one charts the bus it belongs to.
+- A forecast's day types for days beyond today are provisional: they fall back to a plain
+  weekday/weekend guess rather than checking configured calendars, which are only
+  resolved as those days actually arrive.
+- A group's forecast is unavailable — its chips disabled, with a "learning… *n*/14 days"
+  hint in their place — until its pattern profile has at least `patterns.min_days` (14 by
+  default) of history behind it.
 
 ## Entities
 

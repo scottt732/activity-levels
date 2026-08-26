@@ -162,7 +162,9 @@ describe("activity-levels-panel tabs", () => {
     expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false", "false"]);
     expect(tabs().map((t) => t.getAttribute("tabindex"))).toEqual(["0", "-1", "-1", "-1", "-1"]);
     expect(el.shadowRoot?.querySelector('[role="tabpanel"]')).toBeTruthy();
-    expect(el.shadowRoot?.querySelector("al-mixer")).toBeTruthy();
+    // The default config here has no groups yet, so the Mixer tab shows the empty-state
+    // card rather than a mixer with nothing to mix.
+    expect(el.shadowRoot?.querySelector("al-mixer")).toBeNull();
   });
 
   it("moves the roving tabindex with the arrow keys without switching tabs", async () => {
@@ -195,6 +197,47 @@ describe("activity-levels-panel tabs", () => {
     expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual(["false", "false", "false", "false", "true"]);
     expect(tabs()[4]?.getAttribute("tabindex")).toBe("0");
     expect(el.shadowRoot?.querySelector("al-patterns")).toBeTruthy();
+  });
+});
+
+describe("activity-levels-panel mixer empty state", () => {
+  it("offers a card that sends the user to Groups instead of a mixer with nothing to mix", async () => {
+    expect(el.shadowRoot?.querySelector("al-timeline")).toBeNull();
+    expect(el.shadowRoot?.querySelector("al-strip-controls")).toBeNull();
+    const button = el.shadowRoot?.querySelector<HTMLElement>(".mixer-empty ha-button");
+    expect(button?.textContent?.trim()).toBe("Go to Groups");
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await settle();
+    expect(tabs()[1]?.getAttribute("aria-selected")).toBe("true");
+    expect(el.shadowRoot?.querySelector("al-tree")).toBeTruthy();
+  });
+
+  it("shows the real mixer again once a group exists", async () => {
+    await mount(houseConfig());
+    expect(el.shadowRoot?.querySelector(".mixer-empty")).toBeNull();
+    expect(el.shadowRoot?.querySelector("al-mixer")).toBeTruthy();
+  });
+});
+
+describe("activity-levels-panel mixer timeline wiring", () => {
+  it("hands the timeline the profile state and the configured minimum training days", async () => {
+    await mount({
+      ...houseConfig(),
+      defaults: { ...houseConfig().defaults, patterns: { min_days: 30 } },
+    });
+    await settle();
+    const timeline = el.shadowRoot?.querySelector("al-timeline") as unknown as {
+      profileState: unknown;
+      minDays: number;
+    };
+    expect(timeline.profileState).toMatchObject({ trained: true });
+    expect(timeline.minDays).toBe(30);
+  });
+
+  it("falls back to 14 minimum days when the config names none", async () => {
+    await mount(houseConfig());
+    const timeline = el.shadowRoot?.querySelector("al-timeline") as unknown as { minDays: number };
+    expect(timeline.minDays).toBe(14);
   });
 });
 

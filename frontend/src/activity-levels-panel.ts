@@ -43,6 +43,8 @@ const PROFILE_TTL_MS = 5 * 60_000;
 const RELOAD_GRACE_MS = 1500;
 /** Where the timeline toolbar's choices survive a reload. */
 const TIMELINE_KEY = "activity_levels.timeline";
+/** The engine's own default training window, used when the config does not name one. */
+const DEFAULT_MIN_DAYS = 14;
 
 const RANGES: Range[] = ["24h", "7d", "30d"];
 const HORIZONS: Horizon[] = ["off", "24h", "7d"];
@@ -531,6 +533,7 @@ export class ActivityLevelsPanel extends LitElement {
    */
   private renderMixer(d: Draft) {
     const config = d.config;
+    if (config.groups.length === 0) return this.renderMixerEmpty();
     const busPath = busPathFor(this.selection ?? this.nav.busPath);
     const group = groupAt(config, busPath);
     return html`<div class="rows">
@@ -544,6 +547,8 @@ export class ActivityLevelsPanel extends LitElement {
         .showLights=${this.timeline.showLights}
         .live=${this.live}
         .maxValue=${group?.max_value ?? config.defaults.max_value}
+        .profileState=${this.profileState}
+        .minDays=${config.defaults.patterns?.min_days ?? DEFAULT_MIN_DAYS}
         .narrow=${this.narrow}
         @al-timeline-range=${this.onTimelineRange}
       ></al-timeline>
@@ -571,6 +576,16 @@ export class ActivityLevelsPanel extends LitElement {
         @al-rebuild=${this.onRebuild}
         @al-sim-toggle=${this.onSimToggle}
       ></al-strip-controls>
+    </div>`;
+  }
+
+  /** Nothing to mix until there is at least one group: Groups is where that starts. */
+  private renderMixerEmpty() {
+    return html`<div class="rows">
+      <ha-card class="mixer-empty">
+        <p class="muted">Add your first group in Groups.</p>
+        <ha-button @click=${() => this.selectTab(TABS.indexOf("groups"))}>Go to Groups</ha-button>
+      </ha-card>
     </div>`;
   }
 

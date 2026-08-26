@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/al-timeline";
 import { computePaths, timelineCache } from "../src/al-timeline";
 import type { AlTimeline, TimelineRangeDetail } from "../src/al-timeline";
-import type { HomeAssistant, TimeseriesResponse } from "../src/types";
+import type { HomeAssistant, ProfileState, TimeseriesResponse } from "../src/types";
 
 /** Minute-aligned: query windows are quantized to the minute, so a round `now` keeps the
     fixtures and the window the element asks for in agreement. */
@@ -405,6 +405,99 @@ describe("al-timeline toolbar", () => {
     await settle(el);
     expect(events).toEqual([{ range: "24h", horizon: "24h", showChannels: true, showLights: false }]);
     expect(h.callWS).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("al-timeline forecast readiness", () => {
+  const trainedFor = (gid: string, days = 21): ProfileState => ({
+    trained: true,
+    ready: { [gid]: true },
+    profile: {
+      version: 1,
+      producer: { name: "activity_levels", version: "0.4.0" },
+      generated_at: 0,
+      training_window: [0, 0],
+      day_types: ["weekday"],
+      slot_minutes: 15,
+      groups: { [gid]: { ready: true, days, expected: {}, lights: {} } },
+    },
+  });
+
+  const horizonChip = (el: AlTimeline, h: string): HTMLButtonElement =>
+    q(el, `.chip[data-horizon="${h}"]`) as HTMLButtonElement;
+
+  it("disables the forecast chips and shows a learning hint with no profile at all", async () => {
+    const gid = nextGid();
+    const el = await mount(
+      { groupId: gid, title: "House", range: "24h", horizon: "24h" },
+      hassStub(async () => makeResponse(gid)),
+    );
+    expect(horizonChip(el, "off").disabled).toBe(false);
+    expect(horizonChip(el, "24h").disabled).toBe(true);
+    expect(horizonChip(el, "7d").disabled).toBe(true);
+    expect(q(el, ".hint")?.textContent?.trim()).toBe("learning… 0/14 days");
+    // History is unaffected: the bus line still draws.
+    expect(qa(el, "path.bus")).toHaveLength(1);
+  });
+
+  it("enables the forecast chips once the profile is trained and knows this group", async () => {
+    const gid = nextGid();
+    const el = await mount(
+      { groupId: gid, title: "House", range: "24h", horizon: "24h", profileState: trainedFor(gid, 30) },
+      hassStub(async () => makeResponse(gid)),
+    );
+    expect(horizonChip(el, "24h").disabled).toBe(false);
+    expect(horizonChip(el, "7d").disabled).toBe(false);
+    expect(q(el, ".hint")).toBeNull();
+  });
+
+  it("still shows the hint for a trained profile that has no entry for this group", async () => {
+    const gid = nextGid();
+    const el = await mount(
+      { groupId: gid, title: "House", range: "24h", horizon: "24h", profileState: trainedFor(`${gid}-other`) },
+      hassStub(async () => makeResponse(gid)),
+    );
+    expect(horizonChip(el, "24h").disabled).toBe(true);
+    expect(q(el, ".hint")?.textContent?.trim()).toBe("learning… 0/14 days");
+  });
+
+  it("reads the day count off the profile and the minimum off the caller", async () => {
+    const gid = nextGid();
+    const el = await mount(
+      {
+        groupId: gid,
+        title: "House",
+        range: "24h",
+        horizon: "24h",
+        profileState: { ...trainedFor(gid, 5), trained: false },
+        minDays: 30,
+      },
+      hassStub(async () => makeResponse(gid)),
+    );
+    expect(q(el, ".hint")?.textContent?.trim()).toBe("learning… 5/30 days");
+  });
+});
+
+describe("al-timeline cache recency", () => {
+  it("keeps an entry that is used again ahead of ones that were not, once the cache is full", async () => {
+    const h = hassStub(async (m) => makeResponse(m["group_id"] as string));
+    const touched = nextGid();
+    (await mount({ groupId: touched, range: "24h", horizon: "24h" }, h)).remove();
+    const others = Array.from({ length: 31 }, () => nextGid());
+    for (const gid of others) (await mount({ groupId: gid, range: "24h", horizon: "24h" }, h)).remove();
+    expect(timelineCache.size).toBe(32);
+    const beforeTouch = h.callWS.mock.calls.length;
+    // Touched again, still inside the TTL: a hit, and (per the fix) a re-insertion.
+    (await mount({ groupId: touched, range: "24h", horizon: "24h" }, h)).remove();
+    expect(h.callWS.mock.calls.length).toBe(beforeTouch);
+    // Now flood past the cap with entries nobody re-visits.
+    const flood = Array.from({ length: 10 }, () => nextGid());
+    for (const gid of flood) (await mount({ groupId: gid, range: "24h", horizon: "24h" }, h)).remove();
+    expect(timelineCache.size).toBe(32);
+    const beforeRecheck = h.callWS.mock.calls.length;
+    await mount({ groupId: touched, range: "24h", horizon: "24h" }, h);
+    // Still resident: the flood evicted the untouched entries first, not this one.
+    expect(h.callWS.mock.calls.length).toBe(beforeRecheck);
   });
 });
 

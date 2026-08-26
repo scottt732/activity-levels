@@ -55,3 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Patterns** — learned expected-activity/anomaly sensors, presence simulation switches,
   profile/timeseries websocket API. The live state reports how many lights each group
   owns, so the panel can tell "cannot be simulated" from "not armed".
+- **Mixer landing page** (timeline, drill-down mixer, controls), Patterns tab — the panel
+  now opens on a DAW-style Mixer: a timeline of history and forecast for the selected
+  strip, a drill-down mixer of channel and bus strips with faders, meters and a MASTER
+  strip (mix, limiter, presence-simulation switch), and a controls row for whatever is
+  selected. Groups remains the structure editor and shares its selection with the Mixer.
+  A new Patterns tab shows profile status, per-group readiness and the simulation log.
