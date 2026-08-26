@@ -81,8 +81,9 @@ export const alSimToggle = (gid: string, on: boolean): CustomEvent<{ gid: string
   new CustomEvent<{ gid: string; on: boolean }>("al-sim-toggle", { detail: { gid, on }, bubbles: true, composed: true });
 
 /**
- * Asks the shell to retrain the pattern profile. No detail: what to rebuild is not the
- * control row's call — the shell rebuilds every group and re-reads `profile/get`.
+ * Asks the shell to retrain the pattern profile. What to rebuild is not the caller's
+ * call — the shell rebuilds every group and re-reads `profile/get`. The one thing it
+ * does carry is `force`, which retrains even a profile an external producer owns.
  */
-export const alRebuild = (): CustomEvent<null> =>
-  new CustomEvent<null>("al-rebuild", { detail: null, bubbles: true, composed: true });
+export const alRebuild = (force = false): CustomEvent<{ force: boolean }> =>
+  new CustomEvent<{ force: boolean }>("al-rebuild", { detail: { force }, bubbles: true, composed: true });

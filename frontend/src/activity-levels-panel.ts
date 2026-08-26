@@ -1,19 +1,66 @@
 import { LitElement, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { getConfig, getState, saveConfig, validateConfig } from "./api";
+import {
+  callService,
+  getConfig,
+  getProfile,
+  getSimulationLog,
+  getState,
+  rebuildProfile,
+  saveConfig,
+  validateConfig,
+} from "./api";
 import { ensureHaElements } from "./ha-elements";
+import { groupAt } from "./model";
+import { busPathFor, initialNav, reduce } from "./navigation";
 import { runSave } from "./save-flow";
-import { Draft, getAt } from "./store";
+import { Draft } from "./store";
 import { sharedStyles } from "./styles";
-import type { AlChangeEvent } from "./events";
+import type { SimState } from "./al-mixer";
+import type { AlChangeEvent, TimelineRangeDetail } from "./events";
+import type { MixerNav, NavAction } from "./navigation";
 import type { Banner } from "./save-flow";
-import type { Config, HomeAssistant, LiveState, Path, ValidationError } from "./types";
+import type { Horizon, Range } from "./timeseries";
+import type {
+  Config,
+  Group,
+  HomeAssistant,
+  LiveState,
+  Path,
+  ProfileState,
+  SimulationLog,
+  ValidationError,
+} from "./types";
 
-type Tab = "groups" | "envelopes" | "defaults";
+type Tab = "mixer" | "groups" | "envelopes" | "defaults" | "patterns";
 
-const TABS: Tab[] = ["groups", "envelopes", "defaults"];
+const TABS: Tab[] = ["mixer", "groups", "envelopes", "defaults", "patterns"];
 const LIVE_POLL_MS = 2000;
+const SIM_POLL_MS = 10_000;
+/** A profile only changes when it is retrained, so anything fresher than this will do. */
+const PROFILE_TTL_MS = 5 * 60_000;
 const RELOAD_GRACE_MS = 1500;
+/** Where the timeline toolbar's choices survive a reload. */
+const TIMELINE_KEY = "activity_levels.timeline";
+
+const RANGES: Range[] = ["24h", "7d", "30d"];
+const HORIZONS: Horizon[] = ["off", "24h", "7d"];
+const DEFAULT_TIMELINE: TimelineRangeDetail = { range: "7d", horizon: "24h", showChannels: true, showLights: true };
+
+const simEntityId = (gid: string): string => `switch.${gid}_presence_simulation`;
+
+/** Reads back stored timeline settings, rejecting anything this build does not offer. */
+function parseTimeline(raw: string | null): TimelineRangeDetail | null {
+  if (raw === null) return null;
+  const value = JSON.parse(raw) as Partial<TimelineRangeDetail>;
+  if (!RANGES.includes(value.range as Range) || !HORIZONS.includes(value.horizon as Horizon)) return null;
+  return {
+    range: value.range as Range,
+    horizon: value.horizon as Horizon,
+    showChannels: value.showChannels !== false,
+    showLights: value.showLights !== false,
+  };
+}
 
 @customElement("activity-levels-panel")
 export class ActivityLevelsPanel extends LitElement {
@@ -23,41 +70,53 @@ export class ActivityLevelsPanel extends LitElement {
   @property({ type: Boolean }) narrow = false;
 
   @state() private draft?: Draft;
-  @state() private tab: Tab = "groups";
+  @state() private tab: Tab = "mixer";
   @state() private selection: Path | null = null;
+  @state() private nav: MixerNav = { busPath: [], selection: null };
   @state() private errors: ValidationError[] = [];
   @state() private banner: Banner | null = null;
   @state() private live: LiveState | null = null;
   @state() private liveOn = false;
   @state() private busy = false;
   @state() private missing: string[] = [];
+  @state() private profileState: ProfileState | null = null;
+  @state() private simLog: SimulationLog | null = null;
+  @state() private timeline: TimelineRangeDetail = DEFAULT_TIMELINE;
 
   /** Which tab the roving tabindex sits on; arrow keys move it without activating. */
   @state() private tabFocus = 0;
 
   private liveTimer?: number;
+  private simTimer?: number;
+  /** When the profile was last read, so switching tabs does not re-ask for it every time. */
+  private profileAt = 0;
 
-  private readonly onVisibilityChange = (): void => this.updateLivePolling();
+  private readonly onVisibilityChange = (): void => this.updatePolling();
 
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
     document.addEventListener("visibilitychange", this.onVisibilityChange);
+    this.restoreTimeline();
     const { ok, missing } = await ensureHaElements();
     this.missing = ok ? [] : missing;
     await this.load();
+    this.updatePolling();
+    void this.refreshProfile();
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
-    this.stopLive();
+    this.clearLiveTimer();
+    this.clearSimTimer();
   }
 
   private async load(): Promise<void> {
     try {
       const cfg = await getConfig(this.hass);
       this.draft = new Draft(cfg);
-      this.syncSelection();
+      this.nav = initialNav(cfg);
+      this.selection = this.nav.selection;
       this.errors = [];
       this.banner = null;
     } catch (err) {
@@ -77,22 +136,40 @@ export class ActivityLevelsPanel extends LitElement {
 
   private setConfig(next: Config, coalesceKey?: string): void {
     this.draft?.set(next, coalesceKey);
-    this.syncSelection();
+    this.syncNav();
     this.requestUpdate();
   }
 
-  /** Drops a selection whose node is gone, so the editor pane never renders a dangling path. */
-  private syncSelection(): void {
+  /**
+   * Re-points the navigation at the current config after an edit, and keeps the shared
+   * selection with it: a node that is gone can neither be the current bus nor be shown in
+   * the editor pane, so the reducer walks up to something that still exists.
+   */
+  private syncNav(): void {
     const config = this.draft?.config;
-    if (!config || !this.selection) return;
-    if (getAt(config, this.selection) === undefined) this.selection = null;
+    if (!config) return;
+    const nav = reduce({ busPath: this.nav.busPath, selection: this.selection }, { type: "sync", config });
+    this.nav = nav;
+    this.selection = nav.selection !== null && nav.selection.length > 0 ? nav.selection : null;
   }
+
+  /** One selection for both views: the mixer's bus follows what the tree picked, and back. */
+  private select(path: Path | null): void {
+    this.selection = path;
+    this.nav = path === null ? { ...this.nav, selection: null } : { busPath: busPathFor(path), selection: path };
+  }
+
+  private onNav = (ev: CustomEvent<NavAction>): void => {
+    const nav = reduce(this.nav, ev.detail);
+    this.nav = nav;
+    this.selection = nav.selection;
+  };
 
   private async save(): Promise<void> {
     const draft = this.draft;
     if (!draft) return;
     this.busy = true;
-    this.updateLivePolling();
+    this.updatePolling();
     try {
       const outcome = await runSave(draft.config, {
         validate: (config) => validateConfig(this.hass, config),
@@ -106,14 +183,14 @@ export class ActivityLevelsPanel extends LitElement {
       }
     } finally {
       this.busy = false;
-      this.updateLivePolling();
+      this.updatePolling();
     }
   }
 
   private discard(): void {
     if (!this.draft) return;
     this.draft.reset(this.draft.original);
-    this.syncSelection();
+    this.syncNav();
     this.errors = [];
     this.banner = null;
     this.requestUpdate();
@@ -121,47 +198,59 @@ export class ActivityLevelsPanel extends LitElement {
 
   private undo(): void {
     this.draft?.undo();
-    this.syncSelection();
+    this.syncNav();
     this.requestUpdate();
   }
 
   private redo(): void {
     this.draft?.redo();
-    this.syncSelection();
+    this.syncNav();
     this.requestUpdate();
   }
 
   private toggleLive(on: boolean): void {
-    if (on) this.startLive();
-    else this.stopLive();
+    this.liveOn = on;
+    if (!on && this.tab !== "mixer") this.live = null;
+    this.updatePolling();
   }
 
-  private startLive(): void {
-    this.liveOn = true;
-    this.updateLivePolling();
+  /** The Mixer and Patterns tabs both read the profile and the simulation log. */
+  private get patternsVisible(): boolean {
+    return this.tab === "mixer" || this.tab === "patterns";
   }
 
-  private stopLive(): void {
-    this.liveOn = false;
-    this.clearLiveTimer();
-    this.live = null;
+  private updatePolling(): void {
+    const awake = !this.busy && document.visibilityState === "visible";
+    this.updateLivePolling(awake);
+    this.updateSimPolling(awake);
   }
 
   /**
-   * Starts or pauses the poll to match the current conditions. It runs only while the
-   * toggle is on, no save is in flight - a reload is about to replace the config the
-   * frame describes - and the tab is actually on screen. Pausing keeps the last frame,
-   * so resuming redraws immediately rather than blanking the meters.
+   * Starts or pauses the live poll to match the current conditions. It runs while the
+   * toggle is on - or unconditionally on the Mixer tab, whose meters are the point of the
+   * page - as long as no save is in flight (a reload is about to replace the config the
+   * frame describes) and the tab is actually on screen. Pausing keeps the last frame, so
+   * resuming redraws immediately rather than blanking the meters.
    */
-  private updateLivePolling(): void {
-    const shouldPoll = this.liveOn && !this.busy && document.visibilityState === "visible";
-    if (!shouldPoll) {
+  private updateLivePolling(awake = !this.busy && document.visibilityState === "visible"): void {
+    if (!((this.liveOn || this.tab === "mixer") && awake)) {
       this.clearLiveTimer();
       return;
     }
     if (this.liveTimer !== undefined) return;
     void this.pollLive();
     this.liveTimer = window.setInterval(() => void this.pollLive(), LIVE_POLL_MS);
+  }
+
+  /** The simulation log moves at the pace of light switches, so it gets its own slower timer. */
+  private updateSimPolling(awake = !this.busy && document.visibilityState === "visible"): void {
+    if (!(this.patternsVisible && awake)) {
+      this.clearSimTimer();
+      return;
+    }
+    if (this.simTimer !== undefined) return;
+    void this.pollSim();
+    this.simTimer = window.setInterval(() => void this.pollSim(), SIM_POLL_MS);
   }
 
   private async pollLive(): Promise<void> {
@@ -172,17 +261,101 @@ export class ActivityLevelsPanel extends LitElement {
     }
   }
 
+  private async pollSim(): Promise<void> {
+    try {
+      this.simLog = await getSimulationLog(this.hass);
+    } catch {
+      /* transient websocket failure: keep the last log and retry */
+    }
+  }
+
   private clearLiveTimer(): void {
     if (this.liveTimer === undefined) return;
     clearInterval(this.liveTimer);
     this.liveTimer = undefined;
   }
 
+  private clearSimTimer(): void {
+    if (this.simTimer === undefined) return;
+    clearInterval(this.simTimer);
+    this.simTimer = undefined;
+  }
+
+  /** Reads the profile at most every `PROFILE_TTL_MS`, or right now after a rebuild. */
+  private async refreshProfile(force = false): Promise<void> {
+    if (!this.patternsVisible) return;
+    if (!force && this.profileState !== null && Date.now() - this.profileAt < PROFILE_TTL_MS) return;
+    try {
+      this.profileState = await getProfile(this.hass);
+      this.profileAt = Date.now();
+    } catch {
+      /* keep the document we have: a stale profile still describes the groups */
+    }
+  }
+
+  private onRebuild = async (ev: CustomEvent<{ force: boolean }>): Promise<void> => {
+    try {
+      const { rebuilt } = await rebuildProfile(this.hass, ev.detail?.force === true);
+      this.banner = rebuilt
+        ? { kind: "info", text: "Profile rebuilt." }
+        : { kind: "warning", text: "Rebuild skipped (external profile)." };
+      await this.refreshProfile(true);
+    } catch (err) {
+      this.banner = { kind: "error", text: `Could not rebuild the profile: ${(err as Error).message}` };
+    }
+  };
+
+  /** The simulation switch is Home Assistant's; the strips ask, and only the shell calls it. */
+  private onSimToggle = async (ev: CustomEvent<{ gid: string; on: boolean }>): Promise<void> => {
+    const { gid, on } = ev.detail;
+    try {
+      await callService(this.hass, "switch", on ? "turn_on" : "turn_off", { entity_id: simEntityId(gid) });
+    } catch (err) {
+      this.banner = {
+        kind: "error",
+        text: `Could not ${on ? "start" : "stop"} the simulation for ${gid}: ${(err as Error).message}`,
+      };
+    }
+  };
+
+  /** What the mixer needs beyond the live frame: the switch's state and why it is blocked. */
+  private simStates(config: Config): Record<string, SimState> {
+    const states: Record<string, SimState> = {};
+    const walk = (g: Group): void => {
+      states[g.id] = {
+        on: this.hass?.states[simEntityId(g.id)]?.state === "on",
+        blocked: this.simLog?.blocked[g.id] ?? null,
+      };
+      g.children.forEach(walk);
+    };
+    config.groups.forEach(walk);
+    return states;
+  }
+
+  private restoreTimeline(): void {
+    try {
+      this.timeline = parseTimeline(localStorage.getItem(TIMELINE_KEY)) ?? DEFAULT_TIMELINE;
+    } catch {
+      /* unreadable or unparseable storage: the defaults are a fine place to start */
+    }
+  }
+
+  private onTimelineRange = (ev: CustomEvent<TimelineRangeDetail>): void => {
+    this.timeline = ev.detail;
+    try {
+      localStorage.setItem(TIMELINE_KEY, JSON.stringify(ev.detail));
+    } catch {
+      /* storage disabled or full: the setting still applies to this session */
+    }
+  };
+
   private selectTab(index: number): void {
     const next = TABS[index];
     if (next === undefined) return;
     this.tab = next;
     this.tabFocus = index;
+    this.updatePolling();
+    void this.refreshProfile();
   }
 
   /** Moves the roving tabindex, and the focus with it, without changing the shown tab. */
@@ -227,11 +400,7 @@ export class ActivityLevelsPanel extends LitElement {
         <ha-menu-button slot="navigationIcon"></ha-menu-button>
         <div slot="title">Activity Levels</div>
         <div slot="actionItems" class="row">
-          <span class="muted">Live</span>
-          <ha-switch
-            .checked=${this.liveOn}
-            @change=${(e: Event) => this.toggleLive((e.target as HTMLInputElement).checked)}
-          ></ha-switch>
+          ${this.renderLiveToggle()}
           <ha-icon-button .disabled=${!d?.canUndo} @click=${this.undo} title="Undo">
             <ha-icon icon="mdi:undo"></ha-icon>
           </ha-icon-button>
@@ -267,6 +436,18 @@ export class ActivityLevelsPanel extends LitElement {
     `;
   }
 
+  /** The Mixer polls regardless, so offering a switch that changes nothing would be a lie. */
+  private renderLiveToggle() {
+    if (this.tab === "mixer") return nothing;
+    return html`
+      <span class="muted">Live</span>
+      <ha-switch
+        .checked=${this.liveOn}
+        @change=${(e: Event) => this.toggleLive((e.target as HTMLInputElement).checked)}
+      ></ha-switch>
+    `;
+  }
+
   private renderMissing() {
     return html`
       <div style="padding:16px">
@@ -294,6 +475,8 @@ export class ActivityLevelsPanel extends LitElement {
 
   private renderTab(d: Draft) {
     switch (this.tab) {
+      case "mixer":
+        return this.renderMixer(d);
       case "groups":
         return html`<div class="layout ${this.narrow ? "narrow" : ""}">
           <al-tree
@@ -302,9 +485,7 @@ export class ActivityLevelsPanel extends LitElement {
             .selection=${this.selection}
             .errors=${this.errors}
             .live=${this.live}
-            @al-select=${(e: CustomEvent<Path>) => {
-              this.selection = e.detail;
-            }}
+            @al-select=${(e: CustomEvent<Path>) => this.select(e.detail)}
             @al-change=${this.onChange}
           ></al-tree>
           <div>${this.renderEditor(d)}</div>
@@ -324,7 +505,65 @@ export class ActivityLevelsPanel extends LitElement {
           .errors=${this.errors}
           @al-change=${this.onChange}
         ></al-defaults>`;
+      case "patterns":
+        return html`<al-patterns
+          .hass=${this.hass}
+          .config=${d.config}
+          .profileState=${this.profileState}
+          .simLog=${this.simLog}
+          @al-rebuild=${this.onRebuild}
+        ></al-patterns>`;
     }
+  }
+
+  /**
+   * The mixer page, three rows deep: the selected strip's history and forecast on top, the
+   * bus it lives on in the middle, and everything that does not fit on a strip below it.
+   * A channel is charted as its bus - a stimulus has no series of its own.
+   */
+  private renderMixer(d: Draft) {
+    const config = d.config;
+    const busPath = busPathFor(this.selection ?? this.nav.busPath);
+    const group = groupAt(config, busPath);
+    return html`<div class="rows ${this.narrow ? "narrow" : ""}">
+      <al-timeline
+        .hass=${this.hass}
+        .groupId=${group?.id ?? null}
+        .title=${group ? (group.name ?? group.id) : ""}
+        .range=${this.timeline.range}
+        .horizon=${this.timeline.horizon}
+        .showChannels=${this.timeline.showChannels}
+        .showLights=${this.timeline.showLights}
+        .live=${this.live}
+        .maxValue=${group?.max_value ?? config.defaults.max_value}
+        .narrow=${this.narrow}
+        @al-timeline-range=${this.onTimelineRange}
+      ></al-timeline>
+      <al-mixer
+        .hass=${this.hass}
+        .config=${config}
+        .nav=${this.nav}
+        .errors=${this.errors}
+        .live=${this.live}
+        .simState=${this.simStates(config)}
+        .narrow=${this.narrow}
+        @al-nav=${this.onNav}
+        @al-change=${this.onChange}
+        @al-sim-toggle=${this.onSimToggle}
+      ></al-mixer>
+      <al-strip-controls
+        .hass=${this.hass}
+        .config=${config}
+        .path=${this.nav.selection}
+        .errors=${this.errors}
+        .live=${this.live}
+        .profileState=${this.profileState}
+        .simLog=${this.simLog}
+        @al-change=${this.onChange}
+        @al-rebuild=${this.onRebuild}
+        @al-sim-toggle=${this.onSimToggle}
+      ></al-strip-controls>
+    </div>`;
   }
 
   private renderEditor(d: Draft) {
@@ -346,9 +585,7 @@ export class ActivityLevelsPanel extends LitElement {
           .path=${selection}
           .errors=${this.errors}
           @al-change=${this.onChange}
-          @al-select=${(e: CustomEvent<Path | null>) => {
-            this.selection = e.detail;
-          }}
+          @al-select=${(e: CustomEvent<Path | null>) => this.select(e.detail)}
         ></al-group-editor>`;
   }
 }

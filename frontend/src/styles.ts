@@ -12,6 +12,17 @@ export const sharedStyles = css`
     gap: 16px;
     padding: 16px;
   }
+  /* The mixer page: timeline, mixer and controls stacked, each as wide as the panel. */
+  .rows {
+    display: grid;
+    grid-template-rows: auto auto auto;
+    gap: 16px;
+    padding: 16px;
+    min-width: 0;
+  }
+  .rows > * {
+    min-width: 0;
+  }
   .layout.narrow {
     grid-template-columns: 1fr;
   }

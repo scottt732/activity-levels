@@ -18,6 +18,12 @@ const pathEq = (a: Path, b: Path): boolean => a.length === b.length && a.every((
 /** Strips a trailing `"children", <index>` pair, landing on the parent group's path. */
 const parentBusPath = (busPath: Path): Path | null => (busPath.length >= 4 ? busPath.slice(0, -2) : null);
 
+/**
+ * The bus a selected node is shown on: a stimulus is a channel of the group that owns it,
+ * and a group is the MASTER of its own bus, with its channels below it.
+ */
+export const busPathFor = (path: Path): Path => (path[path.length - 2] === "stimuli" ? path.slice(0, -2) : path);
+
 export function initialNav(config: Config): MixerNav {
   const busPath: Path = config.groups.length > 0 ? ["groups", 0] : [];
   return { busPath, selection: busPath.length > 0 ? busPath : null };

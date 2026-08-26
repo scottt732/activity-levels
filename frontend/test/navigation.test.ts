@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newGroup, newStimulus } from "../src/model";
-import { breadcrumb, channelPaths, initialNav, reduce, type MixerNav } from "../src/navigation";
+import { breadcrumb, busPathFor, channelPaths, initialNav, reduce, type MixerNav } from "../src/navigation";
 import type { Config, Path } from "../src/types";
 
 
@@ -176,5 +176,19 @@ describe("breadcrumb", () => {
   });
   it("is empty for an empty bus path", () => {
     expect(breadcrumb(houseConfig(), [])).toEqual([]);
+  });
+});
+
+describe("busPathFor", () => {
+  it("is the owning group for a stimulus", () => {
+    expect(busPathFor(["groups", 0, "stimuli", 1])).toEqual(["groups", 0]);
+    expect(busPathFor(["groups", 0, "children", 1, "stimuli", 0])).toEqual(["groups", 0, "children", 1]);
+  });
+  it("is the group itself for a group: a selected bus is its own master", () => {
+    expect(busPathFor(["groups", 0])).toEqual(["groups", 0]);
+    expect(busPathFor(["groups", 0, "children", 1])).toEqual(["groups", 0, "children", 1]);
+  });
+  it("is empty for an empty path", () => {
+    expect(busPathFor([])).toEqual([]);
   });
 });
