@@ -688,13 +688,15 @@ class PatternsCoordinator:
         """Run the built-in learner. Returns False when it declined to run.
 
         Serialized: a second caller waits for the rebuild already in flight and takes
-        its result, rather than fitting the very same window all over again.
+        its result, rather than fitting the very same window all over again. "Declined"
+        means no fresh profile came of the call at all -- a caller that waited out
+        somebody else's successful rebuild did get one, and is told so.
         """
         generation = self._generation
         async with self._rebuild_lock:
             if self._generation != generation:
-                _LOGGER.debug("A rebuild finished while this one waited; not refitting")
-                return False
+                _LOGGER.debug("A rebuild finished while this one waited; taking its result")
+                return True
             if not await self._run_rebuild(force=force):
                 return False
             self._generation += 1

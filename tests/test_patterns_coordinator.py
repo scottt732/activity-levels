@@ -611,8 +611,9 @@ async def test_concurrent_rebuilds_fit_only_once(
 
     results = await asyncio.gather(patterns.async_rebuild(), patterns.async_rebuild())
 
-    # the second caller waits, sees the fresh document and does not refit
-    assert sorted(results, reverse=True) == [True, False]
+    # the second caller waits, sees the fresh document and does not refit -- but it did
+    # get the rebuild it asked for, so it is told so
+    assert results == [True, True]
     assert fits == 1
 
 
@@ -731,3 +732,32 @@ async def test_ws_state_reports_each_groups_light_count(
     assert result["success"]
     assert result["result"]["groups"]["kitchen"]["lights"] == 1
     assert result["result"]["groups"]["house"]["lights"] == 0
+
+
+async def test_a_reload_does_not_back_fill_again(
+    recorder_ready: None, hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The history_days-wide recorder query runs once: on the install with no log."""
+    config = house_config()
+    config["groups"][0]["children"][1]["simulation"] = {"lights": {"include": ["light.kitchen"]}}
+    hass.states.async_set("light.kitchen", "on")
+    asked: list[list[str]] = []
+
+    async def fake_backfill(self: LightLog, entity_ids: list[str], since: datetime) -> int:
+        asked.append(list(entity_ids))
+        return 0
+
+    with patch.object(LightLog, "async_backfill", fake_backfill):
+        entry = await _add_entry(hass, config)
+        freezer.tick(timedelta(seconds=START_DELAY + 5))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        assert asked == [["light.kitchen"]]
+
+        await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        freezer.tick(timedelta(seconds=START_DELAY + 5))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+        assert asked == [["light.kitchen"]], "the stored log is the record; do not refetch"
