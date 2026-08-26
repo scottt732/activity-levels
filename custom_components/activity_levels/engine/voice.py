@@ -110,6 +110,7 @@ class Voice:
             return True
         self.gate = True
         self._enter(Phase.ATTACK, t, current)
+        self._advance(t)
         return True
 
     def note_off(self, t: float) -> None:
