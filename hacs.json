@@ -1,6 +1,4 @@
 {
   "name": "Activity Levels",
-  "homeassistant": "2026.8.0",
-  "zip_release": true,
-  "filename": "activity_levels.zip"
+  "homeassistant": "2026.8.0"
 }
