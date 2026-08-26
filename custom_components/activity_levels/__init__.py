@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
@@ -26,8 +24,6 @@ from .schema import ConfigError, validate_config
 from .tree import Tree, build_tree
 from .websocket_api import async_register_websocket
 
-_LOGGER = logging.getLogger(__name__)
-
 SERVICE_TRIGGER_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_GROUP_ID): cv.string,
@@ -48,6 +44,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
     coordinator = ActivityLevelsCoordinator(hass, entry.entry_id, tree)
     await coordinator.async_start()
     entry.runtime_data = coordinator
+    # Registered before the platforms so a failing forward still tears the timers down.
+    entry.async_on_unload(coordinator.async_stop)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _register_services(hass)
@@ -56,10 +54,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntry) -> bool:
-    """Unload a config entry."""
-    ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    await entry.runtime_data.async_stop()
-    return ok
+    """Unload a config entry; the coordinator is stopped by its async_on_unload hook."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ActivityLevelsConfigEntry) -> None:

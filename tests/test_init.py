@@ -6,6 +6,7 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.activity_levels.const import DOMAIN
+from custom_components.activity_levels.coordinator import ActivityLevelsCoordinator
 from custom_components.activity_levels.schema import validate_config
 from tests.fixtures import house_config
 
@@ -89,3 +90,33 @@ async def test_invalid_options_fail_setup(hass: HomeAssistant) -> None:
     entry.add_to_hass(hass)
     assert not await hass.config_entries.async_setup(entry.entry_id)
     assert entry.state is ConfigEntryState.SETUP_ERROR
+
+
+async def test_setup_failure_stops_the_coordinator(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A platform blowing up must not leave the coordinator's timers armed."""
+    hass.states.async_set("binary_sensor.front_door", "off")
+    hass.states.async_set("binary_sensor.living_motion", "off")
+    hass.states.async_set("binary_sensor.kitchen_motion", "off")
+    hass.states.async_set("media_player.tv", "idle")
+    stops: list[ActivityLevelsCoordinator] = []
+    original = ActivityLevelsCoordinator.async_stop
+
+    async def spy(self: ActivityLevelsCoordinator) -> None:
+        stops.append(self)
+        await original(self)
+
+    async def boom(entry: MockConfigEntry, platforms: list[str]) -> None:
+        raise RuntimeError("platform boom")
+
+    monkeypatch.setattr(ActivityLevelsCoordinator, "async_stop", spy)
+    monkeypatch.setattr(hass.config_entries, "async_forward_entry_setups", boom)
+
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validate_config(house_config()))
+    entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert len(stops) == 1
+    assert stops[0]._timers == {}

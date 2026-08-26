@@ -80,6 +80,8 @@ class ActivityLevelsCoordinator:
             self._schedule(root, t)
 
     async def async_stop(self) -> None:
+        if self._stopped:  # idempotent: a second stop must not re-save or re-cancel
+            return
         self._stopped = True
         if self._unsub_state:
             self._unsub_state()
