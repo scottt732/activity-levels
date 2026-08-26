@@ -145,3 +145,14 @@ def test_next_display_change_rising_edge_crosses_immediately() -> None:
     assert g.next_display_change(35.0) == pytest.approx(35.0, abs=2e-3)
     # rising from 0.0 at 0.01/s at precision 1: 0.05 is reached at t=5
     assert g.next_display_change(0.0) == pytest.approx(5.0, abs=2e-3)
+
+
+def test_next_display_change_schedules_the_limiter_unpin() -> None:
+    # raw 8.0 falling at -0.02/s crosses max_value 5.0 at t=150; the display is
+    # pinned (slope 0) until then, so that crossing is the next display change.
+    a, b = impulse("a", gain=4.0, release=400.0), impulse("b", gain=4.0, release=400.0)
+    g = Group(id="g", channels=[Channel(a), Channel(b)], max_value=5.0, precision=1)
+    a.note_on(0.0)
+    b.note_on(0.0)
+    assert g.slope_at(0.0) == 0.0
+    assert g.next_display_change(0.0) == pytest.approx(150.0, abs=2e-3)

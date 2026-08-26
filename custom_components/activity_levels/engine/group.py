@@ -136,27 +136,41 @@ class Group:
             out.append((ch.source.value_at(t) * ch.gain, ch.source.slope_at(t) * ch.gain))
         return out
 
-    # slope_at is the signed rate of change of the *displayed* value. When the
-    # raw (pre-limit) mix is above max_value and still falling, the displayed
-    # value stays pinned at max_value until raw drops back below it, so the
-    # true instantaneous slope of the display is 0 in that region. We treat
-    # that whole region as slope 0 rather than computing the exact time raw
-    # crosses max_value; this is an accepted approximation (see note below).
-    def slope_at(self, t: float) -> float:
+    def _raw_slope_at(self, t: float) -> float:
+        """Slope of the pre-limiter mix. No clamping, no pinning.
+
+        Two approximations live here, both accepted:
+
+        * MAX: the slope is that of the currently loudest channel. A crossover with
+          another channel changes which channel leads, and that moment is not
+          scheduled. The mixed *value* is continuous across a crossover, so this can
+          only make a predicted display change land early (a redundant wake), never
+          late, whenever the incoming leader is the shallower of the two.
+        * MEAN: a channel reaching zero changes the divisor under IGNORE (and the
+          numerator under ZERO), a step this slope does not see. Voice phase
+          boundaries are separately scheduled by ``next_boundary``, which is where
+          those dropouts occur, so the wake is not missed.
+        """
         pairs = self._channel_slopes(t)
         if not pairs:
             return 0.0
         if self.mix is Mix.SUM:
-            slope = sum(s for _, s in pairs)
-        elif self.mix is Mix.MAX:
+            return sum(s for _, s in pairs)
+        if self.mix is Mix.MAX:
             top = max(c for c, _ in pairs)
-            slope = max(s for c, s in pairs if c == top)
-        elif self.null_handling is NullHandling.IGNORE:
+            return max(s for c, s in pairs if c == top)
+        if self.null_handling is NullHandling.IGNORE:
             active = [s for c, s in pairs if c > 0.0]
-            slope = sum(active) / len(active) if active else 0.0
-        else:
-            slope = sum(s for _, s in pairs) / len(pairs)
-        raw = self._mix([c for c, _ in pairs])
+            return sum(active) / len(active) if active else 0.0
+        return sum(s for _, s in pairs) / len(pairs)
+
+    # slope_at is the signed rate of change of the *displayed* value: the raw slope
+    # with the limiter's flat regions zeroed out. While the raw mix sits above
+    # max_value the display is pinned there and does not move, however fast raw is
+    # falling; next_display_change schedules the un-pin crossing separately.
+    def slope_at(self, t: float) -> float:
+        slope = self._raw_slope_at(t)
+        raw = self._raw_value_at(t)
         if (raw >= self.max_value and slope > 0.0) or (raw <= 0.0 and slope < 0.0):
             return 0.0
         if raw > self.max_value and slope < 0.0:
@@ -171,10 +185,19 @@ class Group:
         edge (rather than at it) means the next wake sees the crossing as done, so a
         wake landing an ulp short of a threshold no longer skips a whole step.
         """
+        candidates: list[float] = []
         boundary = self.next_boundary(t)
+        if boundary is not None:
+            candidates.append(boundary)
+        # While pinned by the limiter the display slope is 0, so the moment raw falls
+        # back through max_value is the next change and nothing else would schedule it.
+        raw = self._raw_value_at(t)
+        raw_slope = self._raw_slope_at(t)
+        if raw > self.max_value and raw_slope < 0.0:
+            candidates.append(t + (self.max_value - raw) / raw_slope + _MIN_DT)
         slope = self.slope_at(t)
         if slope == 0.0:
-            return boundary
+            return min(candidates) if candidates else None
         step = 10.0**-self.precision
         value = self.value_at(t)
         shown = round(value, self.precision)
@@ -184,10 +207,8 @@ class Group:
             if round(value + slope * (dt + _MIN_DT), self.precision) != shown:
                 break
             dt += step / abs(slope)  # half-even parity or an ulp blocked this threshold
-        candidate = t + dt + _MIN_DT
-        if boundary is not None and boundary < candidate:
-            return boundary
-        return candidate
+        candidates.append(t + dt + _MIN_DT)
+        return min(candidates)
 
     def find_group(self, group_id: str) -> Group | None:
         for g in self.groups():
