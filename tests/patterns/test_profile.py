@@ -197,3 +197,17 @@ def test_anomaly_score_degenerate_band_stays_finite():
     assert math.isfinite(high) and high > 0
     assert math.isfinite(low) and low < 0
     assert anomaly_score(2.0, (2.0, 2.0, 2.0)) == 0.0
+
+
+def test_anomaly_score_floors_the_denominator_at_five_percent_of_scale():
+    collapsed = (2.0, 2.0, 2.0)
+    assert anomaly_score(5.0, collapsed) == pytest.approx(60.0)  # 3.0 / 0.05
+    assert anomaly_score(5.0, collapsed, scale=10.0) == pytest.approx(6.0)  # 3.0 / 0.5
+    assert anomaly_score(-1.0, collapsed, scale=10.0) == pytest.approx(-6.0)
+    assert abs(anomaly_score(5.0, collapsed)) < 100.0
+
+
+def test_anomaly_score_floor_ignores_wide_enough_bands():
+    assert anomaly_score(4.0, (1.0, 2.0, 3.0), scale=10.0) == pytest.approx(1.0)
+    narrow = (1.99, 2.0, 2.01)
+    assert anomaly_score(2.06, narrow) == pytest.approx((2.06 - 2.01) / 0.05)

@@ -19,7 +19,9 @@ import numpy as np
 import numpy.typing as npt
 
 from .features import design_matrix
-from .profile import SLOTS, slot_minute
+from .profile import SLOT_MINUTES, SLOTS, slot_minute
+
+SLOT_SECONDS = SLOT_MINUTES * 60
 
 MIN_BUCKET_SAMPLES = 20
 """Residual bucket size below which the group-wide quantiles are used instead."""
@@ -64,9 +66,16 @@ def _ordered_day_types(day_types: Sequence[str], samples: Sequence[Sample]) -> l
 def _ridge_solve(
     x: npt.NDArray[np.float64], y: npt.NDArray[np.float64], ridge: float
 ) -> npt.NDArray[np.float64]:
-    """Solve ``(X'X + lambda*D) b = X'y`` with the intercept left unpenalized."""
+    """Solve ``(X'X + lambda*D) b = X'y`` with intercept and trend left unpenalized.
+
+    The trend column spans only ``window_days/365``, so a fixed ridge shrinks its
+    coefficient by a quarter over a 60-day window and drags the expected-now value
+    back toward the window mean. Like the intercept it is a location term, not a
+    wiggle, so it is exempt.
+    """
     penalty = np.eye(x.shape[1], dtype=np.float64)
     penalty[0, 0] = 0.0
+    penalty[1, 1] = 0.0
     lhs = x.T @ x + ridge * penalty
     rhs = x.T @ y
     try:
@@ -144,6 +153,9 @@ def fit_group_expected(
     for day_type in sorted(present | {BASE_DAY_TYPE}):
         grid_idx = np.full(grid.shape[0], index[day_type], dtype=np.int64)
         grid_x = design_matrix(grid, grid_idx, n_day_types, tz, t0=origin)
+        # Keep the date grid so the weekly terms average out, but evaluate the trend
+        # at the last training day: expected-now must not lag behind a trend.
+        grid_x[:, 1] = (float(ts[-1]) - origin) / 86400.0 / 365.0
         prediction = (grid_x @ beta).reshape(SLOTS, days).mean(axis=1)
         medians[day_type] = np.clip(prediction, 0.0, max_value)
 
@@ -190,7 +202,15 @@ def _intervals(
 def _slot_bounds(
     start: float, end: float, day_type_of: Callable[[date], str], tz: tzinfo
 ) -> tuple[list[float], list[tuple[str, int]]]:
-    """Slot boundary epochs and the ``(day_type, slot)`` bucket of each slot."""
+    """Slot boundary epochs and the ``(day_type, slot)`` bucket of each slot.
+
+    Each day is laid out as ``local_midnight + i*900`` and truncated at the next local
+    midnight, so the array is strictly increasing and no instant is credited to two
+    slots. The cost lands on the two DST days a year, at the day's tail: a
+    spring-forward day ends four slots early, and a fall-back day's last slot absorbs
+    the extra hour (75 minutes wide). Slot labels after the transition are an hour off
+    wall time on those days -- accepted in exchange for an array ``bisect`` can search.
+    """
     first = datetime.fromtimestamp(start, tz).date()
     last = datetime.fromtimestamp(end, tz).date()
     bounds: list[float] = []
@@ -198,9 +218,13 @@ def _slot_bounds(
     day = first
     while day <= last:
         day_type = day_type_of(day)
+        midnight = datetime.combine(day, time(0, 0), tzinfo=tz).timestamp()
+        next_midnight = datetime.combine(day + timedelta(days=1), time(0, 0), tzinfo=tz).timestamp()
         for slot in range(SLOTS):
-            hour, minute = divmod(slot_minute(slot), 60)
-            bounds.append(datetime.combine(day, time(hour, minute), tzinfo=tz).timestamp())
+            boundary = midnight + slot * SLOT_SECONDS
+            if boundary >= next_midnight:
+                break
+            bounds.append(boundary)
             buckets.append((day_type, slot))
         day += timedelta(days=1)
     bounds.append(datetime.combine(last + timedelta(days=1), time(0, 0), tzinfo=tz).timestamp())
@@ -233,7 +257,13 @@ def fit_light_profile(
     day_types: Sequence[str],
     tz: tzinfo,
 ) -> dict[str, dict[str, Any]]:
-    """Learn per-light on-probabilities and switch-time distributions."""
+    """Learn per-light on-probabilities and switch-time distributions.
+
+    ``brightness`` is the median over ON transitions only: a brightness change while
+    the light is already on is not a state change and is ignored. A ``(day_type, slot)``
+    bucket with no observed time at all gets ``p_on = 0.0`` rather than the Laplace
+    prior 0.5, which would otherwise invent a coin flip out of no data.
+    """
     start, end = float(window[0]), float(window[1])
     if end <= start:
         return {}
@@ -243,11 +273,11 @@ def fit_light_profile(
         return {}
 
     bounds, buckets = _slot_bounds(start, end, day_type_of, tz)
-    observed: dict[tuple[str, int], float] = defaultdict(float)
+    observed: dict[tuple[str, int], float] = {}
     for k, bucket in enumerate(buckets):
         overlap = min(bounds[k + 1], end) - max(bounds[k], start)
         if overlap > 0.0:
-            observed[bucket] += overlap / 60.0
+            observed[bucket] = observed.get(bucket, 0.0) + overlap / 60.0
 
     seen = {day_type for day_type, _slot in observed}
     ordered = [d for d in day_types if d in seen] + sorted(seen - set(day_types))
@@ -266,12 +296,9 @@ def fit_light_profile(
         p_on: dict[str, list[float]] = {}
         for day_type in ordered:
             p_on[day_type] = [
-                min(
-                    max(
-                        (on_minutes[(day_type, slot)] + 1.0) / (observed[(day_type, slot)] + 2.0),
-                        0.0,
-                    ),
-                    1.0,
+                _laplace(
+                    on_minutes.get((day_type, slot), 0.0),
+                    observed.get((day_type, slot), 0.0),
                 )
                 for slot in range(SLOTS)
             ]
@@ -294,6 +321,13 @@ def fit_light_profile(
             "brightness": round(statistics.median(brightnesses)) if brightnesses else None,
         }
     return profile
+
+
+def _laplace(on_minutes: float, observed_minutes: float) -> float:
+    """Laplace-smoothed on-probability; ``0.0`` when nothing was observed."""
+    if observed_minutes <= 0.0:
+        return 0.0
+    return min(max((on_minutes + 1.0) / (observed_minutes + 2.0), 0.0), 1.0)
 
 
 def _capped(raw: dict[str, list[tuple[float, int]]]) -> dict[str, list[int]]:

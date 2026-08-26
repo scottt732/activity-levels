@@ -99,11 +99,12 @@ Per group, target `y_h` = hourly mean activity level for the training window (�
 - day-type one-hots (excluding the base) and their interactions with the daily terms,
 - calendar dummies already covered by day types; nothing else.
 
-Fit: ridge regression (`λ` = 1.0 on all non-intercept columns) via
-`numpy.linalg.solve` on the normal equations. Prediction is evaluated for every
-`(day_type, 15-min slot)` bucket by averaging predictions over the training window's
-timestamps that fall in that bucket (so weekly terms are integrated out) → `p50`; clamp to
-`[0, max_value]`. Bands: residuals grouped by `(day_type, hour)` → empirical p25/p75
+Fit: ridge regression (`λ` = 1.0 on every column except the intercept and the trend, both
+of which are location terms a penalty would bias) via `numpy.linalg.solve` on the normal
+equations. Prediction is evaluated for every `(day_type, 15-min slot)` bucket by averaging
+predictions over the training window's timestamps that fall in that bucket (so weekly terms
+are integrated out) → `p50`; clamp to `[0, max_value]`. The trend term is evaluated at the
+last training day so expected-now does not lag under a trend. Bands: residuals grouped by `(day_type, hour)` → empirical p25/p75
 offsets added to p50 (fallback to the group-wide residual quantiles when a bucket has
 < 20 samples). Readiness: ≥ `min_days` distinct days with data.
 

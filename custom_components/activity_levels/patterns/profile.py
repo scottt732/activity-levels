@@ -224,11 +224,21 @@ def expected_at(
     return float(band[0]), float(band[1]), float(band[2])
 
 
-def anomaly_score(actual: float, band: tuple[float, float, float]) -> float:
-    """Signed, band-normalized deviation. Positive = more active than usual."""
+MIN_BAND_FRACTION = 0.05
+"""A band narrower than this fraction of ``scale`` is widened for scoring purposes."""
+
+
+def anomaly_score(actual: float, band: tuple[float, float, float], scale: float = 1.0) -> float:
+    """Signed, band-normalized deviation. Positive = more active than usual.
+
+    Both half-widths are floored at ``MIN_BAND_FRACTION * scale`` so a collapsed or
+    near-collapsed band cannot turn a small absolute deviation into a huge score.
+    Callers pass ``scale=max_value`` so the floor is meaningful for the group.
+    """
     p25, p50, p75 = band
+    floor = max(MIN_BAND_FRACTION * scale, EPS)
     if actual > p75:
-        return (actual - p75) / (p75 - p50 + EPS)
+        return (actual - p75) / max(p75 - p50, floor)
     if actual < p25:
-        return (actual - p25) / (p50 - p25 + EPS)
+        return (actual - p25) / max(p50 - p25, floor)
     return 0.0

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import tzinfo
+from datetime import datetime, time, tzinfo
 from typing import Any
 
 import numpy as np
@@ -87,12 +87,15 @@ def sample_plan(
 ) -> list[PlannedAction]:
     """Sample one day of light actions from ``light_profile``.
 
-    ``day_start`` is the epoch of local midnight; action times are derived from it
-    arithmetically, so ``tz`` is accepted only for symmetry with the learner's
-    signature. Actions come back sorted by time, with no two actions for the same
-    light closer together than :data:`MIN_GAP_SECONDS`.
+    ``day_start`` is the epoch of local midnight and ``tz`` its zone; action times
+    are built from the local wall clock (``datetime.combine(date, time, tzinfo=tz)``)
+    rather than by adding seconds to ``day_start``, so a plan stays on wall time
+    across a DST transition. Quiet hours suppress ON actions only -- an OFF is always
+    planned, so a light is never stranded on. Actions come back sorted by time, with
+    no two actions for the same light closer together than :data:`MIN_GAP_SECONDS`,
+    and strictly alternating ON/OFF per light.
     """
-    del tz
+    local_date = datetime.fromtimestamp(day_start, tz).date()
     actions: list[PlannedAction] = []
     for entity_id in sorted(light_profile):
         spec = light_profile[entity_id]
@@ -115,11 +118,12 @@ def sample_plan(
             minute = _pick_minute(rng, on_starts if turn_on else off_starts, slot)
             minute += int(rng.integers(-jitter_minutes, jitter_minutes + 1))
             minute = max(0, min(MINUTES_PER_DAY - 1, minute))
-            if in_quiet_hours(minute, quiet_hours):
+            if turn_on and in_quiet_hours(minute, quiet_hours):
                 continue
+            hour, in_hour = divmod(minute, 60)
             actions.append(
                 PlannedAction(
-                    t=day_start + minute * 60.0,
+                    t=datetime.combine(local_date, time(hour, in_hour), tzinfo=tz).timestamp(),
                     entity_id=entity_id,
                     on=turn_on,
                     brightness=int(brightness) if turn_on and brightness is not None else None,
@@ -130,10 +134,17 @@ def sample_plan(
     actions.sort(key=lambda a: (a.t, a.entity_id))
     kept: list[PlannedAction] = []
     last: dict[str, float] = {}
+    emitted: dict[str, bool] = {e: bool(on) for e, on in initial_state.items()}
     for action in actions:
         previous = last.get(action.entity_id)
         if previous is not None and action.t - previous < MIN_GAP_SECONDS:
             continue
+        # Jitter can reorder a pair, and the gap filter can drop one of them; re-derive
+        # alternation from the kept actions so a light never gets two ONs or two OFFs
+        # in a row.
+        if emitted.get(action.entity_id, False) == action.on:
+            continue
         kept.append(action)
         last[action.entity_id] = action.t
+        emitted[action.entity_id] = action.on
     return kept

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections import defaultdict
 from datetime import UTC, date, datetime, time, timedelta
+from itertools import pairwise
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pytest
@@ -13,6 +16,8 @@ from custom_components.activity_levels.patterns.features import design_matrix, n
 from custom_components.activity_levels.patterns.model import (
     LightTransition,
     Sample,
+    _accumulate,
+    _slot_bounds,
     fit_group_expected,
     fit_light_profile,
 )
@@ -25,6 +30,7 @@ from custom_components.activity_levels.patterns.profile import (
 
 START = date(2026, 1, 1)  # a Thursday
 MAX_VALUE = 10.0
+NY = ZoneInfo("America/New_York")
 
 
 def _at(day: date, hour: int = 0, minute: int = 0) -> float:
@@ -270,3 +276,74 @@ def test_learner_output_validates_against_the_profile_schema():
     doc["training_window"] = list(WINDOW)
     doc["groups"]["living_room"] = {**group, "lights": _lamp_profile()}
     assert validate_profile(doc) == doc
+
+
+def test_expected_now_does_not_lag_under_a_trend():
+    """A pure ramp must predict the *last* training day, not the window mean."""
+    samples: list[Sample] = []
+    for d in range(60):
+        day = START + timedelta(days=d)
+        day_type = _day_type(day, frozenset())
+        value = 1.0 + (d / 59) * 5.9  # 1.0 on day 0, 6.9 on day 59
+        for hour in range(24):
+            samples.append(Sample(t=_at(day, hour), value=value, day_type=day_type))
+    result = fit_group_expected(
+        samples, day_types=("weekday", "weekend"), max_value=MAX_VALUE, tz=UTC
+    )
+    assert result is not None
+    curve = result["expected"]["weekday"]
+    assert curve[slot_of(12 * 60)][1] == pytest.approx(6.9, abs=0.3)
+    assert statistics.fmean(band[1] for band in curve) == pytest.approx(6.9, abs=0.3)
+
+
+def _bounds_for(day: date) -> tuple[list[float], list[tuple[str, int]]]:
+    start = datetime.combine(day, time(0), tzinfo=NY).timestamp()
+    end = datetime.combine(day + timedelta(days=1), time(0), tzinfo=NY).timestamp() - 1.0
+    return _slot_bounds(start, end, lambda _d: "weekday", NY)
+
+
+def test_slot_bounds_are_strictly_increasing_across_dst():
+    for day, hours in ((date(2026, 3, 8), 23), (date(2026, 11, 1), 25)):
+        bounds, buckets = _bounds_for(day)
+        assert all(b > a for a, b in pairwise(bounds)), day
+        assert len(bounds) == len(buckets) + 1, day
+        assert (bounds[-1] - bounds[0]) / 3600.0 == pytest.approx(hours), day
+
+
+def test_spring_forward_double_credits_no_slot():
+    bounds, buckets = _bounds_for(date(2026, 3, 8))
+    covered: dict[tuple[str, int], float] = defaultdict(float)
+    _accumulate(bounds, buckets, (bounds[0], bounds[-1]), covered)
+    assert sum(covered.values()) == pytest.approx(23 * 60)  # the real length of the day
+    assert max(covered.values()) <= 15.0  # no slot is credited twice
+    assert len(buckets) == 92  # the four slots past the short day's end are dropped
+
+
+def test_fall_back_absorbs_the_extra_hour_into_the_last_slot():
+    bounds, buckets = _bounds_for(date(2026, 11, 1))
+    covered: dict[tuple[str, int], float] = defaultdict(float)
+    _accumulate(bounds, buckets, (bounds[0], bounds[-1]), covered)
+    assert sum(covered.values()) == pytest.approx(25 * 60)
+    assert len(buckets) == SLOTS
+    assert covered[("weekday", SLOTS - 1)] == pytest.approx(75.0)
+
+
+def test_unobserved_buckets_have_zero_p_on():
+    """A day type seen only from noon has no morning observations at all."""
+    day = START
+    window = (_at(day, 12), _at(START + timedelta(days=2)))
+    transitions = [
+        LightTransition(_at(day, 13), "light.lamp", True, 120),
+        LightTransition(_at(day, 14), "light.lamp", False, None),
+    ]
+    lamp = fit_light_profile(
+        transitions,
+        window=window,
+        day_type_of=lambda d: "special" if d == day else "weekday",
+        day_types=("special", "weekday"),
+        tz=UTC,
+    )["light.lamp"]
+    noon = slot_of(12 * 60)
+    assert lamp["p_on"]["special"][:noon] == [0.0] * noon
+    assert lamp["p_on"]["special"][slot_of(13 * 60)] > 0.3
+    assert all(p > 0.0 for p in lamp["p_on"]["weekday"])
