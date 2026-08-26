@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from math import isfinite
 
 from .envelope import Mix, NullHandling, Phase
 from .voice import Voice
@@ -24,8 +25,8 @@ class Channel:
     key: str | None = None
 
     def __post_init__(self) -> None:
-        if self.gain <= 0:
-            raise ValueError("channel gain must be > 0")
+        if not isfinite(self.gain) or self.gain <= 0:
+            raise ValueError("channel gain must be a finite number > 0")
 
     @property
     def label(self) -> str:
@@ -44,8 +45,8 @@ class Group:
     precision: int = 1
 
     def __post_init__(self) -> None:
-        if self.max_value <= 0:
-            raise ValueError("max_value must be > 0")
+        if not isfinite(self.max_value) or self.max_value <= 0:
+            raise ValueError("max_value must be a finite number > 0")
         if not 0 <= self.precision <= 3:
             raise ValueError("precision must be in 0..3")
         labels = [ch.label for ch in self.channels]

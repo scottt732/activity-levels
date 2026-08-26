@@ -89,3 +89,28 @@ def test_reset_clears_debounce_history() -> None:
     v.reset()
     assert v.note_on(1.0) is True
     assert v.last_note_on == 1.0
+
+
+def test_note_off_with_zero_release_is_idle_immediately() -> None:
+    # Phase must be accurate the moment the event lands, without a query to settle it.
+    v = Voice(id="v", gain=1.0, envelope=Envelope(release=0.0))
+    v.note_on(0.0)
+    v.note_off(1.0)
+    assert v.phase is Phase.IDLE
+
+
+def test_envelope_rejects_non_finite_durations() -> None:
+    for name in ("attack", "decay", "release", "debounce"):
+        with pytest.raises(ValueError):
+            Envelope(**{name: float("nan")})
+        with pytest.raises(ValueError):
+            Envelope(**{name: float("inf")})
+    with pytest.raises(ValueError):
+        Envelope(sustain=float("nan"))
+
+
+def test_voice_gain_must_be_finite() -> None:
+    with pytest.raises(ValueError):
+        Voice(id="v", gain=float("inf"), envelope=Envelope())
+    with pytest.raises(ValueError):
+        Voice(id="v", gain=float("nan"), envelope=Envelope())

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from math import isfinite
 
 
 class Phase(StrEnum):
@@ -50,7 +51,9 @@ class Envelope:
 
     def __post_init__(self) -> None:
         for name in ("attack", "decay", "release", "debounce"):
-            if getattr(self, name) < 0:
-                raise ValueError(f"{name} must be >= 0")
-        if not 0.0 <= self.sustain <= 1.0:
+            value = getattr(self, name)
+            # NaN compares False against everything, so test finiteness explicitly.
+            if not isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be a finite number >= 0")
+        if not isfinite(self.sustain) or not 0.0 <= self.sustain <= 1.0:
             raise ValueError("sustain must be in [0, 1]")

@@ -27,8 +27,8 @@ class Voice:
     last_note_on: float | None = None
 
     def __post_init__(self) -> None:
-        if self.gain <= 0:
-            raise ValueError("gain must be > 0")
+        if not isfinite(self.gain) or self.gain <= 0:
+            raise ValueError("gain must be a finite number > 0")
 
     # -- segment geometry -------------------------------------------------
 
@@ -103,14 +103,14 @@ class Voice:
             return False
         if self.gate and e.retrigger is Retrigger.ONLY_IN_RELEASE:
             return False
-        current = self.value_at(t)
         self.last_note_on = t
         if e.impulse:
             self.gate = False
             self._enter(Phase.RELEASE, t, self.gain)
+            self._advance(t)
             return True
         self.gate = True
-        self._enter(Phase.ATTACK, t, current)
+        self._enter(Phase.ATTACK, t, self.value_at(t))
         self._advance(t)
         return True
 
@@ -124,6 +124,7 @@ class Voice:
             self._enter(Phase.RELEASE, t, current)
         else:
             self._enter(Phase.IDLE, t, 0.0)
+        self._advance(t)  # a zero-length release is already over; report IDLE now
 
     def unavailable(self, t: float) -> None:
         if self.envelope.unavailable is Unavailable.NOTE_OFF:

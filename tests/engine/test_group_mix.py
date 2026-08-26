@@ -126,3 +126,12 @@ def test_distinct_keys_let_the_same_entity_feed_two_channels() -> None:
     assert g.contributions_at(0.0) == {"a/left": 1.0, "a/right": 1.0}
     # slope must agree with value: both channels contribute, not just one
     assert g.slope_at(0.0) == pytest.approx(-0.02)
+
+
+def test_group_and_channel_numbers_must_be_finite() -> None:
+    with pytest.raises(ValueError):
+        Group(id="g", max_value=float("nan"))
+    with pytest.raises(ValueError):
+        Group(id="g", max_value=float("inf"))
+    with pytest.raises(ValueError):
+        Channel(voice("a"), gain=float("nan"))
