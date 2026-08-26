@@ -106,3 +106,23 @@ def test_display_value_rounds_to_precision() -> None:
 def test_channel_gain_must_be_positive() -> None:
     with pytest.raises(ValueError):
         Channel(voice("a"), gain=0.0)
+
+
+def test_duplicate_channel_labels_are_rejected() -> None:
+    a = voice("a")
+    with pytest.raises(ValueError, match="unique"):
+        Group(id="room", channels=[Channel(a), Channel(a)])
+
+
+def test_distinct_keys_let_the_same_entity_feed_two_channels() -> None:
+    a = voice("a", 1.0)
+    g = Group(
+        id="room",
+        channels=[Channel(a, key="a/left"), Channel(a, key="a/right")],
+        max_value=10.0,
+    )
+    a.note_on(0.0)
+    assert g.value_at(0.0) == pytest.approx(2.0)
+    assert g.contributions_at(0.0) == {"a/left": 1.0, "a/right": 1.0}
+    # slope must agree with value: both channels contribute, not just one
+    assert g.slope_at(0.0) == pytest.approx(-0.02)

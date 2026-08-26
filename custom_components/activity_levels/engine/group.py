@@ -13,14 +13,23 @@ _MIN_DT = 1e-3  # 1 ms: wakes are scheduled just *past* a threshold, never on it
 
 @dataclass
 class Channel:
-    """A mixer input: a voice or a child group, with a gain."""
+    """A mixer input: a voice or a child group, with a gain.
+
+    ``key`` disambiguates two channels fed by the same source; it defaults to the
+    source id, which is unique in the common case of one channel per entity.
+    """
 
     source: Voice | Group
     gain: float = 1.0
+    key: str | None = None
 
     def __post_init__(self) -> None:
         if self.gain <= 0:
             raise ValueError("channel gain must be > 0")
+
+    @property
+    def label(self) -> str:
+        return self.key or self.source.id
 
 
 @dataclass
@@ -39,6 +48,9 @@ class Group:
             raise ValueError("max_value must be > 0")
         if not 0 <= self.precision <= 3:
             raise ValueError("precision must be in 0..3")
+        labels = [ch.label for ch in self.channels]
+        if len(set(labels)) != len(labels):
+            raise ValueError("channel labels must be unique; set Channel.key to disambiguate")
 
     # -- traversal ----------------------------------------------------------
 
@@ -58,7 +70,7 @@ class Group:
     # -- mixing -------------------------------------------------------------
 
     def contributions_at(self, t: float) -> dict[str, float]:
-        return {ch.source.id: ch.source.value_at(t) * ch.gain for ch in self.channels}
+        return {ch.label: ch.source.value_at(t) * ch.gain for ch in self.channels}
 
     def _mix(self, values: list[float]) -> float:
         if not values:
@@ -75,8 +87,13 @@ class Group:
     def _limit(self, raw: float) -> float:
         return min(max(raw, 0.0), self.max_value)
 
+    def _raw_value_at(self, t: float) -> float:
+        """Pre-limiter mix. Iterates channels, not ``contributions_at``, so that two
+        channels sharing a source both count."""
+        return self._mix([ch.source.value_at(t) * ch.gain for ch in self.channels])
+
     def value_at(self, t: float) -> float:
-        return self._limit(self._mix(list(self.contributions_at(t).values())))
+        return self._limit(self._raw_value_at(t))
 
     def display_value_at(self, t: float) -> float:
         return round(self.value_at(t), self.precision)
