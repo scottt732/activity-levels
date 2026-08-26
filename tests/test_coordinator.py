@@ -148,3 +148,35 @@ async def test_timer_delay_is_floored(
     await hass.async_block_till_done()
     assert coordinator.next_wake("house") is not None
     assert coordinator.next_wake("house") - coordinator.now() >= 1.0
+
+
+async def test_child_group_steps_are_scheduled(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, coordinator: ActivityLevelsCoordinator
+) -> None:
+    """A non-leading child's own rounding steps must drive the root's wake."""
+    hass.states.async_set("binary_sensor.living_motion", "on")  # house pinned at 2.0
+    await hass.async_block_till_done()
+    hass.states.async_set("binary_sensor.kitchen_motion", "on")
+    await hass.async_block_till_done()
+    hass.states.async_set("binary_sensor.kitchen_motion", "off")
+    await hass.async_block_till_done()
+    await advance(hass, freezer, 31.0)  # 300s release from 1.0 -> 0.1 per 30s
+    assert coordinator.data["kitchen"].value == pytest.approx(0.9, abs=0.01)
+    assert coordinator.next_wake("house") - coordinator.now() <= 31.0
+
+
+async def test_trigger_rejects_non_positive_or_non_finite_peak(
+    coordinator: ActivityLevelsCoordinator,
+) -> None:
+    for bad in (0.0, -1.0, float("inf"), float("nan")):
+        with pytest.raises(ValueError, match="positive finite"):
+            coordinator.trigger("kitchen", peak=bad)
+    assert coordinator.data["kitchen"].value == 0.0
+
+
+async def test_no_timers_or_saves_after_stop(coordinator: ActivityLevelsCoordinator) -> None:
+    await coordinator.async_stop()
+    assert coordinator.next_wake("house") is None
+    coordinator.trigger("kitchen", peak=2.0)
+    assert coordinator.next_wake("house") is None
+    assert coordinator._timers == {}

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from functools import partial
-from math import inf
+from math import isfinite
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -50,6 +50,7 @@ class ActivityLevelsCoordinator:
         self._timers: dict[str, CALLBACK_TYPE] = {}
         self._wakes: dict[str, float] = {}
         self._unsub_state: CALLBACK_TYPE | None = None
+        self._stopped = False
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, storage_key(entry_id))
         self._min_wake = float(tree.defaults["min_wake_interval"])
         self._safety = float(tree.defaults["safety_refresh"])
@@ -79,6 +80,7 @@ class ActivityLevelsCoordinator:
             self._schedule(root, t)
 
     async def async_stop(self) -> None:
+        self._stopped = True
         if self._unsub_state:
             self._unsub_state()
             self._unsub_state = None
@@ -95,7 +97,9 @@ class ActivityLevelsCoordinator:
         self._listeners.setdefault(group_id, []).append(cb)
 
         def remove() -> None:
-            self._listeners[group_id].remove(cb)
+            listeners = self._listeners.get(group_id)
+            if listeners is not None and cb in listeners:  # tolerate a second call
+                listeners.remove(cb)
 
         return remove
 
@@ -134,6 +138,8 @@ class ActivityLevelsCoordinator:
         return False  # attribute-only update: never retrigger
 
     def _after_change(self, root_ids: set[str], t: float) -> None:
+        if self._stopped:  # unloaded: never arm a timer or a save behind HA's back
+            return
         for rid in root_ids:
             root = self.tree.groups[rid].group
             self._publish(root, t)
@@ -144,9 +150,11 @@ class ActivityLevelsCoordinator:
     # -- commands ------------------------------------------------------------
 
     def trigger(self, group_id: str, peak: float = 1.0) -> None:
+        if not (isfinite(peak) and peak > 0):
+            raise ValueError("peak must be a positive finite number")
         info = self.tree.groups[group_id]
         t = self.now()
-        info.trigger.gain = max(peak, 1e-9)
+        info.trigger.gain = peak
         info.trigger.note_on(t)
         self._after_change({info.root_id}, t)
 
@@ -191,8 +199,10 @@ class ActivityLevelsCoordinator:
     def _schedule(self, root: Group, t: float) -> None:
         if cancel := self._timers.pop(root.id, None):
             cancel()
-        nxt = root.next_display_change(t)
-        wake = min(nxt if nxt is not None else inf, t + self._safety)
+        # Every group in the subtree gets a vote: a child stepping through its own
+        # rounding edges must wake the root even while the root itself holds steady.
+        candidates = [c for g in root.groups() if (c := g.next_display_change(t)) is not None]
+        wake = min([t + self._safety, *candidates])
         delay = max(wake - t, self._min_wake)
         self._wakes[root.id] = t + delay
         self._timers[root.id] = async_call_later(self.hass, delay, partial(self._on_timer, root.id))
@@ -236,6 +246,15 @@ class ActivityLevelsCoordinator:
                 ref.voice.note_on(t)
             elif not in_to and ref.voice.gate:
                 ref.voice.note_off(t)
+            else:
+                continue
+            _LOGGER.debug(
+                "reconciled %s (%s) in group %s to state %r",
+                ref.entity_id,
+                ref.label,
+                ref.group_id,
+                current,
+            )
 
     # -- introspection for the websocket API --------------------------------
 
