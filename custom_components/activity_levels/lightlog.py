@@ -16,6 +16,7 @@ from functools import partial
 from typing import Any
 
 from homeassistant.components.recorder.history import get_significant_states
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -28,11 +29,25 @@ STORAGE_VERSION = 1
 _SAVE_DELAY = 10.0
 _SECONDS_PER_DAY = 86400
 
-_Row = tuple[float, str, bool, int | None]
+_Row = tuple[float, str, bool | None, int | None]
 
 
 def _storage_key(entry_id: str) -> str:
     return f"activity_levels.lights.{entry_id}"
+
+
+def _on_of(value: str | None) -> bool | None:
+    """``True``/``False`` for ``on``/``off``; ``None`` for anything else.
+
+    ``unavailable``, ``unknown`` and a missing state all mean the same thing: we no
+    longer know what the light is doing. Recording that as ``off`` would teach the
+    learner that every restart is somebody switching the lights out.
+    """
+    if value == STATE_ON:
+        return True
+    if value == STATE_OFF:
+        return False
+    return None
 
 
 def _brightness_of(state: State | None) -> int | None:
@@ -84,7 +99,7 @@ class LightLog:
         self.history_days = history_days
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, _storage_key(entry_id))
         self._rows: list[_Row] = []
-        self._last_on: dict[str, bool] = {}
+        self._last_on: dict[str, bool | None] = {}
 
     async def async_load(self) -> None:
         """Load the store, if any, and reconstruct the per-entity last-state index."""
@@ -92,7 +107,8 @@ class LightLog:
         rows: list[_Row] = []
         if stored:
             for t, entity_id, on, brightness in stored.get("rows", []):
-                rows.append((float(t), str(entity_id), bool(on), brightness))
+                state = None if on is None else bool(on)
+                rows.append((float(t), str(entity_id), state, brightness))
         rows.sort(key=lambda row: row[0])
         self._rows = rows
         self._reindex()
@@ -104,12 +120,14 @@ class LightLog:
 
     @callback
     def record(self, entity_id: str, state: State | None, t: float) -> None:
-        """Append a transition when ``entity_id``'s on/off state changed.
+        """Append a transition when ``entity_id``'s on/off/unknown state changed.
 
         The first observation of an entity is always recorded, whatever its value,
-        so an entity that starts off still has a starting point in the log.
+        so an entity that starts off still has a starting point in the log. A state
+        that is neither ``on`` nor ``off`` is written as an *unknown* row, and
+        consecutive unknowns collapse into the one that opened the gap.
         """
-        on = state is not None and state.state == "on"
+        on = _on_of(None if state is None else state.state)
         if entity_id in self._last_on and self._last_on[entity_id] == on:
             return
         insort(self._rows, (t, entity_id, on, _brightness_of(state)), key=lambda row: row[0])
@@ -152,12 +170,13 @@ class LightLog:
         existing = {(t, entity_id) for t, entity_id, _on, _brightness in self._rows}
         added = 0
         for states in history.values():
+            first = True
             last_on: bool | None = None
             for state in states:
                 if not isinstance(state, State):
                     continue
-                on = state.state == "on"
-                if last_on is None or last_on != on:
+                on = _on_of(state.state)
+                if first or last_on != on:
                     t = state.last_changed.timestamp()
                     key = (t, state.entity_id)
                     if key not in existing:
@@ -169,6 +188,7 @@ class LightLog:
                         existing.add(key)
                         added += 1
                 last_on = on
+                first = False
 
         if added:
             self._reindex()

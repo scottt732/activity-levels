@@ -832,6 +832,8 @@ class PatternsCoordinator:
             spans: list[list[float]] = []
             opened: float | None = None
             for transition in self.lightlog.transitions([entity_id], start, end):
+                # an unknown row is a hole in the record, not an off: close the bar
+                # there rather than draw the light on across a restart
                 if transition.on and opened is None:
                     opened = transition.t
                 elif not transition.on and opened is not None:

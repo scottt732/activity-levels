@@ -158,7 +158,7 @@ async def test_record_first_observation_always_recorded_even_if_off(hass: HomeAs
     assert [(r.t, r.on) for r in rows] == [(T0, False)]
 
 
-async def test_record_none_state_treated_as_off(hass: HomeAssistant) -> None:
+async def test_record_none_state_is_unknown_not_off(hass: HomeAssistant) -> None:
     log = LightLog(hass, "entry1", history_days=180)
     await log.async_load()
 
@@ -168,8 +168,35 @@ async def test_record_none_state_treated_as_off(hass: HomeAssistant) -> None:
     rows = log.transitions(["light.kitchen"], T0, T0 + 100)
     assert [(r.t, r.on, r.brightness) for r in rows] == [
         (T0, True, None),
-        (T0 + 5, False, None),
+        (T0 + 5, None, None),
     ]
+
+
+async def test_record_dedupes_consecutive_unknown_states(hass: HomeAssistant) -> None:
+    log = LightLog(hass, "entry1", history_days=180)
+    await log.async_load()
+
+    log.record("light.kitchen", _state("light.kitchen", True), T0)
+    log.record("light.kitchen", State("light.kitchen", "unavailable"), T0 + 5)
+    log.record("light.kitchen", None, T0 + 6)
+    log.record("light.kitchen", State("light.kitchen", "unknown"), T0 + 7)
+    log.record("light.kitchen", _state("light.kitchen", True), T0 + 10)
+
+    rows = log.transitions(["light.kitchen"], T0, T0 + 100)
+    assert [(r.t, r.on) for r in rows] == [(T0, True), (T0 + 5, None), (T0 + 10, True)]
+
+
+async def test_unknown_rows_round_trip_through_storage(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    log = LightLog(hass, "entry1", history_days=180)
+    await log.async_load()
+    log.record("light.kitchen", State("light.kitchen", "unavailable"), T0)
+    await log.async_save()
+
+    reloaded = LightLog(hass, "entry1", history_days=180)
+    await reloaded.async_load()
+    assert [r.on for r in reloaded.transitions(["light.kitchen"], T0, T0 + 1)] == [None]
 
 
 async def test_transitions_filters_by_entity_and_window(hass: HomeAssistant) -> None:
@@ -319,3 +346,26 @@ async def test_prune_schedules_a_delayed_save(
     assert hass_storage["activity_levels.lights.entry1"]["data"]["rows"] == [
         [now - 3600, "light.kitchen", False, None]
     ]
+
+
+async def test_backfill_records_unavailable_history_as_unknown(
+    recorder_mock: None, hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    since = datetime.now(UTC)
+    freezer.tick(timedelta(seconds=1))
+    hass.states.async_set("light.kitchen", "on", {"brightness": 90})
+    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
+
+    freezer.tick(timedelta(seconds=10))
+    async_fire_time_changed(hass)
+    hass.states.async_set("light.kitchen", "unavailable")
+    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
+
+    log = LightLog(hass, "entry1", history_days=180)
+    await log.async_load()
+    await log.async_backfill(["light.kitchen"], since)
+
+    rows = log.transitions(["light.kitchen"], 0, since.timestamp() + 3600)
+    assert [r.on for r in rows] == [True, None]

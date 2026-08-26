@@ -43,11 +43,17 @@ class Sample:
 
 @dataclass(frozen=True)
 class LightTransition:
-    """One observed light state change."""
+    """One observed light state change.
+
+    ``on`` is ``None`` when the light's state stopped being knowable -- it went
+    ``unavailable``/``unknown``, or Home Assistant itself went away. That is a third
+    kind of row, not an ``off``: everything until the next real observation is a hole
+    in the record rather than time the light is known to have spent switched off.
+    """
 
     t: float
     entity_id: str
-    on: bool
+    on: bool | None
     brightness: int | None
 
 
@@ -177,26 +183,51 @@ def fit_group_expected(
 
 def _intervals(
     transitions: Sequence[LightTransition], end: float
-) -> tuple[list[tuple[float, float]], list[tuple[float, bool, int | None]]]:
-    """Reconstruct on-intervals and the state changes that produced them.
+) -> tuple[
+    list[tuple[float, float]], list[tuple[float, bool, int | None]], list[tuple[float, float]]
+]:
+    """Reconstruct on-intervals, the changes that produced them, and the unknown gaps.
 
-    The light is assumed off before the first transition in the window; an
-    interval still open at ``end`` is closed there.
+    The light is assumed off before the first transition in the window; an interval
+    still open at ``end`` is closed there. An ``on is None`` transition terminates any
+    open interval and opens a *gap*: the light is treated as off for the rest of it,
+    but the gap's minutes are handed back so the caller can leave them out of the
+    observed time, and neither entering nor leaving a gap counts as somebody switching
+    the light -- an ON that only says "Home Assistant is back" is not an on-start.
     """
     intervals: list[tuple[float, float]] = []
     changes: list[tuple[float, bool, int | None]] = []
+    unknown: list[tuple[float, float]] = []
     opened: float | None = None
+    gap_from: float | None = None
+    after_gap = False
     for transition in transitions:
+        if transition.on is None:
+            if opened is not None:
+                intervals.append((opened, transition.t))
+                opened = None
+            if gap_from is None:
+                gap_from = transition.t
+            continue
+        if gap_from is not None:
+            unknown.append((gap_from, transition.t))
+            gap_from = None
+            after_gap = True
         if transition.on and opened is None:
             opened = transition.t
-            changes.append((transition.t, True, transition.brightness))
+            if not after_gap:
+                changes.append((transition.t, True, transition.brightness))
         elif not transition.on and opened is not None:
             intervals.append((opened, transition.t))
             opened = None
-            changes.append((transition.t, False, transition.brightness))
+            if not after_gap:
+                changes.append((transition.t, False, transition.brightness))
+        after_gap = False
     if opened is not None:
         intervals.append((opened, end))
-    return intervals, changes
+    if gap_from is not None:
+        unknown.append((gap_from, end))
+    return intervals, changes, unknown
 
 
 def _slot_bounds(
@@ -262,7 +293,9 @@ def fit_light_profile(
     ``brightness`` is the median over ON transitions only: a brightness change while
     the light is already on is not a state change and is ignored. A ``(day_type, slot)``
     bucket with no observed time at all gets ``p_on = 0.0`` rather than the Laplace
-    prior 0.5, which would otherwise invent a coin flip out of no data.
+    prior 0.5, which would otherwise invent a coin flip out of no data. Time a light
+    spent unknown (see :class:`LightTransition`) is subtracted from its own observed
+    minutes, so a restart neither counts as the light being off nor as a switch-on.
     """
     start, end = float(window[0]), float(window[1])
     if end <= start:
@@ -288,17 +321,21 @@ def fit_light_profile(
 
     profile: dict[str, dict[str, Any]] = {}
     for entity_id, entity_transitions in by_entity.items():
-        intervals, changes = _intervals(entity_transitions, end)
+        intervals, changes, gaps = _intervals(entity_transitions, end)
         on_minutes: dict[tuple[str, int], float] = defaultdict(float)
         for span in intervals:
             _accumulate(bounds, buckets, (max(span[0], start), min(span[1], end)), on_minutes)
+        # the window is observed for every light, but each light has its own holes
+        unseen: dict[tuple[str, int], float] = defaultdict(float)
+        for span in gaps:
+            _accumulate(bounds, buckets, (max(span[0], start), min(span[1], end)), unseen)
 
         p_on: dict[str, list[float]] = {}
         for day_type in ordered:
             p_on[day_type] = [
                 _laplace(
                     on_minutes.get((day_type, slot), 0.0),
-                    observed.get((day_type, slot), 0.0),
+                    observed.get((day_type, slot), 0.0) - unseen.get((day_type, slot), 0.0),
                 )
                 for slot in range(SLOTS)
             ]

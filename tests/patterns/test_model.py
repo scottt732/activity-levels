@@ -347,3 +347,36 @@ def test_unobserved_buckets_have_zero_p_on():
     assert lamp["p_on"]["special"][:noon] == [0.0] * noon
     assert lamp["p_on"]["special"][slot_of(13 * 60)] > 0.3
     assert all(p > 0.0 for p in lamp["p_on"]["weekday"])
+
+
+def test_unknown_state_closes_the_interval_and_is_not_observed():
+    """A gap of unknown state terminates an interval without inventing transitions."""
+    day = START
+    window = (_at(day), _at(day + timedelta(days=1)))
+    transitions = [
+        # the light was already on when Home Assistant went down, so all we know is
+        # that we know nothing from 08:00 until it reappears at 09:00
+        LightTransition(_at(day, 8), "light.lamp", None, None),
+        LightTransition(_at(day, 9), "light.lamp", True, 120),
+        LightTransition(_at(day, 11), "light.lamp", None, None),
+    ]
+    lamp = fit_light_profile(
+        transitions,
+        window=window,
+        day_type_of=lambda _d: "weekday",
+        day_types=("weekday",),
+        tz=UTC,
+    )["light.lamp"]
+
+    # the ON at 09:00 is a restart, not somebody reaching for a switch
+    assert lamp["on_starts"] == {}
+    assert lamp["off_starts"] == {}
+    assert lamp["brightness"] is None
+    p_on = lamp["p_on"]["weekday"]
+    # one on-interval, 09:00 -> 11:00, closed by the second unknown
+    assert p_on[slot_of(10 * 60)] > 0.9
+    # the two gaps are not observed at all, so they are neither on nor off
+    assert p_on[slot_of(8 * 60 + 30)] == 0.0
+    assert p_on[slot_of(12 * 60)] == 0.0
+    # midnight to 08:00 is observed, and the light was off through it
+    assert 0.0 < p_on[slot_of(2 * 60)] < 0.1
