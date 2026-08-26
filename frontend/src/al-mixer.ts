@@ -31,6 +31,21 @@ interface SharedStrip {
   tabindex: number;
 }
 
+/**
+ * True when the key was typed into a control that wants it: the master strip's limiter box
+ * and mix selector are real form elements, and a composed keydown from inside their shadow
+ * root reaches the strip row. Backspace there is a deletion, not "up one bus".
+ */
+const isTextEntry = (ev: Event): boolean => {
+  const target = ev.composedPath()[0];
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+};
+
 /** A channel path names a stimulus or a child bus by its last-but-one step. */
 const isBusChannel = (path: Path): boolean => path[path.length - 2] === "children";
 
@@ -207,7 +222,8 @@ export class AlMixer extends LitElement {
   /** Console keys: ←/→ walk the row, Enter drills into a bus, Backspace comes back up. */
   private onKeyDown(ev: KeyboardEvent): void {
     const config = this.config;
-    if (!config) return;
+    // No `preventDefault` on the way out: the control the key was typed into still wants it.
+    if (!config || isTextEntry(ev)) return;
     switch (ev.key) {
       case "ArrowRight":
       case "ArrowLeft":

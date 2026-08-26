@@ -355,6 +355,46 @@ describe("al-mixer keyboard", () => {
   });
 });
 
+describe("al-mixer keyboard and the master's own controls", () => {
+  beforeEach(() => withNavReducer());
+
+  /** The keydown a real browser fires from inside the master strip's shadow root. */
+  const typeInto = async (sel: string, key: string): Promise<KeyboardEvent> => {
+    const node = master()?.shadowRoot?.querySelector(sel);
+    expect(node, `missing ${sel}`).toBeTruthy();
+    const ev = new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true });
+    node?.dispatchEvent(ev);
+    await settle();
+    return ev;
+  };
+
+  it.each(["Backspace", "ArrowRight", "ArrowLeft", "Home", "End", "Enter"])(
+    "leaves %s typed into the limiter box to the limiter box",
+    async (key) => {
+      const ev = await typeInto(".limiter", key);
+      expect(navs).toEqual([]);
+      expect(el.nav).toEqual(initialNav(config));
+      expect(ev.defaultPrevented).toBe(false);
+    },
+  );
+
+  it.each(["Backspace", "ArrowRight", "ArrowLeft", "Home", "End"])(
+    "leaves %s typed into the mix selector to the mix selector",
+    async (key) => {
+      const ev = await typeInto(".mix", key);
+      expect(navs).toEqual([]);
+      expect(el.nav).toEqual(initialNav(config));
+      expect(ev.defaultPrevented).toBe(false);
+    },
+  );
+
+  it("still navigates on a key from the strip itself", async () => {
+    master()?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }));
+    await settle();
+    expect(el.nav.selection).toEqual(["groups", 0, "children", 0]);
+  });
+});
+
 describe("al-mixer edits", () => {
   it("writes a fader move to the strip's gain, sharing everything it did not touch", async () => {
     const fader = strips()[0]?.shadowRoot?.querySelector("al-fader");

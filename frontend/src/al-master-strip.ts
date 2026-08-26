@@ -7,6 +7,14 @@ import type { Mix } from "./types";
 
 const MIXES: Mix[] = ["sum", "max", "mean"];
 
+/**
+ * Keys typed into the mix selector or the limiter box are the control's own: the mixer
+ * listens for keydown on the whole strip row, and a composed keydown crossing this shadow
+ * boundary would read as console navigation (Backspace as "up one bus", arrows as a move
+ * of the selection) instead of an edit.
+ */
+const stopKeys = (ev: KeyboardEvent): void => ev.stopPropagation();
+
 /** The smallest ceiling the engine will accept; mirrored in the input's `min`. */
 const MIN_LIMIT = 0.1;
 
@@ -125,7 +133,7 @@ export class AlMasterStrip extends LitElement {
         <div class="muted">master</div>
         <div>
           <label for="mix">mix</label>
-          <select id="mix" class="mix" .value=${this.mix} @change=${this.onMix}>
+          <select id="mix" class="mix" .value=${this.mix} @change=${this.onMix} @keydown=${stopKeys}>
             ${MIXES.map((m) => html`<option value=${m} ?selected=${m === this.mix}>${m}</option>`)}
           </select>
         </div>
@@ -139,6 +147,7 @@ export class AlMasterStrip extends LitElement {
             step="0.1"
             .value=${String(this.maxValue)}
             @change=${this.onLimiter}
+            @keydown=${stopKeys}
           />
         </div>
         <div class="muted">${this.precision} dp · ${this.lights} light${this.lights === 1 ? "" : "s"}</div>

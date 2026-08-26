@@ -266,6 +266,18 @@ describe("al-master-strip", () => {
     expect(sims).toEqual([{ on: true }]);
   });
 
+  // The mixer listens for keydown on the whole strip row, so a key typed into one of these
+  // controls must not escape and be read as console navigation.
+  it.each([".mix", ".limiter"])("keeps keys typed into %s inside the strip", async (sel) => {
+    const seen: string[] = [];
+    bus.addEventListener("keydown", (e) => seen.push((e as KeyboardEvent).key));
+    const node = el.shadowRoot?.querySelector(sel);
+    node?.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, composed: true }));
+    node?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(seen).toEqual([]);
+  });
+
   it("shows a meter only when there is live state", async () => {
     expect(el.shadowRoot?.querySelector("al-meter")).toBeFalsy();
     el.live = { value: 2, max: 5, gated: false };
