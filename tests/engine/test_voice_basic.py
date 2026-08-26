@@ -81,3 +81,11 @@ def test_reset_returns_to_idle() -> None:
     assert v.phase is Phase.IDLE
     assert v.gate is False
     assert v.value_at(2.0) == 0.0
+
+
+def test_reset_clears_debounce_history() -> None:
+    v = Voice(id="x", gain=2.0, envelope=Envelope(release=10.0, debounce=5.0))
+    assert v.note_on(0.0) is True
+    v.reset()
+    assert v.note_on(1.0) is True
+    assert v.last_note_on == 1.0

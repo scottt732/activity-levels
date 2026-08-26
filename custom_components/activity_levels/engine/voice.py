@@ -129,6 +129,7 @@ class Voice:
 
     def reset(self) -> None:
         self.gate = False
+        self.last_note_on = None
         self._enter(Phase.IDLE, 0.0, 0.0)
 
     # -- persistence --------------------------------------------------------
