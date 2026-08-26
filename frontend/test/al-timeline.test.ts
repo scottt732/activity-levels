@@ -131,6 +131,24 @@ describe("al-timeline data loading", () => {
     expect(h.calls[0]).not.toHaveProperty("forecast_until");
   });
 
+  it("drops the last group's chart when the new group's load fails", async () => {
+    const good = nextGid();
+    const bad = nextGid();
+    const h = hassStub(async (m) => {
+      if (m["group_id"] !== good) throw new Error("no recorder data");
+      return makeResponse(good);
+    });
+    const el = await mount({ groupId: good, title: "House", range: "24h", horizon: "24h" }, h);
+    expect(qa(el, "path.bus")).toHaveLength(1);
+    el.groupId = bad;
+    el.title = "Garage";
+    await settle(el);
+    expect(qa(el, "path.bus")).toHaveLength(0);
+    expect(q(el, ".error")?.textContent).toContain("no recorder data");
+    expect(q(el, ".title")?.textContent?.trim()).toBe("Garage");
+    el.remove();
+  });
+
   it("asks nothing and shows a placeholder without a group", async () => {
     const h = hassStub(async () => makeResponse("nobody"));
     const el = await mount({ groupId: null }, h);

@@ -481,7 +481,12 @@ export class AlTimeline extends LitElement {
     // `hass` is replaced on every live poll upstream; only its arrival is a reason to load.
     const hassArrived = changed.has("hass") && changed.get("hass") === undefined && this.hass !== undefined;
     if (windowChanged || hassArrived) {
-      if (changed.has("groupId")) this.cursorIndex = null;
+      // A new group starts from nothing: keeping the last one's response would leave its
+      // chart on screen under the new title if this load fails or is slow to answer.
+      if (changed.has("groupId")) {
+        this.cursorIndex = null;
+        this.loaded = null;
+      }
       void this.load();
     }
   }
