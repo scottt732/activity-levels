@@ -9,6 +9,7 @@ tests cannot provide, while importing hourly rows directly writes exactly the
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 from datetime import UTC, date, datetime, timedelta
 from itertools import pairwise
@@ -52,7 +53,12 @@ def _top_of_hour() -> datetime:
     return dt_util.utcnow().replace(minute=0, second=0, microsecond=0)
 
 
-def _seed_statistics(hass: HomeAssistant, end: datetime, days: int = TRAINING_DAYS) -> None:
+def _seed_statistics(
+    hass: HomeAssistant,
+    end: datetime,
+    days: int = TRAINING_DAYS,
+    statistic_id: str = STATISTIC_ID,
+) -> None:
     """Import ``days`` of hourly activity statistics ending just before ``end``."""
     rows: list[dict[str, Any]] = []
     t = end - timedelta(days=days)
@@ -69,7 +75,7 @@ def _seed_statistics(hass: HomeAssistant, end: datetime, days: int = TRAINING_DA
             "mean_type": StatisticMeanType.ARITHMETIC,
             "name": None,
             "source": "recorder",
-            "statistic_id": STATISTIC_ID,
+            "statistic_id": statistic_id,
             "unit_class": None,
             "unit_of_measurement": None,
         },
@@ -659,3 +665,48 @@ async def test_a_light_leaving_its_area_leaves_the_group(
     await hass.async_block_till_done()
 
     assert patterns.lights["kitchen"] == []
+
+
+# -- statistic ids ------------------------------------------------------------
+
+
+async def test_statistics_follow_a_renamed_entity(
+    recorder_ready: None, hass: HomeAssistant
+) -> None:
+    """Renaming the activity-level sensor must not blind the learner.
+
+    Long-term statistics are keyed by entity id, so a rename moves the rows; only the
+    entity registry knows where they went.
+    """
+    renamed = "sensor.kitchen_busyness"
+    entry = await _add_entry(hass)
+    entities = er.async_get(hass)
+    unique_id = f"{entry.entry_id}-kitchen-activity_level"
+    original = entities.async_get_entity_id("sensor", DOMAIN, unique_id)
+    assert original == STATISTIC_ID
+    entities.async_update_entity(original, new_entity_id=renamed)
+    await hass.async_block_till_done()
+
+    _seed_statistics(hass, _top_of_hour(), statistic_id=renamed)
+    await async_wait_recording_done(hass)
+
+    patterns = entry.runtime_data.patterns
+    assert await patterns.async_rebuild() is True
+    assert patterns.profile["groups"]["kitchen"]["ready"] is True
+
+
+async def test_a_group_with_no_statistics_names_the_id_it_looked_for(
+    recorder_ready: None, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    entry = await _add_entry(hass)
+    caplog.clear()
+
+    assert await entry.runtime_data.patterns.async_rebuild() is True
+
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno >= logging.WARNING and record.name.startswith("custom_components")
+    ]
+    assert any("sensor.kitchen_activity_level" in message for message in warnings)
+    assert any("sensor.house_activity_level" in message for message in warnings)

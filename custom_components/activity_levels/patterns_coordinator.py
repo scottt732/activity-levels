@@ -716,15 +716,27 @@ class PatternsCoordinator:
 
         window = (start.timestamp(), end.timestamp())
         tz = self.timezone
-        inputs = [
-            GroupInputs(
-                gid=gid,
-                max_value=info.max_value,
-                samples=self._samples(stats.get(statistic_id(gid), []), tz),
-                transitions=self.lightlog.transitions(self.lights.get(gid, []), *window),
+        inputs: list[GroupInputs] = []
+        for gid, info in self.coordinator.tree.groups.items():
+            sid = self._statistic_id(gid)
+            rows = stats.get(sid, [])
+            if not rows:
+                # by far the most common cause is the recorder excluding the sensor, and
+                # the symptom is a group that silently never becomes ready
+                _LOGGER.warning(
+                    "No long-term statistics for %s; group '%s' cannot be learned until "
+                    "the recorder has hourly rows for it",
+                    sid,
+                    gid,
+                )
+            inputs.append(
+                GroupInputs(
+                    gid=gid,
+                    max_value=info.max_value,
+                    samples=self._samples(rows, tz),
+                    transitions=self.lightlog.transitions(self.lights.get(gid, []), *window),
+                )
             )
-            for gid, info in self.coordinator.tree.groups.items()
-        ]
         # one frozen copy of the labelling, so the executor thread never touches hass
         labels = dict(self._day_type_cache)
         precedence = list(self.day_types)
@@ -772,6 +784,18 @@ class PatternsCoordinator:
             samples.append(Sample(t=t, value=float(mean), day_type=self.day_type_of(day)))
         return samples
 
+    def _statistic_id(self, gid: str) -> str:
+        """This group's activity-level statistic id, as the entity registry has it.
+
+        Long-term statistics are keyed by entity id, so a rename moves the rows and the
+        registry is the only thing that knows where to. The derived id is the fallback
+        for a group whose sensor is not registered (yet).
+        """
+        registered = er.async_get(self.hass).async_get_entity_id(
+            "sensor", DOMAIN, f"{self.entry.entry_id}-{gid}-activity_level"
+        )
+        return registered or statistic_id(gid)
+
     def _recorder(self) -> Recorder | None:
         try:
             return get_instance(self.hass)
@@ -781,7 +805,7 @@ class PatternsCoordinator:
     async def _fetch_statistics(
         self, instance: Recorder, start: datetime, end: datetime, gids: Iterable[str] | None = None
     ) -> dict[str, list[StatisticsRow]]:
-        ids = {statistic_id(gid) for gid in (gids or self.coordinator.tree.groups)}
+        ids = {self._statistic_id(gid) for gid in (gids or self.coordinator.tree.groups)}
         job = partial(statistics_during_period, self.hass, start, end, ids, "hour", None, {"mean"})
         result: dict[str, list[StatisticsRow]] = await instance.async_add_executor_job(job)
         return result
@@ -835,7 +859,7 @@ class PatternsCoordinator:
         return {
             gid: [
                 [float(row["start"]), float(mean)]
-                for row in rows.get(statistic_id(gid), [])
+                for row in rows.get(self._statistic_id(gid), [])
                 if (mean := row.get("mean")) is not None
             ]
             for gid in gids
@@ -847,7 +871,7 @@ class PatternsCoordinator:
         instance = self._recorder()
         if instance is None:
             return {gid: [] for gid in gids}
-        entity_ids = [statistic_id(gid) for gid in gids]
+        entity_ids = [self._statistic_id(gid) for gid in gids]
         job = partial(
             get_significant_states,
             self.hass,
@@ -858,7 +882,7 @@ class PatternsCoordinator:
         )
         history = await instance.async_add_executor_job(job)
         return {
-            gid: _resample(history.get(statistic_id(gid), []), start, end, FIVE_MINUTES)
+            gid: _resample(history.get(self._statistic_id(gid), []), start, end, FIVE_MINUTES)
             for gid in gids
         }
 
