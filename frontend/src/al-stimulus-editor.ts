@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
 import { emptyToNull, formatToList, parseToList } from "./convert";
 import { fieldErrors, pathKey } from "./errors";
 import { alChange } from "./events";
@@ -10,6 +10,7 @@ import "./al-override-field";
 import { BOOLEAN_SELECTOR } from "./al-override-field";
 import type { Selector } from "./al-override-field";
 import type { OverrideKind, OverrideValue } from "./convert";
+import type { PropertyValues } from "lit";
 import type {
   Config,
   EnvelopeOverrides,
@@ -108,6 +109,27 @@ export class AlStimulusEditor extends LitElement {
   @property({ attribute: false }) errors: ValidationError[] = [];
   @property({ attribute: false }) live: LiveState | null = null;
 
+  /**
+   * Raw text of the "Active states" field while it is being edited. `formatToList` is lossy
+   * mid-word - a trailing separator in `on, playing,` parses back to `on, playing` - so rendering
+   * the parsed list on every keystroke would eat the separator and make a second state
+   * untypeable. `null` means "not being edited": show the config's value.
+   */
+  @state() private toText: string | null = null;
+
+  /** Drop the raw text when the selection moves, or when the config changed from elsewhere. */
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    if (changed.has("path")) {
+      this.toText = null;
+      return;
+    }
+    if (this.toText === null || !changed.has("config")) return;
+    const { config, path } = this;
+    const stimulus = config && path ? stimulusAt(config, path) : undefined;
+    if (!stimulus) return;
+    if (formatToList(stimulus.to) !== formatToList(parseToList(this.toText))) this.toText = null;
+  }
+
   private computeLabel = (item: FormItem): string => LABELS[item.name] ?? item.name;
   private computeHelper = (item: FormItem): string => HELPERS[item.name] ?? "";
 
@@ -136,10 +158,12 @@ export class AlStimulusEditor extends LitElement {
     const stimulus = stimulusAt(config, path);
     if (!stimulus) return;
     const v = ev.detail?.value ?? {};
+    const toText = String(v.to ?? "");
+    this.toText = toText;
     const merged: Stimulus = {
       ...stimulus,
       entity: String(v.entity ?? ""),
-      to: parseToList(String(v.to ?? "")),
+      to: parseToList(toText),
       gain: typeof v.gain === "number" ? v.gain : stimulus.gain,
       key: emptyToNull(v.key as string | null | undefined),
       envelope: emptyToNull(v.envelope as string | null | undefined),
@@ -180,7 +204,7 @@ export class AlStimulusEditor extends LitElement {
     const resolved = resolvedEnvelope(config, stimulus);
     const data: Record<string, unknown> = {
       entity: stimulus.entity,
-      to: formatToList(stimulus.to),
+      to: this.toText ?? formatToList(stimulus.to),
       gain: stimulus.gain,
       key: stimulus.key ?? "",
       envelope: stimulus.envelope ?? "",

@@ -42,3 +42,17 @@ describe("override field conversion", () => {
     expect(formatInherited("select", "hold")).toBe("hold");
   });
 });
+
+describe("state-list text while typing", () => {
+  it("round-trips a finished multi-state list", () => {
+    expect(parseToList("on, playing")).toEqual(["on", "playing"]);
+    expect(formatToList(parseToList("on, playing"))).toBe("on, playing");
+  });
+  it("loses trailing separators on the way back, which is why raw text must be kept", () => {
+    expect(parseToList("on, playing,")).toEqual(["on", "playing"]);
+    expect(formatToList(parseToList("on, playing,"))).toBe("on, playing");
+    expect(parseToList("on,")).toEqual(["on"]);
+    expect(formatToList(parseToList("on,"))).toBe("on");
+    expect(formatToList(parseToList("on, "))).toBe("on");
+  });
+});
