@@ -247,6 +247,9 @@ export class ActivityLevelsPanel extends LitElement {
           .path=${selection}
           .errors=${this.errors}
           @al-change=${onChange}
+          @al-select=${(e: CustomEvent<Path | null>) => {
+            this.selection = e.detail;
+          }}
         ></al-group-editor>`;
   }
 }
