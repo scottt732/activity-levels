@@ -211,6 +211,10 @@ class ActivityLevelsCoordinator:
     def _on_timer(self, root_id: str, _now: datetime) -> None:
         self._timers.pop(root_id, None)
         t = self.now()
+        # A deleted entity sends no state event; this wake is where we notice it went.
+        if touched := self._reconcile(t, absent_only=True):
+            self._after_change(touched | {root_id}, t)  # publishes, reschedules, persists
+            return
         root = self.tree.groups[root_id].group
         self._publish(root, t)
         self._schedule(root, t)
@@ -234,20 +238,34 @@ class ActivityLevelsCoordinator:
             if data := voices.get(self.tree.voice_key(info.id, info.trigger.id)):
                 info.trigger.restore(data)
 
-    def _reconcile(self, t: float) -> None:
-        """Line the restored voices up with the states HA holds right now."""
+    def _reconcile(self, t: float, *, absent_only: bool = False) -> set[str]:
+        """Line the voices up with the states HA holds now; return the roots that moved.
+
+        With absent_only nothing but a vanished entity is considered: live entities are
+        driven by state events, and "unavailable" stays the envelope policy's business
+        so an unavailable: hold voice keeps holding.
+        """
+        touched: set[str] = set()
         for ref in self.tree.all_voice_refs():
             state = self.hass.states.get(ref.entity_id)
             current = state.state if state else None
-            if current is None or current in (STATE_UNAVAILABLE, STATE_UNKNOWN):
-                continue
-            in_to = current in ref.to
-            if in_to and not ref.voice.gate and not ref.voice.envelope.impulse:
-                ref.voice.note_on(t)
-            elif not in_to and ref.voice.gate:
+            if current is None:
+                # At startup the entity may simply not be back yet, so we hold; on a
+                # safety wake it is gone, and a voice still gated on it should not be.
+                if not (absent_only and ref.voice.gate):
+                    continue
                 ref.voice.note_off(t)
-            else:
+            elif absent_only or current in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
+            else:
+                in_to = current in ref.to
+                if in_to and not ref.voice.gate and not ref.voice.envelope.impulse:
+                    ref.voice.note_on(t)
+                elif not in_to and ref.voice.gate:
+                    ref.voice.note_off(t)
+                else:
+                    continue
+            touched.add(self.tree.groups[ref.group_id].root_id)
             _LOGGER.debug(
                 "reconciled %s (%s) in group %s to state %r",
                 ref.entity_id,
@@ -255,6 +273,7 @@ class ActivityLevelsCoordinator:
                 ref.group_id,
                 current,
             )
+        return touched
 
     # -- introspection for the websocket API --------------------------------
 

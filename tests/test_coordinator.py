@@ -87,6 +87,35 @@ async def test_unavailable_hold_and_recovery(
     assert coordinator.data["living_room"].gated is False
 
 
+async def test_safety_wake_releases_a_voice_whose_entity_vanished(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, coordinator: ActivityLevelsCoordinator
+) -> None:
+    """A deleted entity never sends another event; the safety wake has to notice."""
+    hass.states.async_set("binary_sensor.kitchen_motion", "on")
+    await hass.async_block_till_done()
+    assert coordinator.data["kitchen"].gated is True
+    hass.states.async_remove("binary_sensor.kitchen_motion")
+    await hass.async_block_till_done()
+    assert coordinator.data["kitchen"].gated is True  # hold, until we know it is really gone
+    await advance(hass, freezer, 61.0)  # safety_refresh
+    assert coordinator.data["kitchen"].gated is False
+    assert coordinator.data["kitchen"].cooldown_at is not None
+    await advance(hass, freezer, 60.0)
+    assert 0.0 < coordinator.data["kitchen"].value < 1.0
+
+
+async def test_safety_wake_keeps_holding_an_unavailable_entity(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, coordinator: ActivityLevelsCoordinator
+) -> None:
+    """Absence is the only thing the safety wake reconciles: 'unavailable' still holds."""
+    hass.states.async_set("media_player.tv", "playing")
+    await hass.async_block_till_done()
+    hass.states.async_set("media_player.tv", "unavailable")
+    await hass.async_block_till_done()
+    await advance(hass, freezer, 61.0)
+    assert coordinator.data["living_room"].gated is True
+
+
 async def test_attribute_only_change_does_not_retrigger_impulse(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, coordinator: ActivityLevelsCoordinator
 ) -> None:
