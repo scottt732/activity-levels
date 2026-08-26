@@ -1,3 +1,4 @@
+import type { NavAction } from "./navigation";
 import type { Config, Mix, Path } from "./types";
 
 /** `al-change` also carries an optional key that merges rapid edits of one field into a single undo step. */
@@ -54,3 +55,14 @@ export const alLimiterChanged = (value: number): CustomEvent<{ value: number }> 
   stripEvent("al-limiter-changed", { value });
 
 export const alSimToggled = (on: boolean): CustomEvent<{ on: boolean }> => stripEvent("al-sim-toggled", { on });
+
+/**
+ * The mixer's own events. Navigation is a request, not a move: the shell owns the nav
+ * state and reduces the action, so a mixer inside a dialog or a card behaves the same.
+ */
+export const alNav = (action: NavAction): CustomEvent<NavAction> =>
+  new CustomEvent<NavAction>("al-nav", { detail: action, bubbles: true, composed: true });
+
+/** Asks the shell to flip a group's presence simulation; only it may call the switch. */
+export const alSimToggle = (gid: string, on: boolean): CustomEvent<{ gid: string; on: boolean }> =>
+  new CustomEvent<{ gid: string; on: boolean }>("al-sim-toggle", { detail: { gid, on }, bubbles: true, composed: true });
