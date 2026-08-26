@@ -28,7 +28,6 @@ async def entry(hass: HomeAssistant) -> MockConfigEntry:
     return entry
 
 
-@pytest.mark.xfail(reason="entities land in Task 7", strict=True)
 async def test_setup_creates_devices_and_entities(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
@@ -66,7 +65,6 @@ async def test_options_update_reloads(hass: HomeAssistant, entry: MockConfigEntr
     assert dev.async_get_device(identifiers={(DOMAIN, "kitchen")}).name == "Pantry"
 
 
-@pytest.mark.xfail(reason="entities land in Task 7", strict=True)
 async def test_services(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     await hass.services.async_call(
         DOMAIN, "trigger", {"group_id": "kitchen", "peak": 2.5}, blocking=True
@@ -76,7 +74,6 @@ async def test_services(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     assert hass.states.get("sensor.kitchen_activity_level").state == "0.0"
 
 
-@pytest.mark.xfail(reason="entities land in Task 7", strict=True)
 async def test_unload(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
