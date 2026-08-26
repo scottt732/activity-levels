@@ -40,3 +40,9 @@ python_version = "3.14"
 namespace_packages = true
 explicit_package_bases = true
 files = ["custom_components/activity_levels"]
+
+# HA re-exports these from the websocket_api package without an __all__, so a strict
+# no_implicit_reexport rejects the package-level names core's own integrations use.
+[[tool.mypy.overrides]]
+module = "homeassistant.components.websocket_api"
+no_implicit_reexport = false

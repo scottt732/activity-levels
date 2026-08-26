@@ -7,12 +7,6 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
-from homeassistant.components.websocket_api.connection import ActiveConnection
-from homeassistant.components.websocket_api.decorators import (
-    async_response,
-    require_admin,
-    websocket_command,
-)
 from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
@@ -42,10 +36,12 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_state)
 
 
-@websocket_command({vol.Required("type"): f"{DOMAIN}/config/get"})
-@require_admin
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/config/get"})
 @callback
-def ws_config_get(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
+def ws_config_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
     entries = hass.config_entries.async_entries(DOMAIN)
     if not entries:
         connection.send_error(msg["id"], "not_found", "Activity Levels is not configured")
@@ -53,13 +49,13 @@ def ws_config_get(hass: HomeAssistant, connection: ActiveConnection, msg: dict[s
     connection.send_result(msg["id"], {"config": dict(entries[0].options)})
 
 
-@websocket_command(
+@websocket_api.require_admin
+@websocket_api.websocket_command(
     {vol.Required("type"): f"{DOMAIN}/config/validate", vol.Required("config"): dict}
 )
-@require_admin
 @callback
 def ws_config_validate(
-    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     try:
         validate_config(msg["config"])
@@ -69,11 +65,13 @@ def ws_config_validate(
     connection.send_result(msg["id"], {"ok": True, "errors": []})
 
 
-@websocket_command({vol.Required("type"): f"{DOMAIN}/config/save", vol.Required("config"): dict})
-@require_admin
-@async_response
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): f"{DOMAIN}/config/save", vol.Required("config"): dict}
+)
+@websocket_api.async_response
 async def ws_config_save(
-    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     entries = hass.config_entries.async_entries(DOMAIN)
     if not entries:
@@ -93,10 +91,12 @@ async def ws_config_save(
     connection.send_result(msg["id"], {"ok": True})
 
 
-@websocket_command({vol.Required("type"): f"{DOMAIN}/state"})
-@require_admin
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/state"})
 @callback
-def ws_state(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
+def ws_state(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
     coordinator = _coordinator(hass)
     if coordinator is None:
         connection.send_error(msg["id"], "not_loaded", "Activity Levels is not loaded")
