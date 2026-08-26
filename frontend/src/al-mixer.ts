@@ -95,6 +95,13 @@ export class AlMixer extends LitElement {
       .crumb:last-of-type {
         font-weight: 600;
       }
+      /* The root selector is a crumb that happens to be a control, so it is styled to
+         sit in the trail rather than to look like a form field. */
+      select.crumb {
+        -webkit-appearance: none;
+        appearance: none;
+        max-width: 12em;
+      }
       .sep {
         color: var(--secondary-text-color);
       }
@@ -268,8 +275,34 @@ export class AlMixer extends LitElement {
     this.shadowRoot?.querySelector<HTMLElement>('.strips > [tabindex="0"]')?.focus();
   }
 
+  /**
+   * With more than one root group there is no single top of the tree to walk up to, so
+   * the trail starts with a selector over the roots instead of a crumb for one of them.
+   */
+  private renderRootSelector(config: Config): TemplateResult | typeof nothing {
+    if (config.groups.length < 2) return nothing;
+    const current = typeof this.nav.busPath[1] === "number" ? this.nav.busPath[1] : 0;
+    return html`
+      <select
+        class="link crumb root"
+        aria-label="Root bus"
+        aria-current=${this.nav.busPath.length <= 2 ? "location" : nothing}
+        .value=${String(current)}
+        @change=${(ev: Event) =>
+          this.navigate({ type: "open", path: ["groups", Number((ev.target as HTMLSelectElement).value)] })}
+      >
+        ${config.groups.map(
+          (g, i) => html`<option value=${i} ?selected=${i === current}>${g.name ?? g.id}</option>`,
+        )}
+      </select>
+    `;
+  }
+
   private renderCrumbs(config: Config): TemplateResult {
-    const crumbs = breadcrumb(config, this.nav.busPath);
+    const root = this.renderRootSelector(config);
+    const trail = breadcrumb(config, this.nav.busPath);
+    // The selector stands in for the root crumb; without it the root is a crumb like any other.
+    const crumbs = root === nothing ? trail : trail.slice(1);
     return html`
       <div class="crumbs">
         <button
@@ -280,9 +313,10 @@ export class AlMixer extends LitElement {
         >
           ⌃ up
         </button>
+        ${root}
         ${crumbs.map(
           (crumb, i) => html`
-            ${i > 0 ? html`<span class="sep">›</span>` : nothing}
+            ${i > 0 || root !== nothing ? html`<span class="sep">›</span>` : nothing}
             <button
               class="link crumb"
               aria-current=${i === crumbs.length - 1 ? "location" : nothing}

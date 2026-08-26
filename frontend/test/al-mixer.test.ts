@@ -265,6 +265,59 @@ describe("al-mixer rendering", () => {
   });
 });
 
+describe("al-mixer multi-root breadcrumb", () => {
+  /** Property (with its own tree) alongside a second root bus to switch to. */
+  const twoRoots = (): Config => {
+    const one = houseConfig();
+    return { ...one, groups: [one.groups[0]!, { ...newGroup("shed"), name: "Shed" }] };
+  };
+
+  const rootSelect = (): HTMLSelectElement | null =>
+    el.shadowRoot?.querySelector<HTMLSelectElement>("select.root") ?? null;
+
+  const crumbButtons = (): string[] =>
+    [...(el.shadowRoot?.querySelectorAll("button.crumb") ?? [])].map((c) => c.textContent?.trim() ?? "");
+
+  it("offers no root selector when there is only one root bus", () => {
+    expect(rootSelect()).toBeNull();
+    expect(crumbButtons()).toEqual(["Property"]);
+  });
+
+  it("starts the breadcrumb with a selector over the root buses", async () => {
+    el.config = twoRoots();
+    await el.updateComplete;
+    const select = rootSelect();
+    expect([...(select?.options ?? [])].map((o) => o.textContent?.trim())).toEqual(["Property", "Shed"]);
+    expect(select?.value).toBe("0");
+    // The selector stands in for the root crumb rather than doubling it.
+    expect(crumbButtons()).toEqual([]);
+  });
+
+  it("opens the root bus the selector was changed to", async () => {
+    el.config = twoRoots();
+    await el.updateComplete;
+    const select = rootSelect();
+    if (select) select.value = "1";
+    select?.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    expect(navs).toEqual([{ type: "open", path: ["groups", 1] }]);
+  });
+
+  it("keeps the crumbs below the root and leaves up disabled at a root bus", async () => {
+    el.config = twoRoots();
+    el.nav = { busPath: ["groups", 1], selection: ["groups", 1] };
+    await el.updateComplete;
+    expect(rootSelect()?.value).toBe("1");
+    expect(crumbButtons()).toEqual([]);
+    expect(el.shadowRoot?.querySelector<HTMLButtonElement>(".up")?.disabled).toBe(true);
+    el.nav = { busPath: ["groups", 0, "children", 0], selection: ["groups", 0, "children", 0] };
+    await el.updateComplete;
+    expect(rootSelect()?.value).toBe("0");
+    expect(crumbButtons()).toEqual(["House"]);
+    expect(el.shadowRoot?.querySelector<HTMLButtonElement>(".up")?.disabled).toBe(false);
+  });
+});
+
 describe("al-mixer navigation", () => {
   it("opens the child bus a strip's 'open ▸' asks for", async () => {
     await clickIn(strips()[0]!, ".open");
