@@ -56,6 +56,9 @@ async def test_note_off_then_decay_with_timer(
     assert k.cooldown_at == pytest.approx(coordinator.now() + 300.0, abs=1.0)
     await advance(hass, freezer, 150.0)
     assert coordinator.data["kitchen"].value == pytest.approx(0.5, abs=0.06)
+    await advance(hass, freezer, 140.0)  # display is 0.0 while the voice is still releasing
+    assert coordinator.data["kitchen"].value == 0.0
+    assert coordinator.data["kitchen"].contributors == {}  # no 0.0 entries
     await advance(hass, freezer, 200.0)
     assert coordinator.data["kitchen"].value == 0.0
     assert coordinator.data["kitchen"].active is False

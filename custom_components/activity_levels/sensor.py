@@ -48,6 +48,8 @@ class ActivityLevelSensor(ActivityLevelsEntity, SensorEntity):
     """The group's current level, plus how it was arrived at."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
+    # a dict that changes on every step: valuable live, dead weight in the recorder
+    _unrecorded_attributes = frozenset({ATTR_CONTRIBUTORS})
 
     def __init__(self, coordinator: ActivityLevelsCoordinator, info: GroupInfo) -> None:
         """Set up the level sensor for one group."""

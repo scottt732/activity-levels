@@ -182,9 +182,9 @@ class ActivityLevelsCoordinator:
             last_activity=group.last_activity(),
             cooldown_at=group.cooldown_at(t),
             contributors={
-                label: round(v, info.precision)
+                label: rounded
                 for label, v in group.contributions_at(t).items()
-                if v > 0.0
+                if (rounded := round(v, info.precision)) > 0.0  # round first: no 0.0 entries
             },
         )
 
