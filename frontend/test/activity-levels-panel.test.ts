@@ -29,11 +29,11 @@ const config = () => ({
   groups: [],
 });
 
-const hass = (isAdmin: boolean) => ({
+const hass = () => ({
   states: {},
   areas: {},
   entities: {},
-  user: { is_admin: isAdmin, name: "Test" },
+  user: { is_admin: true, name: "Test" },
   language: "en",
   localize: (k: string) => k,
   callWS: vi.fn(async (msg: { type: string }) =>
@@ -44,10 +44,10 @@ const hass = (isAdmin: boolean) => ({
 let el: Panel;
 
 /** The panel loads its config in `connectedCallback`; settle that before asserting. */
-const mount = async (isAdmin = true): Promise<void> => {
+const mount = async (): Promise<void> => {
   document.body.innerHTML = "";
   el = document.createElement("activity-levels-panel") as Panel;
-  el.hass = hass(isAdmin);
+  el.hass = hass();
   document.body.appendChild(el);
   await el.updateComplete;
   await el.updateComplete;
@@ -116,16 +116,6 @@ describe("activity-levels-panel notices", () => {
     const tree = el.shadowRoot?.querySelector("al-tree");
     const button = tree?.shadowRoot?.querySelector("ha-button");
     expect(button?.textContent?.trim()).toBe("Add your first group");
-  });
-
-  it("says nothing about read-only access for an admin", () => {
-    expect(el.shadowRoot?.querySelector("ha-alert")).toBeNull();
-  });
-
-  it("warns a non-admin that the panel is read-only", async () => {
-    await mount(false);
-    const alert = el.shadowRoot?.querySelector("ha-alert");
-    expect(alert?.textContent).toContain("read-only");
   });
 });
 

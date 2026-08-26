@@ -53,11 +53,6 @@ export class ActivityLevelsPanel extends LitElement {
     this.stopLive();
   }
 
-  /** Non-admins can look, but every write command is rejected by the backend. */
-  private get readOnly(): boolean {
-    return this.hass?.user?.is_admin === false;
-  }
-
   private async load(): Promise<void> {
     try {
       const cfg = await getConfig(this.hass);
@@ -234,11 +229,11 @@ export class ActivityLevelsPanel extends LitElement {
             <ha-icon icon="mdi:redo"></ha-icon>
           </ha-icon-button>
           <ha-button appearance="plain" .disabled=${!d?.dirty || this.busy} @click=${this.discard}>Discard</ha-button>
-          <ha-button .disabled=${!d?.dirty || this.busy || this.readOnly} @click=${this.save}
+          <ha-button .disabled=${!d?.dirty || this.busy} @click=${this.save}
             >${d?.dirty ? "Save" : "Saved"}</ha-button
           >
         </div>
-        ${this.renderBanner()} ${this.renderReadOnly()}
+        ${this.renderBanner()}
         <div class="tabs" role="tablist" aria-label="Sections" @keydown=${this.onTabsKeydown}>
           ${TABS.map(
             (t, i) => html`<button
@@ -272,14 +267,6 @@ export class ActivityLevelsPanel extends LitElement {
         </p>
       </div>
     `;
-  }
-
-  private renderReadOnly() {
-    if (!this.readOnly) return nothing;
-    return html`<ha-alert alert-type="info"
-      >You are signed in as a non-administrator, so this panel is read-only: saving is rejected by Home
-      Assistant. Ask an administrator to make configuration changes.</ha-alert
-    >`;
   }
 
   private renderBanner() {
