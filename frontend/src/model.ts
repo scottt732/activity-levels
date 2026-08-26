@@ -58,9 +58,9 @@ export function uniqueGroupId(config: Config, base: string): string {
   return `${slug}_${n}`;
 }
 
-export const groupAt = (config: Config, path: Path): Group => getAt<Group>(config, path);
+export const groupAt = (config: Config, path: Path): Group | undefined => getAt<Group>(config, path);
 
-export const stimulusAt = (config: Config, path: Path): Stimulus => getAt<Stimulus>(config, path);
+export const stimulusAt = (config: Config, path: Path): Stimulus | undefined => getAt<Stimulus>(config, path);
 
 /** The list a node lives in: `["groups", 2]` -> `["groups"]`. */
 export const parentListPath = (path: Path): Path => path.slice(0, -1);

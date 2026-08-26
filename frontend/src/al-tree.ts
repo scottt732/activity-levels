@@ -2,12 +2,18 @@ import { LitElement, css, html, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { pathKey, subtreeErrorCount } from "./errors";
+import { alChange, alSelect } from "./events";
 import { newGroup, newStimulus, parentGroupPath, parentListPath, uniqueGroupId } from "./model";
 import { insertAt, moveAt, removeAt } from "./store";
 import { sharedStyles } from "./styles";
 import type { Config, Group, HomeAssistant, LiveState, Path, Stimulus, ValidationError } from "./types";
 
 const stop = (ev: Event): void => ev.stopPropagation();
+
+/** Keeps Enter/Space on an inner control from also reaching the expansion panel summary. */
+const stopSelectKeys = (ev: KeyboardEvent): void => {
+  if (ev.key === "Enter" || ev.key === " ") ev.stopPropagation();
+};
 
 /** Group/stimulus tree with inline add, reorder and delete affordances. */
 @customElement("al-tree")
@@ -41,7 +47,17 @@ export class AlTree extends LitElement {
       .selected {
         background: var(--secondary-background-color);
       }
-      .header:focus-visible,
+      .link {
+        background: none;
+        border: none;
+        margin: 0;
+        padding: 0;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .link:focus-visible,
       .stimulus:focus-visible {
         outline: 2px solid var(--primary-color);
         outline-offset: -2px;
@@ -80,11 +96,11 @@ export class AlTree extends LitElement {
   @property({ attribute: false }) live: LiveState | null = null;
 
   private emitChange(next: Config): void {
-    this.dispatchEvent(new CustomEvent<Config>("al-change", { detail: next, bubbles: true, composed: true }));
+    this.dispatchEvent(alChange(next));
   }
 
   private emitSelect(path: Path | null): void {
-    this.dispatchEvent(new CustomEvent<Path | null>("al-select", { detail: path, bubbles: true, composed: true }));
+    this.dispatchEvent(alSelect(path));
   }
 
   private isSelected(path: Path): boolean {
@@ -167,15 +183,16 @@ export class AlTree extends LitElement {
     const pct = live ? Math.max(0, Math.min(100, (live.value / (max || 1)) * 100)) : 0;
     return html`
       <ha-expansion-panel outlined left-chevron ?expanded=${depth < 2}>
-        <div
-          slot="header"
-          class="header ${this.isSelected(path) ? "selected" : ""}"
-          role="button"
-          tabindex="0"
-          @click=${(ev: Event) => this.select(ev, path)}
-          @keydown=${(ev: KeyboardEvent) => this.selectOnKey(ev, path)}
-        >
-          <span class="name grow">${group.name || group.id || "(unnamed group)"}</span>
+        <div slot="header" class="header ${this.isSelected(path) ? "selected" : ""}">
+          <button
+            type="button"
+            class="link name grow"
+            title="Edit this group"
+            @click=${(ev: Event) => this.select(ev, path)}
+            @keydown=${stopSelectKeys}
+          >
+            ${group.name || group.id || "(unnamed group)"}
+          </button>
           ${count ? html`<span class="badge" title="${count} problem(s) in this group">${count}</span>` : nothing}
           ${live
             ? html`<div class="meter" title="${live.value} of ${max}">

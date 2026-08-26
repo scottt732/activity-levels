@@ -2,10 +2,14 @@ import type { Config, Path } from "./types";
 
 type Node = Record<string | number, unknown>;
 
-export function getAt<T = unknown>(obj: unknown, path: Path): T {
+/** Reads `path` out of `obj`, or `undefined` if any step along the way is missing. */
+export function getAt<T = unknown>(obj: unknown, path: Path): T | undefined {
   let cur: unknown = obj;
-  for (const key of path) cur = (cur as Node)[key];
-  return cur as T;
+  for (const key of path) {
+    if (cur == null) return undefined;
+    cur = (cur as Node)[key];
+  }
+  return cur as T | undefined;
 }
 
 function clone(node: unknown): Node {
@@ -53,11 +57,16 @@ export function moveAt<T>(obj: T, listPath: Path, from: number, to: number): T {
   });
 }
 
+/** Consecutive `set` calls sharing a coalesce key merge into one undo step inside this window. */
+const COALESCE_MS = 1000;
+
 export class Draft {
   original: Config;
   config: Config;
   private past: Config[] = [];
   private future: Config[] = [];
+  private coalesceKey: string | null = null;
+  private coalesceAt = 0;
 
   constructor(original: Config) {
     this.original = original;
@@ -76,13 +85,24 @@ export class Draft {
     return this.future.length > 0;
   }
 
-  set(next: Config): void {
-    this.past.push(this.config);
+  /**
+   * Records a new config. Passing the same `coalesceKey` again within
+   * {@link COALESCE_MS} keeps those edits in one undo step, so typing in a field
+   * does not fill the history with a step per keystroke.
+   */
+  set(next: Config, coalesceKey?: string): void {
+    const now = Date.now();
+    const merge =
+      coalesceKey !== undefined && coalesceKey === this.coalesceKey && now - this.coalesceAt < COALESCE_MS;
+    if (!merge) this.past.push(this.config);
     this.future = [];
     this.config = next;
+    this.coalesceKey = coalesceKey ?? null;
+    this.coalesceAt = now;
   }
 
   undo(): void {
+    this.coalesceKey = null;
     const prev = this.past.pop();
     if (prev) {
       this.future.push(this.config);
@@ -91,6 +111,7 @@ export class Draft {
   }
 
   redo(): void {
+    this.coalesceKey = null;
     const next = this.future.pop();
     if (next) {
       this.past.push(this.config);
@@ -103,5 +124,6 @@ export class Draft {
     this.config = original;
     this.past = [];
     this.future = [];
+    this.coalesceKey = null;
   }
 }

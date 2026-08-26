@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newGroup, newStimulus, resolvedEnvelope, uniqueGroupId } from "../src/model";
+import { groupAt, newGroup, newStimulus, resolvedEnvelope, stimulusAt, uniqueGroupId } from "../src/model";
 import type { Config } from "../src/types";
 
 const cfg: Config = {
@@ -18,6 +18,12 @@ describe("model", () => {
     const e = resolvedEnvelope(cfg, s);
     expect(e).toEqual({ attack: 10, decay: 300, sustain: 0.6, release: 120, impulse: false, retrigger: "always", unavailable: "hold", debounce: 5 });
     expect(resolvedEnvelope(cfg, newStimulus("binary_sensor.x")).release).toBe(1800);
+  });
+  it("returns undefined for a path whose node is gone", () => {
+    expect(groupAt(cfg, ["groups", 9])).toBeUndefined();
+    expect(groupAt(cfg, ["groups", 1, "children", 4])).toBeUndefined();
+    expect(stimulusAt(cfg, ["groups", 0, "stimuli", 0])).toBeUndefined();
+    expect(groupAt(cfg, ["groups", 0])?.id).toBe("house");
   });
   it("generates unique ids across the tree", () => {
     expect(uniqueGroupId(cfg, "house")).toBe("house_3");

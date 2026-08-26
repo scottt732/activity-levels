@@ -2,6 +2,7 @@ import { LitElement, css, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { emptyToNull } from "./convert";
 import { fieldErrors, pathKey } from "./errors";
+import { alChange, alSelect } from "./events";
 import { groupAt, parentGroupPath } from "./model";
 import { removeAt, setAt } from "./store";
 import { sharedStyles } from "./styles";
@@ -31,6 +32,9 @@ const HELPERS: Record<string, string> = {
   null_handling: "Whether idle contributors count as zero or drop out of the mean.",
   gain: "Scales this group's contribution to its parent.",
 };
+
+/** Fields the top form owns, checked in order to name the coalescing key. */
+const FORM_FIELDS: (keyof Group)[] = ["id", "name", "area", "mix", "null_handling", "gain"];
 
 const MIX_OPTIONS = [
   { value: "sum", label: "Sum (mixer)" },
@@ -91,12 +95,12 @@ export class AlGroupEditor extends LitElement {
   private computeLabel = (item: FormItem): string => LABELS[item.name] ?? item.name;
   private computeHelper = (item: FormItem): string => HELPERS[item.name] ?? "";
 
-  private emitChange(next: Config): void {
-    this.dispatchEvent(new CustomEvent<Config>("al-change", { detail: next, bubbles: true, composed: true }));
+  private emitChange(next: Config, coalesceKey?: string): void {
+    this.dispatchEvent(alChange(next, coalesceKey));
   }
 
   private emitSelect(path: Path | null): void {
-    this.dispatchEvent(new CustomEvent<Path | null>("al-select", { detail: path, bubbles: true, composed: true }));
+    this.dispatchEvent(alSelect(path));
   }
 
   private onFormChanged(ev: CustomEvent<{ value?: Record<string, unknown> }>): void {
@@ -104,6 +108,7 @@ export class AlGroupEditor extends LitElement {
     const { config, path } = this;
     if (!config || !path) return;
     const group = groupAt(config, path);
+    if (!group) return;
     const v = ev.detail?.value ?? {};
     const merged: Group = {
       ...group,
@@ -114,19 +119,22 @@ export class AlGroupEditor extends LitElement {
       null_handling: (v.null_handling as NullHandling | undefined) ?? group.null_handling,
       gain: typeof v.gain === "number" ? v.gain : group.gain,
     };
-    this.emitChange(setAt(config, path, merged));
+    const field = FORM_FIELDS.find((k) => merged[k] !== group[k]);
+    if (field === undefined) return;
+    this.emitChange(setAt(config, path, merged), `${pathKey(path)}:${field}`);
   }
 
   private setField(key: string, value: unknown): void {
     const { config, path } = this;
     if (!config || !path) return;
-    this.emitChange(setAt(config, [...path, key], value));
+    this.emitChange(setAt(config, [...path, key], value), `${pathKey(path)}:${key}`);
   }
 
   private onDelete(): void {
     const { config, path } = this;
     if (!config || !path) return;
     const group = groupAt(config, path);
+    if (!group) return;
     if (!window.confirm(`Delete group "${group.name || group.id}" and everything in it?`)) return;
     this.emitChange(removeAt(config, path));
     const parent = parentGroupPath(path);
@@ -137,7 +145,7 @@ export class AlGroupEditor extends LitElement {
     const { config, path } = this;
     if (!config || !path || path.length === 0)
       return html`<ha-card><span class="muted">Select a group.</span></ha-card>`;
-    const group = groupAt(config, path) as Group | undefined;
+    const group = groupAt(config, path);
     if (!group) return html`<ha-card><span class="muted">This group no longer exists.</span></ha-card>`;
 
     const isRoot = path.length === 2;

@@ -66,8 +66,11 @@ describe("al-tree", () => {
     expect(selects[0]).toEqual(["groups", 0, "stimuli", 1]);
   });
 
-  it("selects a group from its header row", async () => {
-    await click(".header");
+  it("selects a group from its name button, and leaves the header row unfocusable", async () => {
+    const header = el.shadowRoot?.querySelector(".header");
+    expect(header?.getAttribute("role")).toBeNull();
+    expect(header?.getAttribute("tabindex")).toBeNull();
+    await click(".header button.link");
     expect(selects).toEqual([["groups", 0]]);
     expect(changes).toHaveLength(0);
   });

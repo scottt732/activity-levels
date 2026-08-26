@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Draft, getAt, insertAt, moveAt, removeAt, setAt } from "../src/store";
 import type { Config } from "../src/types";
 
@@ -45,5 +45,62 @@ describe("Draft", () => {
     d.reset(d.config);
     expect(d.dirty).toBe(false);
     expect(d.canUndo).toBe(false);
+  });
+});
+
+describe("getAt", () => {
+  it("returns undefined when a step along the path is missing", () => {
+    expect(getAt(base, ["groups", 5, "children", 0])).toBeUndefined();
+    expect(getAt(base, ["groups", 0, "stimuli", 0, "entity"])).toBeUndefined();
+    expect(getAt(base, ["groups", 0, "id"])).toBe("house");
+  });
+});
+
+describe("Draft coalescing", () => {
+  const PAUSE = 1500;
+  const rename = (d: Draft, name: string, key?: string): void => {
+    d.set(setAt(d.config, ["groups", 0, "name"], name), key);
+  };
+
+  it("merges rapid edits of one field into a single undo step", () => {
+    vi.useFakeTimers();
+    try {
+      const d = new Draft(base);
+      rename(d, "H", "groups/0:name");
+      rename(d, "Ho", "groups/0:name");
+      rename(d, "Hom", "groups/0:name");
+      expect(d.config.groups[0]!.name).toBe("Hom");
+      d.undo();
+      expect(d.config).toBe(base);
+      expect(d.canUndo).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps separate steps for another field, a pause, or an unkeyed edit", () => {
+    vi.useFakeTimers();
+    try {
+      const d = new Draft(base);
+      rename(d, "A", "groups/0:name");
+      d.set(setAt(d.config, ["groups", 0, "id"], "home"), "groups/0:id");
+      d.undo();
+      expect(d.config.groups[0]!.id).toBe("house");
+      expect(d.config.groups[0]!.name).toBe("A");
+
+      vi.advanceTimersByTime(PAUSE);
+      rename(d, "B", "groups/0:name");
+      vi.advanceTimersByTime(PAUSE);
+      rename(d, "C", "groups/0:name");
+      d.undo();
+      expect(d.config.groups[0]!.name).toBe("B");
+
+      rename(d, "D");
+      rename(d, "E");
+      d.undo();
+      expect(d.config.groups[0]!.name).toBe("D");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

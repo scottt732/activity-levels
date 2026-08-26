@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { emptyToNull, formatToList, parseToList } from "./convert";
 import { fieldErrors, pathKey } from "./errors";
+import { alChange } from "./events";
 import { groupAt, parentGroupPath, presetById, resolvedEnvelope, stimulusAt } from "./model";
 import { setAt } from "./store";
 import { sharedStyles } from "./styles";
@@ -39,6 +40,9 @@ const HELPERS: Record<string, string> = {
   key: "Optional name for this voice; defaults to the entity id.",
   envelope: "Preset the overrides below start from.",
 };
+
+/** Fields the top form owns, checked in order to name the coalescing key. */
+const FORM_FIELDS: (keyof Stimulus)[] = ["entity", "gain", "key", "envelope"];
 
 const DURATION_SELECTOR: Selector = { duration: {} };
 const SUSTAIN_SELECTOR: Selector = { number: { min: 0, max: 1, step: 0.05, mode: "slider" } };
@@ -107,8 +111,8 @@ export class AlStimulusEditor extends LitElement {
   private computeLabel = (item: FormItem): string => LABELS[item.name] ?? item.name;
   private computeHelper = (item: FormItem): string => HELPERS[item.name] ?? "";
 
-  private emitChange(next: Config): void {
-    this.dispatchEvent(new CustomEvent<Config>("al-change", { detail: next, bubbles: true, composed: true }));
+  private emitChange(next: Config, coalesceKey?: string): void {
+    this.dispatchEvent(alChange(next, coalesceKey));
   }
 
   private schemaFor(config: Config): FormItem[] {
@@ -130,6 +134,7 @@ export class AlStimulusEditor extends LitElement {
     const { config, path } = this;
     if (!config || !path) return;
     const stimulus = stimulusAt(config, path);
+    if (!stimulus) return;
     const v = ev.detail?.value ?? {};
     const merged: Stimulus = {
       ...stimulus,
@@ -139,13 +144,18 @@ export class AlStimulusEditor extends LitElement {
       key: emptyToNull(v.key as string | null | undefined),
       envelope: emptyToNull(v.envelope as string | null | undefined),
     };
-    this.emitChange(setAt(config, path, merged));
+    const field =
+      formatToList(merged.to) !== formatToList(stimulus.to)
+        ? "to"
+        : FORM_FIELDS.find((k) => merged[k] !== stimulus[k]);
+    if (field === undefined) return;
+    this.emitChange(setAt(config, path, merged), `${pathKey(path)}:${field}`);
   }
 
   private setOverride(name: keyof EnvelopeOverrides, value: OverrideValue): void {
     const { config, path } = this;
     if (!config || !path) return;
-    this.emitChange(setAt(config, [...path, name], value));
+    this.emitChange(setAt(config, [...path, name], value), `${pathKey(path)}:${name}`);
   }
 
   /** Where the effective value comes from when the stimulus does not override it. */
@@ -161,7 +171,7 @@ export class AlStimulusEditor extends LitElement {
     const { config, path } = this;
     if (!config || !path || path.length < 3)
       return html`<ha-card><span class="muted">Select a stimulus.</span></ha-card>`;
-    const stimulus = stimulusAt(config, path) as Stimulus | undefined;
+    const stimulus = stimulusAt(config, path);
     if (!stimulus) return html`<ha-card><span class="muted">This stimulus no longer exists.</span></ha-card>`;
 
     const group = groupAt(config, parentGroupPath(path));

@@ -3,8 +3,9 @@ import { customElement, property, state } from "lit/decorators.js";
 import { getConfig, getState, saveConfig, validateConfig } from "./api";
 import { ensureHaElements } from "./ha-elements";
 import { runSave } from "./save-flow";
-import { Draft } from "./store";
+import { Draft, getAt } from "./store";
 import { sharedStyles } from "./styles";
+import type { AlChangeEvent } from "./events";
 import type { Banner } from "./save-flow";
 import type { Config, HomeAssistant, LiveState, Path, ValidationError } from "./types";
 
@@ -49,6 +50,7 @@ export class ActivityLevelsPanel extends LitElement {
     try {
       const cfg = await getConfig(this.hass);
       this.draft = new Draft(cfg);
+      this.syncSelection();
       this.errors = [];
       this.banner = null;
     } catch (err) {
@@ -56,9 +58,17 @@ export class ActivityLevelsPanel extends LitElement {
     }
   }
 
-  private setConfig(next: Config): void {
-    this.draft?.set(next);
+  private setConfig(next: Config, coalesceKey?: string): void {
+    this.draft?.set(next, coalesceKey);
+    this.syncSelection();
     this.requestUpdate();
+  }
+
+  /** Drops a selection whose node is gone, so the editor pane never renders a dangling path. */
+  private syncSelection(): void {
+    const config = this.draft?.config;
+    if (!config || !this.selection) return;
+    if (getAt(config, this.selection) === undefined) this.selection = null;
   }
 
   private async save(): Promise<void> {
@@ -84,6 +94,7 @@ export class ActivityLevelsPanel extends LitElement {
   private discard(): void {
     if (!this.draft) return;
     this.draft.reset(this.draft.original);
+    this.syncSelection();
     this.errors = [];
     this.banner = null;
     this.requestUpdate();
@@ -91,11 +102,13 @@ export class ActivityLevelsPanel extends LitElement {
 
   private undo(): void {
     this.draft?.undo();
+    this.syncSelection();
     this.requestUpdate();
   }
 
   private redo(): void {
     this.draft?.redo();
+    this.syncSelection();
     this.requestUpdate();
   }
 
@@ -193,7 +206,7 @@ export class ActivityLevelsPanel extends LitElement {
   }
 
   private renderTab(d: Draft) {
-    const onChange = (e: CustomEvent<Config>) => this.setConfig(e.detail);
+    const onChange = (e: AlChangeEvent) => this.setConfig(e.detail, e.coalesceKey);
     switch (this.tab) {
       case "groups":
         return html`<div class="layout ${this.narrow ? "narrow" : ""}">
@@ -230,7 +243,7 @@ export class ActivityLevelsPanel extends LitElement {
   private renderEditor(d: Draft) {
     const selection = this.selection;
     if (!selection) return html`<ha-card><span class="muted">Select a group or stimulus.</span></ha-card>`;
-    const onChange = (e: CustomEvent<Config>) => this.setConfig(e.detail);
+    const onChange = (e: AlChangeEvent) => this.setConfig(e.detail, e.coalesceKey);
     const isStimulus = selection[selection.length - 2] === "stimuli";
     return isStimulus
       ? html`<al-stimulus-editor
