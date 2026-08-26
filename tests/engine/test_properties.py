@@ -9,6 +9,7 @@ from custom_components.activity_levels.engine import (
     Retrigger,
     Voice,
 )
+from custom_components.activity_levels.engine.group import _MIN_DT as MIN_DT
 
 durations = st.floats(min_value=0.0, max_value=3600.0, allow_nan=False, allow_infinity=False)
 positive_durations = st.floats(
@@ -16,7 +17,11 @@ positive_durations = st.floats(
 )
 gains = st.floats(min_value=0.1, max_value=10.0, allow_nan=False, allow_infinity=False)
 fractions = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
-times = st.floats(min_value=0.0, max_value=100_000.0, allow_nan=False, allow_infinity=False)
+# Real deployments run at epoch scale, where a float has ~2.4e-7 s of resolution.
+# Exercise both that and the tidy 0.0 base so precision bugs cannot hide.
+time_bases = st.sampled_from([0.0, 1.7e9])
+offsets = st.floats(min_value=0.0, max_value=100_000.0, allow_nan=False, allow_infinity=False)
+times = st.builds(lambda base, off: base + off, time_bases, offsets)
 
 
 @st.composite
@@ -125,3 +130,60 @@ def test_group_value_within_limits(
     assert 0.0 <= g.value_at(t) <= max_value + 1e-9
     nb = g.next_display_change(t)
     assert nb is None or nb >= t - 1e-9
+
+
+# The scheduler's whole job: between one wake and the next, the displayed value must
+# not move. Anything else is a stale sensor until the following wake.
+@settings(max_examples=150, deadline=None)
+@given(
+    st.lists(st.tuples(st.one_of(smooth_envelopes(), envelopes()), gains), min_size=1, max_size=4),
+    st.sampled_from(list(Mix)),
+    st.integers(min_value=0, max_value=2),
+    st.floats(min_value=0.2, max_value=4.0, allow_nan=False, allow_infinity=False),
+    time_bases,
+    st.floats(min_value=0.0, max_value=600.0, allow_nan=False, allow_infinity=False),
+)
+def test_display_value_is_stable_until_the_next_display_change(
+    specs: list[tuple[Envelope, float]],
+    mix: Mix,
+    precision: int,
+    max_value: float,
+    t0: float,
+    off: float,
+) -> None:
+    voices = [Voice(id=f"v{i}", gain=g, envelope=e) for i, (e, g) in enumerate(specs)]
+    g = Group(
+        id="g",
+        channels=[Channel(v) for v in voices],
+        mix=mix,
+        max_value=max_value,
+        precision=precision,
+    )
+    for v in voices:
+        v.note_on(t0)
+    # Queries mutate, so t must never go backwards: fire, then release, then walk.
+    for v in voices:
+        if v.gate:
+            v.note_off(t0 + off)
+
+    t = t0 + off
+    horizon = t + 7200.0
+    for wake in range(501):
+        assert wake < 500, "next_display_change is not making progress"
+        if t >= horizon:
+            break
+        nxt = g.next_display_change(t)
+        if nxt is None:
+            nxt = horizon
+        assert nxt >= t
+        if nxt != horizon:
+            assert nxt > t
+        # A wake is aimed 1 ms *past* the threshold it targets, so the window that
+        # must be stable ends a millisecond short of it. Over that window the
+        # displayed value has to be exactly constant -- one changed sample is a
+        # sensor reading stale until the following wake.
+        probe = max(nxt - t - MIN_DT, 0.0)
+        base = g.display_value_at(t)
+        for i in range(1, 40):
+            assert g.display_value_at(t + probe * i / 40) == base
+        t = nxt
