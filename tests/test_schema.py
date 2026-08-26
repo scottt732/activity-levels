@@ -18,7 +18,9 @@ def test_house_config_normalizes() -> None:
     assert env["default"]["release"] == 1800.0
     assert env["media"]["attack"] == 10.0 and env["media"]["sustain"] == 0.6
     house = cfg["groups"][0]
-    assert house["mix"] == "max" and house["gain"] == 1.0 and house["max_value"] == 5.0
+    assert house["mix"] == "max" and house["gain"] == 1.0
+    assert house["max_value"] is None
+    assert house["precision"] is None
     lr = house["children"][0]
     assert lr["stimuli"][0]["to"] == ["on"]
     assert lr["stimuli"][1]["to"] == ["playing"]

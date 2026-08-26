@@ -175,22 +175,6 @@ def _path(parts: list[Any]) -> str:
     return "/".join(str(p) for p in parts)
 
 
-def _resolve_group_defaults(cfg: dict[str, Any]) -> None:
-    """Fill in group max_value/precision from the config defaults where unset."""
-    defaults = cfg[CONF_DEFAULTS]
-
-    def walk(group: dict[str, Any]) -> None:
-        if group["max_value"] is None:
-            group["max_value"] = defaults["max_value"]
-        if group["precision"] is None:
-            group["precision"] = defaults["precision"]
-        for child in group["children"]:
-            walk(child)
-
-    for group in cfg[CONF_GROUPS]:
-        walk(group)
-
-
 def _stringify_enums(obj: Any) -> Any:
     if isinstance(obj, dict):
         return {k: _stringify_enums(v) for k, v in obj.items()}
@@ -261,7 +245,6 @@ def validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
         raise ConfigError([{"path": _path(e.path), "message": e.msg} for e in exc.errors]) from exc
     except vol.Invalid as exc:
         raise ConfigError([{"path": _path(exc.path), "message": exc.msg}]) from exc
-    _resolve_group_defaults(cfg)
     errors = _cross_checks(cfg)
     if errors:
         raise ConfigError(errors)
