@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Saving from the panel no longer refreshes the whole UI: the sidebar panel stays registered across integration reloads and is removed only when the integration is deleted.
+- A light going `unavailable`, or Home Assistant restarting, is recorded as *unknown*
+  rather than as the light being switched off. The gap closes any open interval, is left
+  out of that light's observed minutes, and produces no learned switch-on or switch-off
+  times, so restarts no longer teach the profile a nightly habit.
+- Long-term statistics are located through the entity registry, so renaming a group's
+  `sensor.<id>_activity_level` no longer hides its history from the learner. A rebuild
+  that finds no rows for a group warns, naming the statistic id it looked for.
+- Presence simulation waits for Home Assistant to be running, plus a minute to settle,
+  before driving anything: restored switches used to arm while the away entity and every
+  stimulus were still unavailable, which reads as an empty, quiet house.
+- Light membership follows the entity and device registries, so a light added, moved or
+  removed after setup joins or leaves its group without a reload. The group's switch is
+  created by the switch platform at setup and still needs one; that is logged.
+- `plan_for` no longer reports actions the clock had already passed when the plan was
+  sampled, and a plan forced by `simulate_now` expires at midnight instead of overriding
+  the switches for a second day.
+- Forecasts are capped at 2000 points: a request past the cap comes back truncated and
+  says so, and the day-type ribbon stops where the forecast does.
+- The light log batches its writes over five minutes instead of ten seconds, and prunes
+  to `history_days` when it is loaded as well as nightly.
+- A rebuild that waited out a concurrent one reports success rather than "declined".
+- An empty `day_type_precedence` is rejected instead of validating into a configuration
+  that can never label a day.
 
 ### Added
 
@@ -30,4 +53,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overlays each group's level and gate, and each voice's envelope phase and countdown,
   onto the tree and the stimulus editor.
 - **Patterns** — learned expected-activity/anomaly sensors, presence simulation switches,
-  profile/timeseries websocket API.
+  profile/timeseries websocket API. The live state reports how many lights each group
+  owns, so the panel can tell "cannot be simulated" from "not armed".

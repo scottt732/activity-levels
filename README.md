@@ -116,14 +116,40 @@ Workday integration's binary sensor) overrides the weekday/weekend guess when pr
 Each calendar you list under `patterns.calendars` becomes a day type of its own, so a
 vacation week is learned separately from an ordinary one.
 
-**Presence simulation.** With the master switch and a group's own switch on, the group is
-simulated only while **all four** hard preconditions hold: the master switch is on, the
-group's switch is on, the configured `away_entity` is `on`, and the group's *real* level —
-its stimuli only, ignoring anything `activity_levels.trigger` contributed — is zero. When
-any of them drops, the plan is cancelled and the lights are left exactly where they are:
-somebody just came home, and fighting them for the switch is not a feature. Actions are
-never scheduled inside `quiet_hours`. Every executed action is written to a rolling log of
-the last 500, readable from the panel.
+**Presence simulation.** A group is simulated only while **every** one of these holds:
+
+| Precondition | Where it comes from |
+| --- | --- |
+| the master switch is on | `switch.activity_levels_presence_simulation` |
+| the group's own switch is on | `switch.<id>_presence_simulation` |
+| the group is not opted out | `simulation.enabled` in its config |
+| the group owns at least one light | its `area`, plus `simulation.lights.include`/`exclude` |
+| an `away_entity` is configured, and is `on` | `defaults.simulation.away_entity` |
+| the group's *real* level is exactly zero | its stimuli, ignoring `activity_levels.trigger` |
+| the group's profile is ready | `min_days` of history behind it |
+
+Home Assistant also has to be running, plus a minute to settle: at startup the switches
+restore before the rest of the house has published a state, and an occupied house that
+has not finished loading looks exactly like an empty one.
+
+When any precondition drops, the plan is cancelled and the lights are left exactly where
+they are: somebody just came home, and fighting them for the switch is not a feature.
+`quiet_hours` suppresses switch-**on** actions only — an off is always planned, so a light
+is never left stranded on by a window that opened around it. Every executed action is
+written to a rolling log of the last 500, readable from the panel.
+
+Three things worth knowing:
+
+- **A child's trigger button counts as real activity for its parents.** `real_value` drops
+  the group's *own* synthetic trigger voice, not its children's, so pressing the kitchen's
+  test button cancels any simulation running on the house above it.
+- **Do not use a group's own lights as its stimuli.** The simulation switching a light on
+  would raise the group's real level, which cancels the simulation — a loop that stops
+  itself a second after it starts.
+- **Renaming `sensor.<id>_activity_level` is supported.** The learner asks the entity
+  registry where the sensor lives now, so its long-term statistics are followed rather
+  than lost. Excluding it from the recorder is what breaks learning; a rebuild warns,
+  naming the statistic id it found nothing for.
 
 **Plugging in your own producer.** The profile is a plain document, and any producer may
 replace it over the websocket API with `activity_levels/profile/save {profile}` — it is
@@ -189,7 +215,7 @@ defaults:
     workday_entity: null     # binary_sensor from the Workday integration, if you have one
   simulation:
     away_entity: null        # binary_sensor that is `on` when the house is empty
-    quiet_hours: ["01:00", "05:30"]  # no light actions inside this window; null to disable
+    quiet_hours: ["01:00", "05:30"]  # no lights switched *on* in this window; null to disable
 envelopes:
   - id: default
     attack: 0s
