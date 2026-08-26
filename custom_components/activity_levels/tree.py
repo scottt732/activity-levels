@@ -1,0 +1,146 @@
+"""Build the engine tree from a normalized configuration."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Any
+
+from .const import TRIGGER_KEY
+from .engine import Channel, Envelope, Group, Mix, NullHandling, Retrigger, Unavailable, Voice
+
+_ENVELOPE_KEYS = (
+    "attack",
+    "decay",
+    "sustain",
+    "release",
+    "impulse",
+    "retrigger",
+    "unavailable",
+    "debounce",
+)
+
+
+@dataclass(frozen=True)
+class GroupInfo:
+    id: str
+    name: str
+    area: str | None
+    parent_id: str | None
+    root_id: str
+    precision: int
+    max_value: float
+    mix: str
+    group: Group
+    trigger: Voice
+
+
+@dataclass(frozen=True)
+class VoiceRef:
+    entity_id: str
+    to: frozenset[str]
+    voice: Voice
+    group_id: str
+    label: str
+
+
+@dataclass
+class Tree:
+    roots: list[Group] = field(default_factory=list)
+    groups: dict[str, GroupInfo] = field(default_factory=dict)
+    voices_by_entity: dict[str, list[VoiceRef]] = field(default_factory=dict)
+    entity_ids: list[str] = field(default_factory=list)
+    defaults: dict[str, Any] = field(default_factory=dict)
+    order: list[str] = field(default_factory=list)
+
+    def group_order(self) -> list[GroupInfo]:
+        return [self.groups[gid] for gid in self.order]
+
+    def root_of(self, group_id: str) -> Group:
+        return self.groups[self.groups[group_id].root_id].group
+
+    @staticmethod
+    def voice_key(group_id: str, label: str) -> str:
+        return f"{group_id}|{label}"
+
+    def all_voice_refs(self) -> list[VoiceRef]:
+        return [ref for refs in self.voices_by_entity.values() for ref in refs]
+
+
+def resolve_envelope(
+    defaults: Mapping[str, Any],
+    presets: Mapping[str, Mapping[str, Any]],
+    stimulus: Mapping[str, Any],
+) -> Envelope:
+    preset = presets[stimulus.get("envelope") or defaults["envelope"]]
+    resolved: dict[str, Any] = {}
+    for key in _ENVELOPE_KEYS:
+        value = stimulus.get(key)
+        if value is None:
+            value = preset.get(key)
+        if value is None:
+            value = defaults.get(key)
+        if value is not None:
+            resolved[key] = value
+    if "retrigger" in resolved:
+        resolved["retrigger"] = Retrigger(resolved["retrigger"])
+    if "unavailable" in resolved:
+        resolved["unavailable"] = Unavailable(resolved["unavailable"])
+    return Envelope(**resolved)
+
+
+def _trigger_voice(defaults: Mapping[str, Any], presets: Mapping[str, Mapping[str, Any]]) -> Voice:
+    base = resolve_envelope(defaults, presets, {})
+    return Voice(id=TRIGGER_KEY, gain=1.0, envelope=Envelope(release=base.release, impulse=True))
+
+
+def build_tree(config: dict[str, Any]) -> Tree:
+    defaults = config["defaults"]
+    presets = {e["id"]: e for e in config["envelopes"]}
+    tree = Tree(defaults=dict(defaults))
+
+    def build(node: dict[str, Any], parent_id: str | None, root_id: str | None) -> Group:
+        gid = node["id"]
+        rid = root_id or gid
+        tree.order.append(gid)  # pre-order: record this group before its children
+        channels: list[Channel] = []
+        for stim in node["stimuli"]:
+            voice = Voice(
+                id=stim["entity"],
+                gain=stim["gain"],
+                envelope=resolve_envelope(defaults, presets, stim),
+            )
+            channel = Channel(voice, key=stim["key"])
+            channels.append(channel)
+            ref = VoiceRef(stim["entity"], frozenset(stim["to"]), voice, gid, channel.label)
+            tree.voices_by_entity.setdefault(stim["entity"], []).append(ref)
+        for child in node["children"]:
+            channels.append(Channel(build(child, gid, rid), gain=child["gain"]))
+        trigger = _trigger_voice(defaults, presets)
+        channels.append(Channel(trigger, key=TRIGGER_KEY))
+        group = Group(
+            id=gid,
+            channels=channels,
+            mix=Mix(node["mix"]),
+            null_handling=NullHandling(node["null_handling"]),
+            max_value=node["max_value"] if node["max_value"] is not None else defaults["max_value"],
+            precision=node["precision"] if node["precision"] is not None else defaults["precision"],
+        )
+        tree.groups[gid] = GroupInfo(
+            id=gid,
+            name=node["name"],
+            area=node["area"],
+            parent_id=parent_id,
+            root_id=rid,
+            precision=group.precision,
+            max_value=group.max_value,
+            mix=node["mix"],
+            group=group,
+            trigger=trigger,
+        )
+        return group
+
+    for node in config["groups"]:
+        tree.roots.append(build(node, None, None))
+    tree.entity_ids = sorted(tree.voices_by_entity)
+    return tree
