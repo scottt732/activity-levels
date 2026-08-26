@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from math import inf
+from math import inf, isfinite
 from typing import Any
 
 from .envelope import Envelope, Phase, Retrigger, Unavailable
 
 _TIMED = frozenset({Phase.ATTACK, Phase.DECAY, Phase.RELEASE})
+_HELD_BY_GATE = frozenset({Phase.ATTACK, Phase.DECAY, Phase.SUSTAIN})
 
 
 @dataclass
@@ -145,16 +146,31 @@ class Voice:
         }
 
     def restore(self, data: Mapping[str, Any]) -> None:
+        raw_gate = data.get("gate", False)
+        if not isinstance(raw_gate, bool):
+            self.reset()  # 1, "true" and None are not a gate; the snapshot is garbage
+            return
         try:
             phase = Phase(data["phase"])
             start_t = float(data["phase_start_t"])
             start_value = float(data["phase_start_value"])
-            gate = bool(data.get("gate", False))
             raw_last = data.get("last_note_on")
             last = None if raw_last is None else float(raw_last)
         except (KeyError, ValueError, TypeError):
             self.reset()
             return
-        self._enter(phase, start_t, min(max(start_value, 0.0), self.gain))
-        self.gate = gate
+        if not (isfinite(start_t) and isfinite(start_value) and (last is None or isfinite(last))):
+            self.reset()
+            return
+        value = min(max(start_value, 0.0), self.gain)
+        # A snapshot can disagree with itself -- an older schema, a hand-edited store,
+        # a gain that changed. Phase and gate must end up consistent either way.
+        if not raw_gate and phase in _HELD_BY_GATE:
+            phase = Phase.RELEASE if value > 0.0 else Phase.IDLE
+            if phase is Phase.IDLE:
+                value = 0.0
+        elif raw_gate and phase in (Phase.RELEASE, Phase.IDLE):
+            phase = Phase.SUSTAIN  # a gated voice is held, never decaying
+        self._enter(phase, start_t, value)
+        self.gate = raw_gate
         self.last_note_on = last
