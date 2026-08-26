@@ -97,6 +97,11 @@ export class AlOverrideField extends LitElement {
     return formatInherited(this.kind, value);
   }
 
+  /**
+   * `ha-selector` defaults `required` to true, which makes a duration selector spell an
+   * inherited (null) value as `00:00:00` and hides the clear affordance, so it is passed
+   * explicitly: an override that is not set must read as empty.
+   */
   override render() {
     const helper = this.overridden
       ? "Overridden"
@@ -108,6 +113,7 @@ export class AlOverrideField extends LitElement {
           .hass=${this.hass}
           .selector=${this.kind === "boolean" ? BOOLEAN_SELECTOR : this.selector}
           .label=${this.label}
+          .required=${false}
           .value=${toSelectorValue(this.kind, this.value)}
           .helper=${helper}
           @value-changed=${this.onValueChanged}

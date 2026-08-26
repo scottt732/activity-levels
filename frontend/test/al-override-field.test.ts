@@ -61,6 +61,11 @@ describe("al-override-field", () => {
     expect(helper()).toBe("Inherited from defaults: surprise");
   });
 
+  it("leaves the selector optional, so an inherited value stays blank and clearable", () => {
+    const selector = el.shadowRoot?.querySelector("ha-selector") as (HTMLElement & { required?: boolean }) | null;
+    expect(selector?.required).toBe(false);
+  });
+
   it("says so once the field is overridden", async () => {
     el.value = "always";
     await el.updateComplete;
