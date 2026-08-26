@@ -18,9 +18,15 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
-from custom_components.activity_levels.lightlog import LightLog, resolve_group_lights
+from custom_components.activity_levels.lightlog import (
+    SAVE_DELAY,
+    LightLog,
+    resolve_group_lights,
+)
 
-T0 = datetime(2026, 1, 1, tzinfo=UTC).timestamp()
+# local midnight today: the log prunes on load, so a fixed epoch would age out of
+# `history_days` and quietly empty every round-trip test
+T0 = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
 @pytest.fixture
@@ -260,7 +266,7 @@ async def test_record_schedules_a_delayed_save(
 
     assert "activity_levels.lights.entry1" not in hass_storage
 
-    freezer.tick(timedelta(seconds=11))
+    freezer.tick(timedelta(seconds=SAVE_DELAY + 1))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
 
@@ -339,7 +345,7 @@ async def test_prune_schedules_a_delayed_save(
     await log.async_save()  # flush what record() scheduled, so only prune's save is left
 
     log.prune(now)
-    freezer.tick(timedelta(seconds=11))
+    freezer.tick(timedelta(seconds=SAVE_DELAY + 1))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
 
@@ -369,3 +375,31 @@ async def test_backfill_records_unavailable_history_as_unknown(
 
     rows = log.transitions(["light.kitchen"], 0, since.timestamp() + 3600)
     assert [r.on for r in rows] == [True, None]
+
+
+async def test_load_prunes_rows_older_than_history_days(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """A log that outlived its window is trimmed on the way in, not only nightly."""
+    key = "activity_levels.lights.entry1"
+    stale = T0 - 400 * 86400
+    hass_storage[key] = {
+        "version": 1,
+        "key": key,
+        "data": {
+            "rows": [
+                [stale, "light.kitchen", True, None],
+                [T0 - 3600, "light.kitchen", False, None],
+            ]
+        },
+    }
+
+    log = LightLog(hass, "entry1", history_days=180)
+    await log.async_load()
+
+    assert [r.t for r in log.transitions(["light.kitchen"], 0, T0 + 1)] == [T0 - 3600]
+
+
+def test_the_save_delay_is_five_minutes() -> None:
+    """Every light in the house writes to this store; batching them matters."""
+    assert SAVE_DELAY == 300.0

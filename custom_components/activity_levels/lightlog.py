@@ -22,11 +22,15 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from .patterns.model import LightTransition
 
 STORAGE_VERSION = 1
-_SAVE_DELAY = 10.0
+SAVE_DELAY = 300.0
+"""Debounce on the store. Every light in the house lands in this one file and a
+stop flushes it anyway, so batching costs nothing and spares the flash a write per
+switch flip."""
 _SECONDS_PER_DAY = 86400
 
 _Row = tuple[float, str, bool | None, int | None]
@@ -102,7 +106,12 @@ class LightLog:
         self._last_on: dict[str, bool | None] = {}
 
     async def async_load(self) -> None:
-        """Load the store, if any, and reconstruct the per-entity last-state index."""
+        """Load the store, trim it to ``history_days`` and rebuild the last-state index.
+
+        Pruning on the way in as well as nightly matters after an outage: the nightly
+        timer only fires while we are running, so a log left behind by an install that
+        was down for a month would otherwise be carried around whole until 03:00.
+        """
         stored = await self._store.async_load()
         rows: list[_Row] = []
         if stored:
@@ -112,6 +121,7 @@ class LightLog:
         rows.sort(key=lambda row: row[0])
         self._rows = rows
         self._reindex()
+        self.prune(dt_util.utcnow().timestamp())
 
     def _reindex(self) -> None:
         self._last_on = {}
@@ -132,7 +142,7 @@ class LightLog:
             return
         insort(self._rows, (t, entity_id, on, _brightness_of(state)), key=lambda row: row[0])
         self._last_on[entity_id] = on
-        self._store.async_delay_save(self._data, _SAVE_DELAY)
+        self._store.async_delay_save(self._data, SAVE_DELAY)
 
     def transitions(
         self, entity_ids: Iterable[str], start: float, end: float
@@ -152,7 +162,7 @@ class LightLog:
         if len(kept) != len(self._rows):
             self._rows = kept
             self._reindex()
-            self._store.async_delay_save(self._data, _SAVE_DELAY)
+            self._store.async_delay_save(self._data, SAVE_DELAY)
 
     async def async_backfill(self, entity_ids: list[str], since: datetime) -> int:
         """Back-fill transitions for ``entity_ids`` from the recorder's history.
@@ -192,7 +202,7 @@ class LightLog:
 
         if added:
             self._reindex()
-            self._store.async_delay_save(self._data, _SAVE_DELAY)
+            self._store.async_delay_save(self._data, SAVE_DELAY)
         return added
 
     def _data(self) -> dict[str, Any]:
