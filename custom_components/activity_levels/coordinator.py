@@ -279,8 +279,9 @@ class ActivityLevelsCoordinator:
 
     # -- introspection for the websocket API --------------------------------
 
-    def voice_states(self) -> dict[str, list[dict[str, Any]]]:
-        t = self.now()
+    def voice_states(self, t: float | None = None) -> dict[str, list[dict[str, Any]]]:
+        if t is None:
+            t = self.now()
         out: dict[str, list[dict[str, Any]]] = {gid: [] for gid in self.tree.groups}
         for ref in self.tree.all_voice_refs():
             out[ref.group_id].append(self._voice_state(ref.label, ref.entity_id, ref.voice, t))
@@ -289,8 +290,9 @@ class ActivityLevelsCoordinator:
             out[info.id].append(self._voice_state(TRIGGER_KEY, None, info.trigger, t))
         return out
 
-    def group_details(self) -> dict[str, dict[str, Any]]:
-        t = self.now()
+    def group_details(self, t: float | None = None) -> dict[str, dict[str, Any]]:
+        if t is None:
+            t = self.now()
         root_ids = {root.id for root in self.tree.roots}
         return {
             gid: {

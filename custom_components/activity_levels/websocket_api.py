@@ -101,7 +101,10 @@ def ws_state(
     if coordinator is None:
         connection.send_error(msg["id"], "not_loaded", "Activity Levels is not loaded")
         return
-    details = coordinator.group_details()
+    # One frame, one clock: the countdowns the panel draws are measured against the
+    # `now` it is handed, so every value in the frame has to come from that same instant.
+    now = coordinator.now()
+    details = coordinator.group_details(now)
     groups = {
         gid: {
             **asdict(state),
@@ -113,5 +116,5 @@ def ws_state(
     }
     connection.send_result(
         msg["id"],
-        {"now": coordinator.now(), "groups": groups, "voices": coordinator.voice_states()},
+        {"now": now, "groups": groups, "voices": coordinator.voice_states(now)},
     )

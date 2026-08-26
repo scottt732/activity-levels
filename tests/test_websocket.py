@@ -110,6 +110,30 @@ async def test_state_command(
     assert msg["result"]["groups"]["kitchen"]["value"] == pytest.approx(3.0)
 
 
+async def test_state_reads_the_clock_once(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    entry: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One frame, one timestamp: the countdowns are measured against the reported now."""
+    coordinator = entry.runtime_data
+    base = coordinator.now()
+    calls: list[None] = []
+
+    def counting_now() -> float:
+        calls.append(None)  # every read jumps, so a second one would show up in the frame
+        return base + 100.0 * len(calls)
+
+    monkeypatch.setattr(coordinator, "now", counting_now)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/state"})
+    msg = await client.receive_json()
+
+    assert len(calls) == 1
+    assert msg["result"]["now"] == pytest.approx(base + 100.0)
+
+
 async def test_diagnostics(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     diag = await async_get_config_entry_diagnostics(hass, entry)
     assert diag["config"]["groups"][0]["id"] == "house"
