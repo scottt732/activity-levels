@@ -56,6 +56,11 @@ export interface Defaults {
   debounce: number;
   safety_refresh: number;
   min_wake_interval: number;
+  /**
+   * Pattern-learning settings. Typed loosely: the engine owns the full shape and the panel
+   * only reads `min_days`, so an option it does not know about survives a round trip.
+   */
+  patterns?: Record<string, unknown> & { min_days?: number };
 }
 
 export interface Config {

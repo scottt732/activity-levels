@@ -11,3 +11,4 @@ import "./al-strip";
 import "./al-master-strip";
 import "./al-mixer";
 import "./al-timeline";
+import "./al-strip-controls";

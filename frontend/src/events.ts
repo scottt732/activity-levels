@@ -79,3 +79,10 @@ export const alTimelineRange = (detail: TimelineRangeDetail): CustomEvent<Timeli
 /** Asks the shell to flip a group's presence simulation; only it may call the switch. */
 export const alSimToggle = (gid: string, on: boolean): CustomEvent<{ gid: string; on: boolean }> =>
   new CustomEvent<{ gid: string; on: boolean }>("al-sim-toggle", { detail: { gid, on }, bubbles: true, composed: true });
+
+/**
+ * Asks the shell to retrain the pattern profile. No detail: what to rebuild is not the
+ * control row's call — the shell rebuilds every group and re-reads `profile/get`.
+ */
+export const alRebuild = (): CustomEvent<null> =>
+  new CustomEvent<null>("al-rebuild", { detail: null, bubbles: true, composed: true });

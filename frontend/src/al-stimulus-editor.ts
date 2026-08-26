@@ -1,99 +1,30 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { emptyToNull, formatToList, parseToList } from "./convert";
-import { formatDuration } from "./duration";
 import { fieldErrors, pathKey } from "./errors";
 import { alChange } from "./events";
-import { groupAt, parentGroupPath, presetById, resolvedEnvelope, stimulusAt } from "./model";
+import { groupAt, parentGroupPath, resolvedEnvelope, stimulusAt } from "./model";
 import { setAt } from "./store";
+import {
+  OVERRIDES,
+  changedStimulusField,
+  mergeStimulus,
+  overrideSource,
+  phaseCountdown,
+  stimulusData,
+  stimulusHelper,
+  stimulusLabel,
+  stimulusSchema,
+  toTextMatches,
+} from "./stimulus-form";
 import { sharedStyles } from "./styles";
 import "./al-envelope-sketch";
 import "./al-override-field";
-import { BOOLEAN_SELECTOR } from "./al-override-field";
-import type { Selector } from "./al-override-field";
-import type { OverrideKind, OverrideValue } from "./convert";
+import type { StimulusField } from "./stimulus-form";
+import type { OverrideValue } from "./convert";
 import type { PropertyValues } from "lit";
-import type {
-  Config,
-  EnvelopeOverrides,
-  HomeAssistant,
-  LiveState,
-  Path,
-  Stimulus,
-  ValidationError,
-} from "./types";
+import type { Config, EnvelopeOverrides, HomeAssistant, LiveState, Path, ValidationError } from "./types";
 
-interface FormItem {
-  name: string;
-  selector: Selector;
-}
-
-const LABELS: Record<string, string> = {
-  entity: "Entity",
-  to: "Active states",
-  gain: "Gain",
-  key: "Label",
-  envelope: "Envelope preset",
-};
-
-const HELPERS: Record<string, string> = {
-  entity: "The entity whose state drives this stimulus.",
-  to: "Comma-separated states that trigger the envelope, e.g. on, playing.",
-  gain: "How loudly this stimulus contributes to its group.",
-  key: "Optional name for this voice; defaults to the entity id.",
-  envelope: "Preset the overrides below start from.",
-};
-
-/** Fields the top form owns, checked in order to name the coalescing key. */
-const FORM_FIELDS: (keyof Stimulus)[] = ["entity", "gain", "key", "envelope"];
-
-/** Milliseconds stay on: the backend takes sub-second debounce, wake and A/D/R values,
- * and a selector without the field would silently drop the `milliseconds` we hand it. */
-const DURATION_SELECTOR: Selector = { duration: { enable_millisecond: true } };
-const SUSTAIN_SELECTOR: Selector = { number: { min: 0, max: 1, step: 0.05, mode: "slider" } };
-const RETRIGGER_SELECTOR: Selector = {
-  select: {
-    mode: "dropdown",
-    options: [
-      { value: "only_in_release", label: "Only while releasing" },
-      { value: "always", label: "Always" },
-    ],
-  },
-};
-const UNAVAILABLE_SELECTOR: Selector = {
-  select: {
-    mode: "dropdown",
-    options: [
-      { value: "hold", label: "Hold the last value" },
-      { value: "note_off", label: "Release the note" },
-    ],
-  },
-};
-
-/**
- * Named where "defaults" would otherwise be, when the envelope id on a stimulus (or on
- * `defaults.envelope`) matches no preset: the inherited numbers below are then the
- * engine's own fallbacks, not anything the user can see in the Envelopes tab.
- */
-const UNKNOWN_PRESET = "(unknown preset — using built-in defaults)";
-
-interface OverrideItem {
-  name: keyof EnvelopeOverrides;
-  label: string;
-  kind: OverrideKind;
-  selector: Selector;
-}
-
-const OVERRIDES: OverrideItem[] = [
-  { name: "attack", label: "Attack", kind: "duration", selector: DURATION_SELECTOR },
-  { name: "decay", label: "Decay", kind: "duration", selector: DURATION_SELECTOR },
-  { name: "sustain", label: "Sustain", kind: "number", selector: SUSTAIN_SELECTOR },
-  { name: "release", label: "Release", kind: "duration", selector: DURATION_SELECTOR },
-  { name: "impulse", label: "Impulse", kind: "boolean", selector: BOOLEAN_SELECTOR },
-  { name: "retrigger", label: "Retrigger", kind: "select", selector: RETRIGGER_SELECTOR },
-  { name: "unavailable", label: "When unavailable", kind: "select", selector: UNAVAILABLE_SELECTOR },
-  { name: "debounce", label: "Debounce", kind: "duration", selector: DURATION_SELECTOR },
-];
+const FIELDS: StimulusField[] = ["entity", "to", "gain", "key", "envelope"];
 
 /** Editor for one stimulus: what triggers it, and its envelope overrides. */
 @customElement("al-stimulus-editor")
@@ -138,28 +69,11 @@ export class AlStimulusEditor extends LitElement {
     const { config, path } = this;
     const stimulus = config && path ? stimulusAt(config, path) : undefined;
     if (!stimulus) return;
-    if (formatToList(stimulus.to) !== formatToList(parseToList(this.toText))) this.toText = null;
+    if (!toTextMatches(stimulus.to, this.toText)) this.toText = null;
   }
-
-  private computeLabel = (item: FormItem): string => LABELS[item.name] ?? item.name;
-  private computeHelper = (item: FormItem): string => HELPERS[item.name] ?? "";
 
   private emitChange(next: Config, coalesceKey?: string): void {
     this.dispatchEvent(alChange(next, coalesceKey));
-  }
-
-  private schemaFor(config: Config): FormItem[] {
-    const options = [
-      { value: "", label: "(default preset)" },
-      ...config.envelopes.map((e) => ({ value: e.id, label: e.id })),
-    ];
-    return [
-      { name: "entity", selector: { entity: {} } },
-      { name: "to", selector: { text: {} } },
-      { name: "gain", selector: { number: { min: 0.1, max: 10, step: 0.1, mode: "slider" } } },
-      { name: "key", selector: { text: {} } },
-      { name: "envelope", selector: { select: { mode: "dropdown", options } } },
-    ];
   }
 
   private onFormChanged(ev: CustomEvent<{ value?: Record<string, unknown> }>): void {
@@ -169,20 +83,9 @@ export class AlStimulusEditor extends LitElement {
     const stimulus = stimulusAt(config, path);
     if (!stimulus) return;
     const v = ev.detail?.value ?? {};
-    const toText = String(v.to ?? "");
-    this.toText = toText;
-    const merged: Stimulus = {
-      ...stimulus,
-      entity: String(v.entity ?? ""),
-      to: parseToList(toText),
-      gain: typeof v.gain === "number" ? v.gain : stimulus.gain,
-      key: emptyToNull(v.key as string | null | undefined),
-      envelope: emptyToNull(v.envelope as string | null | undefined),
-    };
-    const field =
-      formatToList(merged.to) !== formatToList(stimulus.to)
-        ? "to"
-        : FORM_FIELDS.find((k) => merged[k] !== stimulus[k]);
+    this.toText = String(v.to ?? "");
+    const merged = mergeStimulus(stimulus, v);
+    const field = changedStimulusField(merged, stimulus);
     if (field === undefined) return;
     this.emitChange(setAt(config, path, merged), `${pathKey(path)}:${field}`);
   }
@@ -191,25 +94,6 @@ export class AlStimulusEditor extends LitElement {
     const { config, path } = this;
     if (!config || !path) return;
     this.emitChange(setAt(config, [...path, name], value), `${pathKey(path)}:${name}`);
-  }
-
-  /**
-   * How long this voice stays in its current phase, measured against the payload's own
-   * `now` so a browser clock that disagrees with the server does not skew the countdown.
-   */
-  private countdown(at: number | null): string | null {
-    const now = this.live?.now;
-    if (at === null || now === undefined) return null;
-    return formatDuration(Math.max(0, Math.round((at - now) * 1000) / 1000));
-  }
-
-  /** Where the effective value comes from when the stimulus does not override it. */
-  private sourceOf(config: Config, stimulus: Stimulus, name: keyof EnvelopeOverrides): string {
-    const preset = presetById(config, stimulus.envelope);
-    if (!preset) return UNKNOWN_PRESET;
-    return preset[name] === null || preset[name] === undefined
-      ? "defaults"
-      : (stimulus.envelope ?? config.defaults.envelope);
   }
 
   override render() {
@@ -223,28 +107,21 @@ export class AlStimulusEditor extends LitElement {
     const fields = fieldErrors(this.errors, path);
     const own = this.errors.filter((e) => e.path === pathKey(path));
     const resolved = resolvedEnvelope(config, stimulus);
-    const data: Record<string, unknown> = {
-      entity: stimulus.entity,
-      to: this.toText ?? formatToList(stimulus.to),
-      gain: stimulus.gain,
-      key: stimulus.key ?? "",
-      envelope: stimulus.envelope ?? "",
-    };
     const voice = this.live?.voices[group?.id ?? ""]?.find(
       (v) => v.label === (stimulus.key ?? stimulus.entity),
     );
-    const phaseEnds = this.countdown(voice?.phase_ends ?? null);
+    const phaseEnds = phaseCountdown(this.live?.now, voice?.phase_ends);
 
     return html`
       <ha-card header="Stimulus">
         ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
         <ha-form
           .hass=${this.hass}
-          .data=${data}
-          .schema=${this.schemaFor(config)}
+          .data=${stimulusData(stimulus, this.toText, FIELDS)}
+          .schema=${stimulusSchema(config, FIELDS)}
           .error=${fields}
-          .computeLabel=${this.computeLabel}
-          .computeHelper=${this.computeHelper}
+          .computeLabel=${stimulusLabel}
+          .computeHelper=${stimulusHelper}
           @value-changed=${this.onFormChanged}
         ></ha-form>
         ${voice
@@ -268,7 +145,7 @@ export class AlStimulusEditor extends LitElement {
             .selector=${item.selector}
             .value=${stimulus[item.name] as OverrideValue}
             .inherited=${resolved[item.name] as OverrideValue}
-            .inheritedFrom=${this.sourceOf(config, stimulus, item.name)}
+            .inheritedFrom=${overrideSource(config, stimulus, item.name)}
             .error=${fields[item.name]}
             @value-changed=${(ev: CustomEvent<{ value: OverrideValue }>) =>
               this.setOverride(item.name, ev.detail.value)}
