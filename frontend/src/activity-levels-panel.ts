@@ -32,10 +32,16 @@ export class ActivityLevelsPanel extends LitElement {
   @state() private busy = false;
   @state() private missing: string[] = [];
 
+  /** Which tab the roving tabindex sits on; arrow keys move it without activating. */
+  @state() private tabFocus = 0;
+
   private liveTimer?: number;
+
+  private readonly onVisibilityChange = (): void => this.updateLivePolling();
 
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
     const { ok, missing } = await ensureHaElements();
     this.missing = ok ? [] : missing;
     await this.load();
@@ -43,7 +49,13 @@ export class ActivityLevelsPanel extends LitElement {
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.stopLive();
+  }
+
+  /** Non-admins can look, but every write command is rejected by the backend. */
+  private get readOnly(): boolean {
+    return this.hass?.user?.is_admin === false;
   }
 
   private async load(): Promise<void> {
@@ -75,6 +87,7 @@ export class ActivityLevelsPanel extends LitElement {
     const draft = this.draft;
     if (!draft) return;
     this.busy = true;
+    this.updateLivePolling();
     try {
       const outcome = await runSave(draft.config, {
         validate: (config) => validateConfig(this.hass, config),
@@ -88,6 +101,7 @@ export class ActivityLevelsPanel extends LitElement {
       }
     } finally {
       this.busy = false;
+      this.updateLivePolling();
     }
   }
 
@@ -113,31 +127,92 @@ export class ActivityLevelsPanel extends LitElement {
   }
 
   private toggleLive(on: boolean): void {
-    this.liveOn = on;
     if (on) this.startLive();
     else this.stopLive();
   }
 
   private startLive(): void {
-    this.stopLive();
-    const tick = async (): Promise<void> => {
-      try {
-        this.live = await getState(this.hass);
-      } catch {
-        /* transient websocket failure: keep the last frame and retry */
-      }
-    };
-    void tick();
-    this.liveTimer = window.setInterval(() => void tick(), LIVE_POLL_MS);
+    this.liveOn = true;
+    this.updateLivePolling();
   }
 
   private stopLive(): void {
-    if (this.liveTimer !== undefined) {
-      clearInterval(this.liveTimer);
-      this.liveTimer = undefined;
-    }
+    this.liveOn = false;
+    this.clearLiveTimer();
     this.live = null;
   }
+
+  /**
+   * Starts or pauses the poll to match the current conditions. It runs only while the
+   * toggle is on, no save is in flight - a reload is about to replace the config the
+   * frame describes - and the tab is actually on screen. Pausing keeps the last frame,
+   * so resuming redraws immediately rather than blanking the meters.
+   */
+  private updateLivePolling(): void {
+    const shouldPoll = this.liveOn && !this.busy && document.visibilityState === "visible";
+    if (!shouldPoll) {
+      this.clearLiveTimer();
+      return;
+    }
+    if (this.liveTimer !== undefined) return;
+    void this.pollLive();
+    this.liveTimer = window.setInterval(() => void this.pollLive(), LIVE_POLL_MS);
+  }
+
+  private async pollLive(): Promise<void> {
+    try {
+      this.live = await getState(this.hass);
+    } catch {
+      /* transient websocket failure: keep the last frame and retry */
+    }
+  }
+
+  private clearLiveTimer(): void {
+    if (this.liveTimer === undefined) return;
+    clearInterval(this.liveTimer);
+    this.liveTimer = undefined;
+  }
+
+  private selectTab(index: number): void {
+    const next = TABS[index];
+    if (next === undefined) return;
+    this.tab = next;
+    this.tabFocus = index;
+  }
+
+  /** Moves the roving tabindex, and the focus with it, without changing the shown tab. */
+  private focusTab(index: number): void {
+    this.tabFocus = index;
+    void this.updateComplete.then(() => {
+      this.renderRoot.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus();
+    });
+  }
+
+  /** Manual-activation tablist: arrows (and Home/End) move, Enter/Space activate. */
+  private onTabsKeydown = (ev: KeyboardEvent): void => {
+    const last = TABS.length - 1;
+    switch (ev.key) {
+      case "ArrowRight":
+        this.focusTab((this.tabFocus + 1) % TABS.length);
+        break;
+      case "ArrowLeft":
+        this.focusTab((this.tabFocus + last) % TABS.length);
+        break;
+      case "Home":
+        this.focusTab(0);
+        break;
+      case "End":
+        this.focusTab(last);
+        break;
+      case "Enter":
+      case " ":
+        this.selectTab(this.tabFocus);
+        break;
+      default:
+        return;
+    }
+    ev.preventDefault();
+  };
 
   override render() {
     if (this.missing.length) return this.renderMissing();
@@ -159,23 +234,30 @@ export class ActivityLevelsPanel extends LitElement {
             <ha-icon icon="mdi:redo"></ha-icon>
           </ha-icon-button>
           <ha-button appearance="plain" .disabled=${!d?.dirty || this.busy} @click=${this.discard}>Discard</ha-button>
-          <ha-button .disabled=${!d?.dirty || this.busy} @click=${this.save}>${d?.dirty ? "Save" : "Saved"}</ha-button>
+          <ha-button .disabled=${!d?.dirty || this.busy || this.readOnly} @click=${this.save}
+            >${d?.dirty ? "Save" : "Saved"}</ha-button
+          >
         </div>
-        ${this.renderBanner()}
-        <div class="tabs">
+        ${this.renderBanner()} ${this.renderReadOnly()}
+        <div class="tabs" role="tablist" aria-label="Sections" @keydown=${this.onTabsKeydown}>
           ${TABS.map(
-            (t) => html`<div
+            (t, i) => html`<button
+              type="button"
+              id="tab-${t}"
               class="tab ${this.tab === t ? "active" : ""}"
               role="tab"
-              @click=${() => {
-                this.tab = t;
-              }}
+              aria-selected=${this.tab === t ? "true" : "false"}
+              aria-controls="tabpanel"
+              tabindex=${i === this.tabFocus ? 0 : -1}
+              @click=${() => this.selectTab(i)}
             >
               ${t[0]!.toUpperCase() + t.slice(1)}
-            </div>`,
+            </button>`,
           )}
         </div>
-        ${d ? this.renderTab(d) : html`<p style="padding:16px">Loading…</p>`}
+        <div id="tabpanel" role="tabpanel" aria-labelledby="tab-${this.tab}">
+          ${d ? this.renderTab(d) : html`<p style="padding:16px">Loading…</p>`}
+        </div>
       </ha-top-app-bar-fixed>
     `;
   }
@@ -190,6 +272,14 @@ export class ActivityLevelsPanel extends LitElement {
         </p>
       </div>
     `;
+  }
+
+  private renderReadOnly() {
+    if (!this.readOnly) return nothing;
+    return html`<ha-alert alert-type="info"
+      >You are signed in as a non-administrator, so this panel is read-only: saving is rejected by Home
+      Assistant. Ask an administrator to make configuration changes.</ha-alert
+    >`;
   }
 
   private renderBanner() {

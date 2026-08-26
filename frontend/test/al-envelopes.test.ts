@@ -152,3 +152,25 @@ describe("al-envelopes", () => {
     expect(form().data?.id).toBe("preset_2");
   });
 });
+
+describe("al-envelopes: id warnings", () => {
+  /** Text of the warnings the editor pane is showing, if any. */
+  const warnings = (): string[] =>
+    [...(el.shadowRoot?.querySelectorAll('ha-alert[alert-type="warning"]') ?? [])].map(
+      (n) => n.textContent?.trim() ?? "",
+    );
+
+  it("says nothing about an id that is unique and non-empty", () => {
+    expect(warnings()).toEqual([]);
+  });
+
+  it("warns when the id duplicates another preset's", async () => {
+    await edit({ id: "media" });
+    expect(warnings().join(" ")).toContain('Another preset already uses the id "media"');
+  });
+
+  it("warns when the id has been cleared", async () => {
+    await edit({ id: "" });
+    expect(warnings().join(" ")).toContain("needs an id");
+  });
+});

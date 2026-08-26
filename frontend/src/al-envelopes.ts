@@ -291,9 +291,12 @@ export class AlEnvelopes extends LitElement {
       impulse: preset.impulse,
     };
 
+    const idWarning = describeIdProblem(config, index, preset);
+
     return html`
       <ha-card header="Envelope preset">
         ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
+        ${idWarning ? html`<ha-alert alert-type="warning">${idWarning}</ha-alert>` : nothing}
         <ha-form
           .hass=${this.hass}
           .data=${data}
@@ -325,6 +328,20 @@ export class AlEnvelopes extends LitElement {
       </ha-card>
     `;
   }
+}
+
+/**
+ * Flags an id that cannot address this preset: blank, or shared with another one. Saving
+ * rejects both, but the warning lands while the id is still being typed - and a duplicate
+ * is worth naming, since `renamePreset` deliberately stops following references while two
+ * presets answer to the same id.
+ */
+function describeIdProblem(config: Config, index: number, preset: EnvelopePreset): string | null {
+  if (preset.id.trim() === "") return "This preset needs an id before stimuli can name it.";
+  if (config.envelopes.some((e, i) => i !== index && e.id === preset.id)) {
+    return `Another preset already uses the id "${preset.id}". Ids must be unique, and a reference follows a rename only while the id it names is unambiguous.`;
+  }
+  return null;
 }
 
 /** Explains, in one sentence, why a preset cannot be deleted yet. */

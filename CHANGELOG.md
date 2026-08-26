@@ -21,3 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state restored across restarts, and diagnostics.
 - **Websocket API** — `activity_levels/config/get`, `config/validate`,
   `config/save` and `state` for the sidebar panel, all admin-only.
+- **Panel** — sidebar panel for editing groups, stimuli, envelopes and defaults; live
+  view. Edits are a draft with undo, redo and discard; saving validates first and shows
+  problems on the fields that caused them, then reloads the integration. The live view
+  overlays each group's level and gate, and each voice's envelope phase and countdown,
+  onto the tree and the stimulus editor.

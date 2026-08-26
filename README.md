@@ -24,10 +24,41 @@ is recomputed recursively at every level whenever a leaf voice changes.
 2. Install "Activity Levels" from HACS, then restart Home Assistant if prompted.
 3. Go to **Settings → Integrations → Add Integration**, search for "Activity Levels",
    and add it.
-4. Configuration is edited in a sidebar panel *coming in the next release*. Until then,
-   edit the config via the `activity_levels/config/save` websocket command (see below)
-   or by calling it from **Developer Tools → Actions/Template** with a JSON payload
-   matching the [configuration reference](#configuration-reference).
+4. Open **Activity Levels** in the sidebar to configure it (see [The panel](#the-panel)).
+   Everything the panel edits is also reachable over the websocket API — the
+   `activity_levels/config/get`, `config/validate` and `config/save` commands take and
+   return the [configuration reference](#configuration-reference) shape.
+
+## The panel
+
+The sidebar entry opens an admin-only editor for the whole configuration:
+
+- **Groups** — the tree of groups on the left, the editor for whatever you select on the
+  right. Each group row can add a stimulus, add a child group, move itself among its
+  siblings, or delete itself and everything under it. A red badge on a row counts the
+  validation problems inside it.
+- **Envelopes** — the preset library, with a sketch of the selected preset's ADSR shape.
+  Renaming a preset rewrites every stimulus and default that names it; a preset something
+  still points at cannot be deleted until those references move.
+- **Defaults** — the site-wide fallbacks every group, preset and stimulus inherits from.
+
+Edits are held as a draft: **Undo**/**Redo** walk it, **Discard** throws it away, and
+**Save** validates first — problems come back attached to the fields that caused them —
+then writes the configuration and reloads the integration, which re-creates entities and
+restores their state. The **Live** switch polls the engine every two seconds and overlays
+the current level, gate and envelope phase onto the tree and the stimulus editor; it
+pauses while a save is in flight and while the browser tab is in the background.
+
+### Known limitations
+
+- Reordering is done with the up/down buttons on each row; there is no drag and drop.
+- A group's `area` is applied when its device is first created, so changing it later does
+  not move an existing device.
+- Renaming a group's `id` re-creates that group's entities under the new id; history from
+  the old entities is not carried over.
+- On a cold page load the panel can report that some Home Assistant UI components did not
+  load. Home Assistant registers them lazily; visiting **Settings → Devices & services**
+  once and reloading the page is enough to bring them in.
 
 ## Entities
 
@@ -101,6 +132,9 @@ uv run pytest
 uv run ruff check .
 uv run mypy
 ```
+
+The panel lives in [`frontend/`](frontend/README.md), which covers `pnpm dev` against a
+running Home Assistant and why the built bundle is committed.
 
 ## License
 

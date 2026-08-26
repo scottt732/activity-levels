@@ -1,12 +1,23 @@
 import { LitElement, css, html, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
+import { formatDuration } from "./duration";
 import { pathKey, subtreeErrorCount } from "./errors";
 import { alChange, alSelect } from "./events";
 import { newGroup, newStimulus, parentGroupPath, parentListPath, uniqueGroupId } from "./model";
 import { insertAt, moveAt, removeAt } from "./store";
 import { sharedStyles } from "./styles";
-import type { Config, Group, HomeAssistant, LiveState, Path, Stimulus, ValidationError } from "./types";
+import type {
+  Config,
+  Group,
+  GroupLive,
+  HomeAssistant,
+  LiveState,
+  Path,
+  Stimulus,
+  ValidationError,
+  VoiceLive,
+} from "./types";
 
 const stop = (ev: Event): void => ev.stopPropagation();
 
@@ -86,6 +97,9 @@ export class AlTree extends LitElement {
       .empty {
         padding: 4px;
       }
+      .blurb {
+        margin: 0 0 12px;
+      }
     `,
   ];
 
@@ -153,17 +167,53 @@ export class AlTree extends LitElement {
     this.emitSelect(parent.length ? parent : null);
   }
 
+  /**
+   * Countdown to a live timestamp, measured against the payload's own `now` so a browser
+   * clock that disagrees with the server does not show a negative or inflated wait.
+   */
+  private countdown(at: number | null): string | null {
+    const now = this.live?.now;
+    if (at === null || now === undefined) return null;
+    return formatDuration(Math.max(0, Math.round((at - now) * 1000) / 1000));
+  }
+
+  /** Tooltip for a voice's phase chip: what it is doing, and how long that lasts. */
+  private voiceTitle(voice: VoiceLive): string {
+    const ends = this.countdown(voice.phase_ends);
+    return ends === null ? `Phase: ${voice.phase}` : `Phase: ${voice.phase}, ends in ${ends}`;
+  }
+
+  /** Tooltip for a group's meter: the displayed value, the unrounded mix, and the next wake. */
+  private meterTitle(live: GroupLive, max: number, isRoot: boolean): string {
+    const parts = [`${live.value} of ${max}`, `raw ${live.raw_value.toFixed(3)}`];
+    const wake = isRoot ? this.countdown(live.next_wake) : null;
+    if (wake !== null) parts.push(`next wake in ${wake}`);
+    return parts.join(" · ");
+  }
+
   override render() {
     const config = this.config;
     if (!config) return html`<ha-card><span class="muted">Loading…</span></ha-card>`;
+    if (config.groups.length === 0) return this.renderEmpty();
     return html`
       <ha-card>
         ${config.groups.map((g, i) => this.renderGroup(config, g, ["groups", i], 0, i, config.groups.length))}
-        ${config.groups.length === 0
-          ? html`<p class="muted">No groups yet. Add one to get started.</p>`
-          : nothing}
         <div class="row">
           <ha-button @click=${() => this.addGroup(["groups"], config.groups.length)}>Add group</ha-button>
+        </div>
+      </ha-card>
+    `;
+  }
+
+  private renderEmpty(): TemplateResult {
+    return html`
+      <ha-card>
+        <p class="muted blurb">
+          Nothing is configured yet. A group is a room, a floor, or the whole house: it mixes the stimuli you
+          give it into one activity level, and groups can nest inside each other.
+        </p>
+        <div class="row">
+          <ha-button @click=${() => this.addGroup(["groups"], 0)}>Add your first group</ha-button>
         </div>
       </ha-card>
     `;
@@ -195,7 +245,7 @@ export class AlTree extends LitElement {
           </button>
           ${count ? html`<span class="badge" title="${count} problem(s) in this group">${count}</span>` : nothing}
           ${live
-            ? html`<div class="meter" title="${live.value} of ${max}">
+            ? html`<div class="meter" title=${this.meterTitle(live, max, depth === 0)}>
                   <div style="width: ${pct}%"></div>
                 </div>
                 <span class="dot ${live.gated ? "gated" : ""}" title=${live.gated ? "Gate open" : "Gate closed"}></span>`
@@ -235,7 +285,11 @@ export class AlTree extends LitElement {
           ${group.stimuli.map((s, i) =>
             this.renderStimulus(s, [...path, "stimuli", i], i, group.stimuli.length, group.id),
           )}
-          ${group.stimuli.length === 0 ? html`<div class="muted empty">No stimuli yet.</div>` : nothing}
+          ${group.stimuli.length === 0
+            ? html`<div class="muted empty">
+                No stimuli yet — use the + button above to point this group at an entity.
+              </div>`
+            : nothing}
           <div class="children">
             ${group.children.map((c, i) =>
               this.renderGroup(config, c, [...path, "children", i], depth + 1, i, group.children.length),
@@ -270,7 +324,7 @@ export class AlTree extends LitElement {
         ${count ? html`<span class="badge" title="${count} problem(s)">${count}</span>` : nothing}
         ${entity ? html`<span class="muted chip">${entity.state}</span>` : nothing}
         ${voice
-          ? html`<span class="muted chip">${voice.phase}</span>
+          ? html`<span class="chip phase ${voice.phase}" title=${this.voiceTitle(voice)}>${voice.phase}</span>
               <span class="muted chip">${voice.value.toFixed(2)}</span>`
           : nothing}
         <div class="row" @click=${stop}>

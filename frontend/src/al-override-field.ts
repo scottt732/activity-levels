@@ -18,6 +18,17 @@ export const BOOLEAN_SELECTOR: Selector = {
   },
 };
 
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+/** The label a `select` selector shows for one of its stored values, if it has one. */
+export function optionLabel(selector: Selector, value: string): string | undefined {
+  const select = selector.select as { options?: readonly SelectOption[] } | undefined;
+  return select?.options?.find((o) => o.value === value)?.label;
+}
+
 /**
  * One nullable override: an `ha-selector` plus a reset button. `null` means
  * "inherit", and the helper text names where the effective value comes from.
@@ -55,8 +66,13 @@ export class AlOverrideField extends LitElement {
     return this.value !== null && this.value !== undefined;
   }
 
+  /**
+   * Fired on this element only. Every parent binds `@value-changed` directly on the field,
+   * and a bubbling copy would also reach the `ha-form` above it, which reads the payload as
+   * one of its own fields changing.
+   */
   private emit(value: OverrideValue): void {
-    this.dispatchEvent(new CustomEvent("value-changed", { detail: { value }, bubbles: true, composed: true }));
+    this.dispatchEvent(new CustomEvent("value-changed", { detail: { value } }));
   }
 
   private onValueChanged(ev: CustomEvent<{ value?: unknown }>): void {
@@ -68,10 +84,23 @@ export class AlOverrideField extends LitElement {
     this.emit(null);
   }
 
+  /**
+   * The inherited value as the dropdown would spell it: a `select` stores enum ids like
+   * `only_in_release`, and the helper should read the way the options do.
+   */
+  private describeInherited(): string {
+    const value = this.inherited;
+    if (this.kind === "select" && value !== null && value !== undefined) {
+      const label = optionLabel(this.selector, String(value));
+      if (label !== undefined) return label;
+    }
+    return formatInherited(this.kind, value);
+  }
+
   override render() {
     const helper = this.overridden
       ? "Overridden"
-      : `Inherited from ${this.inheritedFrom}: ${formatInherited(this.kind, this.inherited)}`;
+      : `Inherited from ${this.inheritedFrom}: ${this.describeInherited()}`;
     return html`
       <div class="row">
         <ha-selector

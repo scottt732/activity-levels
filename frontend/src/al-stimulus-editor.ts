@@ -1,6 +1,7 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { emptyToNull, formatToList, parseToList } from "./convert";
+import { formatDuration } from "./duration";
 import { fieldErrors, pathKey } from "./errors";
 import { alChange } from "./events";
 import { groupAt, parentGroupPath, presetById, resolvedEnvelope, stimulusAt } from "./model";
@@ -68,6 +69,13 @@ const UNAVAILABLE_SELECTOR: Selector = {
     ],
   },
 };
+
+/**
+ * Named where "defaults" would otherwise be, when the envelope id on a stimulus (or on
+ * `defaults.envelope`) matches no preset: the inherited numbers below are then the
+ * engine's own fallbacks, not anything the user can see in the Envelopes tab.
+ */
+const UNKNOWN_PRESET = "(unknown preset — using built-in defaults)";
 
 interface OverrideItem {
   name: keyof EnvelopeOverrides;
@@ -185,10 +193,20 @@ export class AlStimulusEditor extends LitElement {
     this.emitChange(setAt(config, [...path, name], value), `${pathKey(path)}:${name}`);
   }
 
+  /**
+   * How long this voice stays in its current phase, measured against the payload's own
+   * `now` so a browser clock that disagrees with the server does not skew the countdown.
+   */
+  private countdown(at: number | null): string | null {
+    const now = this.live?.now;
+    if (at === null || now === undefined) return null;
+    return formatDuration(Math.max(0, Math.round((at - now) * 1000) / 1000));
+  }
+
   /** Where the effective value comes from when the stimulus does not override it. */
   private sourceOf(config: Config, stimulus: Stimulus, name: keyof EnvelopeOverrides): string {
     const preset = presetById(config, stimulus.envelope);
-    if (!preset) return "defaults";
+    if (!preset) return UNKNOWN_PRESET;
     return preset[name] === null || preset[name] === undefined
       ? "defaults"
       : (stimulus.envelope ?? config.defaults.envelope);
@@ -215,6 +233,7 @@ export class AlStimulusEditor extends LitElement {
     const voice = this.live?.voices[group?.id ?? ""]?.find(
       (v) => v.label === (stimulus.key ?? stimulus.entity),
     );
+    const phaseEnds = this.countdown(voice?.phase_ends ?? null);
 
     return html`
       <ha-card header="Stimulus">
@@ -231,8 +250,11 @@ export class AlStimulusEditor extends LitElement {
         ${voice
           ? html`<div class="row live">
               <span class="muted">Live</span>
-              <span class="chip">${voice.phase}</span>
+              <span class="chip phase ${voice.phase}">${voice.phase}</span>
               <span class="chip">${voice.value.toFixed(2)}</span>
+              ${phaseEnds !== null
+                ? html`<span class="muted chip">ends in ${phaseEnds}</span>`
+                : nothing}
               <span class="dot ${voice.gate ? "gated" : ""}" title=${voice.gate ? "Gate open" : "Gate closed"}></span>
             </div>`
           : nothing}
