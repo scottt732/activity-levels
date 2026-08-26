@@ -10,6 +10,7 @@ import {
   saveConfig,
   validateConfig,
 } from "./api";
+import { DEFAULT_MIN_DAYS } from "./constants";
 import { simSwitchId } from "./entities";
 import { ensureHaElements } from "./ha-elements";
 import { groupAt } from "./model";
@@ -43,9 +44,6 @@ const PROFILE_TTL_MS = 5 * 60_000;
 const RELOAD_GRACE_MS = 1500;
 /** Where the timeline toolbar's choices survive a reload. */
 const TIMELINE_KEY = "activity_levels.timeline";
-/** The engine's own default training window, used when the config does not name one. */
-const DEFAULT_MIN_DAYS = 14;
-
 const RANGES: Range[] = ["24h", "7d", "30d"];
 const HORIZONS: Horizon[] = ["off", "24h", "7d"];
 const DEFAULT_TIMELINE: TimelineRangeDetail = { range: "7d", horizon: "24h", showChannels: true, showLights: true };

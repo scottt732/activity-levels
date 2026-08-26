@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { DEFAULT_MIN_DAYS } from "./constants";
 import { expectedSensorId } from "./entities";
 import { alRebuild } from "./events";
 import { sharedStyles } from "./styles";
@@ -8,9 +9,6 @@ import type { Config, Group, HomeAssistant, ProfileState, SimulationLog, Simulat
 
 /** How many simulated light changes the log shows; the endpoint returns at most this many. */
 const LOG_ROWS = 50;
-
-/** The engine's own default training window, used when the config does not name one. */
-const DEFAULT_MIN_DAYS = 14;
 
 interface Row {
   id: string;

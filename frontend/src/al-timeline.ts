@@ -1,6 +1,7 @@
 import { LitElement, css, html, nothing, svg } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { getTimeseries } from "./api";
+import { DEFAULT_MIN_DAYS } from "./constants";
 import { alTimelineRange } from "./events";
 import { sharedStyles } from "./styles";
 import {
@@ -36,9 +37,6 @@ const REFETCH_MS = 60_000;
 const CACHE_TTL_MS = 60_000;
 /** Enough for a few strips at a few ranges; past that the oldest entries are dropped. */
 const CACHE_MAX = 32;
-
-/** The engine's own default training window, used when the config does not name one. */
-const DEFAULT_MIN_DAYS = 14;
 
 const RANGES: Range[] = ["24h", "7d", "30d"];
 const HORIZONS: Horizon[] = ["off", "24h", "7d"];

@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { DEFAULT_MIN_DAYS } from "./constants";
 import { anomalySensorId, expectedSensorId, simSwitchId } from "./entities";
 import { fieldErrors, pathKey } from "./errors";
 import { alChange, alRebuild, alSimToggle } from "./events";
@@ -60,9 +61,6 @@ const BUS_FIELDS: GroupField[] = ["name", "mix", "null_handling", "gain"];
 
 /** How many simulation actions the status card shows before it stops being a summary. */
 const LOG_ROWS = 5;
-
-/** The engine's own default training window, used when the config does not name one. */
-const DEFAULT_MIN_DAYS = 14;
 
 /** A stimulus is a channel; anything else selectable in the mixer is a bus. */
 const isChannel = (path: Path): boolean => path[path.length - 2] === "stimuli";
