@@ -9,12 +9,13 @@ own randomness (that is covered by ``tests/patterns/test_planner.py``).
 from __future__ import annotations
 
 import copy
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import HomeAssistant, State
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import CoreState, HomeAssistant, State
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
@@ -29,7 +30,11 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.activity_levels.const import DOMAIN
 from custom_components.activity_levels.patterns.profile import SLOTS
 from custom_components.activity_levels.schema import validate_config
-from custom_components.activity_levels.simulation import MAX_LOG_ROWS, simlog_storage_key
+from custom_components.activity_levels.simulation import (
+    MAX_LOG_ROWS,
+    STARTUP_GRACE,
+    simlog_storage_key,
+)
 from tests.fixtures import house_config
 
 LIGHT = "light.kitchen"
@@ -104,10 +109,18 @@ async def _setup(
     away: str = "on",
     restore: bool = False,
     lights: dict[str, Any] | None = None,
+    settle: bool = True,
 ) -> MockConfigEntry:
-    """A loaded entry whose kitchen owns ``light.kitchen`` and a ready profile."""
+    """A loaded entry whose kitchen owns ``light.kitchen`` and a ready profile.
+
+    ``settle`` lets the runtime's startup grace elapse, which every test that expects
+    a plan to run needs; pass ``False`` to look at the house mid-startup.
+    """
     await hass.config.async_set_time_zone("UTC")
-    freezer.move_to(when)
+    # start the clock a grace period early so that letting it run out lands exactly on
+    # `when`: the plans these tests assert on are sampled from the slot we are in
+    begin = datetime.fromisoformat(when).replace(tzinfo=UTC)
+    freezer.move_to(begin - timedelta(seconds=STARTUP_GRACE + 1) if settle else begin)
 
     area = ar.async_get(hass).async_get_or_create("kitchen")
     entities = er.async_get(hass)
@@ -139,7 +152,16 @@ async def _setup(
         _profile(dt_util.utcnow().timestamp(), lights=lights)
     )
     await hass.async_block_till_done()
+    if settle:
+        await _settle(hass, freezer)
     return entry
+
+
+async def _settle(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
+    """Let the runtime's post-startup grace period run out."""
+    freezer.tick(timedelta(seconds=STARTUP_GRACE + 1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
 
 
 async def _switch(hass: HomeAssistant, entity_id: str, on: bool) -> None:
@@ -542,6 +564,7 @@ async def test_the_log_is_capped_and_newest_first(
     }
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
+    await _settle(hass, freezer)  # a reload restarts the runtime, and its grace with it
     simulation = entry.runtime_data.patterns.simulation
 
     rows = simulation.log(limit=MAX_LOG_ROWS * 2)
@@ -554,3 +577,48 @@ async def test_the_log_is_capped_and_newest_first(
     rows = simulation.log(limit=MAX_LOG_ROWS * 2)
     assert len(rows) == MAX_LOG_ROWS
     assert rows[0]["entity_id"] == LIGHT
+
+
+# -- startup grace -------------------------------------------------------------
+
+
+async def test_restored_switches_wait_for_the_startup_grace(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Nothing is driven while the house is still coming up around us.
+
+    Switches restore to on before most integrations have published a state, so the
+    away entity and every stimulus still read as absent or unavailable and a busy
+    group looks empty.
+    """
+    entry = await _setup(hass, freezer, restore=True, settle=False)
+    simulation = entry.runtime_data.patterns.simulation
+
+    assert simulation.global_on is True
+    assert simulation.group_on("kitchen") is True
+    assert simulation.is_active("kitchen") is False
+    assert simulation.blocked_reason("kitchen") == "Home Assistant is still starting up"
+
+    await _settle(hass, freezer)
+
+    assert simulation.blocked_reason("kitchen") is None
+    assert simulation.is_active("kitchen") is True
+
+
+async def test_the_grace_only_starts_once_home_assistant_has(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    hass.set_state(CoreState.not_running)
+    entry = await _setup(hass, freezer, restore=True, settle=False)
+    simulation = entry.runtime_data.patterns.simulation
+
+    await _settle(hass, freezer)  # the delay alone means nothing while HA is starting
+    assert simulation.is_active("kitchen") is False
+
+    hass.set_state(CoreState.running)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+    assert simulation.is_active("kitchen") is False  # the grace starts now
+
+    await _settle(hass, freezer)
+    assert simulation.is_active("kitchen") is True

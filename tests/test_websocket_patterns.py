@@ -12,11 +12,12 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
+from freezegun.api import FrozenDateTimeFactory
 from homeassistant.components.recorder.models import StatisticMeanType
 from homeassistant.components.recorder.statistics import async_import_statistics
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
@@ -27,6 +28,7 @@ from custom_components.activity_levels.patterns.profile import SLOTS
 from custom_components.activity_levels.schema import validate_config
 from custom_components.activity_levels.simulation import (
     SIMLOG_STORAGE_VERSION,
+    STARTUP_GRACE,
     simlog_storage_key,
 )
 from tests.fixtures import house_config
@@ -322,8 +324,15 @@ async def test_timeseries_unknown_group(
 
 
 async def test_simulation_log_reports_entries_and_preconditions(
-    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, entry: MockConfigEntry
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
+    # past the runtime's startup grace, so the switches are the first thing in the way
+    freezer.tick(timedelta(seconds=STARTUP_GRACE + 1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
     client = await hass_ws_client(hass)
     await client.send_json_auto_id({"type": f"{DOMAIN}/simulation/log"})
     msg = await client.receive_json()

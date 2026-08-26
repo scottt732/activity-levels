@@ -19,9 +19,17 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_ENTITY_ID, STATE_ON
-from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STARTED, STATE_ON
+from homeassistant.core import (
+    CALLBACK_TYPE,
+    CoreState,
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    callback,
+)
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_point_in_time,
     async_track_state_change_event,
     async_track_time_change,
@@ -44,6 +52,14 @@ MAX_LOG_ROWS = 500
 """How many executed actions the log keeps; older rows are dropped on write."""
 SAVE_DELAY = 10.0
 DEFAULT_LOG_LIMIT = 50
+
+STARTUP_GRACE = 60.0
+"""How long after Home Assistant is up the runtime waits before driving anything.
+
+Switches restore to ``on`` while the rest of the house is still loading, and at that
+point the away entity, the motion sensors and the lights themselves are all absent or
+unavailable -- which reads as "empty house, no activity" and would have the simulation
+walking through an occupied home. Nothing is planned until the dust settles."""
 
 LIGHT_DOMAIN = "light"
 ATTR_BRIGHTNESS = "brightness"
@@ -100,6 +116,7 @@ class SimulationRuntime:
         )
         self._unsubs: list[CALLBACK_TYPE] = []
         self._doc: Mapping[str, Any] = patterns.profile
+        self._settled = False
         self._stopped = False
 
     # -- lifecycle -----------------------------------------------------------
@@ -124,6 +141,32 @@ class SimulationRuntime:
         self._unsubs.append(
             async_track_time_change(self.hass, self._midnight, hour=0, minute=0, second=0)
         )
+        self._schedule_grace()
+
+    @callback
+    def _schedule_grace(self) -> None:
+        """Arm the settle timer: now if Home Assistant is up, else when it says so."""
+        if self.hass.state is CoreState.running:
+            self._unsubs.append(async_call_later(self.hass, STARTUP_GRACE, self._settle))
+            return
+
+        @callback
+        def on_started(_event: Event[Any]) -> None:
+            if self._stopped:
+                return
+            self._unsubs.append(async_call_later(self.hass, STARTUP_GRACE, self._settle))
+
+        self._unsubs.append(
+            self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, on_started)
+        )
+
+    @callback
+    def _settle(self, _now: datetime) -> None:
+        """The grace is over: whatever the switches say now, act on it."""
+        if self._stopped:
+            return
+        self._settled = True
+        self.evaluate_all()
 
     async def async_stop(self) -> None:
         """Cancel every timer and flush the log. Idempotent."""
@@ -161,7 +204,7 @@ class SimulationRuntime:
     def set_global(self, on: bool) -> None:
         """The global switch moved: re-evaluate every group."""
         self._global_on = on
-        self._evaluate_all()
+        self.evaluate_all()
 
     @callback
     def set_group(self, gid: str, on: bool) -> None:
@@ -207,6 +250,8 @@ class SimulationRuntime:
         Phrased for a person: the simulate_now service puts it straight in front of
         whoever asked for a simulation that could not start.
         """
+        if not self._settled:
+            return "Home Assistant is still starting up"
         if not forced and not (self._global_on and self._group_on.get(gid, False)):
             return "the presence simulation switches are off"
         if not self._enabled.get(gid, True):
@@ -239,7 +284,8 @@ class SimulationRuntime:
             self._cancel(gid)
 
     @callback
-    def _evaluate_all(self) -> None:
+    def evaluate_all(self) -> None:
+        """Re-check every group. Called whenever something house-wide moved."""
         for gid in self.coordinator.tree.groups:
             self._evaluate(gid)
 
@@ -256,7 +302,7 @@ class SimulationRuntime:
 
     @callback
     def _away_changed(self, _event: Event[EventStateChangedData]) -> None:
-        self._evaluate_all()
+        self.evaluate_all()
 
     @callback
     def _profile_changed(self) -> None:
@@ -270,13 +316,13 @@ class SimulationRuntime:
             return
         self._doc = self.patterns.profile
         self._replan()
-        self._evaluate_all()
+        self.evaluate_all()
 
     @callback
     def _midnight(self, _now: datetime) -> None:
         """A new local day: today's day type, and so its curves, are different."""
         self._replan()
-        self._evaluate_all()
+        self.evaluate_all()
 
     @callback
     def _replan(self) -> None:
