@@ -91,7 +91,7 @@ export class AlTree extends LitElement {
         padding: 0 8px 8px 8px;
       }
       ha-icon-button {
-        --mdc-icon-button-size: 32px;
+        --ha-icon-button-size: 32px;
         --mdc-icon-size: 18px;
       }
       .empty {

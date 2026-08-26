@@ -139,7 +139,7 @@ export class AlEnvelopes extends LitElement {
         line-height: 1.6;
       }
       ha-icon-button {
-        --mdc-icon-button-size: 32px;
+        --ha-icon-button-size: 32px;
         --mdc-icon-size: 18px;
       }
       .sketch {
