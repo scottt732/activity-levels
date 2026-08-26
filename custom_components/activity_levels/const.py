@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from homeassistant.const import Platform
 
+# re-exported so the integration side has one place to import constants from, while
+# the learner keeps its own definition and stays free of `homeassistant`
+from .patterns.daytype import BUILTIN_DAY_TYPES as BUILTIN_DAY_TYPES
+
 DOMAIN = "activity_levels"
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -32,7 +36,6 @@ CONF_GROUPS = "groups"
 CONF_PATTERNS = "patterns"
 CONF_SIMULATION = "simulation"
 
-BUILTIN_DAY_TYPES = ("weekday", "weekend", "holiday")
 SLOT_MINUTES = 15
 SLOTS_PER_DAY = 96
 

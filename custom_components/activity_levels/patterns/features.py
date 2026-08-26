@@ -21,6 +21,12 @@ DAILY_HARMONICS = 4
 WEEKLY_HARMONICS = 3
 BASE_COLUMNS = 2 + 2 * DAILY_HARMONICS + 2 * WEEKLY_HARMONICS
 
+TREND_COLUMN = 1
+"""Index of the linear-trend column.
+
+The fit leaves it unpenalized alongside the intercept, and evaluating the model on a
+synthetic grid overwrites it, so both places need to agree on where it is."""
+
 
 def n_columns(n_day_types: int) -> int:
     """Number of design-matrix columns for ``n_day_types`` day types."""

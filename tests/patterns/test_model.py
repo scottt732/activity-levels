@@ -12,7 +12,11 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pytest
 
-from custom_components.activity_levels.patterns.features import design_matrix, n_columns
+from custom_components.activity_levels.patterns.features import (
+    TREND_COLUMN,
+    design_matrix,
+    n_columns,
+)
 from custom_components.activity_levels.patterns.model import (
     LightTransition,
     Sample,
@@ -380,3 +384,10 @@ def test_unknown_state_closes_the_interval_and_is_not_observed():
     assert p_on[slot_of(12 * 60)] == 0.0
     # midnight to 08:00 is observed, and the light was off through it
     assert 0.0 < p_on[slot_of(2 * 60)] < 0.1
+
+
+def test_the_trend_column_is_where_the_model_thinks_it_is():
+    """`_ridge_solve` leaves this column unpenalized and the grid pins it by index."""
+    ts = np.array([0.0, 86400.0 * 365.0], dtype=np.float64)
+    x = design_matrix(ts, np.zeros(2, dtype=np.int64), 1, UTC)
+    assert list(x[:, TREND_COLUMN]) == [0.0, 1.0]

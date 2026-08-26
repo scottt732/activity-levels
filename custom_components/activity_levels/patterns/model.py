@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from .features import design_matrix
+from .features import TREND_COLUMN, design_matrix
 from .profile import SLOT_MINUTES, SLOTS, slot_minute
 
 SLOT_SECONDS = SLOT_MINUTES * 60
@@ -81,7 +81,7 @@ def _ridge_solve(
     """
     penalty = np.eye(x.shape[1], dtype=np.float64)
     penalty[0, 0] = 0.0
-    penalty[1, 1] = 0.0
+    penalty[TREND_COLUMN, TREND_COLUMN] = 0.0
     lhs = x.T @ x + ridge * penalty
     rhs = x.T @ y
     try:
@@ -161,7 +161,7 @@ def fit_group_expected(
         grid_x = design_matrix(grid, grid_idx, n_day_types, tz, t0=origin)
         # Keep the date grid so the weekly terms average out, but evaluate the trend
         # at the last training day: expected-now must not lag behind a trend.
-        grid_x[:, 1] = (float(ts[-1]) - origin) / 86400.0 / 365.0
+        grid_x[:, TREND_COLUMN] = (float(ts[-1]) - origin) / 86400.0 / 365.0
         prediction = (grid_x @ beta).reshape(SLOTS, days).mean(axis=1)
         medians[day_type] = np.clip(prediction, 0.0, max_value)
 

@@ -1,4 +1,9 @@
-from custom_components.activity_levels.patterns.daytype import DayTypeInputs, resolve_day_type
+from custom_components.activity_levels import const
+from custom_components.activity_levels.patterns.daytype import (
+    BUILTIN_DAY_TYPES,
+    DayTypeInputs,
+    resolve_day_type,
+)
 
 PREC = ["vacation", "holiday", "school_year", "weekend", "weekday"]
 
@@ -24,3 +29,8 @@ def test_calendar_precedence():
 
 def test_unknown_calendar_ids_are_ignored():
     assert resolve_day_type(DayTypeInputs(0, True, frozenset({"nope"})), PREC) == "weekday"
+
+
+def test_const_re_exports_the_one_definition() -> None:
+    """`const` is where the rest of the integration looks; there is still one list."""
+    assert const.BUILTIN_DAY_TYPES is BUILTIN_DAY_TYPES

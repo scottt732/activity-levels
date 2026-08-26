@@ -139,7 +139,11 @@ PATTERNS_SCHEMA = vol.Schema(
         vol.Optional("history_days", default=180): vol.All(int, vol.Range(min=30, max=730)),
         vol.Optional("min_days", default=14): vol.All(int, vol.Range(min=3, max=90)),
         vol.Optional("calendars", default=list): [CALENDAR_SCHEMA],
-        vol.Optional("day_type_precedence", default=None): vol.Any(None, [str]),
+        # None means "derive it from the calendars"; an empty list is a config that
+        # can never label a day, which is a mistake rather than a default
+        vol.Optional("day_type_precedence", default=None): vol.Any(
+            None, vol.All([str], vol.Length(min=1))
+        ),
         vol.Optional("workday_entity", default=None): vol.Any(None, cv.entity_id),
     }
 )

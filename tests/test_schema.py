@@ -121,3 +121,10 @@ def test_group_simulation_and_calendar_validation() -> None:
     cfg["defaults"]["patterns"] = {}
     cfg["defaults"]["simulation"] = {"quiet_hours": ["25:00", "05:00"]}
     assert "defaults/simulation/quiet_hours" in errors_of(cfg)
+
+
+def test_empty_day_type_precedence_is_rejected() -> None:
+    """An empty list is not "use the defaults"; it is a config with no day types."""
+    cfg = house_config()
+    cfg["defaults"]["patterns"] = {"day_type_precedence": []}
+    assert "defaults/patterns/day_type_precedence" in errors_of(cfg)
