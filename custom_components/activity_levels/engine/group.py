@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from .envelope import Mix, NullHandling, Phase
 from .voice import Voice
 
+_MIN_DT = 1e-6
+
 
 @dataclass
 class Channel:
@@ -154,7 +156,7 @@ class Group:
         k = round(value / step)
         edge = (k + 0.5) * step if slope > 0.0 else (k - 0.5) * step
         dt = (edge - value) / slope
-        if dt <= 0.0:
+        if dt < _MIN_DT:
             dt += step / abs(slope)
         candidate = t + dt
         if boundary is not None and boundary < candidate:

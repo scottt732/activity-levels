@@ -132,3 +132,12 @@ def test_find_group_and_reset() -> None:
     outer.reset()
     assert a.phase is Phase.IDLE
     assert outer.value_at(1.0) == 0.0
+
+
+def test_next_display_change_rising_edge_advances_a_full_step() -> None:
+    a = Voice(id="a", gain=1.0, envelope=Envelope(attack=100.0))
+    g = Group(id="g", channels=[Channel(a)], precision=1)
+    a.note_on(0.0)
+    assert g.next_display_change(15.0) == pytest.approx(25.0)
+    assert g.next_display_change(35.0) == pytest.approx(45.0)
+    assert g.next_display_change(0.0) == pytest.approx(5.0)
