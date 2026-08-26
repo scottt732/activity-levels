@@ -12,6 +12,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.activity_levels.const import DOMAIN
 from custom_components.activity_levels.schema import validate_config
+from custom_components.activity_levels.sensor import ActivityLevelSensor
 from tests.fixtures import house_config
 
 
@@ -49,6 +50,7 @@ async def test_level_sensor_and_attributes(hass: HomeAssistant, entry: MockConfi
     assert hass.states.get("binary_sensor.living_room_active").state == "on"
     assert hass.states.get("sensor.living_room_last_activity").state != "unknown"
     assert hass.states.get("sensor.house_activity_level").state == "2.0"
+    assert "contributors" in ActivityLevelSensor._unrecorded_attributes
 
 
 async def test_decay_updates_and_timestamps(
