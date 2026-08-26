@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
-from .envelope import Mix, NullHandling
+from .envelope import Mix, NullHandling, Phase
 from .voice import Voice
 
 
@@ -78,3 +78,95 @@ class Group:
 
     def display_value_at(self, t: float) -> float:
         return round(self.value_at(t), self.precision)
+
+    # -- aggregates ---------------------------------------------------------
+
+    def active_at(self, t: float) -> bool:
+        return self.value_at(t) > 0.0
+
+    def gated_at(self, t: float) -> bool:
+        return any(v.gate for v in self.voices())
+
+    def active_voices(self, t: float) -> int:
+        return sum(1 for v in self.voices() if v.is_active(t))
+
+    def last_activity(self) -> float | None:
+        stamps = [v.last_note_on for v in self.voices() if v.last_note_on is not None]
+        return max(stamps) if stamps else None
+
+    def cooldown_at(self, t: float) -> float | None:
+        if self.gated_at(t) or not self.active_at(t):
+            return None
+        ends = [
+            b
+            for v in self.voices()
+            if v.phase is Phase.RELEASE and (b := v.next_boundary(t)) is not None
+        ]
+        return max(ends) if ends else None
+
+    def next_boundary(self, t: float) -> float | None:
+        bounds = [b for v in self.voices() if (b := v.next_boundary(t)) is not None]
+        return min(bounds) if bounds else None
+
+    # -- scheduling helpers -------------------------------------------------
+
+    def _channel_slopes(self, t: float) -> list[tuple[float, float]]:
+        """Return (contribution, slope_of_contribution) per channel."""
+        out: list[tuple[float, float]] = []
+        for ch in self.channels:
+            out.append((ch.source.value_at(t) * ch.gain, ch.source.slope_at(t) * ch.gain))
+        return out
+
+    # slope_at is the signed rate of change of the *displayed* value. When the
+    # raw (pre-limit) mix is above max_value and still falling, the displayed
+    # value stays pinned at max_value until raw drops back below it, so the
+    # true instantaneous slope of the display is 0 in that region. We treat
+    # that whole region as slope 0 rather than computing the exact time raw
+    # crosses max_value; this is an accepted approximation (see note below).
+    def slope_at(self, t: float) -> float:
+        pairs = self._channel_slopes(t)
+        if not pairs:
+            return 0.0
+        if self.mix is Mix.SUM:
+            slope = sum(s for _, s in pairs)
+        elif self.mix is Mix.MAX:
+            top = max(c for c, _ in pairs)
+            slope = max(s for c, s in pairs if c == top)
+        elif self.null_handling is NullHandling.IGNORE:
+            active = [s for c, s in pairs if c > 0.0]
+            slope = sum(active) / len(active) if active else 0.0
+        else:
+            slope = sum(s for _, s in pairs) / len(pairs)
+        raw = self._mix([c for c, _ in pairs])
+        if (raw >= self.max_value and slope > 0.0) or (raw <= 0.0 and slope < 0.0):
+            return 0.0
+        if raw > self.max_value and slope < 0.0:
+            return 0.0  # still above the limiter; display is pinned until raw drops below
+        return slope
+
+    def next_display_change(self, t: float) -> float | None:
+        boundary = self.next_boundary(t)
+        slope = self.slope_at(t)
+        if slope == 0.0:
+            return boundary
+        step = 10.0**-self.precision
+        value = self.value_at(t)
+        k = round(value / step)
+        edge = (k + 0.5) * step if slope > 0.0 else (k - 0.5) * step
+        dt = (edge - value) / slope
+        if dt <= 0.0:
+            dt += step / abs(slope)
+        candidate = t + dt
+        if boundary is not None and boundary < candidate:
+            return boundary
+        return candidate
+
+    def find_group(self, group_id: str) -> Group | None:
+        for g in self.groups():
+            if g.id == group_id:
+                return g
+        return None
+
+    def reset(self) -> None:
+        for v in self.voices():
+            v.reset()
