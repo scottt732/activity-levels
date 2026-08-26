@@ -166,12 +166,17 @@ export class AlStrip extends LitElement {
           ${this.entityIcon
             ? html`<ha-icon class="icon" .icon=${this.entityIcon}></ha-icon>`
             : html`<span class="icon">${this.kind === "bus" ? "▤" : "⚡"}</span>`}
-          <button class="link name" title=${this.label}>${this.label}</button>
+          <span class="name" title=${this.label}>${this.label}</span>
         </div>
         <div class="sub" title=${this.sublabel ?? ""}>${this.sublabel ?? ""}</div>
         ${e ? html`<al-envelope-sketch .envelope=${e}></al-envelope-sketch>` : nothing}
         <div class="adsr" title=${e ? adsrHint(e) : ""}>${e ? adsrHint(e) : ""}</div>
-        <al-fader .value=${this.gain} label=${`${this.label} gain`} @value-changed=${this.onGain}></al-fader>
+        <al-fader
+          .value=${this.gain}
+          .focusable=${this.selected}
+          label=${`${this.label} gain`}
+          @value-changed=${this.onGain}
+        ></al-fader>
         ${this.live
           ? html`<al-meter .value=${this.live.value} .max=${this.live.max} .gated=${this.live.gated}></al-meter>`
           : nothing}
@@ -181,7 +186,11 @@ export class AlStrip extends LitElement {
                 >${this.errors}</span
               >`
             : nothing}
-          ${this.kind === "bus" ? html`<button class="link open" @click=${this.open}>open ▸</button>` : nothing}
+          ${this.kind === "bus"
+            ? html`<button class="link open" tabindex=${this.selected ? 0 : -1} @click=${this.open}>
+                open ▸
+              </button>`
+            : nothing}
         </div>
       </div>
     `;

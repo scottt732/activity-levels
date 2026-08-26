@@ -127,6 +127,26 @@ describe("al-strip", () => {
     expect(el.shadowRoot?.querySelector(".icon")?.textContent?.trim()).toBe("⚡");
   });
 
+  it("names itself in plain text, so the name is not a tab stop of its own", () => {
+    const name = el.shadowRoot?.querySelector(".name");
+    expect(name?.tagName.toLowerCase()).toBe("span");
+    expect(el.shadowRoot?.querySelector("button.name")).toBeFalsy();
+  });
+
+  it("keeps its own controls out of the tab order until the strip is selected", async () => {
+    el.kind = "bus";
+    await el.updateComplete;
+    const fader = el.shadowRoot?.querySelector("al-fader");
+    await fader?.updateComplete;
+    expect(el.shadowRoot?.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
+    expect(fader?.shadowRoot?.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
+    el.selected = true;
+    await el.updateComplete;
+    await fader?.updateComplete;
+    expect(el.shadowRoot?.querySelector(".open")?.getAttribute("tabindex")).toBe("0");
+    expect(fader?.shadowRoot?.querySelector('[role="slider"]')?.getAttribute("tabindex")).toBe("0");
+  });
+
   it("is focusable so the mixer can hand it the roving tabindex", () => {
     expect(el.getAttribute("tabindex")).toBe("-1");
     el.tabIndex = 0;
@@ -283,6 +303,17 @@ describe("al-master-strip", () => {
     node?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }));
     await el.updateComplete;
     expect(seen).toEqual([]);
+  });
+
+  it("keeps its own controls out of the tab order until the strip is selected", async () => {
+    const stops = (): string[] =>
+      [...(el.shadowRoot?.querySelectorAll("select, input, ha-switch") ?? [])].map(
+        (n) => n.getAttribute("tabindex") ?? "",
+      );
+    expect(stops()).toEqual(["-1", "-1", "-1"]);
+    el.selected = true;
+    await el.updateComplete;
+    expect(stops()).toEqual(["0", "0", "0"]);
   });
 
   it("shows a meter only when there is live state", async () => {

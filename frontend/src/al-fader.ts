@@ -80,6 +80,12 @@ export class AlFader extends LitElement {
 
   @property({ type: Number }) value = 1;
   @property({ type: Boolean, reflect: true }) disabled = false;
+  /**
+   * Whether the fader is a tab stop. A strip row is one stop, not four, so only the
+   * selected strip lets its fader into the tab order; the keyboard still works once
+   * focus is there, which is what separates this from `disabled`.
+   */
+  @property({ type: Boolean }) focusable = true;
   @property({ type: String }) label = "Gain";
 
   /** The pending value of a drag, or null when the host's value is the one on show. */
@@ -203,7 +209,7 @@ export class AlFader extends LitElement {
       <div
         class="fader"
         role="slider"
-        tabindex=${this.disabled ? -1 : 0}
+        tabindex=${this.disabled || !this.focusable ? -1 : 0}
         aria-label=${this.label}
         aria-orientation="vertical"
         aria-valuemin=${FADER_MIN}

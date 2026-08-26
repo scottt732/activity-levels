@@ -99,6 +99,17 @@ export class AlMasterStrip extends LitElement {
   @property({ type: String }) simEntityId: string | null = null;
   @property({ type: Boolean }) simOn = false;
   @property({ type: String }) blockedReason: string | null = null;
+  /**
+   * Whether this strip is the one the mixer's roving tabindex is on. The strip row is a
+   * single tab stop, so the mix selector, the limiter box and the simulation switch join
+   * the tab order only once the strip itself has been reached.
+   */
+  @property({ type: Boolean, reflect: true }) selected = false;
+
+  /** `0` on the selected strip, `-1` on every other one. */
+  private get stop(): number {
+    return this.selected ? 0 : -1;
+  }
 
   private onMix(ev: Event): void {
     this.dispatchEvent(alMixChanged((ev.target as HTMLSelectElement).value as Mix));
@@ -133,7 +144,14 @@ export class AlMasterStrip extends LitElement {
         <div class="muted">master</div>
         <div>
           <label for="mix">mix</label>
-          <select id="mix" class="mix" .value=${this.mix} @change=${this.onMix} @keydown=${stopKeys}>
+          <select
+            id="mix"
+            class="mix"
+            tabindex=${this.stop}
+            .value=${this.mix}
+            @change=${this.onMix}
+            @keydown=${stopKeys}
+          >
             ${MIXES.map((m) => html`<option value=${m} ?selected=${m === this.mix}>${m}</option>`)}
           </select>
         </div>
@@ -143,6 +161,7 @@ export class AlMasterStrip extends LitElement {
             id="limiter"
             class="limiter"
             type="number"
+            tabindex=${this.stop}
             min=${MIN_LIMIT}
             step="0.1"
             .value=${String(this.maxValue)}
@@ -154,6 +173,7 @@ export class AlMasterStrip extends LitElement {
         ${this.lights > 0
           ? html`<div class="sim">
               <ha-switch
+                tabindex=${this.stop}
                 .checked=${this.simOn}
                 .disabled=${this.simEntityId === null}
                 title=${blocked ?? (this.simEntityId === null ? "No simulation switch for this group" : "Presence simulation")}

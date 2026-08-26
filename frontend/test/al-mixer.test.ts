@@ -390,6 +390,23 @@ describe("al-mixer keyboard", () => {
     expect(el.shadowRoot?.activeElement).toBe(master());
   });
 
+  it("keeps the whole strip out of the tab order, controls included, until it is selected", async () => {
+    const stops = (host: AlStrip | AlMasterStrip): number =>
+      (host.shadowRoot?.querySelectorAll('[tabindex="0"]') ?? []).length;
+    const fader = (host: AlStrip): Element | null | undefined =>
+      host.shadowRoot?.querySelector("al-fader")?.shadowRoot?.querySelector('[role="slider"]');
+    const first = strips()[0]!;
+    await first.updateComplete;
+    expect(stops(first)).toBe(0);
+    expect(fader(first)?.getAttribute("tabindex")).toBe("-1");
+    await press("ArrowRight");
+    await first.updateComplete;
+    await first.shadowRoot?.querySelector("al-fader")?.updateComplete;
+    expect(first.shadowRoot?.querySelector(".open")?.getAttribute("tabindex")).toBe("0");
+    expect(fader(first)?.getAttribute("tabindex")).toBe("0");
+    expect(stops(strips()[1]!)).toBe(0);
+  });
+
   it("opens the selected bus on Enter and comes back up on Backspace", async () => {
     await press("ArrowRight");
     await press("Enter");

@@ -57,6 +57,17 @@ describe("al-fader semantics", () => {
     expect(slider().getAttribute("aria-valuetext")).toBe(formatGain(2.5));
   });
 
+  it("takes itself out of the tab order when the host says it is not focusable", async () => {
+    // The strip hands this out with its roving tabindex: only the selected strip's fader
+    // is a tab stop, but an unfocusable fader still works under the pointer.
+    el.focusable = false;
+    await el.updateComplete;
+    expect(slider().getAttribute("tabindex")).toBe("-1");
+    expect(slider().getAttribute("aria-disabled")).toBe("false");
+    await key("ArrowUp");
+    expect(events).toHaveLength(1);
+  });
+
   it("takes itself out of the tab order when disabled", async () => {
     el.disabled = true;
     await el.updateComplete;
