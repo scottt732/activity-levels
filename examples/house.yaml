@@ -33,9 +33,7 @@ groups:
       - id: house
         name: House
         mix: max
-        stimuli:
-          - entity: binary_sensor.smoke_detector
-            envelope: hour
+        # (old binary_sensor.smoke_detector no longer exists; add a smoke/safety sensor here if you have one)
         children:
           - id: basement
             name: Basement
@@ -45,6 +43,9 @@ groups:
                 name: Play Room
                 stimuli:
                   - entity: binary_sensor.basement_hallway_door
+                  - entity: binary_sensor.play_room_motion
+                    envelope: hour
+                  - entity: binary_sensor.play_room_front_window
               - id: laundry_room
                 name: Laundry Room
                 stimuli:
@@ -81,8 +82,7 @@ groups:
               - id: kitchen
                 name: Kitchen
                 stimuli:
-                  - entity: binary_sensor.kitchen_motion
-                    envelope: hour
+                  # (old binary_sensor.kitchen_motion no longer exists; add a kitchen motion/occupancy sensor here)
                   - entity: binary_sensor.kitchen_windows
                   - entity: binary_sensor.back_door
                     envelope: fifteen_minutes
@@ -102,9 +102,9 @@ groups:
               - id: main_bedroom
                 name: Main Bedroom
                 stimuli:
-                  - entity: binary_sensor.main_bedroom_door
+                  - entity: binary_sensor.master_bedroom_door
                     envelope: two_hours
-                  - entity: binary_sensor.main_bedroom_motion
+                  - entity: binary_sensor.master_bedroom_motion
                     envelope: hour
               - id: upstairs_hallway
                 name: Upstairs Hallway
@@ -124,14 +124,23 @@ groups:
             name: Front Yard
             mix: max
             stimuli:
-              - entity: binary_sensor.front_patio_motion
-              - entity: binary_sensor.front_yard_motion
+              - entity: binary_sensor.front_door_protect_motion
+                envelope: fifteen_minutes
+              - entity: binary_sensor.front_porch_motion
+              - entity: binary_sensor.front_yard_protect_motion
+                envelope: fifteen_minutes
           - id: back_yard
             name: Back Yard
             mix: max
             children:
-              # back_patio had no stimuli in the old config; add one here when you have a sensor for it.
+              - id: back_patio
+                name: Back Patio
+                stimuli:
+                  - entity: binary_sensor.back_patio_doorbell_protect_motion
+                    envelope: fifteen_minutes
               - id: driveway
                 name: Driveway
                 stimuli:
                   - entity: binary_sensor.driveway_motion
+                  - entity: binary_sensor.driveway_camera_protect_motion
+                    envelope: fifteen_minutes
