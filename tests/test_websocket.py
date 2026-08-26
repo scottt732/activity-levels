@@ -91,6 +91,13 @@ async def test_state_command(
     motion = next(v for v in voices if v["entity"] == "binary_sensor.living_motion")
     assert motion["phase"] == "sustain" and motion["gate"] is True
 
+    assert "now" in msg["result"]
+    lr = groups["living_room"]
+    assert lr["precision"] == 1 and lr["max_value"] == 5.0 and lr["mix"] == "sum"
+    assert lr["raw_value"] == pytest.approx(2.0)
+    assert lr["next_wake"] is None
+    assert groups["house"]["next_wake"] is not None
+
     # the hidden trigger voice is a real contributor, so it has to be listed too
     await hass.services.async_call(
         DOMAIN, "trigger", {"group_id": "kitchen", "peak": 3.0}, blocking=True

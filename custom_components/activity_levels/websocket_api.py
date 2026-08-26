@@ -101,12 +101,17 @@ def ws_state(
     if coordinator is None:
         connection.send_error(msg["id"], "not_loaded", "Activity Levels is not loaded")
         return
+    details = coordinator.group_details()
     groups = {
         gid: {
             **asdict(state),
             "name": coordinator.tree.groups[gid].name,
             "parent_id": coordinator.tree.groups[gid].parent_id,
+            **details[gid],
         }
         for gid, state in coordinator.data.items()
     }
-    connection.send_result(msg["id"], {"groups": groups, "voices": coordinator.voice_states()})
+    connection.send_result(
+        msg["id"],
+        {"now": coordinator.now(), "groups": groups, "voices": coordinator.voice_states()},
+    )

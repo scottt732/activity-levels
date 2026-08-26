@@ -289,6 +289,20 @@ class ActivityLevelsCoordinator:
             out[info.id].append(self._voice_state(TRIGGER_KEY, None, info.trigger, t))
         return out
 
+    def group_details(self) -> dict[str, dict[str, Any]]:
+        t = self.now()
+        root_ids = {root.id for root in self.tree.roots}
+        return {
+            gid: {
+                "precision": info.precision,
+                "max_value": info.max_value,
+                "mix": info.mix,
+                "raw_value": info.group.value_at(t),
+                "next_wake": self.next_wake(gid) if gid in root_ids else None,
+            }
+            for gid, info in self.tree.groups.items()
+        }
+
     @staticmethod
     def _voice_state(label: str, entity_id: str | None, v: Voice, t: float) -> dict[str, Any]:
         v.is_active(t)  # advance the state machine before reading .phase
