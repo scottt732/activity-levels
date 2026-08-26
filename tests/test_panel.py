@@ -44,15 +44,29 @@ async def test_bundle_is_served(
     assert "activity-levels-panel" in body
 
 
-async def test_unload_removes_panel_and_reload_reregisters(
+async def test_reload_keeps_panel_without_panels_updated(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
-    assert await hass.config_entries.async_unload(entry.entry_id)
+    """A reload (every Save does one) must not remove and re-add the panel.
+
+    Removing it fires EVENT_PANELS_UPDATED, which makes the frontend tear down and
+    recreate the custom panel element — the whole UI visibly refreshes on Save.
+    """
+    before = hass.data[frontend.DATA_PANELS][PANEL_URL_PATH]
+    events: list[object] = []
+    hass.bus.async_listen(frontend.EVENT_PANELS_UPDATED, lambda ev: events.append(ev))
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.data[frontend.DATA_PANELS][PANEL_URL_PATH] is before
+    assert events == []
+
+
+async def test_removing_the_entry_removes_the_panel(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert PANEL_URL_PATH not in hass.data[frontend.DATA_PANELS]
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    assert PANEL_URL_PATH in hass.data[frontend.DATA_PANELS]
 
 
 async def test_dev_server_override(hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -55,13 +55,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
     _register_services(hass)
     async_register_websocket(hass)
     await async_register_panel(hass)
-    entry.async_on_unload(lambda: async_unregister_panel(hass))
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntry) -> bool:
     """Unload a config entry; the coordinator is stopped by its async_on_unload hook."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntry) -> None:
+    """Remove the sidebar panel when the integration is deleted.
+
+    Deliberately not done on unload: every Save reloads the entry, and removing the panel
+    fires EVENT_PANELS_UPDATED, which makes the frontend recreate the panel element.
+    """
+    async_unregister_panel(hass)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ActivityLevelsConfigEntry) -> None:

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Saving from the panel no longer refreshes the whole UI: the sidebar panel stays registered across integration reloads and is removed only when the integration is deleted.
+
 ### Added
 
 - **Engine** — an ADSR voice/group mixer with per-voice attack, decay, sustain and
