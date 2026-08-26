@@ -14,6 +14,18 @@ export const newGroup = (id: string): Group => ({
   children: [],
 });
 
+export const newPreset = (id: string): EnvelopePreset => ({
+  id,
+  attack: 0,
+  decay: 0,
+  sustain: 1,
+  release: 1800,
+  impulse: false,
+  retrigger: null,
+  unavailable: null,
+  debounce: null,
+});
+
 export const newStimulus = (entity: string): Stimulus => ({
   entity,
   to: ["on"],
@@ -49,13 +61,48 @@ export function slugify(text: string): string {
   return s || "group";
 }
 
-export function uniqueGroupId(config: Config, base: string): string {
-  const ids = allGroupIds(config);
+export const allPresetIds = (config: Config): Set<string> => new Set(config.envelopes.map((e) => e.id));
+
+function uniqueIn(ids: Set<string>, base: string): string {
   const slug = slugify(base);
   if (!ids.has(slug)) return slug;
   let n = 2;
   while (ids.has(`${slug}_${n}`)) n++;
   return `${slug}_${n}`;
+}
+
+export const uniqueGroupId = (config: Config, base: string): string => uniqueIn(allGroupIds(config), base);
+
+export const uniquePresetId = (config: Config, base: string): string => uniqueIn(allPresetIds(config), base);
+
+/** Where a preset is still in use. Deleting one that is referenced would strand those stimuli. */
+export function presetReferences(config: Config, id: string): { defaults: boolean; groups: string[] } {
+  const groups: string[] = [];
+  const walk = (g: Group): void => {
+    if (g.stimuli.some((s) => s.envelope === id)) groups.push(g.id);
+    g.children.forEach(walk);
+  };
+  config.groups.forEach(walk);
+  return { defaults: config.defaults.envelope === id, groups };
+}
+
+/**
+ * Renames a preset and every reference to it - `defaults.envelope` and each stimulus that
+ * named it - so a rename lands as one config, never as a dangling reference.
+ */
+export function renamePreset(config: Config, oldId: string, newId: string): Config {
+  if (oldId === newId) return config;
+  const renameGroup = (g: Group): Group => ({
+    ...g,
+    stimuli: g.stimuli.map((s) => (s.envelope === oldId ? { ...s, envelope: newId } : s)),
+    children: g.children.map(renameGroup),
+  });
+  return {
+    ...config,
+    defaults: config.defaults.envelope === oldId ? { ...config.defaults, envelope: newId } : config.defaults,
+    envelopes: config.envelopes.map((e) => (e.id === oldId ? { ...e, id: newId } : e)),
+    groups: config.groups.map(renameGroup),
+  };
 }
 
 export const groupAt = (config: Config, path: Path): Group | undefined => getAt<Group>(config, path);

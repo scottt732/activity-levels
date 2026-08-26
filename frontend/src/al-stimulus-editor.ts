@@ -6,6 +6,7 @@ import { alChange } from "./events";
 import { groupAt, parentGroupPath, presetById, resolvedEnvelope, stimulusAt } from "./model";
 import { setAt } from "./store";
 import { sharedStyles } from "./styles";
+import "./al-envelope-sketch";
 import "./al-override-field";
 import { BOOLEAN_SELECTOR } from "./al-override-field";
 import type { Selector } from "./al-override-field";
@@ -249,7 +250,8 @@ export class AlStimulusEditor extends LitElement {
               this.setOverride(item.name, ev.detail.value)}
           ></al-override-field>`,
         )}
-        <!-- TODO(task 6): render <al-envelope-sketch> for the resolved envelope here. -->
+        <h3>Envelope shape</h3>
+        <al-envelope-sketch .envelope=${resolved}></al-envelope-sketch>
       </ha-card>
     `;
   }

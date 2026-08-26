@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { groupAt, newGroup, newStimulus, resolvedEnvelope, stimulusAt, uniqueGroupId } from "../src/model";
+import {
+  groupAt,
+  newGroup,
+  newStimulus,
+  presetReferences,
+  renamePreset,
+  resolvedEnvelope,
+  stimulusAt,
+  uniqueGroupId,
+  uniquePresetId,
+} from "../src/model";
 import type { Config } from "../src/types";
 
 const cfg: Config = {
@@ -29,5 +39,81 @@ describe("model", () => {
     expect(uniqueGroupId(cfg, "house")).toBe("house_3");
     expect(uniqueGroupId(cfg, "kitchen")).toBe("kitchen_2");
     expect(uniqueGroupId(cfg, "Living Room!")).toBe("living_room");
+  });
+});
+
+describe("preset ids", () => {
+  it("generates unique preset ids against envelope ids, not group ids", () => {
+    expect(uniquePresetId(cfg, "preset")).toBe("preset");
+    expect(uniquePresetId(cfg, "media")).toBe("media_2");
+    expect(uniquePresetId(cfg, "Slow Fade!")).toBe("slow_fade");
+    expect(uniquePresetId(cfg, "house")).toBe("house");
+  });
+});
+
+const refCfg = (): Config => ({
+  ...cfg,
+  defaults: { ...cfg.defaults, envelope: "media" },
+  groups: [
+    {
+      ...newGroup("house"),
+      stimuli: [
+        { ...newStimulus("media_player.tv"), envelope: "media" },
+        { ...newStimulus("binary_sensor.door"), envelope: null },
+      ],
+      children: [
+        { ...newGroup("kitchen"), stimuli: [{ ...newStimulus("light.hob"), envelope: "media" }] },
+        { ...newGroup("study"), stimuli: [{ ...newStimulus("light.desk"), envelope: "default" }] },
+      ],
+    },
+  ],
+});
+
+describe("presetReferences", () => {
+  it("finds the defaults reference and every referencing group, including nested ones", () => {
+    expect(presetReferences(refCfg(), "media")).toEqual({ defaults: true, groups: ["house", "kitchen"] });
+  });
+  it("reports an unused preset as unreferenced", () => {
+    expect(presetReferences(refCfg(), "unused")).toEqual({ defaults: false, groups: [] });
+  });
+  it("does not count stimuli that inherit the default preset", () => {
+    expect(presetReferences(refCfg(), "default")).toEqual({ defaults: false, groups: ["study"] });
+  });
+});
+
+describe("renamePreset", () => {
+  it("rewrites the preset, the defaults and every referencing stimulus at once", () => {
+    const before = refCfg();
+    const after = renamePreset(before, "media", "cinema");
+    expect(after.envelopes.map((e) => e.id)).toEqual(["default", "cinema"]);
+    expect(after.defaults.envelope).toBe("cinema");
+    expect(after.groups[0]!.stimuli[0]!.envelope).toBe("cinema");
+    expect(after.groups[0]!.children[0]!.stimuli[0]!.envelope).toBe("cinema");
+  });
+
+  it("leaves unrelated references alone", () => {
+    const after = renamePreset(refCfg(), "media", "cinema");
+    expect(after.groups[0]!.stimuli[1]!.envelope).toBeNull();
+    expect(after.groups[0]!.children[1]!.stimuli[0]!.envelope).toBe("default");
+  });
+
+  it("does not mutate the config it was given", () => {
+    const before = refCfg();
+    const snapshot = JSON.stringify(before);
+    const after = renamePreset(before, "media", "cinema");
+    expect(JSON.stringify(before)).toBe(snapshot);
+    expect(after).not.toBe(before);
+  });
+
+  it("is a no-op when the id is unchanged", () => {
+    const before = refCfg();
+    expect(renamePreset(before, "media", "media")).toBe(before);
+  });
+
+  it("ignores a rename of an id no preset uses", () => {
+    const before = refCfg();
+    const after = renamePreset(before, "nope", "cinema");
+    expect(after.envelopes.map((e) => e.id)).toEqual(["default", "media"]);
+    expect(after.defaults.envelope).toBe("media");
   });
 });
