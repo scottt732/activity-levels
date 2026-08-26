@@ -50,7 +50,10 @@ async def test_level_sensor_and_attributes(hass: HomeAssistant, entry: MockConfi
     assert hass.states.get("binary_sensor.living_room_active").state == "on"
     assert hass.states.get("sensor.living_room_last_activity").state != "unknown"
     assert hass.states.get("sensor.house_activity_level").state == "2.0"
-    assert "contributors" in ActivityLevelSensor._unrecorded_attributes
+    # The recorder reads the union Entity builds in __init_subclass__, not the class
+    # attribute we set, so assert against the set that actually keeps `contributors`
+    # out of the database.
+    assert "contributors" in ActivityLevelSensor._Entity__combined_unrecorded_attributes
 
 
 async def test_decay_updates_and_timestamps(

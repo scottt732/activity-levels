@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
-from homeassistant.components.http.server import StaticPathConfig
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant, callback
 
 from .const import (
@@ -21,6 +22,8 @@ from .const import (
     STATIC_URL,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
 _STATIC_REGISTERED = f"{DOMAIN}_static_registered"
 _FRONTEND_DIR = Path(__file__).parent / "frontend"
 
@@ -28,6 +31,11 @@ _FRONTEND_DIR = Path(__file__).parent / "frontend"
 def _bundle_hash() -> str:
     bundle = _FRONTEND_DIR / BUNDLE_NAME
     if not bundle.is_file():
+        _LOGGER.warning(
+            "Frontend bundle %s is missing, so the Activity Levels panel will not load. "
+            "Build it with 'pnpm build' in frontend/, or reinstall the integration",
+            bundle,
+        )
         return "missing"
     return hashlib.sha256(bundle.read_bytes()).hexdigest()[:12]
 
