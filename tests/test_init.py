@@ -120,3 +120,31 @@ async def test_setup_failure_stops_the_coordinator(
     assert entry.state is ConfigEntryState.SETUP_ERROR
     assert len(stops) == 1
     assert stops[0]._timers == {}
+
+
+async def test_reload_with_a_tree_that_will_not_build_fails_the_entry(
+    hass: HomeAssistant, entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A config that validates but cannot be built must fail setup, not raise blind."""
+
+    def boom(config: dict[str, object]) -> None:
+        raise ValueError("boom")
+
+    monkeypatch.setattr("custom_components.activity_levels.build_tree", boom)
+    cfg = validate_config(house_config())
+    cfg["groups"][0]["children"][1]["name"] = "Pantry"  # something to reload for
+    hass.config_entries.async_update_entry(entry, options=cfg)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+
+
+async def test_removing_a_group_removes_its_device_and_entities(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    cfg = validate_config(house_config())
+    del cfg["groups"][0]["children"][1]  # drop the kitchen
+    hass.config_entries.async_update_entry(entry, options=cfg)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    assert dr.async_get(hass).async_get_device(identifiers={(DOMAIN, "kitchen")}) is None
+    assert er.async_get(hass).async_get("sensor.kitchen_activity_level") is None

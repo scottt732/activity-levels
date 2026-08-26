@@ -39,7 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
         config = validate_config(entry.options)
     except ConfigError as err:
         raise ConfigEntryError(f"Invalid Activity Levels configuration: {err}") from err
-    tree = build_tree(config)
+    try:
+        tree = build_tree(config)
+    except Exception as err:  # a validated config the engine still cannot be built from
+        raise ConfigEntryError(f"Could not build the Activity Levels tree: {err}") from err
     _create_devices(hass, entry, tree)
     coordinator = ActivityLevelsCoordinator(hass, entry.entry_id, tree)
     await coordinator.async_start()
