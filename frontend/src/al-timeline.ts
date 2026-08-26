@@ -34,6 +34,8 @@ const NARROW_HEIGHT = 160;
 const MAX_POINTS = 2000;
 const REFETCH_MS = 60_000;
 const CACHE_TTL_MS = 60_000;
+/** Enough for a few strips at a few ranges; past that the oldest entries are dropped. */
+const CACHE_MAX = 32;
 
 const RANGES: Range[] = ["24h", "7d", "30d"];
 const HORIZONS: Horizon[] = ["off", "24h", "7d"];
@@ -58,6 +60,30 @@ const cache = new Map<string, { at: number; data: TimeseriesResponse }>();
 
 /** Requests still in the air, so two elements asking at once cost one round trip. */
 const inflight = new Map<string, Promise<TimeseriesResponse>>();
+
+/**
+ * Test hook. The cache is module-level state whose bounds are part of this element's
+ * contract, so the tests assert on it and clear it between cases. Nothing in the app
+ * touches it through this name.
+ */
+export const timelineCache = cache;
+
+/**
+ * Stores a response and keeps the cache bounded: a panel left open all day walks through
+ * a new window every minute, so entries have to leave as well as arrive. Anything past
+ * the TTL is dead weight and goes first; past that the oldest entries are dropped.
+ */
+function remember(key: string, data: TimeseriesResponse): void {
+  const now = Date.now();
+  for (const [k, v] of cache) if (now - v.at >= CACHE_TTL_MS) cache.delete(k);
+  // Delete before set so a refreshed key counts as the newest, not its original age.
+  cache.delete(key);
+  cache.set(key, { at: now, data });
+  for (const k of cache.keys()) {
+    if (cache.size <= CACHE_MAX) break;
+    cache.delete(k);
+  }
+}
 
 export type { TimelineRangeDetail } from "./events";
 
@@ -163,7 +189,7 @@ export function computePaths(
     : [];
 
   const f = data.forecast;
-  const band = f ? toPolygonPoints(bandPolygon(f, x, y)) : "";
+  const band = f ? toPolygonPoints(bandPolygon(f, x, y, MAX_POINTS)) : "";
   const p50 = f ? pathFor(decimate(forecastLine(f, "p50"), MAX_POINTS), x, y) : "";
 
   const order: string[] = [];
@@ -425,7 +451,10 @@ export class AlTimeline extends LitElement {
   }
 
   private query(groupId: string): TimeseriesQuery {
-    const now = Math.floor(Date.now() / 1000);
+    // Quantized to the minute: an exact `now` would make every load a new window and a
+    // new cache key, so the shared cache could never hit. The "now" line still moves on
+    // the real clock — it is drawn from `nowAt`, not from the window.
+    const now = Math.floor(Date.now() / 1000 / 60) * 60;
     const w = windowFor(now, this.range, this.horizon);
     return {
       group_id: groupId,
@@ -458,7 +487,7 @@ export class AlTimeline extends LitElement {
       inflight.set(key, pending);
       void pending
         .then(
-          (data) => cache.set(key, { at: Date.now(), data }),
+          (data) => remember(key, data),
           () => undefined,
         )
         .finally(() => inflight.delete(key));
@@ -504,9 +533,12 @@ export class AlTimeline extends LitElement {
     return value;
   }
 
-  /** "now" follows the live poll when there is one, so the line moves between refetches. */
+  /**
+   * "now" follows the live poll when there is one and the real clock otherwise, so the
+   * line keeps moving between refetches even though the window itself is quantized.
+   */
   private nowAt(p: ComputedTimeline): number {
-    return clamp(this.live?.now ?? this.loaded?.q.end ?? p.t1, p.t0, p.t1);
+    return clamp(this.live?.now ?? Math.floor(Date.now() / 1000), p.t0, p.t1);
   }
 
   private emitSettings(): void {

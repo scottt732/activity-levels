@@ -77,12 +77,20 @@ export function pathFor(points: [number, number][], x: (t: number) => number, y:
   return points.map(([t, v], i) => `${i === 0 ? "M" : "L"}${x(t)},${y(v)}`).join(" ");
 }
 
-/** The forecast band as a closed SVG polygon path: p75 forward, then p25 backward. */
-export function bandPolygon(f: Forecast, x: (t: number) => number, y: (v: number) => number): string {
-  const n = f.p75.length;
-  if (n === 0) return "";
-  const forward: [number, number][] = f.p75.map((v, i): [number, number] => [f.t0 + i * f.step, v]);
-  const backward: [number, number][] = f.p25.map((v, i): [number, number] => [f.t0 + i * f.step, v]).reverse();
+/** The forecast band as a closed SVG polygon path: p75 forward, then p25 backward.
+ *  `maxPoints` caps the vertices per edge; the default keeps every point. */
+export function bandPolygon(
+  f: Forecast,
+  x: (t: number) => number,
+  y: (v: number) => number,
+  maxPoints = Infinity,
+): string {
+  if (f.p75.length === 0) return "";
+  const at = (vs: number[]): [number, number][] => vs.map((v, i): [number, number] => [f.t0 + i * f.step, v]);
+  // Both edges go through `decimate`, like every line on the chart: a long forecast is no
+  // more resolvable than a long history, and the band is the widest shape on the chart.
+  const forward = decimate(at(f.p75), maxPoints);
+  const backward = decimate(at(f.p25), maxPoints).reverse();
   const all = [...forward, ...backward];
   return `${all.map(([t, v], i) => `${i === 0 ? "M" : "L"}${x(t)},${y(v)}`).join(" ")} Z`;
 }

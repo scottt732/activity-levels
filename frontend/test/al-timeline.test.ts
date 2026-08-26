@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/al-timeline";
-import { computePaths } from "../src/al-timeline";
+import { computePaths, timelineCache } from "../src/al-timeline";
 import type { AlTimeline, TimelineRangeDetail } from "../src/al-timeline";
 import type { HomeAssistant, TimeseriesResponse } from "../src/types";
 
-const NOW = 1_700_000_000;
+/** Minute-aligned: query windows are quantized to the minute, so a round `now` keeps the
+    fixtures and the window the element asks for in agreement. */
+const NOW = 1_700_000_040;
 const DAY = 86_400;
 
 /** A fresh group id per test, so the module-level cache never leaks between them. */
@@ -95,6 +97,7 @@ const press = async (el: AlTimeline, key: string, shiftKey = false): Promise<voi
 
 beforeEach(() => {
   document.body.innerHTML = "";
+  timelineCache.clear();
   vi.useFakeTimers({ now: NOW * 1000 });
 });
 
@@ -136,16 +139,60 @@ describe("al-timeline data loading", () => {
     expect(q(el, "svg")).toBeNull();
   });
 
+  it("quantizes the window to the minute", async () => {
+    const gid = nextGid();
+    const h = hassStub(async () => makeResponse(gid));
+    vi.setSystemTime((NOW + 37) * 1000);
+    await mount({ groupId: gid, range: "24h", horizon: "24h" }, h);
+    expect(h.calls[0]).toMatchObject({ start: NOW - DAY, end: NOW, forecast_until: NOW + DAY });
+  });
+
   it("serves a second element from the cache within the TTL", async () => {
     const gid = nextGid();
     const h = hassStub(async () => makeResponse(gid));
     const first = await mount({ groupId: gid, range: "24h", horizon: "24h" }, h);
     expect(h.callWS).toHaveBeenCalledTimes(1);
+    // Half a minute later: a different instant, but the same quantized window, so the
+    // second element must not go back to the server.
+    vi.setSystemTime((NOW + 30) * 1000);
     const second = await mount({ groupId: gid, range: "24h", horizon: "24h" }, h);
     expect(h.callWS).toHaveBeenCalledTimes(1);
     expect(qa(second, "path.bus")).toHaveLength(1);
     first.remove();
     second.remove();
+  });
+
+  it("asks again once the window has moved on past the TTL", async () => {
+    const gid = nextGid();
+    const h = hassStub(async () => makeResponse(gid));
+    const first = await mount({ groupId: gid, range: "24h", horizon: "24h" }, h);
+    first.remove();
+    vi.setSystemTime((NOW + 61) * 1000);
+    await mount({ groupId: gid, range: "24h", horizon: "24h" }, h);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    expect(h.calls[1]).toMatchObject({ start: NOW + 60 - DAY, end: NOW + 60 });
+  });
+
+  it("drops entries past the TTL as new ones arrive", async () => {
+    const h = hassStub(async (m) => makeResponse(m["group_id"] as string));
+    (await mount({ groupId: nextGid(), range: "24h", horizon: "24h" }, h)).remove();
+    expect(timelineCache.size).toBe(1);
+    vi.setSystemTime((NOW + 61) * 1000);
+    (await mount({ groupId: nextGid(), range: "24h", horizon: "24h" }, h)).remove();
+    expect(timelineCache.size).toBe(1);
+  });
+
+  it("caps the cache and evicts the oldest window first", async () => {
+    const h = hassStub(async (m) => makeResponse(m["group_id"] as string));
+    const gids = Array.from({ length: 40 }, () => nextGid());
+    for (const gid of gids) (await mount({ groupId: gid, range: "24h", horizon: "24h" }, h)).remove();
+    expect(h.callWS).toHaveBeenCalledTimes(40);
+    expect(timelineCache.size).toBeLessThanOrEqual(32);
+    // The newest window is still there; the first one asked for is long gone.
+    await mount({ groupId: gids[39]!, range: "24h", horizon: "24h" }, h);
+    expect(h.callWS).toHaveBeenCalledTimes(40);
+    await mount({ groupId: gids[0]!, range: "24h", horizon: "24h" }, h);
+    expect(h.callWS).toHaveBeenCalledTimes(41);
   });
 
   it("keeps the last good data and shows an inline error when a refetch fails", async () => {

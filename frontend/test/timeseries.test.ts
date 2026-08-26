@@ -96,6 +96,19 @@ describe("bandPolygon", () => {
     const f: Forecast = { t0: 0, step: 10, p25: [], p50: [], p75: [] };
     expect(bandPolygon(f, (t) => t, (v) => v)).toBe("");
   });
+  it("decimates both edges when a cap is given", () => {
+    const n = 5_000;
+    const f: Forecast = {
+      t0: 0,
+      step: 10,
+      p25: Array.from({ length: n }, (_, i) => i % 3),
+      p50: Array.from({ length: n }, (_, i) => 3 + (i % 3)),
+      p75: Array.from({ length: n }, (_, i) => 6 + (i % 3)),
+    };
+    const vertices = (d: string): number => d.split(" ").length - 1;
+    expect(vertices(bandPolygon(f, (t) => t, (v) => v, 100))).toBeLessThanOrEqual(200);
+    expect(vertices(bandPolygon(f, (t) => t, (v) => v))).toBe(2 * n);
+  });
 });
 
 describe("forecastLine", () => {
