@@ -148,6 +148,7 @@ export interface HomeAssistant {
   language: string;
   localize: (key: string, ...args: unknown[]) => string;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
+  callService(domain: string, service: string, data?: Record<string, unknown>): Promise<void>;
 }
 
 export type Path = (string | number)[];

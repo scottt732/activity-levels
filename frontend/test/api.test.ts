@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { getConfig, saveConfig, validateConfig } from "../src/api";
-import type { Config, HomeAssistant } from "../src/types";
+import { callService, getConfig, getProfile, getSimulationLog, getTimeseries, rebuildProfile, saveConfig, validateConfig } from "../src/api";
+import type { Config, HomeAssistant, ProfileState, SimulationLog, TimeseriesResponse } from "../src/types";
 
 const config: Config = {
   version: 1,
@@ -43,5 +43,66 @@ describe("api", () => {
       ok: false,
       errors: [{ path: "", message: "duplicate group id: house" }],
     });
+  });
+});
+
+describe("getTimeseries", () => {
+  it("sends the query alongside the message type and returns the response as-is", async () => {
+    const response: TimeseriesResponse = { series: {}, forecast: null, day_types: [], lights: {}, plan: [] };
+    const callWS = vi.fn(async () => response);
+    const hass = hassWith(callWS);
+    const query = { group_id: "house", start: 0, end: 100, resolution: "5m" as const };
+    await expect(getTimeseries(hass, query)).resolves.toBe(response);
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/timeseries", ...query });
+  });
+});
+
+describe("getProfile", () => {
+  it("requests the profile state", async () => {
+    const profile: ProfileState = { profile: {} as never, ready: {}, trained: false };
+    const callWS = vi.fn(async () => profile);
+    const hass = hassWith(callWS);
+    await expect(getProfile(hass)).resolves.toBe(profile);
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/profile/get" });
+  });
+});
+
+describe("rebuildProfile", () => {
+  it("defaults force to false", async () => {
+    const callWS = vi.fn(async () => ({ rebuilt: true }));
+    const hass = hassWith(callWS);
+    await expect(rebuildProfile(hass)).resolves.toEqual({ rebuilt: true });
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/profile/rebuild", force: false });
+  });
+  it("passes force through when given", async () => {
+    const callWS = vi.fn(async () => ({ rebuilt: true }));
+    const hass = hassWith(callWS);
+    await rebuildProfile(hass, true);
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/profile/rebuild", force: true });
+  });
+});
+
+describe("getSimulationLog", () => {
+  it("defaults limit to 50 and omits group_id when not given", async () => {
+    const log: SimulationLog = { entries: [], active: {}, blocked: {} };
+    const callWS = vi.fn(async () => log);
+    const hass = hassWith(callWS);
+    await expect(getSimulationLog(hass)).resolves.toBe(log);
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/simulation/log", limit: 50 });
+  });
+  it("passes group_id and limit through when given", async () => {
+    const callWS = vi.fn(async () => ({ entries: [], active: {}, blocked: {} }));
+    const hass = hassWith(callWS);
+    await getSimulationLog(hass, "house", 10);
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/simulation/log", group_id: "house", limit: 10 });
+  });
+});
+
+describe("callService", () => {
+  it("delegates straight to hass.callService", async () => {
+    const svc = vi.fn(async () => undefined);
+    const hass = { callService: svc } as unknown as HomeAssistant;
+    await callService(hass, "light", "turn_on", { entity_id: "light.x" });
+    expect(svc).toHaveBeenCalledWith("light", "turn_on", { entity_id: "light.x" });
   });
 });
