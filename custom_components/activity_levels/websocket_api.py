@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant, callback
 from .const import DOMAIN
 from .coordinator import ActivityLevelsCoordinator
 from .schema import ConfigError, validate_config
+from .tree import build_tree
 
 _REGISTERED = f"{DOMAIN}_websocket_registered"
 
@@ -80,7 +81,8 @@ async def ws_config_save(
         return
     try:
         config = validate_config(msg["config"])
-    except ConfigError as err:
+        build_tree(config)
+    except (ConfigError, ValueError) as err:
         connection.send_error(msg["id"], "invalid_config", str(err))
         return
     hass.config_entries.async_update_entry(entries[0], options=config)

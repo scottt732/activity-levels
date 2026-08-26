@@ -53,6 +53,29 @@ async def test_config_get_validate_save(
     assert not msg["success"] and msg["error"]["code"] == "invalid_config"
 
 
+async def test_config_save_rejects_engine_build_failure(
+    hass: HomeAssistant,
+    hass_ws_client: WebSocketGenerator,
+    entry: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(config: dict[str, object]) -> None:
+        raise ValueError("boom")
+
+    monkeypatch.setattr("custom_components.activity_levels.websocket_api.build_tree", boom)
+    original_options = dict(entry.options)
+
+    client = await hass_ws_client(hass)
+    good = validate_config(house_config())
+    good["groups"][0]["children"][1]["name"] = "Pantry"
+    await client.send_json_auto_id({"type": "activity_levels/config/save", "config": good})
+    msg = await client.receive_json()
+
+    assert not msg["success"]
+    assert msg["error"]["code"] == "invalid_config"
+    assert entry.options == original_options
+
+
 async def test_state_command(
     hass: HomeAssistant, hass_ws_client: WebSocketGenerator, entry: MockConfigEntry
 ) -> None:
