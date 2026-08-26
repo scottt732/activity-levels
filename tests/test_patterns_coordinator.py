@@ -710,3 +710,24 @@ async def test_a_group_with_no_statistics_names_the_id_it_looked_for(
     ]
     assert any("sensor.kitchen_activity_level" in message for message in warnings)
     assert any("sensor.house_activity_level" in message for message in warnings)
+
+
+async def test_ws_state_reports_each_groups_light_count(
+    hass: HomeAssistant, hass_ws_client: Any
+) -> None:
+    """The panel needs to know a group owns lights before it offers to simulate it."""
+    area = ar.async_get(hass).async_get_or_create("kitchen")
+    entities = er.async_get(hass)
+    light = entities.async_get_or_create("light", "demo", "kitchen-lamp")
+    entities.async_update_entity(light.entity_id, area_id=area.id)
+    config = house_config()
+    config["groups"][0]["children"][1]["area"] = area.id
+    await _add_entry(hass, config)
+
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": f"{DOMAIN}/state"})
+    result = await client.receive_json()
+
+    assert result["success"]
+    assert result["result"]["groups"]["kitchen"]["lights"] == 1
+    assert result["result"]["groups"]["house"]["lights"] == 0

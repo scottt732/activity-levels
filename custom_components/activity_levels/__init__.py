@@ -60,6 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
     # timers down; async_stop is idempotent.
     entry.async_on_unload(coordinator.async_stop)
     patterns = PatternsCoordinator(hass, entry, coordinator, config)
+    coordinator.patterns = patterns
     entry.async_on_unload(patterns.async_stop)
     await patterns.async_start()
     entry.runtime_data = RuntimeData(coordinator=coordinator, patterns=patterns)

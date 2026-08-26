@@ -71,6 +71,8 @@ export interface GroupLive {
   value: number; real_value: number; raw_value: number; active: boolean; gated: boolean; active_voices: number;
   last_activity: number | null; cooldown_at: number | null; contributors: Record<string, number>;
   name: string; parent_id: string | null; precision: number; max_value: number; mix: Mix; next_wake: number | null;
+  /** Light entities the group owns right now; 0 means it cannot be simulated. */
+  lights: number;
 }
 export interface VoiceLive {
   label: string; entity: string | null; phase: "idle" | "attack" | "decay" | "sustain" | "release";

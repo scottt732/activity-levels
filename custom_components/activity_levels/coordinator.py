@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from functools import partial
 from math import isfinite
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, callback
@@ -19,6 +19,9 @@ from homeassistant.util import dt as dt_util
 from .const import STORAGE_VERSION, TRIGGER_KEY, storage_key
 from .engine import Group, Phase, Voice
 from .tree import Tree, VoiceRef
+
+if TYPE_CHECKING:
+    from .patterns_coordinator import PatternsCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 _SAVE_DELAY = 10.0
@@ -46,6 +49,9 @@ class ActivityLevelsCoordinator:
         self.entry_id = entry_id
         self.tree = tree
         self.data: dict[str, GroupState] = {}
+        # filled in once the patterns coordinator exists: it is constructed from this
+        # one, so it cannot be an argument here
+        self.patterns: PatternsCoordinator | None = None
         self._listeners: dict[str, list[Callable[[], None]]] = {}
         self._timers: dict[str, CALLBACK_TYPE] = {}
         self._wakes: dict[str, float] = {}
@@ -303,6 +309,7 @@ class ActivityLevelsCoordinator:
                 "max_value": info.max_value,
                 "mix": info.mix,
                 "raw_value": info.group.value_at(t),
+                "lights": len(self.patterns.lights.get(gid, [])) if self.patterns else 0,
                 "next_wake": self.next_wake(gid) if gid in root_ids else None,
             }
             for gid, info in self.tree.groups.items()
