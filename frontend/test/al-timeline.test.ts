@@ -376,6 +376,153 @@ describe("al-timeline rendering", () => {
   });
 });
 
+describe("al-timeline live refetch", () => {
+  const setVisibility = (value: string): void => {
+    Object.defineProperty(document, "visibilityState", { value, configurable: true });
+  };
+  afterEach(() => setVisibility("visible"));
+
+  /** A mounted chart whose first load has been answered, watching `gid` at 1.0. */
+  const watching = async (): Promise<{ el: AlTimeline; h: Harness; gid: string }> => {
+    const gid = nextGid();
+    const h = hassStub(async () => makeResponse(gid));
+    const el = await mount(
+      { groupId: gid, range: "24h", horizon: "24h", live: liveFor(gid, NOW, 1) },
+      h,
+    );
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    return { el, h, gid };
+  };
+
+  /** A new live frame `seconds` on, reading `value`. */
+  const frame = async (el: AlTimeline, gid: string, seconds: number, value: number): Promise<void> => {
+    el.live = liveFor(gid, NOW + seconds, value);
+    await el.updateComplete;
+  };
+
+  it("asks the recorder to catch up 10 s after the live value moves", async () => {
+    const { el, h, gid } = await watching();
+    await frame(el, gid, 1, 1.2);
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    el.remove();
+  });
+
+  it("bypasses the cache, so the second ask actually reaches the server", async () => {
+    const { el, h, gid } = await watching();
+    await frame(el, gid, 1, 1.2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    // Same minute, so the same quantized window and the same cache key as the first load:
+    // a second call can only mean the forced path went past the entry it would have hit.
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    expect(h.calls[1]).toEqual(h.calls[0]);
+    el.remove();
+  });
+
+  it("sits still for a move smaller than half a display step", async () => {
+    const { el, h, gid } = await watching();
+    // Half a step at 1 dp is 0.05, and neither frame is that far from the 1.0 baseline.
+    await frame(el, gid, 1, 1.02);
+    await frame(el, gid, 2, 1.04);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    el.remove();
+  });
+
+  it("reads the step off the group's own precision", async () => {
+    const gid = nextGid();
+    const h = hassStub(async () => makeResponse(gid));
+    const el = await mount(
+      {
+        groupId: gid,
+        range: "24h",
+        horizon: "24h",
+        live: { now: NOW, groups: { [gid]: groupLive({ value: 1, precision: 2 }) }, voices: {} },
+      },
+      h,
+    );
+    // 0.01 moves half a step at 2 dp, where it would be far too small at 1 dp.
+    el.live = { now: NOW + 1, groups: { [gid]: groupLive({ value: 1.01, precision: 2 }) }, voices: {} };
+    await el.updateComplete;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    el.remove();
+  });
+
+  it("coalesces every move inside the 10 s into one refetch", async () => {
+    const { el, h, gid } = await watching();
+    await frame(el, gid, 1, 1.2);
+    await vi.advanceTimersByTimeAsync(4_000);
+    await frame(el, gid, 5, 2.4);
+    await vi.advanceTimersByTimeAsync(4_000);
+    await frame(el, gid, 9, 3.6);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    // …and the timer is free again for the next move.
+    await frame(el, gid, 12, 4.8);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.callWS).toHaveBeenCalledTimes(3);
+    el.remove();
+  });
+
+  it("drops the pending refetch on disconnect", async () => {
+    const { el, h, gid } = await watching();
+    await frame(el, gid, 1, 1.2);
+    el.remove();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops the pending refetch when the selection moves to another group", async () => {
+    const { el, h, gid } = await watching();
+    await frame(el, gid, 1, 1.2);
+    el.groupId = nextGid();
+    await settle(el);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    el.remove();
+  });
+
+  it("skips the refetch while the host has it paused", async () => {
+    const { el, h, gid } = await watching();
+    el.paused = true;
+    await frame(el, gid, 1, 1.2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    el.paused = false;
+    await frame(el, gid, 12, 2.4);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    el.remove();
+  });
+
+  it("skips the refetch while the tab is hidden", async () => {
+    const { el, h, gid } = await watching();
+    setVisibility("hidden");
+    await frame(el, gid, 1, 1.2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    setVisibility("visible");
+    await frame(el, gid, 12, 2.4);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.callWS).toHaveBeenCalledTimes(2);
+    el.remove();
+  });
+
+  it("does not refetch just because a live frame arrived", async () => {
+    const { el, h, gid } = await watching();
+    await frame(el, gid, 1, 1);
+    await frame(el, gid, 2, 1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    el.remove();
+  });
+});
+
 describe("al-timeline live tail", () => {
   /** The chart is 800 wide with 32 of left margin, so the plot spans 768px of 48h. */
   const tailD = (el: AlTimeline): string => q(el, "path.tail")?.getAttribute("d") ?? "";

@@ -35,6 +35,12 @@ const NARROW_HEIGHT = 160;
 /** More points than this in one path is more than the display can resolve anyway. */
 const MAX_POINTS = 2000;
 const REFETCH_MS = 60_000;
+/**
+ * How long after the live value moves the recorder is asked to catch up. Long enough that
+ * a burst of movement costs one round trip, short enough that the tail is not left
+ * carrying the chart on its own.
+ */
+const LIVE_REFETCH_MS = 10_000;
 const CACHE_TTL_MS = 60_000;
 /** Enough for a few strips at a few ranges; past that the oldest entries are dropped. */
 const CACHE_MAX = 32;
@@ -432,12 +438,25 @@ export class AlTimeline extends LitElement {
 
   private observer?: ResizeObserver;
   private timer?: ReturnType<typeof setInterval>;
+  /** The pending "the live value moved" refetch, if one is already on its way. */
+  private liveTimer?: ReturnType<typeof setTimeout>;
+  /** The live value that refetch was scheduled against; `null` until the first frame. */
+  private liveValue: number | null = null;
   /** Only the newest load may write; a slow answer to an old window is dropped. */
   private seq = 0;
   private memo: { key: unknown[]; value: ComputedTimeline } | null = null;
 
   private get height(): number {
     return this.narrow ? NARROW_HEIGHT : HEIGHT;
+  }
+
+  /**
+   * Whether a fetch is worth making right now. A background tab has nobody watching the
+   * chart, and a save is about to replace the config this window describes: either way the
+   * round trip buys nothing. Both the periodic tick and the live refetch ask this.
+   */
+  private get refetchable(): boolean {
+    return !this.paused && document.visibilityState === "visible";
   }
 
   /**
@@ -472,10 +491,8 @@ export class AlTimeline extends LitElement {
       });
       this.observer.observe(this);
     }
-    // A background tab has nobody watching the chart, and a save is about to replace the
-    // config this window describes: either way the tick is a wasted round trip.
     this.timer = setInterval(() => {
-      if (this.paused || document.visibilityState !== "visible") return;
+      if (!this.refetchable) return;
       void this.load();
     }, REFETCH_MS);
     void this.load();
@@ -487,6 +504,41 @@ export class AlTimeline extends LitElement {
     this.observer = undefined;
     if (this.timer !== undefined) clearInterval(this.timer);
     this.timer = undefined;
+    this.resetLiveWatch();
+  }
+
+  /** Forgets the pending refetch and the value it was measured against. */
+  private resetLiveWatch(): void {
+    if (this.liveTimer !== undefined) clearTimeout(this.liveTimer);
+    this.liveTimer = undefined;
+    this.liveValue = null;
+  }
+
+  /**
+   * Schedules the catch-up refetch when the selected group's live value has moved by more
+   * than half a display step - less than that rounds to the same readout, so the recorded
+   * history is not visibly behind the tail. Everything that moves inside the 10 s rides on
+   * the timer the first move started, so a busy group still costs one round trip.
+   */
+  private watchLive(): void {
+    const gid = this.groupId;
+    const group = gid === null ? undefined : this.live?.groups[gid];
+    if (!group) return;
+    const previous = this.liveValue;
+    // The first frame is the baseline, not a change: there is nothing to catch up to yet.
+    if (previous === null) {
+      this.liveValue = group.value;
+      return;
+    }
+    if (Math.abs(group.value - previous) <= Math.pow(10, -group.precision) / 2) return;
+    this.liveValue = group.value;
+    if (this.liveTimer !== undefined) return;
+    this.liveTimer = setTimeout(() => {
+      this.liveTimer = undefined;
+      // Paused or hidden, the same way the periodic tick is: the next move will ask again.
+      if (!this.refetchable) return;
+      void this.load(true);
+    }, LIVE_REFETCH_MS);
   }
 
   override willUpdate(changed: PropertyValues<this>): void {
@@ -503,6 +555,10 @@ export class AlTimeline extends LitElement {
       }
       void this.load();
     }
+    // Another group's movement is not this one's, and the load above is already the
+    // freshest history there is - so the watch starts over rather than firing into it.
+    if (changed.has("groupId")) this.resetLiveWatch();
+    if (changed.has("live")) this.watchLive();
   }
 
   private query(groupId: string): TimeseriesQuery {
@@ -521,14 +577,19 @@ export class AlTimeline extends LitElement {
     };
   }
 
-  private async load(): Promise<void> {
+  /**
+   * Loads the current window. `force` is the catch-up refetch's path: the point of it is
+   * that the recorder has something newer than the answer already in hand, and the shared
+   * cache would serve that same answer straight back for the rest of its minute.
+   */
+  private async load(force = false): Promise<void> {
     const hass = this.hass;
     const groupId = this.groupId;
     if (!hass || groupId === null) return;
     const q = this.query(groupId);
     const key = cacheKey(q);
 
-    const hit = cache.get(key);
+    const hit = force ? undefined : cache.get(key);
     if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
       this.seq++;
       this.loaded = { q, data: hit.data };
@@ -540,16 +601,21 @@ export class AlTimeline extends LitElement {
       return;
     }
 
-    let pending = inflight.get(key);
+    let pending = force ? undefined : inflight.get(key);
     if (!pending) {
-      pending = getTimeseries(hass, q);
-      inflight.set(key, pending);
-      void pending
+      const started = getTimeseries(hass, q);
+      pending = started;
+      inflight.set(key, started);
+      void started
         .then(
           (data) => remember(key, data),
           () => undefined,
         )
-        .finally(() => inflight.delete(key));
+        // A forced load overwrote whatever was registered here, so only the request that
+        // is still the one in the air may clear the entry.
+        .finally(() => {
+          if (inflight.get(key) === started) inflight.delete(key);
+        });
     }
 
     const seq = ++this.seq;
