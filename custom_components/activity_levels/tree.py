@@ -7,8 +7,9 @@ from dataclasses import dataclass, field
 from math import inf
 from typing import Any
 
-from .const import TRIGGER_KEY
+from .const import CONF_PRESENCE, PRESENCE_KEY, TRIGGER_KEY
 from .engine import Channel, Envelope, Group, Mix, NullHandling, Retrigger, Unavailable, Voice
+from .topology import room_ids
 
 _ENVELOPE_KEYS = (
     "attack",
@@ -34,6 +35,7 @@ class GroupInfo:
     mix: str
     group: Group
     trigger: Voice
+    presence: Voice | None
 
 
 @dataclass(frozen=True)
@@ -111,9 +113,40 @@ def _trigger_voice(
     )
 
 
+def _presence_voice(
+    defaults: Mapping[str, Any],
+    presets: Mapping[str, Mapping[str, Any]],
+    presence: Mapping[str, Any],
+    overrides: Mapping[str, Any],
+    max_value: float,
+) -> Voice:
+    """The visible synthetic channel that says somebody is in this room.
+
+    Built like a stimulus rather than like the trigger: it is real activity, it is
+    capped at the group's limiter, and its envelope resolves through the ordinary
+    chain -- the group's own overrides, then ``presence.envelope``, then
+    ``defaults.envelope``. A note-on lasts until the room empties, so the default
+    (a held note with a long release) is exactly right.
+    """
+    stimulus = {
+        **overrides,
+        "envelope": overrides.get("envelope") or presence.get("envelope"),
+    }
+    return Voice(
+        id=PRESENCE_KEY,
+        gain=float(overrides.get("gain", 1.0)),
+        envelope=resolve_envelope(defaults, presets, stimulus),
+        ceiling=max_value,
+    )
+
+
 def build_tree(config: dict[str, Any]) -> Tree:
     defaults = config["defaults"]
     presets = {e["id"]: e for e in config["envelopes"]}
+    presence_cfg = config.get(CONF_PRESENCE) or {}
+    # Only rooms can be occupied; a branch (House, Downstairs) mixes rooms and is not a
+    # place. With presence off there are no presence channels at all.
+    rooms = room_ids(config) if presence_cfg.get("enabled") else frozenset()
     tree = Tree(defaults=dict(defaults))
 
     def build(node: dict[str, Any], parent_id: str | None, root_id: str | None) -> Group:
@@ -137,6 +170,12 @@ def build_tree(config: dict[str, Any]) -> Tree:
             tree.voices_by_entity.setdefault(stim["entity"], []).append(ref)
         for child in node["children"]:
             channels.append(Channel(build(child, gid, rid), gain=child["gain"]))
+        presence: Voice | None = None
+        if gid in rooms:
+            presence = _presence_voice(
+                defaults, presets, presence_cfg, node[CONF_PRESENCE], max_value
+            )
+            channels.append(Channel(presence, key=PRESENCE_KEY))
         trigger = _trigger_voice(defaults, presets, max_value)
         channels.append(Channel(trigger, key=TRIGGER_KEY))
         group = Group(
@@ -158,6 +197,7 @@ def build_tree(config: dict[str, Any]) -> Tree:
             mix=node["mix"],
             group=group,
             trigger=trigger,
+            presence=presence,
         )
         return group
 

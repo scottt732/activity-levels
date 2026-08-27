@@ -2,10 +2,11 @@ from math import inf
 
 import pytest
 
+from custom_components.activity_levels.const import PRESENCE_KEY, TRIGGER_KEY
 from custom_components.activity_levels.engine import Mix, Phase, Retrigger
 from custom_components.activity_levels.schema import validate_config
 from custom_components.activity_levels.tree import build_tree, resolve_envelope
-from tests.fixtures import house_config
+from tests.fixtures import house_config, presence_config, rooms_config
 
 
 def test_build_tree_shapes() -> None:
@@ -94,3 +95,40 @@ def test_the_trigger_voice_still_releases_from_the_limiter_in_one_release() -> N
     assert trig.value_at(3600.0) == pytest.approx(2.5)
     assert trig.value_at(7200.0) == 0.0
     assert trig.is_active(7200.0) is False
+
+
+def test_room_groups_get_a_visible_presence_channel() -> None:
+    tree = build_tree(validate_config(presence_config()))
+    kitchen = tree.groups["kitchen"]
+    labels = [channel.label for channel in kitchen.group.channels]
+    assert labels == ["binary_sensor.kitchen_motion", PRESENCE_KEY, TRIGGER_KEY]
+    assert kitchen.presence is not None
+    assert kitchen.presence.gain == 2.0  # the group's own override
+    assert kitchen.presence.ceiling == kitchen.max_value  # capped like a stimulus
+    assert kitchen.presence.envelope.release == 3600.0  # presence.envelope: hour
+    # a branch is not a room: nothing to be present in
+    assert tree.groups["downstairs"].presence is None
+    assert PRESENCE_KEY not in [c.label for c in tree.groups["downstairs"].group.channels]
+
+
+def test_group_presence_overrides_beat_the_preset() -> None:
+    config = presence_config()
+    config["groups"][0]["children"][0]["children"][1]["presence"] = {"release": "5m"}
+    tree = build_tree(validate_config(config))
+    assert tree.groups["dining_room"].presence.envelope.release == 300.0
+    assert tree.groups["kitchen"].presence.envelope.release == 3600.0
+
+
+def test_no_presence_channel_when_presence_is_off() -> None:
+    tree = build_tree(validate_config(rooms_config()))  # presence absent -> disabled
+    for info in tree.groups.values():
+        assert info.presence is None
+        assert PRESENCE_KEY not in [c.label for c in info.group.channels]
+
+
+def test_the_presence_voice_is_in_the_mix_and_in_live_voices() -> None:
+    tree = build_tree(validate_config(presence_config()))
+    kitchen = tree.groups["kitchen"]
+    kitchen.presence.note_on(0.0)
+    assert kitchen.group.value_at(0.0) == pytest.approx(2.0)
+    assert kitchen.presence in list(kitchen.group.live_voices())

@@ -16,7 +16,7 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import STORAGE_VERSION, TRIGGER_KEY, storage_key
+from .const import PRESENCE_KEY, STORAGE_VERSION, TRIGGER_KEY, storage_key
 from .engine import Channel, Group, Phase, Voice
 from .tree import Tree, VoiceRef
 
@@ -201,6 +201,29 @@ class ActivityLevelsCoordinator:
         self._after_change({info.root_id}, t)
         return info.group.display_value_at(t)
 
+    def set_occupied(self, group_id: str, occupied: bool) -> None:
+        """Open or close a room's presence gate.
+
+        A note, not a level: the caller decides who counts as an occupant (a confidence
+        threshold, and never two note-ons for two people), and this only moves on the
+        0 <-> occupied crossings. A group with no presence voice -- a branch, or any
+        group at all while presence is off -- is a no-op rather than an error, so the
+        presence coordinator never has to know which groups are rooms.
+        """
+        info = self.tree.groups.get(group_id)
+        if info is None or info.presence is None:
+            return
+        t = self.now()
+        if occupied:
+            if info.presence.gate:
+                return  # already sounding; a second note-on is noise
+            info.presence.note_on(t)
+        else:
+            if not info.presence.gate:
+                return
+            info.presence.note_off(t)
+        self._after_change({info.root_id}, t)
+
     def set_muted(self, group_id: str, muted: bool) -> None:
         """Take a group out of its parent's mix, or put it back.
 
@@ -296,6 +319,8 @@ class ActivityLevelsCoordinator:
         }
         for info in self.tree.groups.values():
             voices[self.tree.voice_key(info.id, info.trigger.id)] = info.trigger.snapshot()
+            if info.presence is not None:
+                voices[self.tree.voice_key(info.id, PRESENCE_KEY)] = info.presence.snapshot()
         return {"voices": voices, "muted": dict(self._muted)}
 
     def _restore(self, voices: dict[str, Any]) -> None:
@@ -305,6 +330,10 @@ class ActivityLevelsCoordinator:
         for info in self.tree.groups.values():
             if data := voices.get(self.tree.voice_key(info.id, info.trigger.id)):
                 info.trigger.restore(data)
+            if info.presence is not None and (
+                data := voices.get(self.tree.voice_key(info.id, PRESENCE_KEY))
+            ):
+                info.presence.restore(data)
 
     def _restore_muted(self, muted: dict[str, Any]) -> None:
         """Re-apply the stored mutes to the freshly built tree.
@@ -368,6 +397,8 @@ class ActivityLevelsCoordinator:
         for ref in self.tree.all_voice_refs():
             out[ref.group_id].append(self._voice_state(ref.label, ref.entity_id, ref.voice, t))
         for info in self.tree.groups.values():
+            if info.presence is not None:
+                out[info.id].append(self._voice_state(PRESENCE_KEY, None, info.presence, t))
             # the trigger voice has no entity behind it, but it still moves the value
             out[info.id].append(self._voice_state(TRIGGER_KEY, None, info.trigger, t))
         return out

@@ -9,10 +9,11 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
+from custom_components.activity_levels.const import PRESENCE_KEY, TRIGGER_KEY
 from custom_components.activity_levels.coordinator import ActivityLevelsCoordinator
 from custom_components.activity_levels.schema import validate_config
 from custom_components.activity_levels.tree import build_tree
-from tests.fixtures import house_config
+from tests.fixtures import house_config, presence_config
 
 
 @pytest.fixture
@@ -25,6 +26,13 @@ async def coordinator(hass: HomeAssistant) -> AsyncGenerator[ActivityLevelsCoord
     await coord.async_start()
     yield coord
     await coord.async_stop()  # cancel timers so the harness sees no lingering handles
+
+
+async def _started(hass: HomeAssistant, config: dict[str, Any]) -> ActivityLevelsCoordinator:
+    """A coordinator on a real ``hass``, started, with its store already loaded."""
+    coordinator = ActivityLevelsCoordinator(hass, "entry", build_tree(validate_config(config)))
+    await coordinator.async_start()
+    return coordinator
 
 
 async def advance(hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float) -> None:
@@ -374,3 +382,69 @@ async def test_trigger_stacks_only_up_to_the_limiter(
     assert coordinator.data["kitchen"].value == pytest.approx(2.5, abs=0.05)
     await advance(hass, freezer, 900.0)
     assert coordinator.data["kitchen"].value == 0.0
+
+
+async def test_set_occupied_notes_on_and_off(hass: HomeAssistant) -> None:
+    coordinator = await _started(hass, presence_config())
+    assert coordinator.data["kitchen"].value == 0.0
+
+    coordinator.set_occupied("kitchen", True)
+    state = coordinator.data["kitchen"]
+    assert state.value == pytest.approx(2.0)
+    assert state.gated is True
+    assert state.contributors[PRESENCE_KEY] == pytest.approx(2.0)
+    # presence is real activity, unlike the synthetic trigger
+    assert state.real_value == pytest.approx(2.0)
+
+    coordinator.set_occupied("kitchen", False)
+    assert coordinator.data["kitchen"].gated is False
+    await coordinator.async_stop()
+
+
+async def test_set_occupied_is_idempotent(hass: HomeAssistant) -> None:
+    coordinator = await _started(hass, presence_config())
+    coordinator.set_occupied("kitchen", True)
+    first = coordinator.tree.groups["kitchen"].presence.last_note_on
+    coordinator.set_occupied("kitchen", True)
+    assert coordinator.tree.groups["kitchen"].presence.last_note_on == first
+    coordinator.set_occupied("kitchen", False)
+    coordinator.set_occupied("kitchen", False)  # a second note-off must not throw
+    await coordinator.async_stop()
+
+
+async def test_set_occupied_on_a_branch_is_a_no_op(hass: HomeAssistant) -> None:
+    coordinator = await _started(hass, presence_config())
+    coordinator.set_occupied("downstairs", True)  # no presence voice: nothing happens
+    assert coordinator.data["downstairs"].value == 0.0
+    await coordinator.async_stop()
+
+
+async def test_the_presence_voice_survives_a_restart(hass: HomeAssistant) -> None:
+    coordinator = await _started(hass, presence_config())
+    coordinator.set_occupied("kitchen", True)
+    await coordinator.async_stop()
+
+    revived = await _started(hass, presence_config())
+    assert revived.data["kitchen"].gated is True
+    assert revived.data["kitchen"].value == pytest.approx(2.0, abs=0.05)
+    await revived.async_stop()
+
+
+async def test_a_muted_room_stops_holding_its_parent_up(hass: HomeAssistant) -> None:
+    coordinator = await _started(hass, presence_config())
+    coordinator.set_occupied("kitchen", True)
+    assert coordinator.data["downstairs"].value > 0.0
+    coordinator.set_muted("kitchen", True)
+    assert coordinator.data["downstairs"].value == 0.0
+    assert coordinator.data["kitchen"].value == pytest.approx(2.0)  # the room itself sounds on
+    await coordinator.async_stop()
+
+
+async def test_presence_shows_up_in_voice_states(hass: HomeAssistant) -> None:
+    coordinator = await _started(hass, presence_config())
+    coordinator.set_occupied("kitchen", True)
+    voices = coordinator.voice_states()["kitchen"]
+    presence = next(v for v in voices if v["label"] == PRESENCE_KEY)
+    assert presence["entity"] is None and presence["gate"] is True
+    assert [v["label"] for v in coordinator.voice_states()["downstairs"]] == [TRIGGER_KEY]
+    await coordinator.async_stop()
