@@ -1,0 +1,94 @@
+name: Bug report
+description: Something in the integration or the panel does not behave the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please check the
+        [existing issues](https://github.com/scottt732/activity-levels/issues?q=is%3Aissue)
+        first — and if you are not sure it is a bug, a
+        [discussion](https://github.com/scottt732/activity-levels/discussions) is a fine
+        place to start.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you see, and what did you expect instead?
+      placeholder: |
+        The kitchen group's level stays at 0 even though the motion sensor fires.
+        I expected it to rise to 1.0 and then release over 30 minutes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that shows the problem.
+      placeholder: |
+        1. Configure a group with one binary_sensor stimulus.
+        2. Trip the sensor.
+        3. Watch `sensor.kitchen_activity_level`.
+    validations:
+      required: true
+
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      description: Settings → About, e.g. `2026.8.3`.
+    validations:
+      required: true
+
+  - type: input
+    id: integration-version
+    attributes:
+      label: Activity Levels version
+      description: >
+        HACS shows it, or read `version` from
+        `custom_components/activity_levels/manifest.json`.
+    validations:
+      required: true
+
+  - type: input
+    id: install-method
+    attributes:
+      label: Installation
+      description: HACS, the release zip, or a git checkout?
+      placeholder: HACS
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration excerpt
+      description: >
+        The group, stimulus or envelope involved. Download it from the panel or from the
+        integration's diagnostics, and trim it to the part that matters. Remove anything
+        you would rather not publish.
+      render: yaml
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >
+        Any `activity_levels` lines from Settings → System → Logs. Turning the logger up
+        gives much more:
+        `logger: { logs: { custom_components.activity_levels: debug } }`.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Screenshots of the panel, related integrations, whatever seems relevant.
+    validations:
+      required: false

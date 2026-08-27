@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest something the integration or the panel should be able to do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Open-ended ideas are often easier to work through in
+        [Discussions](https://github.com/scottt732/activity-levels/discussions) — use this
+        form when you have a concrete change in mind.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that is awkward or impossible today?
+      placeholder: >
+        I want a group to ignore its stimuli entirely while nobody is home, without
+        deleting them.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: How you picture it working — configuration, entities, panel, services.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Automations, templates, other integrations — and why they fall short.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+    validations:
+      required: false
