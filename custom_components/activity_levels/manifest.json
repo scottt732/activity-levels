@@ -2,6 +2,7 @@
   "domain": "activity_levels",
   "name": "Activity Levels",
   "after_dependencies": [
+    "bermuda",
     "calendar",
     "recorder"
   ],

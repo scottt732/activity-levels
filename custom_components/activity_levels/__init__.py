@@ -30,7 +30,7 @@ from .const import (
 from .coordinator import ActivityLevelsCoordinator
 from .panel import async_register_panel, async_unregister_panel
 from .patterns_coordinator import PatternsCoordinator
-from .presence_coordinator import PresenceCoordinator
+from .presence_coordinator import PresenceCoordinator, clear_presence_issues
 from .runtime import ActivityLevelsConfigEntry, RuntimeData
 from .schema import ConfigError, validate_config
 from .topology import build_topology
@@ -80,6 +80,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
         presence = PresenceCoordinator(hass, entry, coordinator, topology, config)
         entry.async_on_unload(presence.async_stop)
         await presence.async_start()
+    else:
+        # nothing is left to clear whatever the presence side raised while it was on
+        clear_presence_issues(hass, entry.entry_id)
     entry.runtime_data = RuntimeData(
         coordinator=coordinator, patterns=patterns, topology=topology, presence=presence
     )

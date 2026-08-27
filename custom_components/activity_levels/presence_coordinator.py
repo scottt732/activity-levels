@@ -62,6 +62,28 @@ REGISTRY_DEBOUNCE = 5.0
 SAVE_DELAY = 10.0
 AWAY_LABEL = "Away"
 
+PRESENCE_ISSUES = (
+    ISSUE_BERMUDA_MISSING,
+    ISSUE_NOT_BERMUDA,
+    ISSUE_DISABLED_SENSORS,
+    ISSUE_UNMAPPED_SCANNERS,
+    ISSUE_TRANSITION,
+)
+"""Every repair issue the presence side can raise, so they can all be swept away."""
+
+
+@callback
+def clear_presence_issues(hass: HomeAssistant, entry_id: str) -> None:
+    """Delete every presence repair issue for one entry.
+
+    Called at the top of :meth:`PresenceCoordinator.async_start`, which then re-raises
+    whichever still apply, and by setup when presence is switched off -- because in that
+    case no coordinator is built, and without this the issues from the last time it was
+    on would sit in the repairs panel forever with nothing left to clear them.
+    """
+    for key in PRESENCE_ISSUES:
+        ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry_id}")
+
 
 @dataclass
 class TrackedDevice:
@@ -135,21 +157,23 @@ class PresenceCoordinator:
         leave the coordinator inert: the issue explains it, the entry still loads, and
         every other part of the integration goes on working.
         """
+        clear_presence_issues(self.hass, self.entry.entry_id)
         stored = await self._store.async_load()
-        self._beliefs = dict((stored or {}).get("beliefs") or {})
+        beliefs = stored.get("beliefs") if isinstance(stored, Mapping) else None
+        # a store we can no longer read is a uniform prior, not a failed setup
+        self._beliefs = dict(beliefs) if isinstance(beliefs, Mapping) else {}
 
-        if BERMUDA_DOMAIN not in self.hass.config.components:
+        if not self._bermuda_loaded():
             self._issue(ISSUE_BERMUDA_MISSING, present=True)
             _LOGGER.warning(
                 "presence.enabled is set but Bermuda is not installed; the presence side "
                 "stays off until it is"
             )
             return
-        self._issue(ISSUE_BERMUDA_MISSING, present=False)
 
         problem = self.topology.feasible(self.settings["stay"], self.settings["escape"])
-        self._issue(ISSUE_TRANSITION, present=problem is not None, detail=problem or "")
         if problem is not None:
+            self._issue(ISSUE_TRANSITION, present=True, detail=problem)
             _LOGGER.warning("Presence is off: %s", problem)
             return
 
@@ -161,6 +185,21 @@ class PresenceCoordinator:
         # a first observation from the states that are already there, so a restart does
         # not sit blank until somebody's phone next moves
         self._observe(dt_util.utcnow().timestamp())
+
+    def _bermuda_loaded(self) -> bool:
+        """Whether Bermuda is installed, whether or not it has finished starting.
+
+        Nothing orders the two integrations, so on a cold boot ours can set up while
+        Bermuda's component is still loading. Taking ``hass.config.components`` as the
+        only answer would raise "Bermuda is not installed" against a perfectly good
+        install and then leave the presence side inert until somebody reloaded the entry
+        by hand -- a configured config entry is the durable fact, so it counts too.
+        ``after_dependencies`` in the manifest makes this the rare case rather than the
+        usual one.
+        """
+        return BERMUDA_DOMAIN in self.hass.config.components or bool(
+            self.hass.config_entries.async_entries(BERMUDA_DOMAIN)
+        )
 
     async def async_stop(self) -> None:
         """Cancel every timer and flush the beliefs. Idempotent."""
@@ -215,7 +254,11 @@ class PresenceCoordinator:
         for spec in self.settings["devices"]:
             entry = entities.async_get(spec["device"])
             if entry is None or entry.platform != BERMUDA_DOMAIN:
-                wrong.append(spec["device"])
+                # two different mistakes with the same consequence, and the fix differs:
+                # a typo or a removed entity, versus somebody else's device_tracker
+                reason = "no such entity" if entry is None else "not a Bermuda entity"
+                wrong.append(f"{spec['device']} ({reason})")
+                _LOGGER.warning("Ignoring tracked device %s: %s", spec["device"], reason)
                 continue
             name = spec["name"] or entry.name or entry.original_name or entry.entity_id
             track = TrackedDevice(name=name, tracker=entry.entity_id, device_id=entry.device_id)

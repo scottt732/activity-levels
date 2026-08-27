@@ -75,7 +75,7 @@
     },
     "not_a_bermuda_device": {
       "title": "Tracked device is not a Bermuda device_tracker",
-      "description": "These tracked devices are not provided by Bermuda and are being ignored: {entities}. Pick a device_tracker that Bermuda created, in the Presence tab of the Activity Levels panel."
+      "description": "These tracked devices could not be resolved to a Bermuda device_tracker and are being ignored, each with the reason: {entities}. Pick a device_tracker that Bermuda created, in the Presence tab of the Activity Levels panel."
     },
     "disabled_distance_sensors": {
       "title": "Bermuda distance sensors are disabled",

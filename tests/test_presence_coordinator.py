@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -26,6 +27,7 @@ from custom_components.activity_levels.const import (
     ISSUE_TRANSITION,
     ISSUE_UNMAPPED_SCANNERS,
     PRESENCE_KEY,
+    PRESENCE_STORAGE_VERSION,
     presence_storage_key,
 )
 from custom_components.activity_levels.diagnostics import async_get_config_entry_diagnostics
@@ -143,14 +145,24 @@ async def test_no_bermuda_raises_an_issue_and_leaves_the_entry_loaded(
 
 async def test_a_device_that_is_not_bermudas_raises_an_issue(hass: HomeAssistant) -> None:
     fake_bermuda(hass)
+    # one entity that does not exist at all, one that exists but belongs to somebody else
+    er.async_get(hass).async_get_or_create(
+        "device_tracker", "demo", "someone", suggested_object_id="the_neighbour"
+    )
     config = presence_config()
-    config["presence"]["devices"] = [{"device": "device_tracker.somebody_elses", "name": "Ghost"}]
+    config["presence"]["devices"] = [
+        {"device": "device_tracker.somebody_elses", "name": "Ghost"},
+        {"device": "device_tracker.the_neighbour", "name": "Neighbour"},
+    ]
     entry = await add_entry(hass, config)
     issues = ir.async_get(hass)
     issue = issues.async_get_issue(DOMAIN, f"{ISSUE_NOT_BERMUDA}_{entry.entry_id}")
     assert issue is not None
     assert issue.translation_placeholders is not None
-    assert "device_tracker.somebody_elses" in issue.translation_placeholders["entities"]
+    named = issue.translation_placeholders["entities"]
+    # the two mistakes have different fixes, so the issue has to tell them apart
+    assert "device_tracker.somebody_elses (no such entity)" in named
+    assert "device_tracker.the_neighbour (not a Bermuda entity)" in named
     assert entry.runtime_data.presence is not None
     assert entry.runtime_data.presence.devices == {}
 
@@ -212,6 +224,57 @@ async def test_an_infeasible_transition_setting_raises_an_issue(hass: HomeAssist
     assert presence is not None and presence.ready is False
     assert presence.devices == {}
     assert ir.async_get(hass).async_get_issue(DOMAIN, f"{ISSUE_TRANSITION}_{entry.entry_id}")
+
+
+async def test_bermuda_still_starting_up_is_not_bermuda_missing(hass: HomeAssistant) -> None:
+    """Nothing orders the two integrations, so a configured entry has to be enough."""
+    bermuda = fake_bermuda(hass)
+    hass.config.components.remove("bermuda")  # its component has not finished loading
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None and presence.ready
+    assert set(presence.scanner_map.values()) == ROOMS
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, f"{ISSUE_BERMUDA_MISSING}_{entry.entry_id}")
+        is None
+    )
+    assert presence.devices["Scott"].tracker == bermuda.tracker
+
+
+async def test_turning_presence_off_clears_the_issues_it_left_behind(
+    hass: HomeAssistant,
+) -> None:
+    entry = await add_entry(hass)  # no Bermuda at all, so an issue is raised
+    issues = ir.async_get(hass)
+    assert issues.async_get_issue(DOMAIN, f"{ISSUE_BERMUDA_MISSING}_{entry.entry_id}")
+
+    hass.config_entries.async_update_entry(entry, options=validate_config(rooms_config()))
+    await hass.async_block_till_done()
+    assert entry.runtime_data.presence is None
+    # nothing is left to clear it, so setup has to
+    assert issues.issues == {}
+
+
+async def test_a_store_it_cannot_read_is_a_uniform_prior_not_a_failed_setup(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    fake_bermuda(hass)
+    for entity_id in ROOM_SENSORS:
+        hass.states.async_set(entity_id, "off")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options=validate_config(presence_config()),
+        title="Activity Levels",
+    )
+    entry.add_to_hass(hass)
+    key = presence_storage_key(entry.entry_id)
+    hass_storage[key] = {"version": PRESENCE_STORAGE_VERSION, "key": key, "data": ["nonsense"]}
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    presence = entry.runtime_data.presence
+    assert presence is not None and presence.ready
 
 
 # -- observations and occupancy ---------------------------------------------
