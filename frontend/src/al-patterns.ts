@@ -50,11 +50,6 @@ export class AlPatterns extends LitElement {
   static styles = [
     sharedStyles,
     css`
-      .page {
-        display: grid;
-        gap: 16px;
-        padding: 16px;
-      }
       h3 {
         margin: 0 0 8px;
         font-size: 1em;

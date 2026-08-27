@@ -129,6 +129,7 @@ export class ActivityLevelsPanel extends LitElement {
     try {
       const cfg = await getConfig(this.hass);
       this.draft = new Draft(cfg);
+      this.syncTabs();
       this.nav = restoreNav(cfg);
       this.selection = this.nav.selection;
       this.errors = [];
@@ -151,9 +152,6 @@ export class ActivityLevelsPanel extends LitElement {
   private setConfig(next: Config, coalesceKey?: string): void {
     this.draft?.set(next, coalesceKey);
     this.syncNav();
-    // turning presence off while standing on its tab would leave the panel on a tab
-    // that is no longer in the list, and the roving tabindex pointing past the end
-    if (!this.tabs.includes(this.tab)) this.selectTab(0);
     this.requestUpdate();
   }
 
@@ -166,12 +164,24 @@ export class ActivityLevelsPanel extends LitElement {
    * editor pane open itself on the first edit the user makes with no row selected.
    */
   private syncNav(): void {
+    this.syncTabs();
     const config = this.draft?.config;
     if (!config) return;
     const had = this.selection;
     const nav = reduce({ ...this.nav, selection: had }, { type: "sync", config });
     this.nav = had === null ? { ...nav, selection: null } : nav;
     this.selection = this.nav.selection !== null && this.nav.selection.length > 0 ? this.nav.selection : null;
+  }
+
+  /**
+   * Keeps the shown tab in the list. An edit, a discard, an undo, a redo and a reload can
+   * all switch presence off underneath the Presence tab; leaving `tab` naming a tab that
+   * is no longer there would keep `al-presence` mounted and polling, and would leave the
+   * roving tabindex past the end of the list - which takes the whole tablist out of the
+   * keyboard order.
+   */
+  private syncTabs(): void {
+    if (!this.tabs.includes(this.tab)) this.selectTab(0);
   }
 
   /**

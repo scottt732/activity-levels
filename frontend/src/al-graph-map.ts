@@ -147,7 +147,11 @@ export class AlGraphMap extends LitElement {
     return out;
   }
 
-  /** What the whole picture says, for somebody who cannot see it. */
+  /**
+   * What the whole picture says, for somebody who cannot see it. It labels a `group`, not
+   * an `img`: `role="img"` prunes the tree below it, which would take the focusable room
+   * buttons with it.
+   */
   private summary(map: MapLayout): string {
     const rooms = `${map.nodes.length} room${map.nodes.length === 1 ? "" : "s"}`;
     const doors = `${map.edges.length} door${map.edges.length === 1 ? "" : "s"}`;
@@ -245,7 +249,7 @@ export class AlGraphMap extends LitElement {
       <svg
         viewBox="0 0 ${map.width} ${map.height}"
         preserveAspectRatio="xMidYMid meet"
-        role="img"
+        role="group"
         aria-label=${summary}
       >
         <title>${summary}</title>

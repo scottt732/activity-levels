@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COL_W, PAD, ROW_H, edgeBetween, edgePoint, layout, pathEdges } from "../src/topology";
+import { COL_W, NODE_W, PAD, ROW_H, edgeBetween, edgePoint, layout, nodeById, pathEdges } from "../src/topology";
 import { roomsConfig } from "./fixtures";
 import type { TopologyPayload } from "../src/types";
 
@@ -58,6 +58,25 @@ describe("layout", () => {
     expect(edgeBetween(map, "dining_room", "kitchen")).toBeDefined();
     const edge = edgeBetween(map, "kitchen", "dining_room")!;
     expect(edgePoint(edge, 0.5)).toEqual({ x: PAD + COL_W / 2, y: PAD });
+  });
+
+  it("stops each edge at the node borders, so an arrowhead is not buried under a box", () => {
+    const map = layout(roomsConfig(), TOPO);
+    const from = nodeById(map, "kitchen")!;
+    const to = nodeById(map, "dining_room")!;
+    const edge = edgeBetween(map, "kitchen", "dining_room")!;
+    expect(edge.x1).toBe(from.x + NODE_W / 2);
+    expect(edge.x2).toBe(to.x - NODE_W / 2);
+    expect(edge.y1).toBe(from.y);
+    expect(edge.y2).toBe(to.y);
+  });
+
+  it("ends a one-way edge on the destination's border", () => {
+    const map = layout(roomsConfig(), TOPO);
+    const bedroom = nodeById(map, "bedroom")!;
+    const edge = edgeBetween(map, "hall", "bedroom")!;
+    expect(edge.oneWay).toBe(true);
+    expect(edge.x2).toBe(bedroom.x - NODE_W / 2);
   });
 
   it("walks a path into its edges", () => {

@@ -124,6 +124,25 @@ describe("al-graph-map", () => {
     expect(node.getAttribute("tabindex")).toBe("0");
   });
 
+  it("exposes its nodes to assistive tech rather than hiding them behind role=img", async () => {
+    const el = await map({ occupants: { kitchen: ["Scott"] } });
+    const svg = el.shadowRoot!.querySelector("svg")!;
+    expect(svg.getAttribute("role")).not.toBe("img");
+    expect(svg.querySelector("title")).toBeTruthy();
+    expect(svg.getAttribute("aria-label")).toContain("5 rooms");
+    const node = el.shadowRoot!.querySelector('g.node[data-id="kitchen"]')!;
+    expect(node.getAttribute("role")).toBe("button");
+    expect(node.getAttribute("aria-label")).toContain("Kitchen");
+  });
+
+  it("points the one-way arrow at the destination's border", async () => {
+    const el = await map();
+    const edge = el.shadowRoot!.querySelector('line.edge[data-one-way="true"]')!;
+    expect(edge.getAttribute("marker-end")).toBe("url(#al-arrow)");
+    const box = el.shadowRoot!.querySelector('g.node[data-id="bedroom"] rect.box')!;
+    expect(Number(edge.getAttribute("x2"))).toBeCloseTo(Number(box.getAttribute("x")));
+  });
+
   it("says so when there is no graph yet", async () => {
     const el = await map({}, { nodes: [], edges: [], exits: [] });
     expect(el.shadowRoot!.textContent).toContain("No rooms are connected yet");

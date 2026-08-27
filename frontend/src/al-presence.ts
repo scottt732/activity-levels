@@ -178,6 +178,8 @@ export class AlPresence extends LitElement {
   /** The pair of rooms the map is routing between; a third pick shifts the older one out. */
   @state() private selected: [string | null, string | null] = [null, null];
   @state() private paths: string[][] = [];
+  /** A request is out. Until it lands there is no verdict to report, only a wait. */
+  @state() private pathsPending = false;
 
   private timer?: ReturnType<typeof setInterval>;
   /** Which paths request is the current one; an older answer resolving late is dropped. */
@@ -242,13 +244,19 @@ export class AlPresence extends LitElement {
   private async refreshPaths(): Promise<void> {
     const [from, to] = this.selected;
     const hass = this.hass;
-    if (!hass || from === null || to === null || from === to) return;
     const seq = ++this.pathSeq;
+    if (!hass || from === null || to === null || from === to) {
+      this.pathsPending = false;
+      return;
+    }
+    this.pathsPending = true;
     try {
       const paths = await getTopologyPaths(hass, from, to);
       if (seq === this.pathSeq) this.paths = paths;
     } catch {
       /* a room that has gone away answers with an error; the empty list is the honest answer */
+    } finally {
+      if (seq === this.pathSeq) this.pathsPending = false;
     }
   }
 
@@ -351,6 +359,8 @@ export class AlPresence extends LitElement {
     if (from === null || to === null)
       return html`<div class="paths empty">Pick two rooms on the map to see the routes between them.</div>`;
     const heading = `${this.roomName(from)}${ARROW}${this.roomName(to)}`;
+    // Only an answered request can say there is no route; before that it is still looking.
+    if (this.pathsPending) return html`<div class="paths muted">Finding routes from ${heading}…</div>`;
     if (this.paths.length === 0)
       return html`<div class="paths">
         <div class="muted">no route from ${heading}</div>

@@ -689,6 +689,24 @@ describe("activity-levels-panel presence tab", () => {
     expect(el.shadowRoot?.querySelector("al-presence")).toBeTruthy();
   });
 
+  it("leaves the Presence tab, and the tablist reachable, when an undo turns presence off", async () => {
+    await mount(roomsConfig());
+    await selectTab(1);
+    el.shadowRoot?.querySelector("al-tree")?.dispatchEvent(alChange(presenceConfig()));
+    await settle();
+    await selectTab(5);
+    expect(el.shadowRoot?.querySelector("al-presence")).toBeTruthy();
+
+    el.shadowRoot
+      ?.querySelector('ha-icon-button[title="Undo"]')
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await settle();
+    expect(el.shadowRoot?.querySelector("al-presence")).toBeNull();
+    expect(tabs()).toHaveLength(5);
+    expect(tabs().filter((t) => t.getAttribute("tabindex") === "0")).toHaveLength(1);
+    expect(el.shadowRoot?.querySelector(".tab.active")?.textContent?.trim()).toBe("Mixer");
+  });
+
   it("falls back off the Presence tab when presence is turned off mid-edit", async () => {
     await mount(presenceConfig());
     await selectTab(5);

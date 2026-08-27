@@ -46,6 +46,8 @@ interface Call extends Record<string, unknown> {
 
 let calls: Call[];
 let state: PresenceState;
+/** Holds the paths answer open, so a test can look at the page mid-request. */
+let holdPaths = false;
 
 const hassStub = (): HomeAssistant =>
   ({
@@ -62,6 +64,7 @@ const hassStub = (): HomeAssistant =>
         case "activity_levels/presence/state":
           return state;
         case "activity_levels/topology/paths":
+          if (holdPaths) return new Promise(() => undefined);
           // Hall reaches Bedroom through a one-way door, so there is no way back.
           return { paths: msg.from === "bedroom" ? [] : PATHS };
         default:
@@ -103,6 +106,7 @@ const norm = (s: string | null | undefined): string => (s ?? "").replace(/\s+/g,
 beforeEach(() => {
   vi.useFakeTimers();
   calls = [];
+  holdPaths = false;
 });
 
 afterEach(() => {
@@ -167,6 +171,16 @@ describe("al-presence", () => {
     await select("bedroom");
     await select("kitchen");
     expect(norm(el.shadowRoot!.querySelector(".paths")!.textContent)).toContain("no route");
+  });
+
+  it("waits for the answer before saying there is no route", async () => {
+    const { el } = await tab();
+    holdPaths = true;
+    await select("kitchen");
+    await select("bedroom");
+    const paths = norm(el.shadowRoot!.querySelector(".paths")!.textContent);
+    expect(paths).not.toContain("no route");
+    expect(paths).toContain("Finding routes");
   });
 
   it("edits presence settings through the draft store", async () => {

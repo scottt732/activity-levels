@@ -55,6 +55,20 @@ export function branchRows(config: Config): { id: string; label: string; branch:
   return out;
 }
 
+/**
+ * How far along the centre-to-centre line one node's border sits. Edges are drawn border
+ * to border rather than centre to centre: a `marker-end` at the destination's centre is
+ * buried under its own opaque box, and a long edge would otherwise run straight through
+ * every box between the two ends. Capped at half, so two boxes closer together than their
+ * own size still give a segment that points the right way.
+ */
+function borderFraction(dx: number, dy: number): number {
+  if (dx === 0 && dy === 0) return 0;
+  const byX = dx === 0 ? Infinity : NODE_W / 2 / Math.abs(dx);
+  const byY = dy === 0 ? Infinity : NODE_H / 2 / Math.abs(dy);
+  return Math.min(byX, byY, 0.5);
+}
+
 export function layout(config: Config, topology: TopologyPayload): MapLayout {
   const rooms = new Set(topology.nodes);
   const exits = new Set(topology.exits);
@@ -93,7 +107,18 @@ export function layout(config: Config, topology: TopologyPayload): MapLayout {
     const to = at.get(b);
     // an edge to something the map does not draw
     if (!from || !to) continue;
-    edges.push({ a, b, oneWay, x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const f = borderFraction(dx, dy);
+    edges.push({
+      a,
+      b,
+      oneWay,
+      x1: from.x + dx * f,
+      y1: from.y + dy * f,
+      x2: to.x - dx * f,
+      y2: to.y - dy * f,
+    });
   }
   const cols = rows.reduce((most, row) => Math.max(most, row.length), 1);
   return {
