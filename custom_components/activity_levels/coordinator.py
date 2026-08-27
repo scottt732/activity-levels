@@ -165,8 +165,15 @@ class ActivityLevelsCoordinator:
             raise ValueError("peak must be a positive finite number")
         info = self.tree.groups[group_id]
         t = self.now()
-        info.trigger.gain = peak
-        info.trigger.note_on(t)
+        # The trigger voice is uncapped -- that is what lets a MEAN group be sized past
+        # its limiter -- so nothing else would stop impulses stacking above anything the
+        # group can ever show, leaving it pinned at the limiter for a release that no
+        # longer matches the level. Only the headroom the mix can still use gets played;
+        # with none left the impulse is a no-op and we just republish.
+        headroom = max(info.group.max_contribution(t) - info.trigger.value_at(t), 0.0)
+        if headroom > 0.0:
+            info.trigger.gain = min(peak, headroom)
+            info.trigger.note_on(t)
         self._after_change({info.root_id}, t)
 
     def set_level(self, group_id: str, value: float) -> float:

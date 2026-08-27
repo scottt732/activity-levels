@@ -352,3 +352,25 @@ async def test_set_level_rejects_negative_or_non_finite_values(
         with pytest.raises(ValueError, match="non-negative finite"):
             coordinator.set_level("kitchen", bad)
     assert coordinator.data["kitchen"].value == 0.0
+
+
+async def test_trigger_stacks_only_up_to_the_limiter(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, coordinator: ActivityLevelsCoordinator
+) -> None:
+    """Repeated impulses pile up on each other, but never past what the group can show.
+
+    The trigger voice is uncapped so a MEAN group can be sized past its limiter; that is
+    the mix's business, not the service's. Stacking three 3.0 impulses onto a SUM group
+    limited at 5.0 must still leave the voice at 5.0, not 9.0 -- otherwise the group
+    would sit pinned at its limiter and take nearly twice the release to come off it.
+    """
+    for _ in range(3):
+        coordinator.trigger("kitchen", peak=3.0)
+    trigger = coordinator.tree.groups["kitchen"].trigger
+    assert trigger.value_at(coordinator.now()) == pytest.approx(5.0)
+    assert coordinator.data["kitchen"].value == pytest.approx(5.0)
+    # from the limiter the fall is the envelope's own: full scale to zero in 30m
+    await advance(hass, freezer, 900.0)
+    assert coordinator.data["kitchen"].value == pytest.approx(2.5, abs=0.05)
+    await advance(hass, freezer, 900.0)
+    assert coordinator.data["kitchen"].value == 0.0
