@@ -1,14 +1,16 @@
-"""Switches: the global presence-simulation master and one switch per group.
+"""Switches: the presence-simulation pair, and a mute switch per group.
 
-Both restore their own state, so an away-mode simulation that was armed before a
-restart is armed again afterwards. The switch is only ever a *permission*: the runtime
-still re-checks every precondition before it plans or executes anything.
+The two simulation switches restore their own state, so an away-mode simulation that was
+armed before a restart is armed again afterwards. That switch is only ever a
+*permission*: the runtime still re-checks every precondition before it plans or executes
+anything. Mute is different -- the coordinator persists it -- so that switch reads the
+coordinator instead of restoring anything of its own.
 """
 
 from __future__ import annotations
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.const import STATE_ON, Platform
+from homeassistant.const import STATE_ON, EntityCategory, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -22,6 +24,7 @@ from .simulation import SimulationRuntime
 from .tree import GroupInfo
 
 SUFFIX = "presence_simulation"
+MUTE_SUFFIX = "mute"
 
 
 async def async_setup_entry(
@@ -29,16 +32,51 @@ async def async_setup_entry(
     entry: ActivityLevelsConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Create the global switch plus one per group that can actually be simulated."""
+    """Create the global switch, a mute per group, and a simulation switch where it applies."""
     coordinator = entry.runtime_data.coordinator
     simulation = entry.runtime_data.patterns.simulation
     entities: list[SwitchEntity] = [GlobalPresenceSimulationSwitch(simulation, entry.entry_id)]
+    entities.extend(MuteSwitch(coordinator, info) for info in coordinator.tree.group_order())
     entities.extend(
         PresenceSimulationSwitch(coordinator, simulation, info)
         for info in coordinator.tree.group_order()
         if simulation.has_switch(info.id)
     )
     async_add_entities(entities)
+
+
+class MuteSwitch(ActivityLevelsEntity, SwitchEntity):
+    """Takes one group out of its parent's mix, without stopping the group itself.
+
+    Not a RestoreEntity: the coordinator persists the mutes and has already re-applied
+    them to the engine tree by the time this entity exists, so a restored second copy
+    could only disagree with what the mixer is actually doing. Muting a root group is
+    allowed; it simply has no parent to be kept out of.
+    """
+
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: ActivityLevelsCoordinator, info: GroupInfo) -> None:
+        """Set up the mute switch for one group."""
+        super().__init__(coordinator, info, MUTE_SUFFIX, Platform.SWITCH)
+
+    @property
+    def is_on(self) -> bool:
+        """Whether this group is currently muted out of its parent."""
+        return self.group_state.muted
+
+    @property
+    def icon(self) -> str:
+        """A crossed-out speaker while muted, so the row reads at a glance."""
+        return "mdi:volume-mute" if self.is_on else "mdi:volume-high"
+
+    async def async_turn_on(self, **kwargs: object) -> None:
+        """Mute the group: its parent stops mixing it in."""
+        self.coordinator.set_muted(self.info.id, True)
+
+    async def async_turn_off(self, **kwargs: object) -> None:
+        """Unmute it: the parent counts it again."""
+        self.coordinator.set_muted(self.info.id, False)
 
 
 class PresenceSimulationSwitch(ActivityLevelsEntity, RestoreEntity, SwitchEntity):

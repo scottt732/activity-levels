@@ -98,3 +98,37 @@ async def test_diagnostic_entities_and_button(hass: HomeAssistant, entry: MockCo
         "button", "press", {"entity_id": "button.kitchen_trigger"}, blocking=True
     )
     assert hass.states.get("sensor.kitchen_activity_level").state == "1.0"
+
+
+async def test_mute_switch_takes_a_group_out_of_its_parent(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    ent = er.async_get(hass)
+    assert ent.async_get("switch.living_room_mute").entity_category == "config"
+    hass.states.async_set("binary_sensor.living_motion", "on")
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.house_activity_level").state == "2.0"
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.living_room_mute"}, blocking=True
+    )
+    assert hass.states.get("switch.living_room_mute").state == "on"
+    assert hass.states.get("sensor.house_activity_level").state == "0.0"
+    # the room's own level is untouched: only the house stops listening
+    assert hass.states.get("sensor.living_room_activity_level").state == "2.0"
+
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.living_room_mute"}, blocking=True
+    )
+    assert hass.states.get("switch.living_room_mute").state == "off"
+    assert hass.states.get("sensor.house_activity_level").state == "2.0"
+
+
+async def test_mute_switch_follows_the_coordinator(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """The coordinator's store is the source of truth, so the switch has to follow it."""
+    assert hass.states.get("switch.kitchen_mute").state == "off"
+    entry.runtime_data.coordinator.set_muted("kitchen", True)
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.kitchen_mute").state == "on"

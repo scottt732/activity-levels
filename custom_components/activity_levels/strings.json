@@ -20,6 +20,7 @@
     "binary_sensor": { "active": { "name": "Active" } },
     "button": { "trigger": { "name": "Trigger" } },
     "switch": {
+      "mute": { "name": "Mute" },
       "presence_simulation": { "name": "Presence simulation" },
       "global_presence_simulation": { "name": "Presence simulation" }
     }
