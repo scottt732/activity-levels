@@ -23,7 +23,7 @@ jobs:
       # PR would sit behind the required checks forever. RELEASE_PLEASE_TOKEN is a
       # fine-grained PAT (contents + pull requests: read/write) whose PRs run CI like
       # anyone else's; without it the job still runs, but the release PR gets no checks.
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
