@@ -65,7 +65,7 @@ async def test_decay_updates_and_timestamps(
     await hass.async_block_till_done()
     cooldown = hass.states.get("sensor.kitchen_cooldown_at").state
     assert cooldown not in ("unknown", "unavailable")
-    await advance(hass, freezer, 150.0)
+    await advance(hass, freezer, 30.0)  # halfway down: 1.0 out of a full scale of 5.0
     assert float(hass.states.get("sensor.kitchen_activity_level").state) == pytest.approx(
         0.5, abs=0.1
     )

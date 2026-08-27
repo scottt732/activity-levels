@@ -29,7 +29,7 @@ def test_envelope_resolution_order() -> None:
     presets = {e["id"]: e for e in cfg["envelopes"]}
     stim = cfg["groups"][0]["children"][1]["stimuli"][0]  # kitchen: release override 5m
     env = resolve_envelope(cfg["defaults"], presets, stim)
-    assert env.release == 300.0 and env.attack == 0.0 and env.retrigger is Retrigger.ONLY_IN_RELEASE
+    assert env.release == 300.0 and env.attack == 0.0 and env.retrigger is Retrigger.STACK
     stim2 = dict(stim, retrigger="always", envelope="momentary")
     env2 = resolve_envelope(cfg["defaults"], presets, stim2)
     assert env2.impulse is True and env2.retrigger is Retrigger.ALWAYS and env2.release == 300.0
@@ -52,3 +52,26 @@ def test_voice_keys_unique() -> None:
     tree = build_tree(validate_config(house_config()))
     keys = [tree.voice_key(r.group_id, r.label) for r in tree.all_voice_refs()]
     assert len(keys) == len(set(keys))
+
+
+def test_voices_inherit_the_owning_group_max_value_as_their_ceiling() -> None:
+    cfg = house_config()
+    cfg["defaults"]["max_value"] = 4.0
+    cfg["groups"][0]["children"][1]["max_value"] = 7.0  # kitchen overrides
+    tree = build_tree(validate_config(cfg))
+    living = tree.voices_by_entity["binary_sensor.living_motion"][0].voice
+    kitchen = tree.voices_by_entity["binary_sensor.kitchen_motion"][0].voice
+    assert living.ceiling == 4.0  # inherited from defaults
+    assert kitchen.ceiling == 7.0  # node override
+    assert tree.groups["living_room"].trigger.ceiling == 4.0
+    assert tree.groups["kitchen"].trigger.ceiling == 7.0
+
+
+def test_voice_ceilings_default_to_the_default_max_value() -> None:
+    tree = build_tree(validate_config(house_config()))
+    default_max = tree.defaults["max_value"]
+    assert default_max == 5.0
+    for ref in tree.all_voice_refs():
+        assert ref.voice.ceiling == default_max
+    for info in tree.group_order():
+        assert info.trigger.ceiling == default_max

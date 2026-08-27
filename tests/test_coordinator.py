@@ -53,13 +53,15 @@ async def test_note_off_then_decay_with_timer(
     await hass.async_block_till_done()
     k = coordinator.data["kitchen"]
     assert k.gated is False and k.cooldown_at is not None
-    assert k.cooldown_at == pytest.approx(coordinator.now() + 300.0, abs=1.0)
-    await advance(hass, freezer, 150.0)
+    # release 5m is the time to fall from full scale (max_value 5.0); this voice's
+    # gain is 1.0, so it is a fifth of the way up and falls in a fifth of the time.
+    assert k.cooldown_at == pytest.approx(coordinator.now() + 60.0, abs=1.0)
+    await advance(hass, freezer, 30.0)
     assert coordinator.data["kitchen"].value == pytest.approx(0.5, abs=0.06)
-    await advance(hass, freezer, 140.0)  # display is 0.0 while the voice is still releasing
+    await advance(hass, freezer, 28.0)  # display is 0.0 while the voice is still releasing
     assert coordinator.data["kitchen"].value == 0.0
     assert coordinator.data["kitchen"].contributors == {}  # no 0.0 entries
-    await advance(hass, freezer, 200.0)
+    await advance(hass, freezer, 40.0)
     assert coordinator.data["kitchen"].value == 0.0
     assert coordinator.data["kitchen"].active is False
 
@@ -103,7 +105,7 @@ async def test_safety_wake_releases_a_voice_whose_entity_vanished(
     await advance(hass, freezer, 61.0)  # safety_refresh
     assert coordinator.data["kitchen"].gated is False
     assert coordinator.data["kitchen"].cooldown_at is not None
-    await advance(hass, freezer, 60.0)
+    await advance(hass, freezer, 30.0)  # halfway down a 60s release
     assert 0.0 < coordinator.data["kitchen"].value < 1.0
 
 
@@ -153,7 +155,7 @@ async def test_snapshot_persists_and_restores(
     await hass.async_block_till_done()
     await coordinator.async_stop()
     assert "activity_levels.entry1" in hass_storage
-    await advance(hass, freezer, 100.0)
+    await advance(hass, freezer, 20.0)  # a third of the way down a 60s release
     coord2 = ActivityLevelsCoordinator(hass, "entry1", build_tree(validate_config(house_config())))
     await coord2.async_start()
     assert coord2.data["kitchen"].value == pytest.approx(2.0 / 3.0, abs=0.05)
@@ -192,9 +194,9 @@ async def test_child_group_steps_are_scheduled(
     await hass.async_block_till_done()
     hass.states.async_set("binary_sensor.kitchen_motion", "off")
     await hass.async_block_till_done()
-    await advance(hass, freezer, 31.0)  # 300s release from 1.0 -> 0.1 per 30s
+    await advance(hass, freezer, 7.0)  # 1.0 falls in 60s -> a 0.1 display step every 6s
     assert coordinator.data["kitchen"].value == pytest.approx(0.9, abs=0.01)
-    assert coordinator.next_wake("house") - coordinator.now() <= 31.0
+    assert coordinator.next_wake("house") - coordinator.now() <= 7.0
 
 
 async def test_trigger_rejects_non_positive_or_non_finite_peak(

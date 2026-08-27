@@ -173,7 +173,7 @@ DEFAULTS_SCHEMA = vol.Schema(
         vol.Optional("max_value", default=DEFAULT_MAX_VALUE): _finite(0.0, lo_exclusive=True),
         vol.Optional("precision", default=DEFAULT_PRECISION): vol.All(int, vol.Range(min=0, max=3)),
         vol.Optional("unavailable", default=Unavailable.HOLD): _ENUM["unavailable"],
-        vol.Optional("retrigger", default=Retrigger.ONLY_IN_RELEASE): _ENUM["retrigger"],
+        vol.Optional("retrigger", default=Retrigger.STACK): _ENUM["retrigger"],
         vol.Optional("debounce", default=0.0): parse_duration,
         vol.Optional("safety_refresh", default=DEFAULT_SAFETY_REFRESH): vol.All(
             parse_duration, vol.Range(min=5.0, max=3600.0)

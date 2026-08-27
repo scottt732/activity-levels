@@ -12,6 +12,18 @@ def test_default_options_validate() -> None:
     assert cfg["defaults"]["safety_refresh"] == 60.0
 
 
+def test_retrigger_defaults_to_stack_and_accepts_every_mode() -> None:
+    cfg = validate_config(house_config())
+    assert cfg["defaults"]["retrigger"] == "stack"
+    for mode in ("stack", "only_in_release", "always"):
+        picked = house_config()
+        picked["defaults"]["retrigger"] = mode
+        picked["envelopes"][0]["retrigger"] = mode
+        out = validate_config(picked)
+        assert out["defaults"]["retrigger"] == mode
+        assert out["envelopes"][0]["retrigger"] == mode
+
+
 def test_house_config_normalizes() -> None:
     cfg = validate_config(house_config())
     env = {e["id"]: e for e in cfg["envelopes"]}

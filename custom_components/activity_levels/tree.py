@@ -89,9 +89,16 @@ def resolve_envelope(
     return Envelope(**resolved)
 
 
-def _trigger_voice(defaults: Mapping[str, Any], presets: Mapping[str, Mapping[str, Any]]) -> Voice:
+def _trigger_voice(
+    defaults: Mapping[str, Any], presets: Mapping[str, Mapping[str, Any]], ceiling: float
+) -> Voice:
     base = resolve_envelope(defaults, presets, {})
-    return Voice(id=TRIGGER_KEY, gain=1.0, envelope=Envelope(release=base.release, impulse=True))
+    return Voice(
+        id=TRIGGER_KEY,
+        gain=1.0,
+        envelope=Envelope(release=base.release, impulse=True),
+        ceiling=ceiling,
+    )
 
 
 def build_tree(config: dict[str, Any]) -> Tree:
@@ -103,12 +110,16 @@ def build_tree(config: dict[str, Any]) -> Tree:
         gid = node["id"]
         rid = root_id or gid
         tree.order.append(gid)  # pre-order: record this group before its children
+        # Every voice in this group is bounded by the group's limiter: stacking must
+        # never pile up height the limiter would only throw away.
+        max_value = node["max_value"] if node["max_value"] is not None else defaults["max_value"]
         channels: list[Channel] = []
         for stim in node["stimuli"]:
             voice = Voice(
                 id=stim["entity"],
                 gain=stim["gain"],
                 envelope=resolve_envelope(defaults, presets, stim),
+                ceiling=max_value,
             )
             channel = Channel(voice, key=stim["key"])
             channels.append(channel)
@@ -116,14 +127,14 @@ def build_tree(config: dict[str, Any]) -> Tree:
             tree.voices_by_entity.setdefault(stim["entity"], []).append(ref)
         for child in node["children"]:
             channels.append(Channel(build(child, gid, rid), gain=child["gain"]))
-        trigger = _trigger_voice(defaults, presets)
+        trigger = _trigger_voice(defaults, presets, max_value)
         channels.append(Channel(trigger, key=TRIGGER_KEY))
         group = Group(
             id=gid,
             channels=channels,
             mix=Mix(node["mix"]),
             null_handling=NullHandling(node["null_handling"]),
-            max_value=node["max_value"] if node["max_value"] is not None else defaults["max_value"],
+            max_value=max_value,
             precision=node["precision"] if node["precision"] is not None else defaults["precision"],
         )
         tree.groups[gid] = GroupInfo(
