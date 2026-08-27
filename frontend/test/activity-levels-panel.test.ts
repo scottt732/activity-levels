@@ -396,6 +396,27 @@ describe("activity-levels-panel mixer expansion", () => {
     expect(mixerNav().expanded).toEqual(new Set(["house"]));
   });
 
+  // Opening the row to reveal what the tree picked is a change to the expansion like any
+  // other; leaving it unwritten meant the row closed itself again on the next reload.
+  it("remembers what it had to open to show a node the tree selected", async () => {
+    await mount(houseConfig());
+    el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(alNav({ type: "toggle", id: "house" }));
+    await settle();
+    expect(JSON.parse(localStorage.getItem("activity_levels.mixer.expanded") ?? "null")).toEqual([]);
+    await selectTab(1);
+    el.shadowRoot?.querySelector("al-tree")?.dispatchEvent(alSelect(["groups", 0, "children", 0]));
+    await settle();
+    expect(JSON.parse(localStorage.getItem("activity_levels.mixer.expanded") ?? "null")).toEqual(["house"]);
+  });
+
+  it("leaves the stored expansion alone when the row already shows what was selected", async () => {
+    await mount(houseConfig());
+    await selectTab(1);
+    el.shadowRoot?.querySelector("al-tree")?.dispatchEvent(alSelect(["groups", 0, "children", 0]));
+    await settle();
+    expect(localStorage.getItem("activity_levels.mixer.expanded")).toBeNull();
+  });
+
   it("does not write the expansion back for a move that only changed the selection", async () => {
     await mount(houseConfig());
     el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(alNav({ type: "select", path: ["groups", 0] }));

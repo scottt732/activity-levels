@@ -173,10 +173,15 @@ export class ActivityLevelsPanel extends LitElement {
   private select(path: Path | null): void {
     const config = this.draft?.config;
     this.selection = path;
-    this.nav =
-      path === null || !config
-        ? { ...this.nav, selection: path }
-        : { expanded: expandTo(config, this.nav.expanded, path), selection: path };
+    if (path === null || !config) {
+      this.nav = { ...this.nav, selection: path };
+      return;
+    }
+    const expanded = expandTo(config, this.nav.expanded, path);
+    // Opening the row to reveal the selection is a change to the expansion like any
+    // other, so it is remembered the way the mixer's own toggles are.
+    if (expanded !== this.nav.expanded) saveExpanded(expanded);
+    this.nav = { expanded, selection: path };
   }
 
   private onNav = (ev: CustomEvent<NavAction>): void => {
