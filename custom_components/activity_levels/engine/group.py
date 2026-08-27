@@ -18,11 +18,15 @@ class Channel:
 
     ``key`` disambiguates two channels fed by the same source; it defaults to the
     source id, which is unique in the common case of one channel per entity.
+
+    ``muted`` silences this input without touching the source: a muted child group goes
+    on computing and publishing its own value, the parent simply stops listening.
     """
 
     source: Voice | Group
     gain: float = 1.0
     key: str | None = None
+    muted: bool = False
 
     def __post_init__(self) -> None:
         if not isfinite(self.gain) or self.gain <= 0:
@@ -31,6 +35,14 @@ class Channel:
     @property
     def label(self) -> str:
         return self.key or self.source.id
+
+    def value_at(self, t: float) -> float:
+        """This channel's contribution to its group: nothing at all while muted."""
+        return 0.0 if self.muted else self.source.value_at(t) * self.gain
+
+    def slope_at(self, t: float) -> float:
+        """The rate that contribution is changing at: flat while muted."""
+        return 0.0 if self.muted else self.source.slope_at(t) * self.gain
 
 
 @dataclass
@@ -68,10 +80,31 @@ class Group:
             else:
                 yield from ch.source.voices()
 
+    def live_voices(self) -> Iterator[Voice]:
+        """The voices that can still move *this* group's value.
+
+        ``voices`` walks everything the group owns -- which is what ``reset`` wants. This
+        one stops at a muted channel, so a muted child's phase boundaries no longer show
+        up as moments the parent has to wake for.
+        """
+        for ch in self._live():
+            if isinstance(ch.source, Voice):
+                yield ch.source
+            else:
+                yield from ch.source.live_voices()
+
     # -- mixing -------------------------------------------------------------
 
+    def _live(self) -> list[Channel]:
+        """The channels still feeding this group.
+
+        A muted channel is *dropped* rather than zeroed, so MEAN loses it from the
+        denominator too -- exactly the way ``null_handling: ignore`` drops a null.
+        """
+        return [ch for ch in self.channels if not ch.muted]
+
     def contributions_at(self, t: float) -> dict[str, float]:
-        return {ch.label: ch.source.value_at(t) * ch.gain for ch in self.channels}
+        return {ch.label: ch.value_at(t) for ch in self.channels}
 
     def _mix(self, values: list[float]) -> float:
         if not values:
@@ -91,7 +124,7 @@ class Group:
     def _raw_value_at(self, t: float) -> float:
         """Pre-limiter mix. Iterates channels, not ``contributions_at``, so that two
         channels sharing a source both count."""
-        return self._mix([ch.source.value_at(t) * ch.gain for ch in self.channels])
+        return self._mix([ch.value_at(t) for ch in self._live()])
 
     def value_at(self, t: float) -> float:
         return self._limit(self._raw_value_at(t))
@@ -103,8 +136,8 @@ class Group:
         MEAN re-mix over the remaining channels instead of guessing. Used for a
         group's "real" value: the level without the synthetic trigger voice.
         """
-        remaining = [ch for ch in self.channels if ch.label != label]
-        return self._limit(self._mix([ch.source.value_at(t) * ch.gain for ch in remaining]))
+        remaining = [ch for ch in self._live() if ch.label != label]
+        return self._limit(self._mix([ch.value_at(t) for ch in remaining]))
 
     def display_value_at(self, t: float) -> float:
         return round(self.value_at(t), self.precision)
@@ -135,17 +168,14 @@ class Group:
         return max(ends) if ends else None
 
     def next_boundary(self, t: float) -> float | None:
-        bounds = [b for v in self.voices() if (b := v.next_boundary(t)) is not None]
+        bounds = [b for v in self.live_voices() if (b := v.next_boundary(t)) is not None]
         return min(bounds) if bounds else None
 
     # -- scheduling helpers -------------------------------------------------
 
     def _channel_slopes(self, t: float) -> list[tuple[float, float]]:
-        """Return (contribution, slope_of_contribution) per channel."""
-        out: list[tuple[float, float]] = []
-        for ch in self.channels:
-            out.append((ch.source.value_at(t) * ch.gain, ch.source.slope_at(t) * ch.gain))
-        return out
+        """Return (contribution, slope_of_contribution) per channel still in the mix."""
+        return [(ch.value_at(t), ch.slope_at(t)) for ch in self._live()]
 
     def _next_max_crossover(self, t: float) -> float | None:
         """Earliest future instant another channel overtakes the current MAX leader."""
