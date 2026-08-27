@@ -87,6 +87,8 @@ export class ActivityLevelsPanel extends LitElement {
 
   private liveTimer?: number;
   private simTimer?: number;
+  /** Which live poll is the current one; an older answer resolving late is dropped. */
+  private liveSeq = 0;
   /** When the profile was last read, so switching tabs does not re-ask for it every time. */
   private profileAt = 0;
   /**
@@ -278,8 +280,13 @@ export class ActivityLevelsPanel extends LitElement {
   };
 
   private async pollLive(): Promise<void> {
+    // A command's refresh lands on top of the periodic poll, so two are routinely in
+    // flight; only the newest may write, or a slow answer would put a stale frame back
+    // on the meters after a fresher one has already drawn.
+    const seq = ++this.liveSeq;
     try {
-      this.live = await getState(this.hass);
+      const state = await getState(this.hass);
+      if (seq === this.liveSeq) this.live = state;
     } catch {
       /* transient websocket failure: keep the last frame and retry */
     }

@@ -80,6 +80,11 @@ let rebuilt = true;
 let rebuildError: Error | null = null;
 /** Set to make every service call fail. */
 let serviceError: Error | null = null;
+/**
+ * When set, `activity_levels/state` answers are held open and their resolvers pushed here,
+ * so a test can have two polls in flight and answer them out of order.
+ */
+let liveGate: ((frame: unknown) => void)[] | null = null;
 
 const hass = () => ({
   states: {},
@@ -102,6 +107,7 @@ const hass = () => ({
       case "activity_levels/simulation/log":
         return { entries: [], active: {}, blocked: {} };
       case "activity_levels/state":
+        if (liveGate) return new Promise((resolve) => liveGate?.push(resolve));
         return { now: 1000, groups: {}, voices: {} };
       // Enough for the timeline to draw an empty chart; its own tests cover the shapes.
       case "activity_levels/timeseries":
@@ -162,6 +168,7 @@ beforeEach(async () => {
   rebuilt = true;
   rebuildError = null;
   serviceError = null;
+  liveGate = null;
   localStorage.clear();
   await mount();
 });
@@ -403,6 +410,28 @@ describe("activity-levels-panel live frame", () => {
   it("drops the last frame when leaving the Mixer with Live off, rather than showing it as live", async () => {
     await selectTab(1);
     expect(treeLive()).toBeNull();
+  });
+
+  // A command's refresh lands on top of the periodic poll, so two are routinely in
+  // flight; the older answer describes a mixer that has already moved on.
+  it("keeps the newest frame when an older poll answers after it", async () => {
+    await mount(houseConfig());
+    const mixerLive = (): { now: number } | null =>
+      (el.shadowRoot?.querySelector("al-mixer") as unknown as { live: { now: number } | null }).live;
+    const pending: ((frame: unknown) => void)[] = [];
+    liveGate = pending;
+    const mixer = el.shadowRoot?.querySelector("al-mixer");
+    mixer?.dispatchEvent(alLiveRefresh());
+    await settle();
+    mixer?.dispatchEvent(alLiveRefresh());
+    await settle();
+    expect(pending).toHaveLength(2);
+    pending[1]?.({ now: 2000, groups: {}, voices: {} });
+    await settle();
+    expect(mixerLive()?.now).toBe(2000);
+    pending[0]?.({ now: 1000, groups: {}, voices: {} });
+    await settle();
+    expect(mixerLive()?.now).toBe(2000);
   });
 
   it("keeps the frame when Live is on", async () => {
