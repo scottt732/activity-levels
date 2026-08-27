@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- New `stack` retrigger mode, now the default, restores the original additive behaviour:
+  each trigger adds its stimulus `gain` on top of whatever is already sounding — while
+  the note is held as well as while it is fading — up to the group's `max_value`. The
+  previous default, `only_in_release`, is still available and unchanged, as is `always`.
+  A stacked note decays to `sustain` times the peak it actually reached.
+- `release` now means "time to fall from full scale (the group's `max_value`) to zero"
+  rather than from the stimulus `gain`. Every level falls at that one slope, so lower
+  levels empty proportionally faster: with `max_value: 5` and `release: 2h`, a voice at
+  5.0 takes 2h and a voice at 1.0 takes 24 minutes. Existing configurations will see
+  low-gain stimuli fade noticeably faster; raise `release` to keep the old timing.
+
 ### Fixed
 - Saving from the panel no longer refreshes the whole UI: the sidebar panel stays registered across integration reloads and is removed only when the integration is deleted.
 - A light going `unavailable`, or Home Assistant restarting, is recorded as *unknown*
