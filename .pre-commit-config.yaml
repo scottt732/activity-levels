@@ -60,7 +60,9 @@ repos:
       - id: codespell
         # hass is Home Assistant's own name for the core object; the rest are real
         # identifiers or spellings codespell guesses at.
-        args: [--ignore-words-list=hass,ons,clickin,unparseable]
+        # One quoted argument: unquoted, YAML splits the flow sequence on the commas and
+        # codespell only ever sees `hass`.
+        args: ["--ignore-words-list=hass,ons,clickin,unparseable"]
 
   # release-please reads the subject line to decide the next version and to write the
   # changelog, so a malformed one is a release bug, not a style nit. Types and scopes
