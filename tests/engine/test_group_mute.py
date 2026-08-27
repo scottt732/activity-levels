@@ -120,6 +120,38 @@ def test_a_muted_child_neither_moves_nor_wakes_its_parent() -> None:
     assert child.next_boundary(0.0) == pytest.approx(10.0)
 
 
+def test_a_muted_child_is_left_out_of_its_parents_aggregates() -> None:
+    living_v, kitchen_v = impulse("living", release=10.0), impulse("kitchen", release=300.0)
+    living = Group(id="living", channels=[Channel(living_v)])
+    kitchen = Group(id="kitchen", channels=[Channel(kitchen_v)])
+    house = Group(
+        id="house", channels=[Channel(living), Channel(kitchen, muted=True)], max_value=10.0
+    )
+    living_v.note_on(0.0)
+    kitchen_v.note_on(5.0)
+    # the house is cooling down from the living room alone, and is done in ten seconds
+    assert house.cooldown_at(0.0) == pytest.approx(10.0)
+    assert house.active_voices(0.0) == 1
+    assert house.last_activity() == 0.0
+    # the kitchen goes on running its own envelope, for its own sensor
+    assert kitchen.cooldown_at(5.0) == pytest.approx(305.0)
+    assert kitchen.active_voices(5.0) == 1
+    assert kitchen.last_activity() == 5.0
+
+
+def test_a_muted_child_does_not_hold_its_parent_gated() -> None:
+    a = impulse("a", release=10.0)
+    held = Voice(id="k", gain=1.0, envelope=Envelope(release=100.0))
+    kitchen = Group(id="kitchen", channels=[Channel(held)])
+    house = Group(id="house", channels=[Channel(a), Channel(kitchen, muted=True)], max_value=10.0)
+    a.note_on(0.0)
+    held.note_on(0.0)
+    assert kitchen.gated_at(0.0) is True
+    assert house.gated_at(0.0) is False
+    # and a gate nobody in the mix is holding no longer suppresses the cooldown
+    assert house.cooldown_at(0.0) == pytest.approx(10.0)
+
+
 def test_reset_still_reaches_a_muted_channel() -> None:
     a = impulse("a", 2.0)
     child = Group(id="child", channels=[Channel(a)])

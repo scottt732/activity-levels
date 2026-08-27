@@ -193,14 +193,19 @@ class Group:
     def active_at(self, t: float) -> bool:
         return self.value_at(t) > 0.0
 
+    # These describe what *this* group is doing, so they read the voices still in its mix.
+    # A muted child goes on sounding for its own sensor, but its gate is not holding this
+    # group up, its release is not what this group is cooling down from, and its notes are
+    # not this group's activity. ``reset`` is the exception: it reaches everything owned.
+
     def gated_at(self, t: float) -> bool:
-        return any(v.gate for v in self.voices())
+        return any(v.gate for v in self.live_voices())
 
     def active_voices(self, t: float) -> int:
-        return sum(1 for v in self.voices() if v.is_active(t))
+        return sum(1 for v in self.live_voices() if v.is_active(t))
 
     def last_activity(self) -> float | None:
-        stamps = [v.last_note_on for v in self.voices() if v.last_note_on is not None]
+        stamps = [v.last_note_on for v in self.live_voices() if v.last_note_on is not None]
         return max(stamps) if stamps else None
 
     def cooldown_at(self, t: float) -> float | None:
@@ -208,7 +213,7 @@ class Group:
             return None
         ends = [
             b
-            for v in self.voices()
+            for v in self.live_voices()
             if v.phase is Phase.RELEASE and (b := v.next_boundary(t)) is not None
         ]
         return max(ends) if ends else None
