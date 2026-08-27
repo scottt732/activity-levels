@@ -117,6 +117,7 @@ def test_a_walk_is_recovered(topo) -> None:
         "hall",
     ]
     assert est.outputs().path[-3:] == ["kitchen", "dining_room", "hall"]
+    assert est.resets == 0  # walking through your own house is not being stuck
 
 
 def test_an_impossible_jump_is_rejected_then_recovered(topo) -> None:
@@ -133,6 +134,7 @@ def test_an_impossible_jump_is_rejected_then_recovered(topo) -> None:
             break
     assert out.room == "bedroom"  # escape gets there eventually, within seconds
     assert t < 40
+    assert est.resets == 0  # briefly surprising is not the same as unexplainable
 
 
 def nonsense(t: float) -> Observation:
@@ -163,6 +165,30 @@ def test_the_stuck_detector_resets_the_belief(topo) -> None:
     assert est.resets == 1
     assert est.outputs().room == "bedroom"
     assert est.belief.sum() == pytest.approx(1.0)
+
+
+def test_a_stationary_noisy_stream_never_resets(topo) -> None:
+    """Standing still under ordinary sensor noise must never look like being stuck.
+
+    The threshold is a percentile of this device's own history, so what enters that
+    history decides whether it holds still. Judging a run against the percentile *in
+    force when the run began* is what keeps it honest: the reading that starts a run
+    still joins the history, but it cannot move the bar it is being measured against
+    while the run is open, and it cannot be quietly excluded from normal either.
+
+    ``stuck_after`` is short here because that is what makes the failure quick to
+    provoke: the shorter the run needed, the sooner a drifting threshold finds one.
+    """
+    est = make(topo, stuck_after=10.0)
+    rng = np.random.default_rng(20260827)
+    for i in range(3000):
+        distances = {
+            key: max(0.0, (0.5 if mapped == "kitchen" else 8.0) + float(rng.normal(0.0, 0.3)))
+            for key, mapped in SCANNERS.items()
+        }
+        est.update(Observation(t=float(i), distances=distances, home=True))
+    assert est.resets == 0
+    assert est.outputs().room == "kitchen"
 
 
 def test_away_wins_when_the_tracker_says_not_home(topo) -> None:

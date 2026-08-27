@@ -29,9 +29,10 @@ observations = st.lists(
 def dynamics(draw):
     """A ``(stay, escape)`` pair that can make a transition row at all.
 
-    ``escape`` goes to every room a room does not touch, so past ``(1 - stay) / rooms``
-    the row would sum past 1 and the topology refuses to build one. That refusal is
-    tested in `test_topology.py`; these properties are about the filter above it.
+    ``escape`` goes to every room a room does not touch, so past
+    ``(1 - stay) / (rooms - 1)`` the row would sum past 1 and the topology refuses to
+    build one. That refusal is tested in `test_topology.py`; these properties are about
+    the filter above it.
     """
     stay = draw(st.floats(min_value=0.5, max_value=0.99))
     elsewhere = max(len(TOPO.nodes) - 1, 1)

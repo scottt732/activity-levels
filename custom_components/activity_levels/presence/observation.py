@@ -18,7 +18,15 @@ UNREACHABLE = 999.0
 
 @dataclass(frozen=True)
 class Observation:
-    """Everything the filter is told at one instant. ``None`` is "no reading"."""
+    """Everything the filter is told at one instant. ``None`` is "no reading".
+
+    ``distances`` must be a **full frame**: every scanner the integration knows about,
+    every update, with ``None`` where there is no current reading. Never a delta of what
+    changed. A scanner missing from the mapping is read as silence, and silence demotes
+    its room to the emission floor -- which can leave that room outranking one the
+    evidence actively argues against. Omitting an unchanged reading would therefore
+    quietly promote the rooms nobody can hear.
+    """
 
     t: float
     distances: Mapping[str, float | None] = field(default_factory=dict)
