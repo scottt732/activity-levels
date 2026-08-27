@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.util import slugify
 
 from .const import (
     ATTR_FORCE,
@@ -20,6 +23,7 @@ from .const import (
     MANUFACTURER,
     MODEL,
     MODEL_HUB,
+    MODEL_PRESENCE,
     PLATFORMS,
     SERVICE_REBUILD_PROFILE,
     SERVICE_RESET,
@@ -65,7 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
         topology = build_topology(config)
     except Exception as err:  # a validated config the engine still cannot be built from
         raise ConfigEntryError(f"Could not build the Activity Levels tree: {err}") from err
-    _create_devices(hass, entry, tree)
+    wanted = _create_devices(hass, entry, tree)
     coordinator = ActivityLevelsCoordinator(hass, entry.entry_id, tree)
     await coordinator.async_start()
     # Registered before anything that can fail, so a failed setup still tears the
@@ -80,9 +84,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
         presence = PresenceCoordinator(hass, entry, coordinator, topology, config)
         entry.async_on_unload(presence.async_stop)
         await presence.async_start()
+        wanted |= _create_presence_devices(hass, entry, sorted(presence.devices))
     else:
         # nothing is left to clear whatever the presence side raised while it was on
         clear_presence_issues(hass, entry.entry_id)
+    _prune_devices(hass, entry, wanted)
     entry.runtime_data = RuntimeData(
         coordinator=coordinator, patterns=patterns, topology=topology, presence=presence
     )
@@ -113,8 +119,8 @@ async def _async_update_listener(hass: HomeAssistant, entry: ActivityLevelsConfi
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-def _create_devices(hass: HomeAssistant, entry: ConfigEntry, tree: Tree) -> None:
-    """Mirror the group tree into the device registry; drop groups that went away."""
+def _create_devices(hass: HomeAssistant, entry: ConfigEntry, tree: Tree) -> set[tuple[str, str]]:
+    """Mirror the group tree into the device registry; return the identifiers it owns."""
     registry = dr.async_get(hass)
     registry.async_get_or_create(
         config_entry_id=entry.entry_id,
@@ -134,7 +140,36 @@ def _create_devices(hass: HomeAssistant, entry: ConfigEntry, tree: Tree) -> None
             # roots hang off the hub, so the whole integration is one tree in the UI
             via_device=(DOMAIN, info.parent_id or entry.entry_id),
         )
-    wanted = {(DOMAIN, gid) for gid in tree.groups} | {(DOMAIN, entry.entry_id)}
+    return {(DOMAIN, gid) for gid in tree.groups} | {(DOMAIN, entry.entry_id)}
+
+
+def _create_presence_devices(
+    hass: HomeAssistant, entry: ConfigEntry, names: Iterable[str]
+) -> set[tuple[str, str]]:
+    """One device per tracked person, under the hub. Empty when presence is off."""
+    registry = dr.async_get(hass)
+    wanted: set[tuple[str, str]] = set()
+    for name in names:
+        identifier = (DOMAIN, f"presence_{slugify(name)}")
+        registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={identifier},
+            name=f"Presence: {name}",
+            manufacturer=MANUFACTURER,
+            model=MODEL_PRESENCE,
+            via_device=(DOMAIN, entry.entry_id),
+        )
+        wanted.add(identifier)
+    return wanted
+
+
+def _prune_devices(hass: HomeAssistant, entry: ConfigEntry, wanted: set[tuple[str, str]]) -> None:
+    """Drop this entry from any device the current configuration no longer describes.
+
+    Separate from creation, and run after *both* passes: a person's device is created
+    later than the groups', and pruning in between would take it away every reload.
+    """
+    registry = dr.async_get(hass)
     for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
         if not device.identifiers & wanted:
             registry.async_update_device(device.id, remove_config_entry_id=entry.entry_id)

@@ -15,9 +15,11 @@
       "cooldown_at": { "name": "Cooldown at" },
       "expected_activity": { "name": "Expected activity" },
       "activity_anomaly": { "name": "Activity anomaly" },
-      "profile": { "name": "Profile" }
+      "profile": { "name": "Profile" },
+      "room": { "name": "Room" },
+      "occupants": { "name": "Occupants" }
     },
-    "binary_sensor": { "active": { "name": "Active" } },
+    "binary_sensor": { "active": { "name": "Active" }, "moving": { "name": "Moving" } },
     "button": { "trigger": { "name": "Trigger" } },
     "switch": {
       "mute": { "name": "Mute" },

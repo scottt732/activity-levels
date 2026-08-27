@@ -14,26 +14,35 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_ACTIVE_VOICES,
+    ATTR_CANDIDATES,
+    ATTR_CONFIDENCE,
     ATTR_CONTRIBUTORS,
     ATTR_COOLDOWN_AT,
     ATTR_DAY_TYPE,
     ATTR_GATED,
+    ATTR_GROUP_ID,
     ATTR_GROUPS_READY,
     ATTR_GROUPS_TOTAL,
     ATTR_MAX_VALUE,
     ATTR_MIX,
+    ATTR_MOVING,
     ATTR_P25,
     ATTR_P75,
+    ATTR_PATH,
     ATTR_PRODUCER,
     ATTR_PRODUCER_VERSION,
     ATTR_READY,
     ATTR_TRAINED,
+    ATTR_UPDATED,
+    ATTR_WHO,
+    AWAY,
     DOMAIN,
 )
 from .coordinator import ActivityLevelsCoordinator
-from .entity import ActivityLevelsEntity
+from .entity import ActivityLevelsEntity, PresenceEntity
 from .patterns.profile import group_ready
 from .patterns_coordinator import PatternsCoordinator
+from .presence_coordinator import PresenceCoordinator
 from .runtime import ActivityLevelsConfigEntry
 from .tree import GroupInfo
 
@@ -58,6 +67,13 @@ async def async_setup_entry(
         entities.append(CooldownAtSensor(coordinator, info))
         entities.append(ExpectedActivitySensor(coordinator, patterns, info))
         entities.append(ActivityAnomalySensor(coordinator, patterns, info))
+    presence = entry.runtime_data.presence
+    if presence is not None and presence.ready:
+        entities.extend(RoomSensor(presence, name) for name in sorted(presence.devices))
+        entities.extend(
+            OccupantsSensor(coordinator, presence, coordinator.tree.groups[gid])
+            for gid in entry.runtime_data.topology.nodes
+        )
     async_add_entities(entities)
 
 
@@ -238,3 +254,73 @@ class ProfileSensor(SensorEntity):
         """Rewrite whenever a producer replaces the document."""
         await super().async_added_to_hass()
         self.async_on_remove(self.patterns.async_add_listener(self.async_write_ha_state))
+
+
+class RoomSensor(PresenceEntity, SensorEntity):
+    """Which room this person is believed to be in."""
+
+    # candidates and path change on every update: worth having live, dead weight recorded
+    _unrecorded_attributes = frozenset({ATTR_CANDIDATES, ATTR_PATH})
+
+    def __init__(self, presence: PresenceCoordinator, name: str) -> None:
+        """Set up the room sensor for one tracked person."""
+        super().__init__(presence, name, "room", Platform.SENSOR)
+
+    @property
+    def native_value(self) -> str | None:
+        """The room's friendly name, or "Away". Names, not ids: this is a display."""
+        out = self.outputs
+        return None if out is None else self.presence.room_name(out.room)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """The id an automation wants, and everything behind the answer."""
+        out = self.outputs
+        if out is None:
+            return {}
+        return {
+            ATTR_GROUP_ID: None if out.room == AWAY else out.room,
+            ATTR_CONFIDENCE: out.confidence,
+            ATTR_MOVING: out.moving,
+            ATTR_CANDIDATES: {
+                self.presence.room_name(room): p for room, p in out.candidates.items()
+            },
+            ATTR_PATH: [self.presence.room_name(room) for room in out.path],
+            ATTR_UPDATED: dt_util.utc_from_timestamp(out.t).isoformat(),
+        }
+
+
+class OccupantsSensor(ActivityLevelsEntity, SensorEntity):
+    """How many people are believed to be in this room.
+
+    On the *group's* device rather than a person's: it is a property of the room, it
+    belongs next to the room's activity level, and an automation that reads one wants
+    the other in reach.
+    """
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: ActivityLevelsCoordinator,
+        presence: PresenceCoordinator,
+        info: GroupInfo,
+    ) -> None:
+        """Set up the occupants sensor for one room."""
+        super().__init__(coordinator, info, "occupants", Platform.SENSOR)
+        self.presence = presence
+
+    @property
+    def native_value(self) -> int:
+        """People confidently placed here. Someone mid-doorway counts nowhere."""
+        return len(self.presence.occupants.get(self.info.id, []))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Who, by name, is being counted."""
+        return {ATTR_WHO: list(self.presence.occupants.get(self.info.id, []))}
+
+    async def async_added_to_hass(self) -> None:
+        """Follow the presence coordinator as well as the level one."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self.presence.async_add_listener(self.async_write_ha_state))
