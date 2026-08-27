@@ -13,8 +13,8 @@ import {
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { simSwitchId } from "./entities";
 import { ensureHaElements } from "./ha-elements";
-import { groupAt } from "./model";
-import { busPathFor, initialNav, reduce } from "./navigation";
+import { groupAt, groupPathFor } from "./model";
+import { expandTo, reduce, restoreNav, saveExpanded } from "./navigation";
 import { runSave } from "./save-flow";
 import { Draft } from "./store";
 import { sharedStyles } from "./styles";
@@ -71,7 +71,7 @@ export class ActivityLevelsPanel extends LitElement {
   @state() private draft?: Draft;
   @state() private tab: Tab = "mixer";
   @state() private selection: Path | null = null;
-  @state() private nav: MixerNav = { busPath: [], selection: null };
+  @state() private nav: MixerNav = { expanded: new Set(), selection: null };
   @state() private errors: ValidationError[] = [];
   @state() private banner: Banner | null = null;
   @state() private live: LiveState | null = null;
@@ -121,7 +121,7 @@ export class ActivityLevelsPanel extends LitElement {
     try {
       const cfg = await getConfig(this.hass);
       this.draft = new Draft(cfg);
-      this.nav = initialNav(cfg);
+      this.nav = restoreNav(cfg);
       this.selection = this.nav.selection;
       this.errors = [];
       this.banner = null;
@@ -148,29 +148,38 @@ export class ActivityLevelsPanel extends LitElement {
 
   /**
    * Re-points the navigation at the current config after an edit, and keeps the shared
-   * selection with it: a node that is gone can neither be the current bus nor be shown in
-   * the editor pane, so the reducer walks up to something that still exists. Nothing
-   * selected stays nothing selected, though - the reducer falls back to the bus, which
-   * is right after a deletion but would make the Groups tab's editor pane open itself
-   * on the first edit the user makes with no row selected.
+   * selection with it: a node that is gone can neither be a track nor be shown in the
+   * editor pane, so the reducer falls back to the first root, and expanded ids that name
+   * nothing are dropped. Nothing selected stays nothing selected, though - the reducer
+   * falls back to a group, which is right after a deletion but would make the Groups tab's
+   * editor pane open itself on the first edit the user makes with no row selected.
    */
   private syncNav(): void {
     const config = this.draft?.config;
     if (!config) return;
     const had = this.selection;
-    const nav = reduce({ busPath: this.nav.busPath, selection: had }, { type: "sync", config });
-    this.nav = had === null ? { busPath: nav.busPath, selection: null } : nav;
+    const nav = reduce({ ...this.nav, selection: had }, { type: "sync", config });
+    this.nav = had === null ? { ...nav, selection: null } : nav;
     this.selection = this.nav.selection !== null && this.nav.selection.length > 0 ? this.nav.selection : null;
   }
 
-  /** One selection for both views: the mixer's bus follows what the tree picked, and back. */
+  /**
+   * One selection for both views. Picking a node in the tree also opens whatever the mixer
+   * row needs open for it to be a visible track - a selected strip nobody can see is not a
+   * shared selection.
+   */
   private select(path: Path | null): void {
+    const config = this.draft?.config;
     this.selection = path;
-    this.nav = path === null ? { ...this.nav, selection: null } : { busPath: busPathFor(path), selection: path };
+    this.nav =
+      path === null || !config
+        ? { ...this.nav, selection: path }
+        : { expanded: expandTo(config, this.nav.expanded, path), selection: path };
   }
 
   private onNav = (ev: CustomEvent<NavAction>): void => {
     const nav = reduce(this.nav, ev.detail);
+    if (nav.expanded !== this.nav.expanded) saveExpanded(nav.expanded);
     this.nav = nav;
     this.selection = nav.selection;
   };
@@ -262,6 +271,11 @@ export class ActivityLevelsPanel extends LitElement {
     void this.pollSim();
     this.simTimer = window.setInterval(() => void this.pollSim(), SIM_POLL_MS);
   }
+
+  /** A runtime command just landed: show what it did without waiting for the next tick. */
+  private onLiveRefresh = (): void => {
+    void this.pollLive();
+  };
 
   private async pollLive(): Promise<void> {
     try {
@@ -534,15 +548,15 @@ export class ActivityLevelsPanel extends LitElement {
   }
 
   /**
-   * The mixer page, three rows deep: the selected strip's history and forecast on top, the
-   * bus it lives on in the middle, and everything that does not fit on a strip below it.
-   * A channel is charted as its bus - a stimulus has no series of its own.
+   * The mixer page, three rows deep: the selected group's history and forecast on top, the
+   * whole tree as one row of track strips in the middle, and everything that does not fit
+   * on a strip below it. A stimulus is charted as its group - it has no series of its own.
    */
   private renderMixer(d: Draft) {
     const config = d.config;
     if (config.groups.length === 0) return this.renderMixerEmpty();
-    const busPath = busPathFor(this.selection ?? this.nav.busPath);
-    const group = groupAt(config, busPath);
+    const selection = this.nav.selection;
+    const group = selection === null ? undefined : groupAt(config, groupPathFor(selection));
     return html`<div class="rows">
       <al-timeline
         .hass=${this.hass}
@@ -571,6 +585,7 @@ export class ActivityLevelsPanel extends LitElement {
         @al-nav=${this.onNav}
         @al-change=${this.onChange}
         @al-sim-toggle=${this.onSimToggle}
+        @al-live-refresh=${this.onLiveRefresh}
       ></al-mixer>
       <al-strip-controls
         .hass=${this.hass}

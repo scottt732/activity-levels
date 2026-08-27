@@ -71,6 +71,7 @@ const groupLive = (over: Partial<GroupLive> = {}): GroupLive => ({
   mix: "sum",
   next_wake: null,
   lights: 2,
+  muted: false,
   ...over,
 });
 
@@ -372,5 +373,59 @@ describe("al-strip-controls: a bus", () => {
     await el.updateComplete;
     expect(changes.at(-1)?.detail.groups[0]?.max_value).toBe(8);
     expect(changes.at(-1)?.coalesceKey).toBe("groups/0:max_value");
+  });
+});
+
+describe("al-strip-controls: a group's stimuli", () => {
+  beforeEach(async () => {
+    el.hass = hassStub({
+      "binary_sensor.front_door": { state: "on", attributes: { friendly_name: "Front Door" } },
+    });
+    await show(["groups", 0]);
+  });
+
+  const panels = (): Element[] => [...(el.shadowRoot?.querySelectorAll("ha-expansion-panel") ?? [])];
+
+  it("lists the group's stimuli, each in the Groups tab's own stimulus editor", () => {
+    expect(text(".stimuli h3")).toBe("Stimuli");
+    expect(panels()).toHaveLength(1);
+    const editor = panels()[0]?.querySelector("al-stimulus-editor") as unknown as {
+      path: Path;
+      config: Config;
+    };
+    expect(editor.path).toEqual(["groups", 0, "stimuli", 0]);
+    expect(editor.config).toBe(el.config);
+  });
+
+  it("heads each one with the entity's friendly name and its current state", () => {
+    expect(text(".stimulus-head .name")).toBe("Front Door");
+    expect(text(".stimulus-head .chip")).toBe("on");
+  });
+
+  it("prefers the stimulus key when it has one", async () => {
+    const config = baseConfig();
+    el.config = {
+      ...config,
+      groups: [{ ...config.groups[0]!, stimuli: [{ ...newStimulus("binary_sensor.front_door"), key: "door" }] }],
+    };
+    await el.updateComplete;
+    expect(text(".stimulus-head .name")).toBe("door");
+  });
+
+  it("badges the problems inside one stimulus", async () => {
+    el.errors = [{ path: "groups/0/stimuli/0/entity", message: "unknown entity" }];
+    await el.updateComplete;
+    expect(text(".stimulus-head .badge")).toBe("1");
+  });
+
+  it("says where to add one when the group has none", async () => {
+    await show(["groups", 0, "children", 0]);
+    expect(panels()).toHaveLength(0);
+    expect(text(".stimuli .muted")).toContain("in Groups");
+  });
+
+  it("has no stimuli section on a channel: a channel is one", async () => {
+    await show(["groups", 0, "stimuli", 0]);
+    expect(el.shadowRoot?.querySelector(".stimuli")).toBeNull();
   });
 });

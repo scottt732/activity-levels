@@ -19,7 +19,9 @@ await import("../src/al-timeline");
 await import("../src/al-strip-controls");
 await import("../src/al-patterns");
 
-const { alChange, alRebuild, alSelect, alSimToggle, alTimelineRange } = await import("../src/events");
+const { alChange, alLiveRefresh, alNav, alRebuild, alSelect, alSimToggle, alTimelineRange } = await import(
+  "../src/events"
+);
 const { newGroup, newStimulus } = await import("../src/model");
 
 type Panel = HTMLElement & { hass: unknown; updateComplete: Promise<boolean> };
@@ -304,7 +306,7 @@ describe("activity-levels-panel validation errors", () => {
 });
 
 describe("activity-levels-panel shared selection", () => {
-  it("leaves an unselected editor pane unselected after an edit, and still moves the bus", async () => {
+  it("leaves an unselected editor pane unselected after an edit", async () => {
     await selectTab(1);
     const placeholder = (): string | undefined => el.shadowRoot?.querySelector("ha-card span.muted")?.textContent?.trim();
     expect(placeholder()).toBe("Select a group or stimulus.");
@@ -314,36 +316,40 @@ describe("activity-levels-panel shared selection", () => {
     await settle();
     expect(placeholder()).toBe("Select a group or stimulus.");
     await selectTab(0);
-    expect(mixerNav()).toEqual({ busPath: ["groups", 0], selection: null });
+    expect(mixerNav()).toEqual({ expanded: new Set(), selection: null });
   });
 
-  it("starts on the first root bus", async () => {
+  it("starts with every root open and the first one selected", async () => {
     await mount(houseConfig());
-    expect(mixerNav()).toEqual({ busPath: ["groups", 0], selection: ["groups", 0] });
+    expect(mixerNav()).toEqual({ expanded: new Set(["house"]), selection: ["groups", 0] });
   });
 
-  it("moves the bus to the parent group when a stimulus is selected in the tree", async () => {
+  it("keeps a stimulus selected when the tree picks one", async () => {
     await mount(houseConfig());
     await selectTab(1);
     el.shadowRoot?.querySelector("al-tree")?.dispatchEvent(alSelect(["groups", 0, "stimuli", 0]));
     await settle();
     await selectTab(0);
-    expect(mixerNav()).toEqual({ busPath: ["groups", 0], selection: ["groups", 0, "stimuli", 0] });
+    expect(mixerNav()).toEqual({ expanded: new Set(["house"]), selection: ["groups", 0, "stimuli", 0] });
   });
 
-  it("shows a selected sub-bus as the master of its own bus", async () => {
+  it("opens whatever the mixer row needs open to show a node the tree selected", async () => {
     await mount(houseConfig());
+    // Collapse the root, then pick something underneath it in the tree.
+    el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(alNav({ type: "toggle", id: "house" }));
+    await settle();
+    expect(mixerNav().expanded).toEqual(new Set());
     await selectTab(1);
     el.shadowRoot?.querySelector("al-tree")?.dispatchEvent(alSelect(["groups", 0, "children", 0]));
     await settle();
     await selectTab(0);
     expect(mixerNav()).toEqual({
-      busPath: ["groups", 0, "children", 0],
+      expanded: new Set(["house"]),
       selection: ["groups", 0, "children", 0],
     });
   });
 
-  it("hands the selected strip's bus to the timeline, with the bus limiter", async () => {
+  it("hands the selected group to the timeline, with its limiter", async () => {
     await mount(houseConfig());
     const timeline = el.shadowRoot?.querySelector("al-timeline") as unknown as {
       groupId: string | null;
@@ -357,6 +363,37 @@ describe("activity-levels-panel shared selection", () => {
     // came out the other side as the toolbar heading.
     const chart = el.shadowRoot?.querySelector("al-timeline") as HTMLElement;
     expect(chart.shadowRoot?.querySelector(".title")?.textContent?.trim()).toBe("House");
+  });
+});
+
+describe("activity-levels-panel mixer expansion", () => {
+  it("remembers what the row was left open at", async () => {
+    await mount(houseConfig());
+    el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(alNav({ type: "toggle", id: "house" }));
+    await settle();
+    expect(JSON.parse(localStorage.getItem("activity_levels.mixer.expanded") ?? "null")).toEqual([]);
+    el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(alNav({ type: "toggle", id: "kitchen" }));
+    await settle();
+    expect(JSON.parse(localStorage.getItem("activity_levels.mixer.expanded") ?? "null")).toEqual(["kitchen"]);
+  });
+
+  it("opens the row the way it was left", async () => {
+    localStorage.setItem("activity_levels.mixer.expanded", JSON.stringify(["kitchen", "attic"]));
+    await mount(houseConfig());
+    expect(mixerNav().expanded).toEqual(new Set(["kitchen"]));
+  });
+
+  it("starts from every root open when the stored expansion is unreadable", async () => {
+    localStorage.setItem("activity_levels.mixer.expanded", "{not json");
+    await mount(houseConfig());
+    expect(mixerNav().expanded).toEqual(new Set(["house"]));
+  });
+
+  it("does not write the expansion back for a move that only changed the selection", async () => {
+    await mount(houseConfig());
+    el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(alNav({ type: "select", path: ["groups", 0] }));
+    await settle();
+    expect(localStorage.getItem("activity_levels.mixer.expanded")).toBeNull();
   });
 });
 
@@ -498,6 +535,16 @@ describe("activity-levels-panel patterns", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("activity-levels-panel runtime commands", () => {
+  it("polls a fresh live frame the moment the mixer asks for one", async () => {
+    await mount(houseConfig());
+    const before = wsCalls("activity_levels/state").length;
+    el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(alLiveRefresh());
+    await settle();
+    expect(wsCalls("activity_levels/state").length).toBe(before + 1);
   });
 });
 

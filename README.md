@@ -52,36 +52,40 @@ moving groups and stimuli is done in **Groups** (below), not here:
    "now" line marks the present. The forecast chips are disabled, with a
    "learning… *n*/14 days" hint in their place, until the pattern profile has actually
    seen the selected group — the history half of the chart is unaffected either way.
-2. **Mixer** — a breadcrumb (`Property › House › Downstairs`, each crumb clickable, plus
-   "⌃ up") over the current bus's channels, drawn as console strips. The current bus
-   itself is the **MASTER** strip, at the right of the row:
+2. **Mixer** — every group in one horizontally scrolling row of track strips, the way a
+   DAW nests track groups: a group with children carries a chevron (`▸ 3` / `▾ 3`) that
+   opens and closes them in place, and a left-hand marker steps in and fades with depth so
+   a child reads as sitting under the parent it follows. Roots start open, and the row
+   reopens the way it was left. The **MASTER** strip at the right of the row follows
+   whatever is selected:
 
-   | Config | Mixer |
+   | Config or state | Mixer |
    | --- | --- |
-   | a stimulus | a channel strip (⚡), showing the entity's current state |
-   | a child group | a bus strip (▤, double border), with an "open ▸" to drill in |
-   | stimulus/child-group `gain` | the strip's **fader** — gain into the parent bus |
-   | envelope (preset + overrides) | the strip's envelope sketch and A/D/S/R hint |
+   | a group | a track strip, at its depth in the tree |
+   | group level | the strip's **value fader**, with the level read out below it |
+   | the level without simulated stimuli | a tick on the fader, while the two differ |
+   | muted / reset | the strip's **M** and **R** buttons |
    | group `mix` | the MASTER strip's mix selector (`sum` / `max` / `mean`) |
    | group `max_value` | the MASTER strip's **limiter** ceiling |
-   | group level | every strip's **meter**, live |
    | `switch.<gid>_presence_simulation` | the MASTER strip's ⏻ — hidden if the group has no lights |
 
-   Clicking a strip selects it (the timeline and the controls row below follow);
-   clicking "open ▸" drills into a bus instead. A root group is a top-level bus; with
-   more than one, the breadcrumb starts with a root selector.
-3. **Controls** — everything about the selected strip that doesn't fit on it. For a
-   channel: the envelope preset, A/D/S/R, sustain, impulse, gain, trigger (`to`) states
-   and debounce, each override showing what preset it falls back to and a reset. For a
-   bus, including the MASTER: name, mix, null handling, limiter, precision, gain into its
-   parent (buses only, not the root), how many lights it owns, its presence-simulation
-   switch and the last few things it has done, the expected/anomaly readings, and a
-   "rebuild profile" button.
+   Clicking a strip selects it (the timeline and the controls row below follow); the
+   chevron only opens and closes. Dragging the value fader **overrides** the group's level
+   — a simulated stimulus, which then cools down from where it was left — and **M** mutes
+   the group out of its parent's mix while it keeps publishing its own value. None of
+   those three touch the configuration: they go straight to the engine, and the next live
+   frame says where it ended up.
+3. **Controls** — everything about the selected group that doesn't fit on a strip: name,
+   mix, null handling, limiter, precision, gain into its parent (not for a root), how many
+   lights it owns, its presence-simulation switch and the last few things it has done, the
+   expected/anomaly readings, a "rebuild profile" button — and its **stimuli**, each one
+   the same editor the Groups tab uses: envelope preset, A/D/S/R, sustain, impulse, gain,
+   trigger (`to`) states and debounce, every override showing what it falls back to.
 
-Keyboard, in the mixer row: **←/→** moves the selection across the channel strips and the
-MASTER (wrapping), **Enter** opens the selected bus, **Backspace** goes up one bus,
-**Home**/**End** jump to the first channel or the MASTER. In the timeline: **←/→** move a
-cursor one sample at a time — the tooltip without a mouse — and **Esc** clears it.
+Keyboard, in the mixer row: **←/→** moves the selection along the visible tracks
+(wrapping), **Enter** or **Space** opens and closes the selected group, **Home**/**End**
+jump to the first and last track. In the timeline: **←/→** move a cursor one sample at a
+time — the tooltip without a mouse — and **Esc** clears it.
 
 Groups, Envelopes and Defaults edit the same draft as the Mixer and share its selection —
 picking a strip here also opens it in Groups, and back:

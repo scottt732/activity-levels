@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { anomalySensorId, expectedSensorId, simSwitchId } from "./entities";
-import { fieldErrors, pathKey } from "./errors";
+import { fieldErrors, pathKey, subtreeErrorCount } from "./errors";
 import { alChange, alRebuild, alSimToggle } from "./events";
 import {
   MAX_VALUE_SELECTOR,
@@ -31,6 +31,7 @@ import {
 import { sharedStyles } from "./styles";
 import "./al-envelope-sketch";
 import "./al-override-field";
+import "./al-stimulus-editor";
 import type { GroupField } from "./group-form";
 import type { StimulusField } from "./stimulus-form";
 import type { OverrideValue } from "./convert";
@@ -123,6 +124,32 @@ export class AlStripControls extends LitElement {
       }
       .log .state {
         color: var(--secondary-text-color);
+      }
+      .stimuli {
+        margin-top: 16px;
+      }
+      ha-expansion-panel {
+        margin-bottom: 4px;
+      }
+      .stimulus-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        flex: 1;
+      }
+      .stimulus-head .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .badge {
+        background: var(--error-color, #db4437);
+        color: var(--text-primary-color, #fff);
+        border-radius: 10px;
+        padding: 0 6px;
+        font-size: 0.75em;
+        line-height: 1.6;
       }
     `,
   ];
@@ -309,7 +336,48 @@ export class AlStripControls extends LitElement {
           </div>
           ${this.renderStatus(config, group)}
         </div>
+        ${this.renderStimuli(config, group, path)}
       </ha-card>
+    `;
+  }
+
+  /**
+   * The group's stimuli, edited right here rather than on strips of their own: only groups
+   * are tracks in the row above. Each one is the Groups tab's stimulus editor, collapsed -
+   * a group with a dozen sensors would otherwise bury everything else on the page.
+   */
+  private renderStimuli(config: Config, group: Group, path: Path): TemplateResult {
+    return html`
+      <div class="stimuli">
+        <h3>Stimuli</h3>
+        ${group.stimuli.length === 0
+          ? html`<div class="muted">No stimuli yet — point this group at an entity in Groups.</div>`
+          : group.stimuli.map((stimulus, i) => this.renderStimulus(config, [...path, "stimuli", i], stimulus))}
+      </div>
+    `;
+  }
+
+  private renderStimulus(config: Config, path: Path, stimulus: Stimulus): TemplateResult {
+    const entity = this.hass?.states[stimulus.entity];
+    const name =
+      (entity?.attributes.friendly_name as string | undefined) ?? (stimulus.entity || "(no entity)");
+    const count = subtreeErrorCount(this.errors, path);
+    return html`
+      <ha-expansion-panel outlined left-chevron>
+        <div slot="header" class="stimulus-head">
+          <ha-icon icon="mdi:flash"></ha-icon>
+          <span class="name">${stimulus.key ?? name}</span>
+          ${count ? html`<span class="badge" title="${count} problem(s)">${count}</span>` : nothing}
+          ${entity ? html`<span class="muted chip">${entity.state}</span>` : nothing}
+        </div>
+        <al-stimulus-editor
+          .hass=${this.hass}
+          .config=${config}
+          .path=${path}
+          .errors=${this.errors}
+          .live=${this.live}
+        ></al-stimulus-editor>
+      </ha-expansion-panel>
     `;
   }
 

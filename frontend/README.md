@@ -47,8 +47,8 @@ so browsers pick up a new one immediately.
 | File | What it holds |
 | --- | --- |
 | `activity-levels-panel.ts` | The shell: top bar, tabs, draft/save/live state. |
-| `al-mixer.ts`, `al-strip.ts`, `al-master-strip.ts` | The Mixer row: breadcrumb, channel/bus strips, the MASTER strip. |
-| `al-fader.ts`, `al-meter.ts`, `fader.ts` | The gain fader (log scale, pointer + keyboard) and the live meter. |
+| `al-mixer.ts`, `al-strip.ts`, `al-master-strip.ts` | The Mixer row: one track strip per group, and the MASTER strip. |
+| `al-fader.ts`, `al-meter.ts`, `fader.ts` | The fader (gain on a log scale, or a level on the group’s own) and the live meter. |
 | `al-timeline.ts`, `timeseries.ts` | The history/forecast chart (plain SVG) and its pure scale/decimation math. |
 | `al-strip-controls.ts` | The controls row for whatever is selected in the Mixer. |
 | `al-patterns.ts` | The Patterns tab: profile status, per-group readiness, simulation log. |
@@ -57,7 +57,7 @@ so browsers pick up a new one immediately.
 | `al-envelopes.ts`, `al-envelope-sketch.ts`, `sketch.ts` | Preset library and ADSR sketch. |
 | `al-defaults.ts` | The site-wide defaults form. |
 | `al-override-field.ts` | One nullable "inherit or override" field. |
-| `navigation.ts` | The Mixer's breadcrumb/drill-down/selection reducer, shared with the tree. |
+| `navigation.ts` | The Mixer row: which groups are open, which track is selected, and where that is remembered. |
 | `store.ts`, `model.ts`, `convert.ts`, `errors.ts`, `duration.ts` | Draft history, config helpers, selector conversions, error lookup. |
 | `constants.ts` | Values more than one component needs to agree on. |
 | `api.ts`, `save-flow.ts` | Websocket commands and the validate-then-save sequence. |
