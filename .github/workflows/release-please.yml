@@ -31,12 +31,13 @@ jobs:
       # blocked behind the required checks forever. workflow_dispatch is exempt from that
       # rule, so run the CI workflows on the release branch ourselves.
       - name: Run CI on the release PR
-        if: steps.release.outputs.prs_created == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
+          if [ -z "$PR_JSON" ]; then echo "no release PR this run"; exit 0; fi
           BRANCH="$(jq -r '.headBranchName' <<<"$PR_JSON")"
+          echo "dispatching CI on $BRANCH"
           gh workflow run python.yml --ref "$BRANCH"
           gh workflow run frontend.yml --ref "$BRANCH"
