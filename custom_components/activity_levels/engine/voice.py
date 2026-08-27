@@ -20,6 +20,7 @@ class Voice:
     id: str
     gain: float
     envelope: Envelope
+    ceiling: float = inf
     phase: Phase = Phase.IDLE
     phase_start_t: float = 0.0
     phase_start_value: float = 0.0
@@ -29,6 +30,19 @@ class Voice:
     def __post_init__(self) -> None:
         if not isfinite(self.gain) or self.gain <= 0:
             raise ValueError("gain must be a finite number > 0")
+        if self.ceiling != inf and not isfinite(self.ceiling):
+            raise ValueError("ceiling must be a finite number or inf")
+        if self.ceiling < self.gain:
+            raise ValueError("ceiling must be >= gain")
+
+    @property
+    def scale(self) -> float:
+        """Full scale: the group limiter this voice feeds, or its own gain if unbounded.
+
+        The release slope is referenced to this, so ``release`` reads as "time to fall
+        from full scale to zero" and every level below it falls at that same slope.
+        """
+        return self.ceiling if isfinite(self.ceiling) else self.gain
 
     # -- segment geometry -------------------------------------------------
 
@@ -44,7 +58,7 @@ class Voice:
         if self.phase is Phase.RELEASE:
             if self.phase_start_value <= 0.0:
                 return 0.0, 0.0
-            return 0.0, e.release * (self.phase_start_value / self.gain)
+            return 0.0, e.release * (self.phase_start_value / self.scale)
         return self.phase_start_value, inf  # SUSTAIN and IDLE hold forever
 
     def _phase_end_t(self) -> float:
@@ -163,7 +177,7 @@ class Voice:
         if not (isfinite(start_t) and isfinite(start_value) and (last is None or isfinite(last))):
             self.reset()
             return
-        value = min(max(start_value, 0.0), self.gain)
+        value = min(max(start_value, 0.0), self.ceiling)
         # A snapshot can disagree with itself -- an older schema, a hand-edited store,
         # a gain that changed. Phase and gate must end up consistent either way.
         if not raw_gate and phase in _HELD_BY_GATE:

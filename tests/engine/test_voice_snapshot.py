@@ -30,13 +30,15 @@ def test_snapshot_of_gated_voice_restores_gate() -> None:
     assert w.value_at(1000.0) == pytest.approx(1.0)
 
 
-def test_restore_clamps_value_to_new_gain() -> None:
-    v = Voice(id="x", gain=5.0, envelope=Envelope(release=100.0))
+def test_restore_clamps_value_to_the_ceiling() -> None:
+    # The ceiling, not the gain, is the upper bound: a stacked voice legitimately sits
+    # above its own gain, so a snapshot above it is only garbage past the limiter.
+    v = Voice(id="x", gain=5.0, envelope=Envelope(release=100.0), ceiling=5.0)
     v.note_on(0.0)
     v.note_off(0.0)
-    w = Voice(id="x", gain=1.0, envelope=Envelope(release=100.0))
+    w = Voice(id="x", gain=1.0, envelope=Envelope(release=100.0), ceiling=2.0)
     w.restore(v.snapshot())
-    assert w.value_at(0.0) == pytest.approx(1.0)
+    assert w.value_at(0.0) == pytest.approx(2.0)
 
 
 @pytest.mark.parametrize(
