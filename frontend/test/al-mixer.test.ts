@@ -50,6 +50,8 @@ const houseConfig = (): Config => ({
 });
 
 let wsError: Error | null = null;
+/** What `level/set` answers with, when the engine lands somewhere other than the ask. */
+let levelResult: number | null = null;
 
 const hassStub = (states: Record<string, { state: string; attributes?: Record<string, unknown> }> = {}): HomeAssistant =>
   ({
@@ -61,6 +63,7 @@ const hassStub = (states: Record<string, { state: string; attributes?: Record<st
     ),
     callWS: vi.fn(async (msg: { type: string; value?: number; muted?: boolean }) => {
       if (wsError) throw wsError;
+      if (msg.type === "activity_levels/level/set" && levelResult !== null) return { value: levelResult };
       return { value: msg.value ?? 0, muted: msg.muted ?? false };
     }),
   }) as unknown as HomeAssistant;
@@ -143,6 +146,7 @@ afterEach(() => {
 beforeEach(async () => {
   document.body.innerHTML = "";
   wsError = null;
+  levelResult = null;
   config = houseConfig();
   navs = [];
   changes = [];
@@ -453,6 +457,36 @@ describe("al-mixer runtime commands", () => {
     expect(refreshes).toBe(1);
     // A level override is runtime state, never a config edit.
     expect(changes).toEqual([]);
+  });
+
+  /** What the fader on a strip is showing right now. */
+  const shown = async (strip: AlStrip): Promise<number | undefined> => {
+    await strip.updateComplete;
+    return strip.shadowRoot?.querySelector("al-fader")?.value;
+  };
+
+  it("shows the level the engine reached rather than the one that was asked for", async () => {
+    // A MAX group cannot be pulled below its loudest child: the answer comes back higher.
+    levelResult = 4.2;
+    const house = strips()[1]!;
+    await drag(house, 1);
+    expect(await shown(house)).toBe(4.2);
+  });
+
+  it("lets the fader go when a level override does not land", async () => {
+    wsError = new Error("not loaded");
+    const house = strips()[1]!;
+    await drag(house, 3.5);
+    expect(el.shadowRoot?.querySelector(".command-error")?.textContent?.trim()).toBe(
+      "Could not set the level of house: not loaded",
+    );
+    expect(await shown(house)).toBe(0);
+  });
+
+  it("hands each strip the live frame's own stamp, so an unchanged level still answers", async () => {
+    el.live = { now: 1234, groups: { house: groupLive({ value: 2 }) }, voices: {} };
+    await el.updateComplete;
+    expect(strips().map((s) => s.liveNow)).toEqual([1234, 1234, 1234, 1234]);
   });
 
   it("mutes and unmutes the strip's own group", async () => {

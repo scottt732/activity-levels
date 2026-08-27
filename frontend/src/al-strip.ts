@@ -156,6 +156,15 @@ export class AlStrip extends LitElement {
   @property({ type: Number }) maxValue = 5;
   @property({ type: Number }) precision = 1;
 
+  /**
+   * The stamp of the live frame `value` came from. A frame answers a pending ask by
+   * arriving, not by carrying a different number: a MAX group pulled below a louder
+   * child, a SUM group whose override reset it back to where it already was, a command
+   * that never landed - all leave the level exactly where it was, and a fader waiting for
+   * it to move would sit at the ask forever.
+   */
+  @property({ type: Number }) liveNow = 0;
+
   @property({ type: Boolean, reflect: true }) muted = false;
   @property({ type: Boolean, reflect: true }) selected = false;
   @property({ type: Boolean, reflect: true }) narrow = false;
@@ -186,8 +195,19 @@ export class AlStrip extends LitElement {
   protected override willUpdate(changed: PropertyValues<this>): void {
     // A fresh live frame is the answer to whatever was asked for: stop showing the ask.
     // Not mid-drag, though - the pointer is still holding the fader where it is.
-    if (changed.has("value") && !this.dragging) this.pending = null;
+    if ((changed.has("liveNow") || changed.has("value")) && !this.dragging) this.pending = null;
     if (!this.hasUpdated || changed.has("depth")) this.style.setProperty("--al-depth", String(this.depth));
+  }
+
+  /**
+   * The engine's own answer to the last override, ahead of the live frame that will carry
+   * it: the level actually reached, or `null` for "the ask never landed". Either way the
+   * fader stops showing what was asked for. A drag that has already taken the fader back
+   * over outranks it - the pointer is the newer intent.
+   */
+  settle(value: number | null): void {
+    if (this.dragging) return;
+    this.pending = value;
   }
 
   /** `0` on the selected strip, `-1` on every other one: the row is a single tab stop. */

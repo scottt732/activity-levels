@@ -12,6 +12,7 @@ import { visibleTracks } from "./navigation";
 import { setAt } from "./store";
 import { sharedStyles } from "./styles";
 import type { StripLevel } from "./al-meter";
+import type { AlStrip } from "./al-strip";
 import type { MixerNav, NavAction, VisibleTrack } from "./navigation";
 import type { Config, Group, HomeAssistant, LiveState, Mix, Path, ValidationError } from "./types";
 
@@ -154,8 +155,16 @@ export class AlMixer extends LitElement {
    * Runs one engine command. A command that lands is followed by a request for a live
    * frame rather than a wait for the next poll: two seconds of a mute button that looks
    * like it did nothing is two seconds of pressing it again.
+   *
+   * `strip` is the track the command came from, when it was one that holds the fader
+   * against its answer: a refused command has no answer coming, so the fader is let go
+   * here rather than left at a level the engine never took.
    */
-  private async command(what: string, run: (hass: HomeAssistant) => Promise<unknown>): Promise<void> {
+  private async command(
+    what: string,
+    run: (hass: HomeAssistant) => Promise<unknown>,
+    strip?: AlStrip,
+  ): Promise<void> {
     const hass = this.hass;
     if (!hass) return;
     try {
@@ -164,6 +173,7 @@ export class AlMixer extends LitElement {
       this.clearErrorTimer();
       this.dispatchEvent(alLiveRefresh());
     } catch (err) {
+      strip?.settle(null);
       this.fail(`Could not ${what}: ${message(err)}`);
     }
   }
@@ -188,8 +198,16 @@ export class AlMixer extends LitElement {
   private onLevelOverride(ev: Event): void {
     const track = this.trackOf(ev);
     if (!track) return;
+    const strip = ev.target as AlStrip;
     const { value } = (ev as CustomEvent<{ value: number }>).detail;
-    void this.command(`set the level of ${track.id}`, (hass) => setLevel(hass, track.id, value));
+    // The engine answers with the level it actually reached, which a limiter or a louder
+    // channel of a MAX group can put somewhere other than the ask. Showing it at once
+    // means the fader stops lying about where the group is a whole poll earlier.
+    void this.command(
+      `set the level of ${track.id}`,
+      async (hass) => strip.settle(await setLevel(hass, track.id, value)),
+      strip,
+    );
   }
 
   private onMuteToggle(ev: Event): void {
@@ -305,6 +323,7 @@ export class AlMixer extends LitElement {
         .expanded=${track.expanded}
         .childCount=${group.children.length}
         .value=${live?.value ?? 0}
+        .liveNow=${this.live?.now ?? 0}
         .realValue=${live?.real_value ?? 0}
         .maxValue=${live?.max_value ?? group.max_value ?? config.defaults.max_value}
         .precision=${live?.precision ?? effectivePrecision(config, group)}

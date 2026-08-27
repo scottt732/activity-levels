@@ -245,6 +245,43 @@ describe("al-strip", () => {
       expect(fader().value).toBe(1);
     });
 
+    // A frame answers the ask by arriving, not by carrying a different number: a MAX group
+    // pulled below a louder child, or an override the engine refused, leaves the level
+    // exactly where it was. Waiting for it to move would strand the fader at the ask.
+    it("snaps back on a frame that carries the same value it did before", async () => {
+      await move(4, true);
+      await move(4, false);
+      el.liveNow = 1000;
+      await el.updateComplete;
+      expect(fader().value).toBe(2);
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent?.trim()).toBe("2.0");
+    });
+
+    it("keeps the dragged value against a frame arriving mid-drag", async () => {
+      await move(4, true);
+      el.liveNow = 1000;
+      await el.updateComplete;
+      expect(fader().value).toBe(4);
+    });
+
+    it("shows the level the engine actually reached, and lets a refusal go", async () => {
+      await move(4, true);
+      await move(4, false);
+      el.settle(4.8);
+      await el.updateComplete;
+      expect(fader().value).toBe(4.8);
+      el.settle(null);
+      await el.updateComplete;
+      expect(fader().value).toBe(2);
+    });
+
+    it("leaves a settled answer alone while a new drag holds the fader", async () => {
+      await move(4, true);
+      el.settle(1);
+      await el.updateComplete;
+      expect(fader().value).toBe(4);
+    });
+
     it("coalesces a run of keyboard steps into one override", async () => {
       vi.useFakeTimers();
       await move(2.5, false);
