@@ -1,9 +1,13 @@
+from pathlib import Path
+
 import pytest
+import yaml
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.selector import selector
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.activity_levels.const import DOMAIN
@@ -77,6 +81,19 @@ async def test_services(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     assert hass.states.get("sensor.kitchen_activity_level").state == "2.5"
     await hass.services.async_call(DOMAIN, "reset", {}, blocking=True)
     assert hass.states.get("sensor.kitchen_activity_level").state == "0.0"
+
+
+def test_set_level_does_not_cap_the_level_the_service_will_take() -> None:
+    path = Path(__file__).parent.parent / "custom_components/activity_levels/services.yaml"
+    services = yaml.safe_load(path.read_text())
+    value = services["set_level"]["fields"]["value"]["selector"]["number"]
+    assert value["min"] == 0
+    # A limiter is per group and can be set well above ten; a ceiling hardcoded here puts
+    # levels the engine accepts out of reach of anyone calling the service.
+    assert "max" not in value
+    selector({"number": value})  # still something Home Assistant will render
+    # `peak` is a stimulus-sized impulse, not a level: its own range still applies
+    assert services["trigger"]["fields"]["peak"]["selector"]["number"]["max"] == 10
 
 
 async def test_unload(hass: HomeAssistant, entry: MockConfigEntry) -> None:
