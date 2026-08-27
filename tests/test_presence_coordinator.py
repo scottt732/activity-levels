@@ -346,6 +346,38 @@ async def test_a_closed_gate_reopens_on_the_next_tick(
     assert coordinator.tree.groups["kitchen"].presence.gate is True
 
 
+async def test_every_tracker_vanishing_releases_the_gates(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Somebody deleting the Bermuda entity must not leave a room occupied forever.
+
+    Discovery drops the device, so there is no longer anything to observe -- and an
+    occupancy that is only recomputed when a filter ran would keep the last answer, with
+    the presence voice held on in a room nothing can see into any more.
+    """
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    coordinator = entry.runtime_data.coordinator
+
+    for _ in range(4):
+        await observe(hass, freezer, bermuda, "kitchen")
+    assert presence.occupants["kitchen"] == ["Scott"]
+    assert coordinator.tree.groups["kitchen"].presence is not None
+    assert coordinator.tree.groups["kitchen"].presence.gate is True
+
+    er.async_get(hass).async_remove(bermuda.tracker)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(seconds=REGISTRY_DEBOUNCE + 1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert presence.devices == {}
+    assert all(who == [] for who in presence.occupants.values())
+    assert coordinator.tree.groups["kitchen"].presence.gate is False
+
+
 async def test_below_the_threshold_nobody_is_an_occupant(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

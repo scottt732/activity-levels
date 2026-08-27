@@ -1,20 +1,19 @@
-"""Constants for Activity Levels."""
+"""Constants for Activity Levels.
+
+Free of `homeassistant`, and it has to stay that way: `topology.py` and
+`presence/estimator.py` read their constants from here, and those are on the pure side of
+the boundary AGENTS.md draws. Anything that needs a Home Assistant type to be spelled --
+`PLATFORMS` was the one -- belongs in `__init__.py`, which is integration code already.
+`tests/test_purity.py` fails if this drifts back.
+"""
 
 from __future__ import annotations
-
-from homeassistant.const import Platform
 
 # re-exported so the integration side has one place to import constants from, while
 # the learner keeps its own definition and stays free of `homeassistant`
 from .patterns.daytype import BUILTIN_DAY_TYPES as BUILTIN_DAY_TYPES
 
 DOMAIN = "activity_levels"
-PLATFORMS: list[Platform] = [
-    Platform.SENSOR,
-    Platform.BINARY_SENSOR,
-    Platform.BUTTON,
-    Platform.SWITCH,
-]
 
 MANUFACTURER = "Activity Levels"
 MODEL = "Group"

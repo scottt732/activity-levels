@@ -263,8 +263,14 @@ class Estimator:
         A changed state space is a refusal, not a migration: the vector no longer means
         what it meant when it was written, and a uniform prior is a better start than a
         confident wrong room.
+
+        Anything that is not the shape ``snapshot`` writes is a refusal too, rather than
+        an exception: this runs while the config entry is being set up, and a store some
+        other version -- or some other hand -- left behind must not take the integration
+        down with it.
         """
-        if list(data.get("states") or []) != list(self.states):
+        states = data.get("states")
+        if not isinstance(states, list) or states != list(self.states):
             return False
         try:
             belief = np.array([float(value) for value in data["belief"]], dtype=np.float64)

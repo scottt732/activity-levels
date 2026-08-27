@@ -410,7 +410,14 @@ class PresenceCoordinator:
         self._observe(dt_util.utcnow().timestamp())
 
     def _observe(self, t: float) -> None:
-        """Run the filter for every device whose readings moved since the last tick."""
+        """Run the filter for every device whose readings moved since the last tick.
+
+        Occupancy is reapplied whether or not a filter ran, because "no device moved" is
+        not the same as "nothing changed": discovery can have just taken the last tracked
+        device away, and then the only thing that releases the gates is an evaluation
+        over an empty set. Only the persist and the notify are skipped when there was
+        nothing to filter, since neither has anything new to say.
+        """
         names = sorted(self._dirty) or sorted(self.devices)
         self._dirty.clear()
         moved = False
@@ -420,9 +427,9 @@ class PresenceCoordinator:
                 continue
             track.outputs = track.estimator.update(self._observation(track, t))
             moved = True
+        self._apply_occupancy()
         if not moved:
             return
-        self._apply_occupancy()
         self._store.async_delay_save(self._snapshot, SAVE_DELAY)
         self._notify()
 
@@ -437,6 +444,11 @@ class PresenceCoordinator:
         for entity_id, key in track.sensors.items():
             state = self.hass.states.get(entity_id)
             distances[key] = parse_distance(None if state is None else state.state)
+        # `unavailable` and `unknown` read as not-home on purpose: an absent answer is
+        # not evidence that somebody is in the house, and the filter's away state is the
+        # honest place for "we cannot see them". The cost is that a Bermuda reload, which
+        # takes every tracker through `unavailable` and back, flips everybody to Away and
+        # then home again -- a burst of note-offs and note-ons rather than a wrong belief.
         tracker = self.hass.states.get(track.tracker)
         home = tracker is not None and tracker.state not in (
             STATE_NOT_HOME,

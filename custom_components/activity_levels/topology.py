@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from .const import AWAY, CONF_GROUPS, CONF_PRESENCE
+from .const import AWAY, CONF_GROUPS
 
 MAX_HOPS = 8
 """How long a path this answers over. A house has few; an unbounded search of a dense
@@ -269,8 +269,3 @@ def _edges(nodes: Sequence[str], out: Mapping[str, frozenset[str]]) -> tuple[Edg
 def room_ids(config: Mapping[str, Any]) -> frozenset[str]:
     """Which groups are rooms. ``tree.py`` asks, so the rule lives in one place."""
     return frozenset(build_topology(config).nodes)
-
-
-def presence_enabled(config: Mapping[str, Any]) -> bool:
-    """Whether the presence side exists at all for this configuration."""
-    return bool((config.get(CONF_PRESENCE) or {}).get("enabled"))

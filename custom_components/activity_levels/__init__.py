@@ -6,6 +6,7 @@ from collections.abc import Iterable
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
@@ -24,7 +25,6 @@ from .const import (
     MODEL,
     MODEL_HUB,
     MODEL_PRESENCE,
-    PLATFORMS,
     SERVICE_REBUILD_PROFILE,
     SERVICE_RESET,
     SERVICE_SET_LEVEL,
@@ -40,6 +40,16 @@ from .schema import ConfigError, validate_config
 from .topology import build_topology
 from .tree import Tree, build_tree
 from .websocket_api import async_register_websocket
+
+# The one constant that needs a Home Assistant type to be spelled, so it lives here
+# rather than in `const.py`: that module is imported by the pure side of the integration
+# (`topology.py`, `presence/estimator.py`) and must not drag `homeassistant` in with it.
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.SWITCH,
+]
 
 SERVICE_TRIGGER_SCHEMA = vol.Schema(
     {

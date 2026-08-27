@@ -349,6 +349,9 @@ applied only when a group's device is first created. A tracked person's entities
 keyed off their (slugified) `presence.devices[].name`, so renaming one renames their
 entities the same way.
 
+`presence` and `trigger` are reserved channel labels — a stimulus `key` or a child group
+`id` of either name is rejected as a duplicate, whether or not presence is switched on.
+
 ```yaml
 version: 1
 defaults:

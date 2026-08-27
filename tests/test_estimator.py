@@ -263,3 +263,23 @@ def test_snapshot_round_trip_and_refusal(topo) -> None:
     )
     assert restored.restore({"nonsense": True}) is False
     assert restored.outputs().room == "dining_room"  # a refusal changes nothing
+
+
+def test_restore_refuses_a_malformed_store_rather_than_raising(topo) -> None:
+    """A store written by something else, or corrupted, is somebody else's bad data.
+
+    ``restore`` is called while a config entry is being set up, so anything it raises
+    takes the whole integration down; every shape that is not the shape it wrote has to
+    come back as a refusal and a uniform prior.
+    """
+    est = make(topo)
+    before = est.belief.copy()
+    for data in (
+        {"states": 1, "belief": []},
+        {"states": None, "belief": []},
+        {"states": "kitchen", "belief": []},
+        {"states": list(topo.states), "belief": 3},
+        {"states": list(topo.states), "belief": [None] * len(topo.states)},
+    ):
+        assert est.restore(data) is False
+    assert np.allclose(est.belief, before)
