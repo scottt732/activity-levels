@@ -1,15 +1,27 @@
 {
   "domain": "activity_levels",
   "name": "Activity Levels",
-  "after_dependencies": ["calendar", "recorder"],
-  "codeowners": ["@scottt732"],
+  "after_dependencies": [
+    "calendar",
+    "recorder"
+  ],
+  "codeowners": [
+    "@scottt732"
+  ],
   "config_flow": true,
-  "dependencies": ["http", "frontend", "panel_custom", "websocket_api"],
+  "dependencies": [
+    "http",
+    "frontend",
+    "panel_custom",
+    "websocket_api"
+  ],
   "documentation": "https://github.com/scottt732/activity-levels",
   "integration_type": "hub",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/scottt732/activity-levels/issues",
-  "requirements": ["numpy==2.3.2"],
+  "requirements": [
+    "numpy==2.3.2"
+  ],
   "single_config_entry": true,
-  "version": "0.0.0"
+  "version": "0.1.0"
 }
