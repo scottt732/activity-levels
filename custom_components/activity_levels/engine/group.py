@@ -139,6 +139,30 @@ class Group:
         remaining = [ch for ch in self._live() if ch.label != label]
         return self._limit(self._mix([ch.value_at(t) for ch in remaining]))
 
+    def contribution_for(self, t: float, label: str, target: float) -> float:
+        """What the live channel called ``label`` must contribute for the raw mix to
+        read ``target``.
+
+        The inverse of :meth:`_mix` for one channel, so a level override can size the
+        group's trigger voice against the mix the group really uses -- including the
+        MEAN denominator, which counts the same channels ``_mix`` counts. The answer is
+        deliberately unclamped, and two of them are not reachable: MAX cannot be pulled
+        *down* by one channel (it answers ``target`` and the louder channel goes on
+        winning), and a negative answer means the rest of the group is already past the
+        target. What to do about either is the caller's policy, not the mixer's.
+        """
+        others = [ch.value_at(t) for ch in self._live() if ch.label != label]
+        if self.mix is Mix.SUM:
+            return target - sum(others)
+        if self.mix is Mix.MAX:
+            return target
+        if self.null_handling is NullHandling.IGNORE:
+            # only channels above zero divide, and a channel sized to a positive
+            # contribution is one of them
+            active = [v for v in others if v > 0.0]
+            return target * (len(active) + 1) - sum(active)
+        return target * (len(others) + 1) - sum(others)
+
     def display_value_at(self, t: float) -> float:
         return round(self.value_at(t), self.precision)
 

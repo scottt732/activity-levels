@@ -166,3 +166,72 @@ def test_value_at_excluding_everything_is_zero() -> None:
     g = Group(id="room", channels=[Channel(a, key="trigger")])
     a.note_on(0.0)
     assert g.value_at_excluding(0.0, "trigger") == 0.0
+
+
+def sized(g: Group, trigger: Voice, t: float, target: float) -> float:
+    """Fire the trigger at the contribution the group asks for, then read the group.
+
+    Deliberately checks the round trip rather than the arithmetic: the contract is that
+    the mix ends up at the target, whatever ``_mix`` happens to do to get there.
+    """
+    peak = g.contribution_for(t, "trigger", target)
+    trigger.reset()
+    if peak > 0.0:
+        trigger.gain = peak
+        trigger.note_on(t)
+    return g.value_at(t)
+
+
+def test_contribution_for_hits_the_target_in_every_mix() -> None:
+    a, trigger = voice("a", 2.0), voice("trigger", 1.0)
+    channels = [Channel(a), Channel(trigger, key="trigger")]
+    a.note_on(0.0)
+    total = Group(id="sum", channels=channels, max_value=10.0)
+    assert sized(total, trigger, 0.0, 3.5) == pytest.approx(3.5)
+    biggest = Group(id="max", channels=channels, mix=Mix.MAX, max_value=10.0)
+    assert sized(biggest, trigger, 0.0, 3.5) == pytest.approx(3.5)
+    average = Group(id="mean", channels=channels, mix=Mix.MEAN, max_value=10.0)
+    assert sized(average, trigger, 0.0, 3.5) == pytest.approx(3.5)
+
+
+def test_contribution_for_counts_the_mean_denominator_the_way_the_mix_does() -> None:
+    a, b, trigger = voice("a", 2.0), voice("b", 1.0), voice("trigger", 1.0)
+    channels = [Channel(a), Channel(b), Channel(trigger, key="trigger")]
+    a.note_on(0.0)  # b stays idle: a null, counted under ZERO and dropped under IGNORE
+    zero = Group(id="zero", channels=channels, mix=Mix.MEAN, max_value=10.0)
+    assert sized(zero, trigger, 0.0, 1.5) == pytest.approx(1.5)
+    ignore = Group(
+        id="ignore",
+        channels=channels,
+        mix=Mix.MEAN,
+        null_handling=NullHandling.IGNORE,
+        max_value=10.0,
+    )
+    assert sized(ignore, trigger, 0.0, 1.5) == pytest.approx(1.5)
+    # the two disagree about the peak, which is the whole point of asking the mix
+    assert zero.contribution_for(0.0, "trigger", 1.5) != pytest.approx(
+        ignore.contribution_for(0.0, "trigger", 1.5)
+    )
+
+
+def test_contribution_for_ignores_muted_channels() -> None:
+    a, b, trigger = voice("a", 2.0), voice("b", 4.0), voice("trigger", 1.0)
+    channels = [Channel(a), Channel(b, muted=True), Channel(trigger, key="trigger")]
+    a.note_on(0.0)
+    b.note_on(0.0)
+    total = Group(id="sum", channels=channels, max_value=10.0)
+    assert sized(total, trigger, 0.0, 3.5) == pytest.approx(3.5)
+    average = Group(id="mean", channels=channels, mix=Mix.MEAN, max_value=10.0)
+    assert sized(average, trigger, 0.0, 3.5) == pytest.approx(3.5)
+
+
+def test_contribution_for_reports_unreachable_targets_honestly() -> None:
+    a, trigger = voice("a", 3.0), voice("trigger", 1.0)
+    channels = [Channel(a), Channel(trigger, key="trigger")]
+    a.note_on(0.0)
+    # MAX cannot be pulled below the loudest channel; SUM answers with a negative peak
+    biggest = Group(id="max", channels=channels, mix=Mix.MAX, max_value=10.0)
+    assert biggest.contribution_for(0.0, "trigger", 1.0) == pytest.approx(1.0)
+    assert sized(biggest, trigger, 0.0, 1.0) == pytest.approx(3.0)
+    total = Group(id="sum", channels=channels, max_value=10.0)
+    assert total.contribution_for(0.0, "trigger", 1.0) == pytest.approx(-2.0)
