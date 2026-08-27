@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { expectedSensorId } from "./entities";
 import { alRebuild } from "./events";
+import { effectivePrecision, formatLevel } from "./model";
 import { sharedStyles } from "./styles";
 import type { TemplateResult } from "lit";
 import type { Config, Group, HomeAssistant, ProfileState, SimulationLog, SimulationLogEntry } from "./types";
@@ -13,17 +14,26 @@ const LOG_ROWS = 50;
 interface Row {
   id: string;
   label: string;
+  /** Decimals for this group's levels; resolved here, where the defaults are in reach. */
+  precision: number;
 }
 
 /** Every group in the tree, depth first, the way the config spells it. */
 function groupRows(config: Config | undefined): Row[] {
   const rows: Row[] = [];
   const walk = (g: Group): void => {
-    rows.push({ id: g.id, label: g.name ?? g.id });
+    rows.push({ id: g.id, label: g.name ?? g.id, precision: config ? effectivePrecision(config, g) : 0 });
     g.children.forEach(walk);
   };
   config?.groups.forEach(walk);
   return rows;
+}
+
+/** A sensor state as a level at `precision`; a non-numeric state ("unknown") is left alone. */
+function level(state: string | undefined, precision: number): string {
+  if (state === undefined) return "—";
+  const n = Number(state);
+  return state.trim() !== "" && Number.isFinite(n) ? formatLevel(n, precision) : state;
 }
 
 const date = (seconds: number): string => new Date(seconds * 1000).toLocaleDateString();
@@ -168,7 +178,7 @@ export class AlPatterns extends LitElement {
         ${ready ? "✓" : "✗"}
       </td>
       <td class="days">${days}</td>
-      <td class="expected">${expected ?? "—"}</td>
+      <td class="expected">${level(expected, row.precision)}</td>
     </tr>`;
   }
 

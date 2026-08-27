@@ -103,6 +103,29 @@ describe("al-patterns readiness", () => {
     expect(rows(el)[0]?.querySelectorAll("td")[3]?.textContent?.trim()).toBe("—");
   });
 
+  it("rounds the expected level to each group's precision", async () => {
+    const cfg = config();
+    cfg.groups[0]!.children[0]!.precision = 3;
+    const el = await mount({
+      config: cfg,
+      profileState: profileState(),
+      hass: hassStub({
+        "sensor.house_expected_activity": "1.4372",
+        "sensor.kitchen_expected_activity": "0.2418",
+      }),
+    });
+    const expected = rows(el).map((r) => r.querySelectorAll("td")[3]?.textContent?.trim());
+    expect(expected).toEqual(["1.4", "0.242"]);
+  });
+
+  it("leaves an expected state that is not a number alone", async () => {
+    const el = await mount({
+      profileState: profileState(),
+      hass: hassStub({ "sensor.house_expected_activity": "unavailable" }),
+    });
+    expect(rows(el)[0]?.querySelectorAll("td")[3]?.textContent?.trim()).toBe("unavailable");
+  });
+
   it("says so when the profile has not loaded yet", async () => {
     const el = await mount();
     expect(rows(el)).toHaveLength(0);

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  effectivePrecision,
+  formatLevel,
   groupAt,
   newGroup,
   newStimulus,
@@ -129,5 +131,32 @@ describe("renamePreset", () => {
     expect(after.envelopes.map((e) => e.id)).toEqual(["default", "default_slow"]);
     expect(after.defaults.envelope).toBe("default");
     expect(after.groups[0]!.children[1]!.stimuli[0]!.envelope).toBe("default");
+  });
+});
+
+describe("formatLevel", () => {
+  it("prints a level at the precision it was asked for", () => {
+    expect(formatLevel(1.8342, 1)).toBe("1.8");
+    expect(formatLevel(1.8342, 2)).toBe("1.83");
+    expect(formatLevel(1.8342, 0)).toBe("2");
+    expect(formatLevel(-0.4271, 1)).toBe("-0.4");
+  });
+
+  it("pads a short value out to the precision, so a column of levels lines up", () => {
+    expect(formatLevel(2, 2)).toBe("2.00");
+    expect(formatLevel(0, 1)).toBe("0.0");
+  });
+
+  it("survives a precision no `toFixed` would take", () => {
+    expect(formatLevel(1.5, -3)).toBe("2");
+    expect(formatLevel(1.5, 1.7)).toBe("1.5");
+    expect(formatLevel(1.5, 500)).not.toBe("");
+  });
+});
+
+describe("effectivePrecision", () => {
+  it("prefers the group's own precision and falls back to the defaults", () => {
+    expect(effectivePrecision(cfg, { ...newGroup("house"), precision: 3 })).toBe(3);
+    expect(effectivePrecision(cfg, newGroup("house"))).toBe(1);
   });
 });

@@ -42,6 +42,20 @@ export const newStimulus = (entity: string): Stimulus => ({
   debounce: null,
 });
 
+/** A group's own precision, or the one it inherits from the defaults. */
+export const effectivePrecision = (config: Config, group: Group): number =>
+  group.precision ?? config.defaults.precision;
+
+/**
+ * A level printed the way the engine rounds it: `1.8342` at 1 dp is `1.8`, and `2` at 2 dp
+ * is `2.00`, so a column of levels lines up. `toFixed` throws outside 0…100 digits and
+ * truncates a fractional one, so the precision is squared up before it gets there - a
+ * profile document or a live frame from a newer engine must not take the panel down.
+ */
+export function formatLevel(value: number, precision: number): string {
+  return value.toFixed(Math.min(100, Math.max(0, Math.trunc(precision))));
+}
+
 export function allGroupIds(config: Config): Set<string> {
   const ids = new Set<string>();
   const walk = (g: Group): void => {

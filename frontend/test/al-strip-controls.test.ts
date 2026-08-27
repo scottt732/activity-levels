@@ -271,6 +271,42 @@ describe("al-strip-controls: a bus", () => {
     expect(text(".anomaly")).toContain("-0.4");
   });
 
+  it("rounds both levels to the group's precision rather than printing the raw state", async () => {
+    el.hass = hassStub({
+      "sensor.house_expected_activity": { state: "1.8342", attributes: { day_type: "weekday" } },
+      "sensor.house_activity_anomaly": { state: "-0.4271" },
+    });
+    await el.updateComplete;
+    expect(text(".expected")).toContain("1.8");
+    expect(text(".expected")).not.toContain("1.83");
+    expect(text(".anomaly")).toContain("-0.4");
+    expect(text(".anomaly")).not.toContain("-0.42");
+  });
+
+  it("follows the live precision when the group asks for more decimals", async () => {
+    el.hass = hassStub({ "sensor.house_expected_activity": { state: "1.8342" } });
+    el.live = { now: 1000, groups: { house: groupLive({ precision: 2 }) }, voices: {} };
+    await el.updateComplete;
+    expect(text(".expected")).toContain("1.83");
+  });
+
+  it("falls back to the config's effective precision with no live state", async () => {
+    const cfg = baseConfig();
+    cfg.groups[0]!.precision = 3;
+    el.config = cfg;
+    el.live = null;
+    el.hass = hassStub({ "sensor.house_expected_activity": { state: "1.8342" } });
+    await el.updateComplete;
+    expect(text(".expected")).toContain("1.834");
+  });
+
+  it("leaves a state that is not a number alone", async () => {
+    el.hass = hassStub({ "sensor.house_expected_activity": { state: "unknown" } });
+    await el.updateComplete;
+    expect(text(".expected")).toContain("unknown");
+    expect(text(".anomaly")).toContain("\u2014");
+  });
+
   it("shows the simulation switch's own state, and asks the shell to flip it", () => {
     const sw = el.shadowRoot?.querySelector<HTMLElement & { checked?: boolean }>(".sim-switch");
     expect(sw?.checked).toBe(true);

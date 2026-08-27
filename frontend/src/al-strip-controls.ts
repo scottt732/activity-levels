@@ -14,7 +14,7 @@ import {
   groupSchema,
   mergeGroup,
 } from "./group-form";
-import { groupAt, parentGroupPath, resolvedEnvelope, stimulusAt } from "./model";
+import { effectivePrecision, formatLevel, groupAt, parentGroupPath, resolvedEnvelope, stimulusAt } from "./model";
 import { setAt } from "./store";
 import {
   OVERRIDES,
@@ -315,6 +315,10 @@ export class AlStripControls extends LitElement {
 
   private renderStatus(config: Config, group: Group): TemplateResult {
     const gid = group.id;
+    // The live frame is what the engine is actually rounding to; the config is the same
+    // number for every group the engine already knows about, and the answer for one it
+    // does not (a group added in this draft has no live entry yet).
+    const dp = this.live?.groups[gid]?.precision ?? effectivePrecision(config, group);
     const lights = this.live?.groups[gid]?.lights ?? 0;
     const sim: HassEntity | undefined = this.hass?.states[simSwitchId(gid)];
     const blocked = this.simLog?.blocked[gid] ?? null;
@@ -343,8 +347,8 @@ export class AlStripControls extends LitElement {
             </div>`
           : nothing}
         ${blocked !== null ? html`<div class="muted blocked">Blocked: ${blocked}</div>` : nothing}
-        ${this.renderSensor("expected", "Expected", expectedSensorId(gid))}
-        ${this.renderSensor("anomaly", "Anomaly", anomalySensorId(gid))}
+        ${this.renderSensor("expected", "Expected", expectedSensorId(gid), dp)}
+        ${this.renderSensor("anomaly", "Anomaly", anomalySensorId(gid), dp)}
         <div class="muted readiness">${this.readiness(config, gid)}</div>
         ${entries.length > 0
           ? html`<ol class="log">
@@ -356,13 +360,21 @@ export class AlStripControls extends LitElement {
     `;
   }
 
-  /** One of the pattern sensors, with the day type it was measured against. */
-  private renderSensor(cls: string, label: string, entityId: string): TemplateResult {
+  /**
+   * One of the pattern sensors, with the day type it was measured against. The state is a
+   * level, so it is printed at the group's precision rather than at whatever the sensor
+   * happens to carry; anything that is not a number ("unknown", "unavailable") is a state,
+   * not a level, and goes through untouched.
+   */
+  private renderSensor(cls: string, label: string, entityId: string, precision: number): TemplateResult {
     const entity = this.hass?.states[entityId];
     const dayType = entity?.attributes.day_type;
+    const raw = entity?.state;
+    const n = raw === undefined ? NaN : Number(raw);
+    const value = raw === undefined ? "—" : raw.trim() !== "" && Number.isFinite(n) ? formatLevel(n, precision) : raw;
     return html`<div class="row ${cls}">
       <span class="muted">${label}</span>
-      <span class="value">${entity?.state ?? "—"}</span>
+      <span class="value">${value}</span>
       ${typeof dayType === "string" ? html`<span class="muted">${dayType}</span>` : nothing}
     </div>`;
   }
