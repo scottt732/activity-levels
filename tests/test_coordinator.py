@@ -214,3 +214,101 @@ async def test_no_timers_or_saves_after_stop(coordinator: ActivityLevelsCoordina
     coordinator.trigger("kitchen", peak=2.0)
     assert coordinator.next_wake("house") is None
     assert coordinator._timers == {}
+
+
+async def test_mute_takes_a_child_out_of_its_parent(
+    hass: HomeAssistant, coordinator: ActivityLevelsCoordinator
+) -> None:
+    hass.states.async_set("binary_sensor.living_motion", "on")
+    await hass.async_block_till_done()
+    assert coordinator.data["house"].value == pytest.approx(2.0)
+    coordinator.set_muted("living_room", True)
+    assert coordinator.data["house"].value == 0.0
+    assert coordinator.data["house"].contributors == {}
+    # the room's own sensor keeps working while the house ignores it
+    assert coordinator.data["living_room"].value == pytest.approx(2.0)
+    assert coordinator.data["living_room"].muted is True
+    assert coordinator.data["house"].muted is False
+    coordinator.set_muted("living_room", False)
+    assert coordinator.data["house"].value == pytest.approx(2.0)
+
+
+async def test_muting_a_root_is_recorded_and_does_nothing(
+    coordinator: ActivityLevelsCoordinator,
+) -> None:
+    coordinator.set_muted("house", True)
+    assert coordinator.data["house"].muted is True
+    assert coordinator.data["house"].value == 0.0
+
+
+async def test_mute_publishes_and_reschedules_the_parent(
+    hass: HomeAssistant, coordinator: ActivityLevelsCoordinator
+) -> None:
+    hass.states.async_set("binary_sensor.kitchen_motion", "on")
+    await hass.async_block_till_done()
+    calls: list[str] = []
+    coordinator.async_add_listener("house", lambda: calls.append("house"))
+    coordinator.async_add_listener("kitchen", lambda: calls.append("kitchen"))
+    timer = coordinator._timers["house"]
+    coordinator.set_muted("kitchen", True)
+    assert sorted(calls) == ["house", "kitchen"]
+    assert coordinator._timers["house"] is not timer
+
+
+async def test_mute_survives_a_restart_and_forgets_vanished_groups(
+    hass: HomeAssistant, hass_storage: dict, coordinator: ActivityLevelsCoordinator
+) -> None:
+    coordinator.set_muted("kitchen", True)
+    await coordinator.async_stop()
+    stored = hass_storage["activity_levels.entry1"]["data"]
+    assert stored["muted"] == {"kitchen": True}
+    stored["muted"]["conservatory"] = True  # a group the config no longer has
+    coord2 = ActivityLevelsCoordinator(hass, "entry1", build_tree(validate_config(house_config())))
+    await coord2.async_start()
+    assert coord2.data["kitchen"].muted is True
+    hass.states.async_set("binary_sensor.kitchen_motion", "on")
+    await hass.async_block_till_done()
+    assert coord2.data["kitchen"].value == pytest.approx(1.0)
+    assert coord2.data["house"].value == 0.0
+    await coord2.async_stop()
+    assert hass_storage["activity_levels.entry1"]["data"]["muted"] == {"kitchen": True}
+
+
+async def test_set_level_sizes_the_trigger_against_the_other_channels(
+    hass: HomeAssistant, coordinator: ActivityLevelsCoordinator
+) -> None:
+    hass.states.async_set("binary_sensor.living_motion", "on")  # a sum group, already at 2.0
+    await hass.async_block_till_done()
+    assert coordinator.set_level("living_room", 3.5) == pytest.approx(3.5)
+    assert coordinator.data["living_room"].value == pytest.approx(3.5)
+    # the override is not real activity, so real_value still reads the room itself
+    assert coordinator.data["living_room"].real_value == pytest.approx(2.0)
+    # and it is an absolute level: a second override replaces the first, never stacks
+    assert coordinator.set_level("living_room", 3.0) == pytest.approx(3.0)
+
+
+async def test_set_level_clamps_to_the_limiter_and_resets_at_zero(
+    coordinator: ActivityLevelsCoordinator,
+) -> None:
+    assert coordinator.set_level("kitchen", 99.0) == pytest.approx(5.0)
+    assert coordinator.set_level("kitchen", 0.0) == 0.0
+    assert coordinator.data["kitchen"].contributors == {}
+
+
+async def test_set_level_on_a_max_group_cannot_undercut_a_louder_child(
+    hass: HomeAssistant, coordinator: ActivityLevelsCoordinator
+) -> None:
+    hass.states.async_set("binary_sensor.living_motion", "on")
+    await hass.async_block_till_done()
+    assert coordinator.set_level("house", 4.0) == pytest.approx(4.0)
+    # the living room is still at 2.0 and MAX keeps it; the caller is told what happened
+    assert coordinator.set_level("house", 1.0) == pytest.approx(2.0)
+
+
+async def test_set_level_rejects_negative_or_non_finite_values(
+    coordinator: ActivityLevelsCoordinator,
+) -> None:
+    for bad in (-1.0, float("inf"), float("nan")):
+        with pytest.raises(ValueError, match="non-negative finite"):
+            coordinator.set_level("kitchen", bad)
+    assert coordinator.data["kitchen"].value == 0.0

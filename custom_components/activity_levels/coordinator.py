@@ -17,7 +17,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import STORAGE_VERSION, TRIGGER_KEY, storage_key
-from .engine import Group, Phase, Voice
+from .engine import Channel, Group, Phase, Voice
 from .tree import Tree, VoiceRef
 
 if TYPE_CHECKING:
@@ -39,6 +39,7 @@ class GroupState:
     last_activity: float | None
     cooldown_at: float | None
     contributors: dict[str, float]
+    muted: bool
 
 
 class ActivityLevelsCoordinator:
@@ -55,6 +56,7 @@ class ActivityLevelsCoordinator:
         self._listeners: dict[str, list[Callable[[], None]]] = {}
         self._timers: dict[str, CALLBACK_TYPE] = {}
         self._wakes: dict[str, float] = {}
+        self._muted: dict[str, bool] = {}
         self._unsub_state: CALLBACK_TYPE | None = None
         self._stopped = False
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, storage_key(entry_id))
@@ -76,6 +78,7 @@ class ActivityLevelsCoordinator:
         t = self.now()
         if stored:
             self._restore(stored.get("voices", {}))
+            self._restore_muted(stored.get("muted", {}))
         self._reconcile(t)
         if self.tree.entity_ids:
             self._unsub_state = async_track_state_change_event(
@@ -166,6 +169,49 @@ class ActivityLevelsCoordinator:
         info.trigger.note_on(t)
         self._after_change({info.root_id}, t)
 
+    def set_level(self, group_id: str, value: float) -> float:
+        """Override a group's level: size its trigger voice so the mix reads ``value``.
+
+        Returns what the group actually ends up showing, which need not be what was
+        asked for: the peak is clamped to the group's limiter, and a MAX group cannot be
+        pulled below its loudest channel. The level cools down from there like any other
+        impulse.
+        """
+        if not (isfinite(value) and value >= 0.0):
+            raise ValueError("value must be a non-negative finite number")
+        info = self.tree.groups[group_id]
+        t = self.now()
+        peak = min(info.group.contribution_for(t, TRIGGER_KEY, value), info.max_value)
+        # From idle every time: note_on stacks onto whatever the trigger is still
+        # sounding, and an override is an absolute level, not one more impulse on top.
+        info.trigger.reset()
+        if peak > 0.0:
+            info.trigger.gain = peak
+            info.trigger.note_on(t)
+        self._after_change({info.root_id}, t)
+        return info.group.display_value_at(t)
+
+    def set_muted(self, group_id: str, muted: bool) -> None:
+        """Take a group out of its parent's mix, or put it back.
+
+        The group itself goes on computing and publishing, so its own sensor keeps
+        working. Muting a root is allowed, recorded, and does nothing else: there is no
+        parent to keep it out of.
+        """
+        info = self.tree.groups[group_id]
+        self._muted[group_id] = muted
+        if (channel := self._parent_channel(group_id)) is not None:
+            channel.muted = muted
+        self._after_change({info.root_id}, self.now())
+
+    def _parent_channel(self, group_id: str) -> Channel | None:
+        """The channel feeding ``group_id`` into its parent, or None for a root."""
+        info = self.tree.groups[group_id]
+        if info.parent_id is None:
+            return None
+        parent = self.tree.groups[info.parent_id].group
+        return next((ch for ch in parent.channels if ch.source is info.group), None)
+
     def reset(self, group_id: str | None = None) -> None:
         t = self.now()
         if group_id is None:
@@ -192,6 +238,7 @@ class ActivityLevelsCoordinator:
             active_voices=group.active_voices(t),
             last_activity=group.last_activity(),
             cooldown_at=group.cooldown_at(t),
+            muted=self._muted.get(group.id, False),
             contributors={
                 label: rounded
                 for label, v in group.contributions_at(t).items()
@@ -239,7 +286,7 @@ class ActivityLevelsCoordinator:
         }
         for info in self.tree.groups.values():
             voices[self.tree.voice_key(info.id, info.trigger.id)] = info.trigger.snapshot()
-        return {"voices": voices}
+        return {"voices": voices, "muted": dict(self._muted)}
 
     def _restore(self, voices: dict[str, Any]) -> None:
         for ref in self.tree.all_voice_refs():
@@ -248,6 +295,22 @@ class ActivityLevelsCoordinator:
         for info in self.tree.groups.values():
             if data := voices.get(self.tree.voice_key(info.id, info.trigger.id)):
                 info.trigger.restore(data)
+
+    def _restore_muted(self, muted: dict[str, Any]) -> None:
+        """Re-apply the stored mutes to the freshly built tree.
+
+        Groups the configuration no longer has are dropped rather than remembered: an id
+        can be reused for something else entirely, and a mute nobody can see is worse
+        than a forgotten one.
+        """
+        self._muted = {
+            gid: flag
+            for gid, flag in muted.items()
+            if gid in self.tree.groups and isinstance(flag, bool)
+        }
+        for gid, flag in self._muted.items():
+            if (channel := self._parent_channel(gid)) is not None:
+                channel.muted = flag
 
     def _reconcile(self, t: float, *, absent_only: bool = False) -> set[str]:
         """Line the voices up with the states HA holds now; return the roots that moved.
