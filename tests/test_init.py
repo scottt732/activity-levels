@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -181,3 +183,15 @@ async def test_set_level_service(hass: HomeAssistant, entry: MockConfigEntry) ->
         await hass.services.async_call(
             DOMAIN, "set_level", {"group_id": "kitchen", "value": -1.0}, blocking=True
         )
+
+
+def test_every_file_carrying_the_version_agrees() -> None:
+    """The three files release-please bumps together must not drift apart."""
+    root = Path(__file__).resolve().parent.parent
+    result = subprocess.run(
+        [sys.executable, str(root / "scripts" / "check_version.py")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

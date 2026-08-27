@@ -5,7 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## Pre-release notes (before 0.1.0)
+
+Everything below landed before the first tagged release; from 0.1.0 onwards
+release-please writes the sections above this one from the commit history.
 
 ### Changed
 - New `stack` retrigger mode, now the default, restores the original additive behaviour:
