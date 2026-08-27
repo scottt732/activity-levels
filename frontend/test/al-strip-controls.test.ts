@@ -269,12 +269,12 @@ describe("al-strip-controls: a bus", () => {
   });
 
   it("edits the bus fields, and offers no gain on a root bus", () => {
-    expect(form().schema?.map((f) => f.name)).toEqual(["name", "mix"]);
+    expect(form().schema?.map((f) => f.name)).toEqual(["name", "mix", "adjacent", "exit"]);
   });
 
   it("offers gain into the parent on a sub-bus", async () => {
     await show(["groups", 0, "children", 0]);
-    expect(form().schema?.map((f) => f.name)).toEqual(["name", "mix", "gain"]);
+    expect(form().schema?.map((f) => f.name)).toEqual(["name", "mix", "gain", "adjacent", "exit"]);
   });
 
   it("asks how idle contributors count only when the mix is a mean", async () => {
@@ -471,5 +471,28 @@ describe("al-strip-controls: presence stimulus", () => {
     expect(branch.shadowRoot!.textContent).not.toContain("Presence (anyone here)");
     const off = await fixture(roomsConfig(), ["groups", 0, "children", 0, "children", 0]);
     expect(off.shadowRoot!.textContent).not.toContain("Presence (anyone here)");
+  });
+});
+
+describe("al-strip-controls: bus adjacency and exit", () => {
+  it("renders the adjacent-rooms selector and the exit toggle, and round-trips an edit into the draft", async () => {
+    const stripEl = await fixture(roomsConfig(), ["groups", 0, "children", 0, "children", 0]);
+    const formEl = stripEl.shadowRoot!.querySelector("ha-form") as HTMLElement & {
+      data?: Record<string, unknown>;
+      schema?: { name: string }[];
+    };
+    expect(formEl.schema?.map((f) => f.name)).toContain("adjacent");
+    expect(formEl.schema?.map((f) => f.name)).toContain("exit");
+
+    const changed = listenFor<AlChangeEvent>(stripEl, "al-change");
+    formEl.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: { ...formEl.data, exit: true } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    const next = (await changed).detail;
+    expect(next.groups[0]?.children[0]?.children[0]?.exit).toBe(true);
   });
 });

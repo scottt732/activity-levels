@@ -50,4 +50,26 @@ describe("adjacency fields", () => {
     const group = houseConfig().groups[0]!;
     expect(groupData(group, true, FIELDS, houseConfig()).adjacent).toEqual([]);
   });
+
+  it("keeps a dangling adjacency id through an unrelated edit, for the backend to catch on save", () => {
+    // A sibling group named here was deleted elsewhere; `al-group-editor`'s delete does no
+    // adjacency cleanup. The id must survive the round trip through `ha-form` so the
+    // backend's `unknown group` validation catches it on Save - not vanish silently the
+    // next time some other field on this group is edited.
+    const config = roomsConfig();
+    const group: Group = { ...kitchen(), adjacent: ["dining_room", "deleted_room"] };
+    const data = groupData(group, false, FIELDS, config);
+    expect(data.adjacent).toEqual(["dining_room", "deleted_room"]);
+    const merged = mergeGroup(group, { ...data, name: "Kitchen 2" });
+    expect(merged.adjacent).toEqual(["dining_room", "deleted_room"]);
+  });
+
+  it("badges a one-way edge with an arrow, leaving a symmetric edge alone", () => {
+    const config = roomsConfig();
+    const hall = config.groups[0]!.children[0]!.children[2]!;
+    const item = groupSchema(hall, false, FIELDS, config).find((i) => i.name === "adjacent")!;
+    const options = (item.selector.select as { options: { value: string; label: string }[] }).options;
+    expect(options.find((o) => o.value === "bedroom")?.label).toBe("Bedroom →");
+    expect(options.find((o) => o.value === "dining_room")?.label).toBe("Dining Room");
+  });
 });

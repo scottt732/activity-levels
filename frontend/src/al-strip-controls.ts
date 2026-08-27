@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { anomalySensorId, expectedSensorId, simSwitchId } from "./entities";
-import { fieldErrors, pathKey, subtreeErrorCount } from "./errors";
+import { fieldErrors, listFieldError, pathKey, subtreeErrorCount } from "./errors";
 import { alChange, alRebuild, alSimToggle } from "./events";
 import {
   MAX_VALUE_SELECTOR,
@@ -71,7 +71,7 @@ import type {
 const CHANNEL_FIELDS: StimulusField[] = ["envelope", "gain", "to", "key"];
 
 /** The bus's tuning fields; `id` and `area` re-create entities, so they stay in the editor too. */
-const BUS_FIELDS: GroupField[] = ["name", "mix", "null_handling", "gain"];
+const BUS_FIELDS: GroupField[] = ["name", "mix", "null_handling", "gain", "adjacent", "exit"];
 
 /** How many simulation actions the status card shows before it stops being a summary. */
 const LOG_ROWS = 5;
@@ -305,8 +305,10 @@ export class AlStripControls extends LitElement {
     const group = groupAt(config, path);
     if (!group) return html`<ha-card><span class="muted">This bus no longer exists.</span></ha-card>`;
     const isRoot = path.length === 2;
-    const fields = fieldErrors(this.errors, path);
     const own = this.errors.filter((e) => e.path === pathKey(path));
+    const fields: Record<string, string> = { ...fieldErrors(this.errors, path) };
+    const adjacentError = listFieldError(this.errors, path, "adjacent");
+    if (adjacentError !== undefined) fields.adjacent = adjacentError;
 
     return html`
       <ha-card header=${group.name ?? group.id}>
@@ -315,8 +317,8 @@ export class AlStripControls extends LitElement {
           <div class="col">
             <ha-form
               .hass=${this.hass}
-              .data=${groupData(group, isRoot, BUS_FIELDS)}
-              .schema=${groupSchema(group, isRoot, BUS_FIELDS)}
+              .data=${groupData(group, isRoot, BUS_FIELDS, config)}
+              .schema=${groupSchema(group, isRoot, BUS_FIELDS, config)}
               .error=${fields}
               .computeLabel=${groupLabel}
               .computeHelper=${groupHelper}

@@ -1,5 +1,5 @@
 import { emptyToNull } from "./convert";
-import { adjacencyId, allGroupIds } from "./model";
+import { adjacencyId, isOneWay } from "./model";
 import type { Selector } from "./al-override-field";
 import type { FormItem } from "./stimulus-form";
 import type { Config, Group, Mix, NullHandling } from "./types";
@@ -73,11 +73,19 @@ export const GROUP_GAIN_SELECTOR: Selector = { number: { min: 0.1, max: 10, step
 
 const EXIT_SELECTOR: Selector = { boolean: {} };
 
-/** Every other group, in tree order: what a room can be adjacent to. */
+/**
+ * Every other group, in tree order: what a room can be adjacent to. A one-way edge out of
+ * `group` is badged with a trailing arrow - edited in YAML only, per spec, but the picker
+ * still has to say which of the selected rooms are one-way.
+ */
 function adjacentSelector(config: Config, group: Group): Selector {
+  const oneWay = new Set((group.adjacent ?? []).filter(isOneWay).map(adjacencyId));
   const options: { value: string; label: string }[] = [];
   const walk = (g: Group): void => {
-    if (g.id !== group.id) options.push({ value: g.id, label: g.name ?? g.id });
+    if (g.id !== group.id) {
+      const name = g.name ?? g.id;
+      options.push({ value: g.id, label: oneWay.has(g.id) ? `${name} \u2192` : name });
+    }
     g.children.forEach(walk);
   };
   config.groups.forEach(walk);
@@ -111,20 +119,24 @@ export function groupSchema(
  * An unset area is left out entirely rather than sent as an empty string: `ha-selector`'s
  * area picker reads `""` as a chosen area that no longer exists.
  *
- * `adjacent` is spelled out as plain ids, dropped to only those that still name a group in
- * `config`: a picker option list built from the current tree cannot show a value that is
- * not one of its options.
+ * `adjacent` is spelled out as plain ids, unfiltered: a dangling id left behind by deleting
+ * another group must survive the round trip through `ha-form` so the backend's own
+ * `unknown group` validation catches it on Save, rather than this vanishing it from under
+ * the user with no error ever shown. The picker's own option list (`adjacentSelector`) is
+ * where filtering to real groups belongs - that only affects what can be newly chosen, not
+ * what is already stored.
+ *
+ * `config` is accepted for symmetry with `groupSchema` (every caller has one to hand and
+ * passes the same arguments to both), but is not needed here.
  */
 export function groupData(
   group: Group,
   isRoot: boolean,
   fields: readonly GroupField[],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- see doc comment above
   config?: Config,
 ): Record<string, unknown> {
-  const known = config ? allGroupIds(config) : null;
-  const adjacent = (group.adjacent ?? [])
-    .map(adjacencyId)
-    .filter((id) => known === null || known.has(id));
+  const adjacent = (group.adjacent ?? []).map(adjacencyId);
   const all: Record<GroupField, unknown> = {
     id: group.id,
     name: group.name ?? "",
