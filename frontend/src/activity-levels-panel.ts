@@ -13,7 +13,7 @@ import {
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { simSwitchId } from "./entities";
 import { ensureHaElements } from "./ha-elements";
-import { groupAt, groupPathFor } from "./model";
+import { groupAt, groupPathFor, presenceSettings } from "./model";
 import { expandTo, reduce, restoreNav, saveExpanded } from "./navigation";
 import { runSave } from "./save-flow";
 import { Draft } from "./store";
@@ -34,9 +34,9 @@ import type {
   ValidationError,
 } from "./types";
 
-type Tab = "mixer" | "groups" | "envelopes" | "defaults" | "patterns";
+type Tab = "mixer" | "groups" | "envelopes" | "defaults" | "patterns" | "presence";
 
-const TABS: Tab[] = ["mixer", "groups", "envelopes", "defaults", "patterns"];
+const BASE_TABS: Tab[] = ["mixer", "groups", "envelopes", "defaults", "patterns"];
 const LIVE_POLL_MS = 2000;
 const SIM_POLL_MS = 10_000;
 /** A profile only changes when it is retrained, so anything fresher than this will do. */
@@ -97,6 +97,12 @@ export class ActivityLevelsPanel extends LitElement {
    */
   private simStatesMemo: { key: unknown[]; value: Record<string, SimState> } | null = null;
 
+  /** Presence is opt-in, so its tab only exists while the draft asks for it. */
+  private get tabs(): Tab[] {
+    const config = this.draft?.config;
+    return config && presenceSettings(config).enabled ? [...BASE_TABS, "presence"] : BASE_TABS;
+  }
+
   private readonly onVisibilityChange = (): void => this.updatePolling();
 
   override async connectedCallback(): Promise<void> {
@@ -145,6 +151,9 @@ export class ActivityLevelsPanel extends LitElement {
   private setConfig(next: Config, coalesceKey?: string): void {
     this.draft?.set(next, coalesceKey);
     this.syncNav();
+    // turning presence off while standing on its tab would leave the panel on a tab
+    // that is no longer in the list, and the roving tabindex pointing past the end
+    if (!this.tabs.includes(this.tab)) this.selectTab(0);
     this.requestUpdate();
   }
 
@@ -376,7 +385,7 @@ export class ActivityLevelsPanel extends LitElement {
     try {
       this.timeline = parseTimeline(localStorage.getItem(TIMELINE_KEY)) ?? DEFAULT_TIMELINE;
     } catch {
-      /* unreadable or unparseable storage: the defaults are a fine place to start */
+      /* unreadable or unparsable storage: the defaults are a fine place to start */
     }
   }
 
@@ -390,7 +399,7 @@ export class ActivityLevelsPanel extends LitElement {
   };
 
   private selectTab(index: number): void {
-    const next = TABS[index];
+    const next = this.tabs[index];
     if (next === undefined) return;
     // The Mixer polls whether or not Live is on, so leaving it with Live off would strand
     // the last frame on the other tabs' meters, where it would read as current.
@@ -411,13 +420,13 @@ export class ActivityLevelsPanel extends LitElement {
 
   /** Manual-activation tablist: arrows (and Home/End) move, Enter/Space activate. */
   private onTabsKeydown = (ev: KeyboardEvent): void => {
-    const last = TABS.length - 1;
+    const last = this.tabs.length - 1;
     switch (ev.key) {
       case "ArrowRight":
-        this.focusTab((this.tabFocus + 1) % TABS.length);
+        this.focusTab((this.tabFocus + 1) % this.tabs.length);
         break;
       case "ArrowLeft":
-        this.focusTab((this.tabFocus + last) % TABS.length);
+        this.focusTab((this.tabFocus + last) % this.tabs.length);
         break;
       case "Home":
         this.focusTab(0);
@@ -457,7 +466,7 @@ export class ActivityLevelsPanel extends LitElement {
         </div>
         ${this.renderBanner()}
         <div class="tabs" role="tablist" aria-label="Sections" @keydown=${this.onTabsKeydown}>
-          ${TABS.map(
+          ${this.tabs.map(
             (t, i) => html`<button
               type="button"
               id="tab-${t}"
@@ -556,6 +565,14 @@ export class ActivityLevelsPanel extends LitElement {
           .simLog=${this.simLog}
           @al-rebuild=${this.onRebuild}
         ></al-patterns>`;
+      case "presence":
+        return html`<al-presence
+          .hass=${this.hass}
+          .config=${d.config}
+          .errors=${this.errors}
+          .narrow=${this.narrow}
+          @al-change=${this.onChange}
+        ></al-presence>`;
     }
   }
 
@@ -619,7 +636,7 @@ export class ActivityLevelsPanel extends LitElement {
     return html`<div class="rows">
       <ha-card class="mixer-empty">
         <p class="muted">Add your first group in Groups.</p>
-        <ha-button @click=${() => this.selectTab(TABS.indexOf("groups"))}>Go to Groups</ha-button>
+        <ha-button @click=${() => this.selectTab(this.tabs.indexOf("groups"))}>Go to Groups</ha-button>
       </ha-card>
     </div>`;
   }

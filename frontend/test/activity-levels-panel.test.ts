@@ -18,11 +18,13 @@ await import("../src/al-mixer");
 await import("../src/al-timeline");
 await import("../src/al-strip-controls");
 await import("../src/al-patterns");
+await import("../src/al-presence");
 
 const { alChange, alLiveRefresh, alNav, alRebuild, alSelect, alSimToggle, alTimelineRange } = await import(
   "../src/events"
 );
 const { newGroup, newStimulus } = await import("../src/model");
+const { presenceConfig, roomsConfig } = await import("./fixtures");
 
 type Panel = HTMLElement & { hass: unknown; updateComplete: Promise<boolean> };
 
@@ -106,6 +108,11 @@ const hass = () => ({
         return { rebuilt };
       case "activity_levels/simulation/log":
         return { entries: [], active: {}, blocked: {} };
+      // Enough for the Presence tab to draw itself; its own tests cover the shapes.
+      case "activity_levels/topology":
+        return { nodes: [], edges: [], exits: [] };
+      case "activity_levels/presence/state":
+        return { enabled: true, devices: {}, occupants: {}, scanners: [], unmapped: [], disabled: [] };
       case "activity_levels/state":
         if (liveGate) return new Promise((resolve) => liveGate?.push(resolve));
         return { now: 1000, groups: {}, voices: {} };
@@ -655,5 +662,48 @@ describe("activity-levels-panel live view", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("activity-levels-panel presence tab", () => {
+  it("offers the Presence tab only when presence is enabled", async () => {
+    await mount(roomsConfig());
+    expect(tabs().map((t) => t.textContent?.trim())).toEqual([
+      "Mixer",
+      "Groups",
+      "Envelopes",
+      "Defaults",
+      "Patterns",
+    ]);
+
+    await mount(presenceConfig());
+    expect(tabs().map((t) => t.textContent?.trim())).toEqual([
+      "Mixer",
+      "Groups",
+      "Envelopes",
+      "Defaults",
+      "Patterns",
+      "Presence",
+    ]);
+    await selectTab(5);
+    expect(el.shadowRoot?.querySelector("al-presence")).toBeTruthy();
+  });
+
+  it("falls back off the Presence tab when presence is turned off mid-edit", async () => {
+    await mount(presenceConfig());
+    await selectTab(5);
+    const off = structuredClone(presenceConfig());
+    off.presence!.enabled = false;
+    el.shadowRoot?.querySelector("al-presence")?.dispatchEvent(alChange(off));
+    await settle();
+    expect(el.shadowRoot?.querySelector("al-presence")).toBeNull();
+    expect(tabs().map((t) => t.textContent?.trim())).toEqual([
+      "Mixer",
+      "Groups",
+      "Envelopes",
+      "Defaults",
+      "Patterns",
+    ]);
+    expect(el.shadowRoot?.querySelector(".tab.active")?.textContent?.trim()).toBe("Mixer");
   });
 });

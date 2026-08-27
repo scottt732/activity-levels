@@ -26,6 +26,12 @@ export const sharedStyles = css`
   .layout.narrow {
     grid-template-columns: 1fr;
   }
+  /* A tab that reads as a column of cards, each as wide as the panel. */
+  .page {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+  }
   ha-card {
     padding: 16px;
   }

@@ -107,3 +107,10 @@ export const alSimToggle = (gid: string, on: boolean): CustomEvent<{ gid: string
  */
 export const alRebuild = (force = false): CustomEvent<{ force: boolean }> =>
   new CustomEvent<{ force: boolean }>("al-rebuild", { detail: { force }, bubbles: true, composed: true });
+
+/**
+ * A room picked on the map. Which pair of rooms is being routed between is the host's
+ * business, not the map's: it keeps the last two and asks for the paths between them.
+ */
+export const alMapSelect = (id: string): CustomEvent<{ id: string }> =>
+  new CustomEvent<{ id: string }>("al-map-select", { detail: { id }, bubbles: true, composed: true });
