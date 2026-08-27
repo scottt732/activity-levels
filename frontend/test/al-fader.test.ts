@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import "../src/al-fader";
 import { FADER_MAX, FADER_MIN, formatGain } from "../src/fader";
 import type { AlFader } from "../src/al-fader";
-import type { GainChangeDetail } from "../src/events";
+import type { FaderChangeDetail } from "../src/events";
 
 let el: AlFader;
-let events: GainChangeDetail[];
+let events: FaderChangeDetail[];
 
 const slider = (): HTMLElement => el.shadowRoot?.querySelector<HTMLElement>('[role="slider"]') as HTMLElement;
 const track = (): HTMLElement => el.shadowRoot?.querySelector<HTMLElement>(".track") as HTMLElement;
@@ -33,7 +33,7 @@ beforeEach(async () => {
   el = document.createElement("al-fader");
   el.value = 1;
   el.label = "House gain";
-  el.addEventListener("value-changed", (e) => events.push((e as CustomEvent<GainChangeDetail>).detail));
+  el.addEventListener("value-changed", (e) => events.push((e as CustomEvent<FaderChangeDetail>).detail));
   document.body.appendChild(el);
   await el.updateComplete;
 });
@@ -174,5 +174,104 @@ describe("al-fader pointer and wheel", () => {
       { value: 1.25, live: false },
       { value: 0.8, live: false },
     ]);
+  });
+});
+
+describe("al-fader in level mode", () => {
+  /** A 0…5 level fader at one decimal, the way a strip hands one out. */
+  const asLevel = async (over: { value?: number; tick?: number | null } = {}): Promise<void> => {
+    el.mode = "level";
+    el.max = 5;
+    el.precision = 1;
+    el.value = over.value ?? 2;
+    el.tick = over.tick ?? null;
+    el.label = "House level";
+    await el.updateComplete;
+  };
+
+  it("announces the group's own range and precision", async () => {
+    await asLevel();
+    const s = slider();
+    expect(s.getAttribute("aria-valuemin")).toBe("0");
+    expect(s.getAttribute("aria-valuemax")).toBe("5");
+    expect(s.getAttribute("aria-valuenow")).toBe("2");
+    expect(s.getAttribute("aria-valuetext")).toBe("2.0");
+    expect(el.shadowRoot?.querySelector(".value")?.textContent?.trim()).toBe("2.0");
+  });
+
+  it("fills the track with the level, not with a log position", async () => {
+    await asLevel({ value: 1 });
+    expect(el.shadowRoot?.querySelector<HTMLElement>(".fill")?.style.height).toBe("20%");
+  });
+
+  it("drops the unity line: there is no unity level", async () => {
+    expect(el.shadowRoot?.querySelector(".unity")).toBeTruthy();
+    await asLevel();
+    expect(el.shadowRoot?.querySelector(".unity")).toBeFalsy();
+  });
+
+  it("marks the real value while a simulated one is holding the level up", async () => {
+    await asLevel({ value: 4, tick: 1 });
+    const tick = el.shadowRoot?.querySelector<HTMLElement>(".tick");
+    expect(tick?.style.bottom).toBe("20%");
+    expect(tick?.getAttribute("title")).toBe("1.0");
+  });
+
+  it("draws no tick when the real value is the value", async () => {
+    await asLevel({ value: 2, tick: 2 });
+    expect(el.shadowRoot?.querySelector(".tick")).toBeFalsy();
+    el.tick = null;
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector(".tick")).toBeFalsy();
+  });
+
+  it("steps a tenth of the throw, or one decimal with shift", async () => {
+    await asLevel();
+    await key("ArrowUp");
+    expect(events).toEqual([{ value: 2.5, live: false }]);
+    await key("ArrowDown", true);
+    expect(events[1]).toEqual({ value: 1.9, live: false });
+  });
+
+  it("goes to the floor and the ceiling with Home and End", async () => {
+    await asLevel();
+    await key("Home");
+    await key("End");
+    expect(events.map((e) => e.value)).toEqual([0, 5]);
+  });
+
+  it("pages by a quarter of the throw", async () => {
+    await asLevel();
+    await key("PageUp");
+    expect(events[0]?.value).toBe(3.3);
+  });
+
+  it("ignores a double click: a level has no home to snap back to", async () => {
+    await asLevel();
+    slider().dispatchEvent(new MouseEvent("dblclick", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(events).toEqual([]);
+  });
+
+  it("maps a drag linearly onto the ceiling", async () => {
+    await asLevel();
+    const t = stubTrack();
+    t.dispatchEvent(pointer("pointerdown", 160));
+    await el.updateComplete;
+    expect(events).toEqual([{ value: 2.5, live: true }]);
+    t.dispatchEvent(pointer("pointerup", 160));
+    await el.updateComplete;
+    expect(events[1]).toEqual({ value: 2.5, live: false });
+  });
+
+  it("shows the live value again once the drag is over", async () => {
+    await asLevel();
+    const t = stubTrack();
+    t.dispatchEvent(pointer("pointerdown", 100));
+    await el.updateComplete;
+    expect(slider().getAttribute("aria-valuenow")).toBe("5");
+    t.dispatchEvent(pointer("pointerup", 100));
+    await el.updateComplete;
+    expect(slider().getAttribute("aria-valuenow")).toBe("2");
   });
 });

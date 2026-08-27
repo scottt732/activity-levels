@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { callService, getConfig, getProfile, getSimulationLog, getTimeseries, rebuildProfile, saveConfig, validateConfig } from "../src/api";
+import { callService, getConfig, getProfile, getSimulationLog, getTimeseries, rebuildProfile, resetGroup, saveConfig, setLevel, setMuted, validateConfig } from "../src/api";
 import type { Config, HomeAssistant, ProfileState, SimulationLog, TimeseriesResponse } from "../src/types";
 
 const config: Config = {
@@ -104,5 +104,30 @@ describe("callService", () => {
     const hass = { callService: svc } as unknown as HomeAssistant;
     await callService(hass, "light", "turn_on", { entity_id: "light.x" });
     expect(svc).toHaveBeenCalledWith("light", "turn_on", { entity_id: "light.x" });
+  });
+});
+
+describe("runtime commands", () => {
+  it("asks for a level and answers with the one actually reached", async () => {
+    // In a `max` group a target below a louder channel cannot be reached, so the engine's
+    // answer is the level it settled at, not the one that was asked for.
+    const callWS = vi.fn(async () => ({ value: 3.2 }));
+    const hass = hassWith(callWS);
+    await expect(setLevel(hass, "house", 1)).resolves.toBe(3.2);
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/level/set", group_id: "house", value: 1 });
+  });
+
+  it("mutes and unmutes, answering with the state that stuck", async () => {
+    const callWS = vi.fn(async () => ({ muted: true }));
+    const hass = hassWith(callWS);
+    await expect(setMuted(hass, "house", true)).resolves.toBe(true);
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/mute", group_id: "house", muted: true });
+  });
+
+  it("resets a group", async () => {
+    const callWS = vi.fn(async () => ({}));
+    const hass = hassWith(callWS);
+    await expect(resetGroup(hass, "house")).resolves.toBeUndefined();
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/reset", group_id: "house" });
   });
 });

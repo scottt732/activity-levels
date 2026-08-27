@@ -78,6 +78,8 @@ export interface GroupLive {
   name: string; parent_id: string | null; precision: number; max_value: number; mix: Mix; next_wake: number | null;
   /** Light entities the group owns right now; 0 means it cannot be simulated. */
   lights: number;
+  /** Whether the group is muted out of its parent's mix. Runtime state, not config. */
+  muted: boolean;
 }
 export interface VoiceLive {
   label: string; entity: string | null; phase: "idle" | "attack" | "decay" | "sustain" | "release";

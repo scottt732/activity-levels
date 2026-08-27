@@ -170,6 +170,7 @@ describe("al-tree live view", () => {
         mix: "sum",
         next_wake: 1090,
         lights: 0,
+        muted: false,
       },
     },
     voices: {

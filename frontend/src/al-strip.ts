@@ -1,29 +1,25 @@
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property } from "lit/decorators.js";
-import "./al-envelope-sketch";
+import { customElement, property, state } from "lit/decorators.js";
 import "./al-fader";
-import "./al-meter";
-import { formatDuration } from "./duration";
-import { alGainChanged, alOpenStrip, alSelectStrip } from "./events";
-import type { GainChangeDetail } from "./events";
-import type { StripLevel } from "./al-meter";
-import type { SketchEnvelope } from "./sketch";
-
-/** Sustain is a fraction of the peak, not a duration, so it gets two decimals of its own. */
-const level = (v: number): string => String(Math.round(v * 100) / 100);
-
-/** The one-line A/D/S/R hint under the sketch; an impulse has no shape to spell out. */
-export function adsrHint(e: SketchEnvelope): string {
-  if (e.impulse) return `impulse · R ${formatDuration(e.release)}`;
-  return `A ${formatDuration(e.attack)} · D ${formatDuration(e.decay)} · S ${level(e.sustain)} · R ${formatDuration(e.release)}`;
-}
+import { alLevelOverride, alMuteToggle, alReset, alSelectStrip, alToggleStrip } from "./events";
+import { formatLevel } from "./model";
+import type { FaderChangeDetail } from "./events";
+import type { PropertyValues } from "lit";
 
 /**
- * One mixer strip: a stimulus channel or a child bus of the current bus.
+ * How long a keyboard (or wheel) run of steps is allowed to keep going before the level it
+ * arrived at is sent. A drag has a pointer-up to say "this one"; a run of arrow keys does
+ * not, and one websocket command per keypress would fight the engine's own cooldown.
+ */
+export const STEP_DEBOUNCE_MS = 250;
+
+/**
+ * One mixer track: a group, at its depth in the tree.
  *
- * It reports intent and nothing else - the mixer owns the config. Its events bubble and
- * are composed so the mixer can listen once on the strip container; which strip they came
- * from is the event's `target`, since a strip does not know its own place in the bus.
+ * It reports intent and nothing else - the mixer owns the config and calls the engine. Its
+ * events bubble and are composed so the mixer can listen once on the strip container;
+ * which strip they came from is the event's `target`, since a strip does not know its own
+ * place in the row.
  */
 @customElement("al-strip")
 export class AlStrip extends LitElement {
@@ -44,41 +40,42 @@ export class AlStrip extends LitElement {
     :host([narrow]) {
       width: 72px;
     }
-    :host([kind="bus"]) {
-      border-style: double;
-      border-width: 4px;
-    }
     :host([selected]),
     :host(:focus-visible) {
       outline: 2px solid var(--primary-color);
       outline-offset: 1px;
     }
+    :host([muted]) .name,
+    :host([muted]) .readout {
+      opacity: 0.55;
+    }
     .strip {
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: stretch;
       gap: 6px;
       min-width: 0;
+      /* Each level of nesting steps the content right, past its parent's marker. */
+      padding-left: calc(var(--al-depth, 0) * 5px + 6px);
+    }
+    /* The depth marker: a bar down the left, inset and faded one step per level, so a
+       child reads as sitting under the parent it follows in the row. */
+    .depth {
+      position: absolute;
+      left: calc(var(--al-depth, 0) * 5px);
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: 2px;
+      background: var(--primary-color);
+      opacity: calc(1 - var(--al-depth, 0) * 0.22);
     }
     .head {
       display: flex;
       align-items: center;
       gap: 4px;
       min-width: 0;
-    }
-    .link {
-      background: none;
-      border: none;
-      margin: 0;
-      padding: 0;
-      font: inherit;
-      color: inherit;
-      text-align: left;
-      cursor: pointer;
-    }
-    .link:focus-visible {
-      outline: 2px solid var(--primary-color);
-      outline-offset: 1px;
     }
     .name {
       flex: 1;
@@ -88,16 +85,47 @@ export class AlStrip extends LitElement {
       white-space: nowrap;
       font-weight: 500;
     }
-    .sub,
-    .adsr {
+    button {
+      background: none;
+      border: 1px solid transparent;
+      margin: 0;
+      padding: 0 4px;
+      font: inherit;
+      font-size: 0.75em;
+      color: inherit;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 1px;
+    }
+    .chevron {
       color: var(--secondary-text-color);
-      font-size: 0.7em;
-      overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
     al-fader {
       align-self: center;
+    }
+    .readout {
+      text-align: center;
+      font-size: 0.85em;
+      font-variant-numeric: tabular-nums;
+    }
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+    }
+    .buttons button {
+      border-color: var(--divider-color, #e0e0e0);
+      min-width: 22px;
+      line-height: 1.6;
+    }
+    .mute[aria-pressed="true"] {
+      background: var(--warning-color, #ffa600);
+      color: var(--text-primary-color, #fff);
+      border-color: var(--warning-color, #ffa600);
     }
     .foot {
       display: flex;
@@ -113,25 +141,35 @@ export class AlStrip extends LitElement {
       font-size: 0.7em;
       line-height: 1.6;
     }
-    .open {
-      margin-left: auto;
-      color: var(--primary-color);
-      font-size: 0.75em;
-    }
-    .icon {
-      font-size: 0.8em;
-    }
   `;
 
-  @property({ type: String, reflect: true }) kind: "channel" | "bus" = "channel";
   @property({ type: String }) label = "";
-  @property({ type: String }) sublabel: string | null = null;
-  @property({ attribute: false }) envelope: SketchEnvelope | null = null;
-  @property({ type: Number }) gain = 1;
-  @property({ attribute: false }) live: StripLevel | null = null;
+  /** How deep in the tree this group sits; 0 for a root. Published as `--al-depth`. */
+  @property({ type: Number }) depth = 0;
+  @property({ type: Boolean }) hasChildren = false;
+  @property({ type: Boolean }) expanded = false;
+  @property({ type: Number }) childCount = 0;
+
+  /** The group's live level, and what it would be without a simulated stimulus holding it. */
+  @property({ type: Number }) value = 0;
+  @property({ type: Number }) realValue = 0;
+  @property({ type: Number }) maxValue = 5;
+  @property({ type: Number }) precision = 1;
+
+  @property({ type: Boolean, reflect: true }) muted = false;
   @property({ type: Boolean, reflect: true }) selected = false;
+  @property({ type: Boolean, reflect: true }) narrow = false;
   @property({ type: Number }) errors = 0;
-  @property({ type: String }) entityIcon: string | null = null;
+
+  /**
+   * The level the user has just put the fader at, until a live frame carrying it (or
+   * anything else) arrives. Without it a run of arrow keys would step from the live value
+   * every time and never get anywhere, and the readout would not follow the drag.
+   */
+  @state() private pending: number | null = null;
+
+  private dragging = false;
+  private stepTimer?: number;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -140,56 +178,143 @@ export class AlStrip extends LitElement {
     if (!this.hasAttribute("tabindex")) this.tabIndex = -1;
   }
 
+  override disconnectedCallback(): void {
+    this.clearStepTimer();
+    super.disconnectedCallback();
+  }
+
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    // A fresh live frame is the answer to whatever was asked for: stop showing the ask.
+    // Not mid-drag, though - the pointer is still holding the fader where it is.
+    if (changed.has("value") && !this.dragging) this.pending = null;
+    if (!this.hasUpdated || changed.has("depth")) this.style.setProperty("--al-depth", String(this.depth));
+  }
+
+  /** `0` on the selected strip, `-1` on every other one: the row is a single tab stop. */
+  private get stop(): number {
+    return this.selected ? 0 : -1;
+  }
+
   private select(): void {
     this.dispatchEvent(alSelectStrip());
   }
 
-  /** Drilling into a bus is its own intent: it must not also read as selecting the strip. */
-  private open(ev: Event): void {
+  /** Opening a track's children is its own intent: it must not also read as selecting it. */
+  private onChevron(ev: Event): void {
     ev.stopPropagation();
-    this.dispatchEvent(alOpenStrip());
+    this.dispatchEvent(alToggleStrip());
   }
 
-  private onGain(ev: CustomEvent<GainChangeDetail>): void {
+  /**
+   * Enter and Space on the chevron are the button's own; the mixer listens for them on the
+   * whole row and would toggle the same track a second time.
+   */
+  private onChevronKey(ev: KeyboardEvent): void {
+    if (ev.key === "Enter" || ev.key === " ") ev.stopPropagation();
+  }
+
+  private clearStepTimer(): void {
+    if (this.stepTimer === undefined) return;
+    clearTimeout(this.stepTimer);
+    this.stepTimer = undefined;
+  }
+
+  private sendOverride(value: number): void {
+    this.clearStepTimer();
+    this.dispatchEvent(alLevelOverride(value));
+  }
+
+  /**
+   * A fader move. A drag reports its steps live and settles on pointer-up, which is the
+   * user saying "there" - that goes out at once. A keyboard or wheel step settles
+   * immediately with no live moves before it, so a run of them is coalesced instead.
+   */
+  private onFader(ev: CustomEvent<FaderChangeDetail>): void {
     ev.stopPropagation();
-    this.dispatchEvent(alGainChanged(ev.detail));
+    const { value, live } = ev.detail;
+    this.pending = value;
+    if (live) {
+      this.dragging = true;
+      return;
+    }
+    if (this.dragging) {
+      this.dragging = false;
+      this.sendOverride(value);
+      return;
+    }
+    this.clearStepTimer();
+    this.stepTimer = window.setTimeout(() => {
+      this.stepTimer = undefined;
+      this.dispatchEvent(alLevelOverride(value));
+    }, STEP_DEBOUNCE_MS);
+  }
+
+  private onMute(): void {
+    this.dispatchEvent(alMuteToggle(!this.muted));
+  }
+
+  private onReset(): void {
+    this.dispatchEvent(alReset());
   }
 
   override render() {
-    // A bus has no envelope of its own - the sketch and its A/D/S/R hint are a channel
-    // strip's story to tell - so a bus ignores whatever it was handed rather than trust
-    // every caller to remember to pass `null`.
-    const e = this.kind === "bus" ? null : this.envelope;
+    const shown = this.pending ?? this.value;
     return html`
       <div class="strip" @click=${this.select}>
+        <div class="depth"></div>
         <div class="head">
-          ${this.entityIcon
-            ? html`<ha-icon class="icon" .icon=${this.entityIcon}></ha-icon>`
-            : html`<span class="icon">${this.kind === "bus" ? "▤" : "⚡"}</span>`}
           <span class="name" title=${this.label}>${this.label}</span>
         </div>
-        <div class="sub" title=${this.sublabel ?? ""}>${this.sublabel ?? ""}</div>
-        ${e ? html`<al-envelope-sketch .envelope=${e}></al-envelope-sketch>` : nothing}
-        <div class="adsr" title=${e ? adsrHint(e) : ""}>${e ? adsrHint(e) : ""}</div>
-        <al-fader
-          .value=${this.gain}
-          .focusable=${this.selected}
-          label=${`${this.label} gain`}
-          @value-changed=${this.onGain}
-        ></al-fader>
-        ${this.live
-          ? html`<al-meter .value=${this.live.value} .max=${this.live.max} .gated=${this.live.gated}></al-meter>`
+        ${this.hasChildren
+          ? html`<button
+              class="chevron"
+              type="button"
+              tabindex=${this.stop}
+              aria-expanded=${this.expanded ? "true" : "false"}
+              title=${`${this.expanded ? "Collapse" : "Expand"} ${this.label}`}
+              @click=${this.onChevron}
+              @keydown=${this.onChevronKey}
+            >
+              ${this.expanded ? "▾" : "▸"} ${this.childCount}
+            </button>`
           : nothing}
+        <al-fader
+          mode="level"
+          .value=${shown}
+          .max=${this.maxValue}
+          .precision=${this.precision}
+          .tick=${this.realValue}
+          .focusable=${this.selected}
+          label=${`${this.label} level`}
+          @value-changed=${this.onFader}
+        ></al-fader>
+        <div class="readout">${formatLevel(shown, this.precision)}</div>
+        <div class="buttons">
+          <button
+            class="mute"
+            type="button"
+            tabindex=${this.stop}
+            aria-pressed=${this.muted ? "true" : "false"}
+            title=${this.muted ? `Unmute ${this.label}` : `Mute ${this.label}`}
+            @click=${this.onMute}
+          >
+            M
+          </button>
+          <button
+            class="reset"
+            type="button"
+            tabindex=${this.stop}
+            title=${`Reset ${this.label}`}
+            @click=${this.onReset}
+          >
+            R
+          </button>
+        </div>
         <div class="foot">
           ${this.errors > 0
             ? html`<span class="badge" title=${`${this.errors} problem${this.errors === 1 ? "" : "s"}`}
                 >${this.errors}</span
               >`
-            : nothing}
-          ${this.kind === "bus"
-            ? html`<button class="link open" tabindex=${this.selected ? 0 : -1} @click=${this.open}>
-                open ▸
-              </button>`
             : nothing}
         </div>
       </div>

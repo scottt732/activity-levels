@@ -138,6 +138,14 @@ export const parentListPath = (path: Path): Path => path.slice(0, -1);
 /** The group that owns a node: `[..., "stimuli", 0]` -> `[...]`. Empty for a root group. */
 export const parentGroupPath = (path: Path): Path => path.slice(0, -2);
 
+/**
+ * The group a selected node belongs to: a stimulus resolves to the group that owns it, and
+ * a group to itself. Only groups are tracks in the mixer and only groups have a level
+ * series, so this is what the strip row, the timeline and the controls row all follow.
+ */
+export const groupPathFor = (path: Path): Path =>
+  path[path.length - 2] === "stimuli" ? parentGroupPath(path) : path;
+
 export const presetById = (config: Config, id: string | null | undefined): EnvelopePreset | undefined =>
   config.envelopes.find((e) => e.id === (id ?? config.defaults.envelope));
 

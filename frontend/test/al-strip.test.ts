@@ -1,13 +1,12 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/al-master-strip";
 import "../src/al-meter";
-import "../src/al-strip";
+import { STEP_DEBOUNCE_MS } from "../src/al-strip";
+import type { AlFader } from "../src/al-fader";
 import type { AlMasterStrip } from "../src/al-master-strip";
 import type { AlMeter } from "../src/al-meter";
 import type { AlStrip } from "../src/al-strip";
-import type { GainChangeDetail } from "../src/events";
-
-const envelope = { attack: 30, decay: 0, sustain: 1, release: 1800, impulse: false };
+import type { FaderChangeDetail } from "../src/events";
 
 /** Events the mixer listens for on its strip container, so they must reach `document.body`. */
 const collect = (node: HTMLElement, type: string, into: unknown[]): void => {
@@ -69,122 +68,234 @@ describe("al-strip", () => {
   let el: AlStrip;
   let bus: HTMLElement;
   let selects: unknown[];
-  let opens: unknown[];
-  let gains: unknown[];
+  let toggles: unknown[];
+  let levels: unknown[];
+  let mutes: unknown[];
+  let resets: unknown[];
+
+  const fader = (): AlFader => el.shadowRoot?.querySelector("al-fader") as AlFader;
+
+  /** What the fader reports: `live` moves during a drag, `live: false` for a settled value. */
+  const move = async (value: number, live: boolean): Promise<void> => {
+    fader().dispatchEvent(new CustomEvent<FaderChangeDetail>("value-changed", { detail: { value, live } }));
+    await el.updateComplete;
+  };
 
   beforeEach(async () => {
     document.body.innerHTML = "";
     selects = [];
-    opens = [];
-    gains = [];
+    toggles = [];
+    levels = [];
+    mutes = [];
+    resets = [];
     bus = document.createElement("div");
     document.body.appendChild(bus);
     el = document.createElement("al-strip");
     el.label = "Downstairs";
-    el.sublabel = "bus · 3";
-    el.envelope = envelope;
-    el.gain = 2;
+    el.depth = 1;
+    el.value = 2;
+    el.realValue = 2;
+    el.maxValue = 5;
+    el.precision = 1;
     bus.appendChild(el);
     collect(bus, "al-select-strip", selects);
-    collect(bus, "al-open-strip", opens);
-    collect(bus, "al-gain-changed", gains);
+    collect(bus, "al-toggle-strip", toggles);
+    collect(bus, "al-level-override", levels);
+    collect(bus, "al-mute-toggle", mutes);
+    collect(bus, "al-reset", resets);
     await el.updateComplete;
   });
 
-  it("renders the name, sublabel, sketch and ADSR hint", () => {
-    const root = el.shadowRoot;
-    expect(root?.querySelector(".name")?.textContent?.trim()).toBe("Downstairs");
-    expect(root?.querySelector(".sub")?.textContent?.trim()).toBe("bus · 3");
-    expect(root?.querySelector("al-envelope-sketch")).toBeTruthy();
-    expect(root?.querySelector(".adsr")?.textContent).toContain("30s");
-    expect(root?.querySelector(".adsr")?.textContent).toContain("30m");
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it("skips the envelope sketch and A/D/S/R hint for a bus, even if one was handed to it", async () => {
-    el.kind = "bus";
-    await el.updateComplete;
-    expect(el.shadowRoot?.querySelector("al-envelope-sketch")).toBeFalsy();
-    expect(el.shadowRoot?.querySelector(".adsr")?.textContent?.trim()).toBe("");
-  });
-
-  it("falls back to a glyph per kind when the entity has no icon", async () => {
-    expect(el.shadowRoot?.querySelector("ha-icon")).toBeFalsy();
-    expect(el.shadowRoot?.querySelector(".icon")?.textContent?.trim()).toBe("⚡");
-    el.kind = "bus";
-    await el.updateComplete;
-    expect(el.shadowRoot?.querySelector(".icon")?.textContent?.trim()).toBe("▤");
-  });
-
-  it("prefers the entity's own icon when it has one", async () => {
-    el.entityIcon = "mdi:sofa";
-    await el.updateComplete;
-    const icon = el.shadowRoot?.querySelector(".icon");
-    expect(icon?.tagName.toLowerCase()).toBe("ha-icon");
-    expect((icon as unknown as { icon?: string }).icon).toBe("mdi:sofa");
-    el.entityIcon = null;
-    await el.updateComplete;
-    expect(el.shadowRoot?.querySelector("ha-icon")).toBeFalsy();
-    expect(el.shadowRoot?.querySelector(".icon")?.textContent?.trim()).toBe("⚡");
-  });
-
-  it("names itself in plain text, so the name is not a tab stop of its own", () => {
+  it("names the group in plain text, so the name is not a tab stop of its own", () => {
     const name = el.shadowRoot?.querySelector(".name");
+    expect(name?.textContent?.trim()).toBe("Downstairs");
     expect(name?.tagName.toLowerCase()).toBe("span");
     expect(el.shadowRoot?.querySelector("button.name")).toBeFalsy();
   });
 
-  it("keeps its own controls out of the tab order until the strip is selected", async () => {
-    el.kind = "bus";
-    await el.updateComplete;
-    const fader = el.shadowRoot?.querySelector("al-fader");
-    await fader?.updateComplete;
-    expect(el.shadowRoot?.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
-    expect(fader?.shadowRoot?.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
-    el.selected = true;
-    await el.updateComplete;
-    await fader?.updateComplete;
-    expect(el.shadowRoot?.querySelector(".open")?.getAttribute("tabindex")).toBe("0");
-    expect(fader?.shadowRoot?.querySelector('[role="slider"]')?.getAttribute("tabindex")).toBe("0");
+  it("has none of the old channel-strip furniture", () => {
+    const root = el.shadowRoot;
+    expect(root?.querySelector("al-envelope-sketch")).toBeFalsy();
+    expect(root?.querySelector(".adsr")).toBeFalsy();
+    expect(root?.querySelector(".sub")).toBeFalsy();
+    expect(root?.querySelector(".open")).toBeFalsy();
+    expect(root?.querySelector("al-meter")).toBeFalsy();
   });
 
-  it("is focusable so the mixer can hand it the roving tabindex", () => {
-    expect(el.getAttribute("tabindex")).toBe("-1");
-    el.tabIndex = 0;
-    expect(el.getAttribute("tabindex")).toBe("0");
-  });
-
-  it("hands the fader the gain and re-emits its moves", async () => {
-    const fader = el.shadowRoot?.querySelector("al-fader");
-    expect(fader?.value).toBe(2);
-    fader?.dispatchEvent(new CustomEvent<GainChangeDetail>("value-changed", { detail: { value: 3, live: true } }));
+  it("publishes its depth as a CSS variable and draws a marker for it", async () => {
+    expect(el.style.getPropertyValue("--al-depth")).toBe("1");
+    expect(el.shadowRoot?.querySelector(".depth")).toBeTruthy();
+    el.depth = 3;
     await el.updateComplete;
-    expect(gains).toEqual([{ value: 3, live: true }]);
+    expect(el.style.getPropertyValue("--al-depth")).toBe("3");
   });
 
   it("selects when the strip is clicked", async () => {
     await click(el, ".name");
     expect(selects).toHaveLength(1);
-    expect(opens).toHaveLength(0);
+    expect(toggles).toHaveLength(0);
   });
 
-  it("offers open only on a bus, and opening does not also select", async () => {
-    expect(el.shadowRoot?.querySelector(".open")).toBeFalsy();
-    el.kind = "bus";
-    await el.updateComplete;
-    expect(el.getAttribute("kind")).toBe("bus");
-    await click(el, ".open");
-    expect(opens).toHaveLength(1);
-    expect(selects).toHaveLength(0);
+  describe("chevron", () => {
+    beforeEach(async () => {
+      el.hasChildren = true;
+      el.childCount = 3;
+      await el.updateComplete;
+    });
+
+    it("appears only for a group with children, with the count beside it", async () => {
+      expect(el.shadowRoot?.querySelector(".chevron")?.textContent?.trim()).toBe("▸ 3");
+      el.expanded = true;
+      await el.updateComplete;
+      const chevron = el.shadowRoot?.querySelector(".chevron");
+      expect(chevron?.textContent?.trim()).toBe("▾ 3");
+      expect(chevron?.getAttribute("aria-expanded")).toBe("true");
+      el.hasChildren = false;
+      await el.updateComplete;
+      expect(el.shadowRoot?.querySelector(".chevron")).toBeFalsy();
+    });
+
+    it("toggles without also selecting the strip", async () => {
+      await click(el, ".chevron");
+      expect(toggles).toHaveLength(1);
+      expect(selects).toHaveLength(0);
+    });
+
+    // The mixer listens for Enter/Space on the whole row; the button already answers them,
+    // and both firing would toggle the same track twice.
+    it.each(["Enter", " "])("keeps %o typed on the chevron inside the strip", async (key) => {
+      const seen: string[] = [];
+      bus.addEventListener("keydown", (e) => seen.push((e as KeyboardEvent).key));
+      el.shadowRoot
+        ?.querySelector(".chevron")
+        ?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true }));
+      await el.updateComplete;
+      expect(seen).toEqual([]);
+    });
+
+    it("lets other keys through to the row", async () => {
+      const seen: string[] = [];
+      bus.addEventListener("keydown", (e) => seen.push((e as KeyboardEvent).key));
+      el.shadowRoot
+        ?.querySelector(".chevron")
+        ?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }));
+      await el.updateComplete;
+      expect(seen).toEqual(["ArrowRight"]);
+    });
   });
 
-  it("shows a meter only when there is live state", async () => {
-    expect(el.shadowRoot?.querySelector("al-meter")).toBeFalsy();
-    el.live = { value: 1, max: 5, gated: true };
-    await el.updateComplete;
-    const meter = el.shadowRoot?.querySelector("al-meter");
-    expect(meter?.value).toBe(1);
-    expect(meter?.max).toBe(5);
-    expect(meter?.gated).toBe(true);
+  describe("value fader", () => {
+    it("is a level fader over the group's own range", () => {
+      const f = fader();
+      expect(f.mode).toBe("level");
+      expect(f.value).toBe(2);
+      expect(f.max).toBe(5);
+      expect(f.precision).toBe(1);
+      expect(f.label).toBe("Downstairs level");
+    });
+
+    it("marks the real value when a simulated one is holding the level up", async () => {
+      expect(fader().tick).toBe(2);
+      el.realValue = 0.5;
+      await el.updateComplete;
+      expect(fader().tick).toBe(0.5);
+    });
+
+    it("reads the level out below the fader, at the group's precision", async () => {
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent?.trim()).toBe("2.0");
+      el.value = 1.8342;
+      el.precision = 2;
+      await el.updateComplete;
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent?.trim()).toBe("1.83");
+    });
+
+    it("follows the live value while nothing is being dragged", async () => {
+      el.value = 3.5;
+      await el.updateComplete;
+      expect(fader().value).toBe(3.5);
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent?.trim()).toBe("3.5");
+    });
+
+    it("shows the dragged value, and asks for it once on release", async () => {
+      await move(4, true);
+      expect(fader().value).toBe(4);
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent?.trim()).toBe("4.0");
+      expect(levels).toEqual([]);
+      await move(4.5, true);
+      await move(4.5, false);
+      expect(levels).toEqual([{ value: 4.5 }]);
+    });
+
+    it("keeps the dragged value against a live frame arriving mid-drag", async () => {
+      await move(4, true);
+      el.value = 1;
+      await el.updateComplete;
+      expect(fader().value).toBe(4);
+    });
+
+    it("snaps back to the live value on the next frame after the drag", async () => {
+      await move(4, true);
+      await move(4, false);
+      el.value = 1;
+      await el.updateComplete;
+      expect(fader().value).toBe(1);
+    });
+
+    it("coalesces a run of keyboard steps into one override", async () => {
+      vi.useFakeTimers();
+      await move(2.5, false);
+      await move(3, false);
+      expect(levels).toEqual([]);
+      await vi.advanceTimersByTimeAsync(STEP_DEBOUNCE_MS);
+      expect(levels).toEqual([{ value: 3 }]);
+    });
+
+    it("steps on from where the last step left it, not from the stale live value", async () => {
+      vi.useFakeTimers();
+      await move(2.5, false);
+      expect(fader().value).toBe(2.5);
+      await vi.advanceTimersByTimeAsync(STEP_DEBOUNCE_MS);
+      expect(levels).toEqual([{ value: 2.5 }]);
+    });
+
+    it("does not hold up a release behind the debounce", async () => {
+      vi.useFakeTimers();
+      await move(4, true);
+      await move(4, false);
+      expect(levels).toEqual([{ value: 4 }]);
+    });
+
+    it("drops a pending step when the strip goes away", async () => {
+      vi.useFakeTimers();
+      await move(3, false);
+      el.remove();
+      await vi.advanceTimersByTimeAsync(STEP_DEBOUNCE_MS * 4);
+      expect(levels).toEqual([]);
+    });
+  });
+
+  describe("mute and reset", () => {
+    it("shows the mute as a pressed toggle and asks for the other state", async () => {
+      const mute = (): Element | null | undefined => el.shadowRoot?.querySelector(".mute");
+      expect(mute()?.getAttribute("aria-pressed")).toBe("false");
+      await click(el, ".mute");
+      expect(mutes).toEqual([{ muted: true }]);
+      el.muted = true;
+      await el.updateComplete;
+      expect(mute()?.getAttribute("aria-pressed")).toBe("true");
+      expect(el.hasAttribute("muted")).toBe(true);
+      await click(el, ".mute");
+      expect(mutes).toEqual([{ muted: true }, { muted: false }]);
+    });
+
+    it("asks for a reset", async () => {
+      await click(el, ".reset");
+      expect(resets).toEqual([null]);
+    });
   });
 
   it("badges the validation errors below it", async () => {
@@ -198,6 +309,29 @@ describe("al-strip", () => {
     el.selected = true;
     await el.updateComplete;
     expect(el.hasAttribute("selected")).toBe(true);
+  });
+
+  it("is focusable so the mixer can hand it the roving tabindex", () => {
+    expect(el.getAttribute("tabindex")).toBe("-1");
+    el.tabIndex = 0;
+    expect(el.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("keeps its own controls out of the tab order until the strip is selected", async () => {
+    el.hasChildren = true;
+    await el.updateComplete;
+    await fader().updateComplete;
+    expect(el.shadowRoot?.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
+    expect(fader().shadowRoot?.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
+    el.selected = true;
+    await el.updateComplete;
+    await fader().updateComplete;
+    expect([...(el.shadowRoot?.querySelectorAll("button") ?? [])].map((b) => b.getAttribute("tabindex"))).toEqual([
+      "0",
+      "0",
+      "0",
+    ]);
+    expect(fader().shadowRoot?.querySelector('[role="slider"]')?.getAttribute("tabindex")).toBe("0");
   });
 });
 

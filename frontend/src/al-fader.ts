@@ -1,7 +1,8 @@
-import { LitElement, css, html } from "lit";
+import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { FADER_MAX, FADER_MIN, clampGain, formatGain, fromPosition, stepValue, toPosition } from "./fader";
-import type { GainChangeDetail } from "./events";
+import { gainScale, levelScale } from "./fader";
+import type { FaderScale } from "./fader";
+import type { FaderChangeDetail } from "./events";
 
 /** Keeps the knob inside the track: half its height at either end. */
 const KNOB = 12;
@@ -10,7 +11,8 @@ const KNOB = 12;
 const pct = (ratio: number): string => `${Math.round(ratio * 1000) / 10}%`;
 
 /**
- * A vertical gain fader on the log scale from `fader.ts`, so unity gain sits mid-throw.
+ * A vertical fader over one of the scales in `fader.ts`: a **gain** (log, unity mid-throw)
+ * or a group's **level** (linear, 0 to its ceiling, quantised to its precision).
  *
  * The value is the host's: the fader never writes to `value`, it asks for a new one. While
  * a drag is in flight the pending value lives in `dragValue` so the host can re-render
@@ -67,6 +69,13 @@ export class AlFader extends LitElement {
       border-top: 1px dashed var(--secondary-text-color);
       opacity: 0.5;
     }
+    /* Where the group would sit without the simulated stimulus holding it up. */
+    .tick {
+      position: absolute;
+      left: -4px;
+      right: -4px;
+      border-top: 2px solid var(--warning-color, #ffa600);
+    }
     .value {
       font-size: 0.75em;
       color: var(--secondary-text-color);
@@ -88,10 +97,26 @@ export class AlFader extends LitElement {
   @property({ type: Boolean }) focusable = true;
   @property({ type: String }) label = "Gain";
 
+  /** Which quantity the fader is holding: a gain into a parent, or a group's own level. */
+  @property({ type: String }) mode: "gain" | "level" = "gain";
+  /** The level scale's ceiling; ignored in gain mode, which has a range of its own. */
+  @property({ type: Number }) max = 5;
+  /** Decimals the level scale quantises to; ignored in gain mode. */
+  @property({ type: Number }) precision = 1;
+  /**
+   * A second, read-only reading to mark on the track - the group's real value while a
+   * simulated one is holding the fill above it. Null, or equal to the value, draws nothing.
+   */
+  @property({ type: Number }) tick: number | null = null;
+
   /** The pending value of a drag, or null when the host's value is the one on show. */
   @state() private dragValue: number | null = null;
 
   private dragging = false;
+
+  private get scale(): FaderScale {
+    return this.mode === "level" ? levelScale(this.max, this.precision) : gainScale;
+  }
 
   /** What the fader is showing: the drag if there is one, otherwise what the host gave it. */
   private get current(): number {
@@ -110,7 +135,7 @@ export class AlFader extends LitElement {
   }
 
   private emit(value: number, live: boolean): void {
-    this.dispatchEvent(new CustomEvent<GainChangeDetail>("value-changed", { detail: { value, live } }));
+    this.dispatchEvent(new CustomEvent<FaderChangeDetail>("value-changed", { detail: { value, live } }));
   }
 
   /** A value the host should keep: ends any drag and reports it as settled. */
@@ -123,33 +148,34 @@ export class AlFader extends LitElement {
   private readonly onWheel = (ev: WheelEvent): void => {
     if (this.disabled || ev.deltaY === 0) return;
     ev.preventDefault();
-    this.commit(stepValue(this.current, ev.deltaY < 0 ? 1 : -1, ev.shiftKey));
+    this.commit(this.scale.step(this.current, ev.deltaY < 0 ? 1 : -1, ev.shiftKey));
   };
 
   private onKeyDown(ev: KeyboardEvent): void {
     if (this.disabled) return;
+    const scale = this.scale;
     const v = this.current;
     let next: number;
     switch (ev.key) {
       case "ArrowUp":
       case "ArrowRight":
-        next = stepValue(v, 1, ev.shiftKey);
+        next = scale.step(v, 1, ev.shiftKey);
         break;
       case "ArrowDown":
       case "ArrowLeft":
-        next = stepValue(v, -1, ev.shiftKey);
+        next = scale.step(v, -1, ev.shiftKey);
         break;
       case "Home":
-        next = FADER_MIN;
+        next = scale.min;
         break;
       case "End":
-        next = FADER_MAX;
+        next = scale.max;
         break;
       case "PageUp":
-        next = clampGain(v * 2);
+        next = scale.page(v, 1);
         break;
       case "PageDown":
-        next = clampGain(v / 2);
+        next = scale.page(v, -1);
         break;
       default:
         return;
@@ -159,16 +185,18 @@ export class AlFader extends LitElement {
     this.commit(next);
   }
 
+  /** Only a scale with a home to go back to answers a double-click; a level has none. */
   private onDoubleClick(): void {
-    if (this.disabled) return;
-    this.commit(1);
+    const reset = this.scale.reset;
+    if (this.disabled || reset === null) return;
+    this.commit(reset);
   }
 
-  /** Maps a pointer's y onto the track: its top is full gain, its bottom is silence. */
+  /** Maps a pointer's y onto the track: its top is the top of the scale, its bottom the floor. */
   private moveTo(ev: MouseEvent, track: HTMLElement): void {
     const rect = track.getBoundingClientRect();
     if (rect.height <= 0) return;
-    const value = fromPosition(1 - (ev.clientY - rect.top) / rect.height);
+    const value = this.scale.fromPosition(1 - (ev.clientY - rect.top) / rect.height);
     if (value === this.dragValue) return;
     this.dragValue = value;
     this.emit(value, true);
@@ -203,8 +231,11 @@ export class AlFader extends LitElement {
   }
 
   override render() {
-    const value = this.current;
-    const pos = toPosition(value);
+    const scale = this.scale;
+    const value = scale.clamp(this.current);
+    const pos = scale.toPosition(value);
+    // A tick that lands on the value itself is not a second reading, just a duplicate line.
+    const tick = this.tick === null || scale.clamp(this.tick) === value ? null : scale.clamp(this.tick);
     return html`
       <div
         class="fader"
@@ -212,10 +243,10 @@ export class AlFader extends LitElement {
         tabindex=${this.disabled || !this.focusable ? -1 : 0}
         aria-label=${this.label}
         aria-orientation="vertical"
-        aria-valuemin=${FADER_MIN}
-        aria-valuemax=${FADER_MAX}
+        aria-valuemin=${scale.min}
+        aria-valuemax=${scale.max}
         aria-valuenow=${value}
-        aria-valuetext=${formatGain(value)}
+        aria-valuetext=${scale.format(value)}
         aria-disabled=${this.disabled ? "true" : "false"}
         @keydown=${this.onKeyDown}
         @dblclick=${this.onDoubleClick}
@@ -227,11 +258,14 @@ export class AlFader extends LitElement {
           @pointerup=${this.onPointerUp}
           @pointercancel=${this.onPointerUp}
         >
-          <div class="unity"></div>
+          ${this.mode === "gain" ? html`<div class="unity"></div>` : nothing}
           <div class="fill" style="height: ${pct(pos)}"></div>
+          ${tick === null
+            ? nothing
+            : html`<div class="tick" style="bottom: ${pct(scale.toPosition(tick))}" title=${scale.format(tick)}></div>`}
           <div class="knob" style="bottom: calc(${pct(pos)} - ${Math.round((pos - 0.5) * KNOB * 10) / 10}px - ${KNOB / 2}px)"></div>
         </div>
-        <div class="value">${formatGain(value)}</div>
+        <div class="value">${scale.format(value)}</div>
       </div>
     `;
   }

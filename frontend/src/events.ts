@@ -38,17 +38,29 @@ const stripEvent = <T>(type: string, detail: T): CustomEvent<T> =>
   new CustomEvent<T>(type, { detail, bubbles: true, composed: true });
 
 /** A fader move: `live` is true while the pointer is still down, false for the value to keep. */
-export interface GainChangeDetail {
+export interface FaderChangeDetail {
   value: number;
   live: boolean;
 }
 
 export const alSelectStrip = (): CustomEvent<null> => stripEvent<null>("al-select-strip", null);
 
-export const alOpenStrip = (): CustomEvent<null> => stripEvent<null>("al-open-strip", null);
+/** Open or close a track's children in place; which track it is, is the event's target. */
+export const alToggleStrip = (): CustomEvent<null> => stripEvent<null>("al-toggle-strip", null);
 
-export const alGainChanged = (detail: GainChangeDetail): CustomEvent<GainChangeDetail> =>
-  stripEvent("al-gain-changed", detail);
+/**
+ * Drag the group's level somewhere: a simulated stimulus, which cools down from there.
+ * This is runtime state, not config - it never reaches the draft store.
+ */
+export const alLevelOverride = (value: number): CustomEvent<{ value: number }> =>
+  stripEvent("al-level-override", { value });
+
+/** Mute or unmute a group out of its parent's mix. */
+export const alMuteToggle = (muted: boolean): CustomEvent<{ muted: boolean }> =>
+  stripEvent("al-mute-toggle", { muted });
+
+/** Drop everything a group is holding: every voice off, back to zero. */
+export const alReset = (): CustomEvent<null> => stripEvent<null>("al-reset", null);
 
 export const alMixChanged = (mix: Mix): CustomEvent<{ mix: Mix }> => stripEvent("al-mix-changed", { mix });
 
@@ -63,6 +75,14 @@ export const alSimToggled = (on: boolean): CustomEvent<{ on: boolean }> => strip
  */
 export const alNav = (action: NavAction): CustomEvent<NavAction> =>
   new CustomEvent<NavAction>("al-nav", { detail: action, bubbles: true, composed: true });
+
+/**
+ * Asks the shell for a live frame now rather than at the next tick of its poll. A runtime
+ * command (a level override, a mute, a reset) lands in the engine immediately, and waiting
+ * up to two seconds to see it would read as the button not having worked.
+ */
+export const alLiveRefresh = (): CustomEvent<null> =>
+  new CustomEvent<null>("al-live-refresh", { detail: null, bubbles: true, composed: true });
 
 /** What the timeline's toolbar settled on. The chart applies it itself; the host persists it. */
 export interface TimelineRangeDetail {

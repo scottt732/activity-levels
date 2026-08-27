@@ -62,6 +62,7 @@ const groupLive = (over: Partial<GroupLive> = {}): GroupLive => ({
   mix: "sum",
   next_wake: null,
   lights: 0,
+  muted: false,
   ...over,
 });
 

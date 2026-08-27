@@ -55,6 +55,27 @@ export const getSimulationLog = (hass: HomeAssistant, group_id?: string, limit =
     limit,
   });
 
+/**
+ * Runtime commands. None of these touch the config: they move the engine now, and the
+ * next live frame is what says where it ended up.
+ */
+
+/**
+ * Sizes the group's built-in trigger voice so its level reads `value`. The answer is the
+ * level actually reached, which the limiter - or a louder channel of a `max` group - can
+ * put somewhere other than where the fader was dragged.
+ */
+export const setLevel = (hass: HomeAssistant, group_id: string, value: number): Promise<number> =>
+  hass.callWS<{ value: number }>({ type: "activity_levels/level/set", group_id, value }).then((r) => r.value);
+
+/** Mutes a group out of its parent's mix; its own value keeps being published either way. */
+export const setMuted = (hass: HomeAssistant, group_id: string, muted: boolean): Promise<boolean> =>
+  hass.callWS<{ muted: boolean }>({ type: "activity_levels/mute", group_id, muted }).then((r) => r.muted);
+
+/** Drops every voice the group is holding, back to zero. */
+export const resetGroup = (hass: HomeAssistant, group_id: string): Promise<void> =>
+  hass.callWS<Record<string, never>>({ type: "activity_levels/reset", group_id }).then(() => undefined);
+
 export const callService = (
   hass: HomeAssistant,
   domain: string,

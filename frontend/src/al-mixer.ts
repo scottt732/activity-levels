@@ -1,18 +1,18 @@
 import { LitElement, css, html, nothing } from "lit";
 import type { PropertyValues, TemplateResult } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
 import "./al-master-strip";
 import "./al-strip";
+import { resetGroup, setLevel, setMuted } from "./api";
 import { simSwitchId } from "./entities";
 import { pathKey, subtreeErrorCount } from "./errors";
-import { alChange, alNav, alSimToggle } from "./events";
-import { groupAt, resolvedEnvelope, stimulusAt } from "./model";
-import { breadcrumb, channelPaths } from "./navigation";
+import { alChange, alLiveRefresh, alNav, alSimToggle } from "./events";
+import { effectivePrecision, groupAt, groupPathFor } from "./model";
+import { visibleTracks } from "./navigation";
 import { setAt } from "./store";
 import { sharedStyles } from "./styles";
 import type { StripLevel } from "./al-meter";
-import type { GainChangeDetail } from "./events";
-import type { MixerNav, NavAction } from "./navigation";
+import type { MixerNav, NavAction, VisibleTrack } from "./navigation";
 import type { Config, Group, HomeAssistant, LiveState, Mix, Path, ValidationError } from "./types";
 
 /** What the shell knows about a group's presence simulation, beyond the switch entity itself. */
@@ -21,19 +21,13 @@ export interface SimState {
   blocked: string | null;
 }
 
-/** The entity Home Assistant exposes for a group's presence simulation. */
-/** What every strip needs regardless of what it stands for. */
-interface SharedStrip {
-  index: number;
-  selected: boolean;
-  errors: number;
-  tabindex: number;
-}
+/** How long a failed command's notice stays up before it stops being news. */
+const ERROR_MS = 8000;
 
 /**
  * True when the key was typed into a control that wants it: the master strip's limiter box
  * and mix selector are real form elements, and a composed keydown from inside their shadow
- * root reaches the strip row. Backspace there is a deletion, not "up one bus".
+ * root reaches the strip row. Space there is a space, not "toggle this track".
  */
 const isTextEntry = (ev: Event): boolean => {
   const target = ev.composedPath()[0];
@@ -45,17 +39,16 @@ const isTextEntry = (ev: Event): boolean => {
   );
 };
 
-/** A channel path names a stimulus or a child bus by its last-but-one step. */
-const isBusChannel = (path: Path): boolean => path[path.length - 2] === "children";
+const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /**
- * Row 2 of the mixer page: the current bus, drawn as a DAW channel strip row.
+ * Row 2 of the mixer page: every group, in one horizontally scrolling row of track strips,
+ * with groups opening and closing in place.
  *
- * The mixer owns no state of its own. Navigation goes out as `al-nav` for the shell to
- * reduce, edits as `al-change` against the draft store, and the presence simulation as
- * `al-sim-toggle` (the switch is Home Assistant's, so only the shell may call it). That
- * keeps the mixer a pure function of `config` + `nav` + `live`, which is what makes the
- * strips cheap to re-render on every live poll.
+ * Config edits go out as `al-change` against the draft store and navigation as `al-nav`
+ * for the shell to reduce. Runtime commands - a level override, a mute, a reset - are the
+ * engine's, not the draft's: they go straight down the websocket from here, and the shell
+ * is asked for a fresh live frame so the row shows what actually happened.
  */
 @customElement("al-mixer")
 export class AlMixer extends LitElement {
@@ -66,45 +59,6 @@ export class AlMixer extends LitElement {
         display: block;
         background: none;
       }
-      .crumbs {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        flex-wrap: wrap;
-        min-height: 28px;
-        margin-bottom: 8px;
-      }
-      .link {
-        background: none;
-        border: none;
-        margin: 0;
-        padding: 2px 4px;
-        font: inherit;
-        color: inherit;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-      .link:disabled {
-        color: var(--disabled-text-color, #9e9e9e);
-        cursor: default;
-      }
-      .link:focus-visible {
-        outline: 2px solid var(--primary-color);
-        outline-offset: 1px;
-      }
-      .crumb:last-of-type {
-        font-weight: 600;
-      }
-      /* The root selector is a crumb that happens to be a control, so it is styled to
-         sit in the trail rather than to look like a form field. */
-      select.crumb {
-        -webkit-appearance: none;
-        appearance: none;
-        max-width: 12em;
-      }
-      .sep {
-        color: var(--secondary-text-color);
-      }
       .strips {
         display: flex;
         align-items: flex-start;
@@ -113,9 +67,11 @@ export class AlMixer extends LitElement {
         padding: 4px;
         outline: none;
       }
-      /* The master sits at the right of the row, past any channels, like a console. */
+      /* The master sits at the right of the row, past every track, like a console. */
       al-master-strip {
         margin-left: auto;
+        position: sticky;
+        right: 0;
       }
       al-master-strip[selected] {
         outline: 2px solid var(--primary-color);
@@ -129,38 +85,45 @@ export class AlMixer extends LitElement {
 
   @property({ attribute: false }) hass?: HomeAssistant;
   @property({ attribute: false }) config?: Config;
-  @property({ attribute: false }) nav: MixerNav = { busPath: [], selection: null };
+  @property({ attribute: false }) nav: MixerNav = { expanded: new Set(), selection: null };
   @property({ attribute: false }) errors: ValidationError[] = [];
   @property({ attribute: false }) live: LiveState | null = null;
   @property({ attribute: false }) simState: Record<string, SimState> = {};
   @property({ type: Boolean, reflect: true }) narrow = false;
 
+  /** What the last command that failed said, until it stops being worth reading. */
+  @state() private commandError: string | null = null;
+
+  private errorTimer?: number;
+
   /**
-   * Set by whatever just asked for a different bus or selection, so focus follows the
-   * roving tabindex only when the move was the user's. A fader drag also selects the
-   * strip it is on, and pulling focus out of the fader mid-drag would strand the
-   * keyboard on a control the pointer is still holding.
+   * Set by whatever just asked for a different selection, so focus follows the roving
+   * tabindex only when the move was the user's. A fader drag also selects the strip it is
+   * on, and pulling focus out of the fader mid-drag would strand the keyboard on a control
+   * the pointer is still holding.
    */
   private pendingFocus = false;
 
-  private get bus(): Group | undefined {
-    // An empty bus path is "no bus", not the config document: `groupAt` would hand back
-    // the document itself, which has neither a name nor channels to draw.
-    return this.config && this.nav.busPath.length > 0 ? groupAt(this.config, this.nav.busPath) : undefined;
+  override disconnectedCallback(): void {
+    this.clearErrorTimer();
+    super.disconnectedCallback();
   }
 
-  private get channels(): Path[] {
-    return this.config ? channelPaths(this.config, this.nav.busPath) : [];
+  private get tracks(): VisibleTrack[] {
+    return this.config ? visibleTracks(this.config, this.nav) : [];
+  }
+
+  /** The group the master strip follows: whatever is selected, or the group that owns it. */
+  private get selected(): { path: Path; group: Group } | null {
+    const { config, nav } = this;
+    if (!config || nav.selection === null) return null;
+    const path = groupPathFor(nav.selection);
+    const group = groupAt(config, path);
+    return group === undefined ? null : { path, group };
   }
 
   private isSelected(path: Path): boolean {
     return this.nav.selection !== null && pathKey(this.nav.selection) === pathKey(path);
-  }
-
-  /** The ceiling a channel's meter is drawn against: the bus it mixes into, not its own. */
-  private busCeiling(bus: Group): number {
-    const live = this.live?.groups[bus.id];
-    return live?.max_value ?? bus.max_value ?? this.config?.defaults.max_value ?? 5;
   }
 
   private navigate(action: NavAction): void {
@@ -172,62 +135,108 @@ export class AlMixer extends LitElement {
     this.dispatchEvent(alChange(next, coalesceKey));
   }
 
-  /** Which strip an event came from: strips are identical, so the row index is the key. */
-  private pathOf(ev: Event): Path | null {
-    const index = (ev.target as HTMLElement | null)?.dataset?.index;
-    if (index === undefined) return null;
-    return this.channels[Number(index)] ?? null;
+  private clearErrorTimer(): void {
+    if (this.errorTimer === undefined) return;
+    clearTimeout(this.errorTimer);
+    this.errorTimer = undefined;
   }
 
-  private onStripSelect(ev: Event): void {
-    const path = this.pathOf(ev);
-    if (path) this.dispatchEvent(alNav({ type: "select", path }));
-  }
-
-  private onStripOpen(ev: Event): void {
-    const path = this.pathOf(ev);
-    if (path) this.navigate({ type: "open", path });
+  private fail(text: string): void {
+    this.commandError = text;
+    this.clearErrorTimer();
+    this.errorTimer = window.setTimeout(() => {
+      this.errorTimer = undefined;
+      this.commandError = null;
+    }, ERROR_MS);
   }
 
   /**
-   * Both the live moves of a drag and the value it settles on are reported: the coalesce
-   * key folds the flood into one undo step, and reporting the moves is what lets the
-   * meters and the timeline follow the fader while it is still under the pointer.
+   * Runs one engine command. A command that lands is followed by a request for a live
+   * frame rather than a wait for the next poll: two seconds of a mute button that looks
+   * like it did nothing is two seconds of pressing it again.
    */
-  private onStripGain(ev: Event): void {
-    const path = this.pathOf(ev);
-    const config = this.config;
-    if (!path || !config) return;
-    const { value } = (ev as CustomEvent<GainChangeDetail>).detail;
-    this.emitChange(setAt(config, [...path, "gain"], value), `${pathKey(path)}:gain`);
+  private async command(what: string, run: (hass: HomeAssistant) => Promise<unknown>): Promise<void> {
+    const hass = this.hass;
+    if (!hass) return;
+    try {
+      await run(hass);
+      this.commandError = null;
+      this.clearErrorTimer();
+      this.dispatchEvent(alLiveRefresh());
+    } catch (err) {
+      this.fail(`Could not ${what}: ${message(err)}`);
+    }
+  }
+
+  /** Which track an event came from: strips are identical, so the row index is the key. */
+  private trackOf(ev: Event): VisibleTrack | null {
+    const index = (ev.target as HTMLElement | null)?.dataset?.index;
+    if (index === undefined) return null;
+    return this.tracks[Number(index)] ?? null;
+  }
+
+  private onStripSelect(ev: Event): void {
+    const track = this.trackOf(ev);
+    if (track) this.dispatchEvent(alNav({ type: "select", path: track.path }));
+  }
+
+  private onStripToggle(ev: Event): void {
+    const track = this.trackOf(ev);
+    if (track) this.navigate({ type: "toggle", id: track.id });
+  }
+
+  private onLevelOverride(ev: Event): void {
+    const track = this.trackOf(ev);
+    if (!track) return;
+    const { value } = (ev as CustomEvent<{ value: number }>).detail;
+    void this.command(`set the level of ${track.id}`, (hass) => setLevel(hass, track.id, value));
+  }
+
+  private onMuteToggle(ev: Event): void {
+    const track = this.trackOf(ev);
+    if (!track) return;
+    const { muted } = (ev as CustomEvent<{ muted: boolean }>).detail;
+    void this.command(`${muted ? "mute" : "unmute"} ${track.id}`, (hass) => setMuted(hass, track.id, muted));
+  }
+
+  private onReset(ev: Event): void {
+    const track = this.trackOf(ev);
+    if (!track) return;
+    void this.command(`reset ${track.id}`, (hass) => resetGroup(hass, track.id));
   }
 
   private onMasterSelect(): void {
-    this.dispatchEvent(alNav({ type: "select", path: this.nav.busPath }));
+    const selection = this.selected;
+    if (selection) this.dispatchEvent(alNav({ type: "select", path: selection.path }));
   }
 
   private onMix(ev: Event): void {
-    const config = this.config;
-    if (!config) return;
+    const { config } = this;
+    const selection = this.selected;
+    if (!config || !selection) return;
     const { mix } = (ev as CustomEvent<{ mix: Mix }>).detail;
-    this.emitChange(setAt(config, [...this.nav.busPath, "mix"], mix));
+    this.emitChange(setAt(config, [...selection.path, "mix"], mix));
   }
 
   private onLimiter(ev: Event): void {
-    const config = this.config;
-    if (!config) return;
+    const { config } = this;
+    const selection = this.selected;
+    if (!config || !selection) return;
     const { value } = (ev as CustomEvent<{ value: number }>).detail;
-    this.emitChange(setAt(config, [...this.nav.busPath, "max_value"], value), `${pathKey(this.nav.busPath)}:limiter`);
+    this.emitChange(
+      setAt(config, [...selection.path, "max_value"], value),
+      `${pathKey(selection.path)}:limiter`,
+    );
   }
 
   private onSim(ev: Event): void {
-    const bus = this.bus;
-    if (!bus) return;
+    const selection = this.selected;
+    if (!selection) return;
     const { on } = (ev as CustomEvent<{ on: boolean }>).detail;
-    this.dispatchEvent(alSimToggle(bus.id, on));
+    this.dispatchEvent(alSimToggle(selection.group.id, on));
   }
 
-  /** Console keys: ←/→ walk the row, Enter drills into a bus, Backspace comes back up. */
+  /** Console keys: ←/→ walk the row, Enter or Space opens and closes, Home/End jump. */
   private onKeyDown(ev: KeyboardEvent): void {
     const config = this.config;
     // No `preventDefault` on the way out: the control the key was typed into still wants it.
@@ -238,178 +247,98 @@ export class AlMixer extends LitElement {
         ev.preventDefault();
         this.navigate({ type: "arrow", delta: ev.key === "ArrowRight" ? 1 : -1, config });
         break;
-      case "Enter": {
+      case "Enter":
+      case " ": {
         const selection = this.nav.selection;
-        if (!selection || !isBusChannel(selection) || !this.channels.some((p) => pathKey(p) === pathKey(selection)))
-          return;
+        const track = selection === null ? undefined : this.tracks.find((t) => pathKey(t.path) === pathKey(selection));
+        if (!track?.hasChildren) return;
         ev.preventDefault();
-        this.navigate({ type: "open", path: selection });
+        this.navigate({ type: "toggle", id: track.id });
         break;
       }
-      case "Backspace":
-        // Always swallowed, so the browser never reads it as "go back" from inside the row.
-        ev.preventDefault();
-        if (this.nav.busPath.length >= 4) this.navigate({ type: "up" });
-        break;
       case "Home":
-      case "End": {
+      case "End":
         ev.preventDefault();
-        const first = this.channels[0] ?? this.nav.busPath;
-        this.navigate({ type: "select", path: ev.key === "Home" ? first : this.nav.busPath });
+        this.navigate({ type: ev.key === "Home" ? "home" : "end", config });
         break;
-      }
       default:
         break;
     }
   }
 
   override updated(changed: PropertyValues<this>): void {
-    if (!this.pendingFocus || !changed.has("nav")) return;
+    if (!changed.has("nav")) return;
+    const focus = this.pendingFocus;
     this.pendingFocus = false;
-    void this.focusSelected();
-  }
-
-  /** Keeps focus on the one strip in the tab order after the row has been re-rendered. */
-  private async focusSelected(): Promise<void> {
-    await this.updateComplete;
-    this.shadowRoot?.querySelector<HTMLElement>('.strips > [tabindex="0"]')?.focus();
+    void this.revealSelected(focus);
   }
 
   /**
-   * With more than one root group there is no single top of the tree to walk up to, so
-   * the trail starts with a selector over the roots instead of a crumb for one of them.
+   * Keeps the one strip in the tab order on screen after the row has been re-rendered, and
+   * on the keyboard when the move was the user's.
    */
-  private renderRootSelector(config: Config): TemplateResult | typeof nothing {
-    if (config.groups.length < 2) return nothing;
-    const current = typeof this.nav.busPath[1] === "number" ? this.nav.busPath[1] : 0;
-    return html`
-      <select
-        class="link crumb root"
-        aria-label="Root bus"
-        aria-current=${this.nav.busPath.length <= 2 ? "location" : nothing}
-        .value=${String(current)}
-        @change=${(ev: Event) =>
-          this.navigate({ type: "open", path: ["groups", Number((ev.target as HTMLSelectElement).value)] })}
-      >
-        ${config.groups.map(
-          (g, i) => html`<option value=${i} ?selected=${i === current}>${g.name ?? g.id}</option>`,
-        )}
-      </select>
-    `;
+  private async revealSelected(focus: boolean): Promise<void> {
+    await this.updateComplete;
+    const node = this.shadowRoot?.querySelector<HTMLElement>('.strips > [tabindex="0"]');
+    if (!node) return;
+    if (focus) node.focus();
+    try {
+      node.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+    } catch {
+      /* no layout to scroll (jsdom, a detached row): the strip is still selected */
+    }
   }
 
-  private renderCrumbs(config: Config): TemplateResult {
-    const root = this.renderRootSelector(config);
-    const trail = breadcrumb(config, this.nav.busPath);
-    // The selector stands in for the root crumb; without it the root is a crumb like any other.
-    const crumbs = root === nothing ? trail : trail.slice(1);
-    return html`
-      <div class="crumbs">
-        <button
-          class="link up"
-          title="Up one bus"
-          ?disabled=${this.nav.busPath.length < 4}
-          @click=${() => this.navigate({ type: "up" })}
-        >
-          ⌃ up
-        </button>
-        ${root}
-        ${crumbs.map(
-          (crumb, i) => html`
-            ${i > 0 || root !== nothing ? html`<span class="sep">›</span>` : nothing}
-            <button
-              class="link crumb"
-              aria-current=${i === crumbs.length - 1 ? "location" : nothing}
-              @click=${() => this.navigate({ type: "open", path: crumb.path })}
-            >
-              ${crumb.label}
-            </button>
-          `,
-        )}
-      </div>
-    `;
-  }
-
-  private renderChannel(config: Config, bus: Group, path: Path, index: number): TemplateResult {
-    const selected = this.isSelected(path);
-    const shared: SharedStrip = {
-      index,
-      selected,
-      errors: subtreeErrorCount(this.errors, path),
-      tabindex: selected ? 0 : -1,
-    };
-    return isBusChannel(path)
-      ? this.renderBusChannel(config, bus, path, shared)
-      : this.renderStimulusChannel(config, bus, path, shared);
-  }
-
-  private renderBusChannel(config: Config, bus: Group, path: Path, shared: SharedStrip): TemplateResult {
-    const child = groupAt(config, path);
-    if (!child) return html``;
-    const live = this.live?.groups[child.id];
-    const level: StripLevel | null = live ? { value: live.value, max: this.busCeiling(bus), gated: live.gated } : null;
+  private renderTrack(config: Config, track: VisibleTrack, index: number): TemplateResult {
+    const group = groupAt(config, track.path);
+    if (!group) return html``;
+    const live = this.live?.groups[group.id];
+    const selected = this.isSelected(track.path);
     return html`
       <al-strip
-        kind="bus"
-        data-index=${shared.index}
-        tabindex=${shared.tabindex}
+        data-index=${index}
+        tabindex=${selected ? 0 : -1}
         ?narrow=${this.narrow}
-        .label=${child.name ?? child.id}
-        .sublabel=${`bus · ${child.stimuli.length + child.children.length}`}
-        .gain=${child.gain}
-        .live=${level}
-        .selected=${shared.selected}
-        .errors=${shared.errors}
+        .label=${group.name ?? group.id}
+        .depth=${track.depth}
+        .hasChildren=${track.hasChildren}
+        .expanded=${track.expanded}
+        .childCount=${group.children.length}
+        .value=${live?.value ?? 0}
+        .realValue=${live?.real_value ?? 0}
+        .maxValue=${live?.max_value ?? group.max_value ?? config.defaults.max_value}
+        .precision=${live?.precision ?? effectivePrecision(config, group)}
+        .muted=${live?.muted ?? false}
+        .selected=${selected}
+        .errors=${subtreeErrorCount(this.errors, track.path)}
       ></al-strip>
     `;
   }
 
-  private renderStimulusChannel(config: Config, bus: Group, path: Path, shared: SharedStrip): TemplateResult {
-    const stimulus = stimulusAt(config, path);
-    if (!stimulus) return html``;
-    const entity = this.hass?.states[stimulus.entity];
-    // A voice is keyed by the label the engine gave it: the stimulus key, or its entity.
-    const voice = this.live?.voices[bus.id]?.find((v) => v.label === (stimulus.key ?? stimulus.entity));
-    const level: StripLevel | null = voice
-      ? { value: voice.value, max: this.busCeiling(bus), gated: voice.gate }
-      : null;
-    return html`
-      <al-strip
-        kind="channel"
-        data-index=${shared.index}
-        tabindex=${shared.tabindex}
-        ?narrow=${this.narrow}
-        .label=${(entity?.attributes.friendly_name as string | undefined) ?? stimulus.entity}
-        .sublabel=${entity?.state ?? "unknown"}
-        .envelope=${resolvedEnvelope(config, stimulus)}
-        .gain=${stimulus.gain}
-        .live=${level}
-        .selected=${shared.selected}
-        .errors=${shared.errors}
-        .entityIcon=${(entity?.attributes.icon as string | undefined) ?? null}
-      ></al-strip>
-    `;
-  }
-
-  private renderMaster(config: Config, bus: Group): TemplateResult {
-    const live = this.live?.groups[bus.id];
+  private renderMaster(config: Config): TemplateResult | typeof nothing {
+    const selection = this.selected;
+    // Nothing selected is nothing to master: the row is the whole tree, so there is no
+    // "current bus" left to fall back to.
+    if (!selection) return nothing;
+    const { group, path } = selection;
+    const live = this.live?.groups[group.id];
     const level: StripLevel | null = live ? { value: live.value, max: live.max_value, gated: live.gated } : null;
-    const entityId = simSwitchId(bus.id);
-    const selected = this.isSelected(this.nav.busPath);
+    const entityId = simSwitchId(group.id);
+    const selected = this.isSelected(path);
     return html`
       <al-master-strip
         tabindex=${selected ? 0 : -1}
         ?selected=${selected}
         ?narrow=${this.narrow}
-        .label=${(bus.name ?? bus.id).toUpperCase()}
-        .mix=${bus.mix}
-        .maxValue=${bus.max_value ?? config.defaults.max_value}
-        .precision=${bus.precision ?? config.defaults.precision}
+        .label=${(group.name ?? group.id).toUpperCase()}
+        .mix=${group.mix}
+        .maxValue=${group.max_value ?? config.defaults.max_value}
+        .precision=${live?.precision ?? effectivePrecision(config, group)}
         .live=${level}
         .lights=${live?.lights ?? 0}
         .simEntityId=${entityId}
         .simOn=${this.hass?.states[entityId]?.state === "on"}
-        .blockedReason=${this.simState[bus.id]?.blocked ?? null}
+        .blockedReason=${this.simState[group.id]?.blocked ?? null}
         @click=${this.onMasterSelect}
       ></al-master-strip>
     `;
@@ -417,23 +346,36 @@ export class AlMixer extends LitElement {
 
   override render() {
     const config = this.config;
-    const bus = this.bus;
-    if (!config || !bus) return html`<div class="empty muted">No bus to mix: add a group first.</div>`;
+    if (!config || config.groups.length === 0)
+      return html`<div class="empty muted">Nothing to mix: add a group first.</div>`;
     return html`
-      ${this.renderCrumbs(config)}
+      ${this.commandError === null
+        ? nothing
+        : html`<ha-alert
+            class="command-error"
+            alert-type="error"
+            dismissable
+            @alert-dismissed-clicked=${() => {
+              this.clearErrorTimer();
+              this.commandError = null;
+            }}
+            >${this.commandError}</ha-alert
+          >`}
       <div
         class="strips"
         role="group"
         aria-label="Mixer"
         @keydown=${this.onKeyDown}
         @al-select-strip=${this.onStripSelect}
-        @al-open-strip=${this.onStripOpen}
-        @al-gain-changed=${this.onStripGain}
+        @al-toggle-strip=${this.onStripToggle}
+        @al-level-override=${this.onLevelOverride}
+        @al-mute-toggle=${this.onMuteToggle}
+        @al-reset=${this.onReset}
         @al-mix-changed=${this.onMix}
         @al-limiter-changed=${this.onLimiter}
         @al-sim-toggled=${this.onSim}
       >
-        ${this.channels.map((path, i) => this.renderChannel(config, bus, path, i))}${this.renderMaster(config, bus)}
+        ${this.tracks.map((track, i) => this.renderTrack(config, track, i))}${this.renderMaster(config)}
       </div>
     `;
   }
