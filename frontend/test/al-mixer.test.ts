@@ -303,6 +303,30 @@ describe("al-mixer navigation", () => {
     expect(navs).toEqual([{ type: "toggle", id: "house" }]);
   });
 
+  // The master follows the selection; it is not the selection. Outlining it too drew a
+  // second focus ring, and a tab stop of its own put two of them in a row that is meant
+  // to be one.
+  it("leaves the row's single tab stop and its outline on the track that is selected", async () => {
+    el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
+    await el.updateComplete;
+    // Shadow content is not matched here, so this is the row itself: strips and master.
+    expect([...(container()?.querySelectorAll('[tabindex="0"]') ?? [])]).toEqual([strips()[1]]);
+    expect(master()?.getAttribute("tabindex")).toBe("-1");
+    expect(master()?.hasAttribute("selected")).toBe(false);
+    expect(strips()[1]?.hasAttribute("selected")).toBe(true);
+    // what it does say is which bus it is following
+    expect(master()?.label).toBe("HOUSE");
+  });
+
+  it("keeps the master's own controls reachable while it follows the selection", async () => {
+    el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
+    await el.updateComplete;
+    await master()?.updateComplete;
+    expect(
+      [...(master()?.shadowRoot?.querySelectorAll("select, input") ?? [])].map((n) => n.getAttribute("tabindex")),
+    ).toEqual(["0", "0"]);
+  });
+
   it("selects the group itself when the master strip is clicked", async () => {
     el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
     await el.updateComplete;

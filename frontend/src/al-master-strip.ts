@@ -100,11 +100,14 @@ export class AlMasterStrip extends LitElement {
   @property({ type: Boolean }) simOn = false;
   @property({ type: String }) blockedReason: string | null = null;
   /**
-   * Whether this strip is the one the mixer's roving tabindex is on. The strip row is a
-   * single tab stop, so the mix selector, the limiter box and the simulation switch join
-   * the tab order only once the strip itself has been reached.
+   * Whether the mixer's roving tabindex is on the track this master is following. The
+   * strip row is a single tab stop, so the mix selector, the limiter box and the
+   * simulation switch join the tab order only once that track has been reached.
+   *
+   * Deliberately not reflected: the master is never itself the selection, so it must not
+   * pick up the outline the row draws on `[selected]`.
    */
-  @property({ type: Boolean, reflect: true }) selected = false;
+  @property({ type: Boolean }) selected = false;
 
   /** `0` on the selected strip, `-1` on every other one. */
   private get stop(): number {

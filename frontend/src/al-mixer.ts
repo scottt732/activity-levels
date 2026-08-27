@@ -74,10 +74,6 @@ export class AlMixer extends LitElement {
         position: sticky;
         right: 0;
       }
-      al-master-strip[selected] {
-        outline: 2px solid var(--primary-color);
-        outline-offset: 1px;
-      }
       .empty {
         padding: 8px 4px;
       }
@@ -343,11 +339,15 @@ export class AlMixer extends LitElement {
     const live = this.live?.groups[group.id];
     const level: StripLevel | null = live ? { value: live.value, max: live.max_value, gated: live.gated } : null;
     const entityId = simSwitchId(group.id);
+    // The master follows the selection rather than being it: the row's one tab stop and
+    // its outline belong to the track strip, and the bus name says which one this is.
+    // The property still travels, so the master's own controls join the tab order behind
+    // the strip they belong to.
     const selected = this.isSelected(path);
     return html`
       <al-master-strip
-        tabindex=${selected ? 0 : -1}
-        ?selected=${selected}
+        tabindex="-1"
+        .selected=${selected}
         ?narrow=${this.narrow}
         .label=${(group.name ?? group.id).toUpperCase()}
         .mix=${group.mix}
