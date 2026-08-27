@@ -1,7 +1,7 @@
 import pytest
 
 from custom_components.activity_levels.schema import ConfigError, default_options, validate_config
-from tests.fixtures import house_config
+from tests.fixtures import house_config, rooms_config
 
 
 def test_default_options_validate() -> None:
@@ -140,3 +140,123 @@ def test_empty_day_type_precedence_is_rejected() -> None:
     cfg = house_config()
     cfg["defaults"]["patterns"] = {"day_type_precedence": []}
     assert "defaults/patterns/day_type_precedence" in errors_of(cfg)
+
+
+def test_adjacency_and_exits_normalize() -> None:
+    cfg = validate_config(rooms_config())
+    rooms = {g["id"]: g for g in cfg["groups"][0]["children"][0]["children"]}
+    assert rooms["kitchen"]["adjacent"] == [
+        {"id": "dining_room", "one_way": False},
+        {"id": "back_patio", "one_way": False},
+    ]
+    assert rooms["hall"]["adjacent"] == [{"id": "bedroom", "one_way": True}]
+    assert rooms["back_patio"]["exit"] is True
+    assert rooms["kitchen"]["exit"] is False
+    assert rooms["kitchen"]["presence"]["gain"] == 1.0
+    assert rooms["kitchen"]["presence"]["envelope"] is None
+
+
+def test_presence_defaults_and_absence() -> None:
+    assert validate_config(house_config())["presence"] == {
+        "enabled": False,
+        "devices": [],
+        "envelope": None,
+        "threshold": 0.6,
+        "stay": 0.9,
+        "escape": 0.001,
+        "scale": 3.0,
+        "floor": 0.05,
+        "stuck_after": 60.0,
+        "scanner_areas": {},
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutate", "path", "fragment"),
+    [
+        (
+            lambda c: c["groups"][0]["children"][0]["children"][0].update(adjacent=["nope"]),
+            "groups/0/children/0/children/0/adjacent/0",
+            "unknown group",
+        ),
+        (
+            lambda c: c["groups"][0]["children"][0]["children"][0].update(adjacent=["kitchen"]),
+            "groups/0/children/0/children/0/adjacent/0",
+            "itself",
+        ),
+        (
+            lambda c: c["groups"][0]["children"][0]["children"][0].update(
+                adjacent=["hall", "hall"]
+            ),
+            "groups/0/children/0/children/0/adjacent/1",
+            "duplicate",
+        ),
+        (
+            lambda c: c["groups"][0]["children"][0]["children"][0].update(
+                presence={"envelope": "nope"}
+            ),
+            "groups/0/children/0/children/0/presence/envelope",
+            "unknown envelope",
+        ),
+    ],
+)
+def test_adjacency_errors_are_pathed(mutate, path, fragment) -> None:
+    config = rooms_config()
+    mutate(config)
+    with pytest.raises(ConfigError) as err:
+        validate_config(config)
+    assert any(e["path"] == path and fragment in e["message"] for e in err.value.errors)
+
+
+@pytest.mark.parametrize(
+    ("presence", "path"),
+    [
+        ({"devices": [{"device": "sensor.not_a_tracker"}]}, "presence/devices/0/device"),
+        ({"threshold": 0}, "presence/threshold"),
+        ({"threshold": 1.5}, "presence/threshold"),
+        ({"stay": 1.0}, "presence/stay"),
+        ({"escape": 0.2}, "presence/escape"),
+        ({"scale": 0}, "presence/scale"),
+        ({"floor": 0}, "presence/floor"),
+        ({"stuck_after": 0}, "presence/stuck_after"),
+        ({"envelope": "nope"}, "presence/envelope"),
+        ({"scanner_areas": {"abc": "nope"}}, "presence/scanner_areas/abc"),
+    ],
+)
+def test_presence_field_errors(presence, path) -> None:
+    config = rooms_config()
+    config["presence"] = {"enabled": True, **presence}
+    with pytest.raises(ConfigError) as err:
+        validate_config(config)
+    assert any(e["path"] == path for e in err.value.errors)
+
+
+def test_presence_threshold_one_and_escape_zero_are_allowed() -> None:
+    config = rooms_config()
+    config["presence"] = {"enabled": True, "threshold": 1.0, "escape": 0.0}
+    assert validate_config(config)["presence"]["threshold"] == 1.0
+
+
+def test_duplicate_tracked_device_and_name() -> None:
+    config = rooms_config()
+    config["presence"] = {
+        "enabled": True,
+        "devices": [
+            {"device": "device_tracker.phone", "name": "Scott"},
+            {"device": "device_tracker.phone", "name": "Scott"},
+        ],
+    }
+    with pytest.raises(ConfigError) as err:
+        validate_config(config)
+    paths = {e["path"] for e in err.value.errors}
+    assert {"presence/devices/1/device", "presence/devices/1/name"} <= paths
+
+
+def test_a_stimulus_cannot_be_called_presence() -> None:
+    config = rooms_config()
+    config["groups"][0]["children"][0]["children"][0]["stimuli"].append(
+        {"entity": "binary_sensor.other", "key": "presence"}
+    )
+    with pytest.raises(ConfigError) as err:
+        validate_config(config)
+    assert any("duplicate stimulus 'presence'" in e["message"] for e in err.value.errors)

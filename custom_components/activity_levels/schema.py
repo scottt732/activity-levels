@@ -16,6 +16,7 @@ from .const import (
     CONF_ENVELOPES,
     CONF_GROUPS,
     CONF_PATTERNS,
+    CONF_PRESENCE,
     CONF_SIMULATION,
     CONF_VERSION,
     DEFAULT_ENVELOPE_ID,
@@ -23,6 +24,7 @@ from .const import (
     DEFAULT_MIN_WAKE_INTERVAL,
     DEFAULT_PRECISION,
     DEFAULT_SAFETY_REFRESH,
+    PRESENCE_KEY,
     TRIGGER_KEY,
 )
 from .duration import parse_duration
@@ -40,7 +42,12 @@ class ConfigError(Exception):
         self.errors = errors
 
 
-def _finite(lo: float | None = None, lo_exclusive: bool = False, hi: float | None = None) -> Any:
+def _finite(
+    lo: float | None = None,
+    lo_exclusive: bool = False,
+    hi: float | None = None,
+    hi_exclusive: bool = False,
+) -> Any:
     def check(value: Any) -> float:
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise vol.Invalid("must be a number")
@@ -49,8 +56,8 @@ def _finite(lo: float | None = None, lo_exclusive: bool = False, hi: float | Non
             raise vol.Invalid("must be finite")
         if lo is not None and (f <= lo if lo_exclusive else f < lo):
             raise vol.Invalid(f"must be {'>' if lo_exclusive else '>='} {lo}")
-        if hi is not None and f > hi:
-            raise vol.Invalid(f"must be <= {hi}")
+        if hi is not None and (f >= hi if hi_exclusive else f > hi):
+            raise vol.Invalid(f"must be {'<' if hi_exclusive else '<='} {hi}")
         return f
 
     return check
@@ -77,6 +84,7 @@ def _hhmm(value: Any) -> str:
 
 
 _calendar_entity = vol.All(cv.entity_id, cv.entity_domain("calendar"))
+_device_tracker = vol.All(cv.entity_id, cv.entity_domain("device_tracker"))
 
 
 def _quiet_hours(value: Any) -> list[str] | None:
@@ -108,6 +116,19 @@ ENVELOPE_SCHEMA = vol.Schema(
     }
 )
 
+# Every field a stimulus may override on its preset. Named once, because a group's
+# presence voice takes exactly the same set.
+_ENVELOPE_OVERRIDES: dict[Any, Any] = {
+    vol.Optional("attack", default=None): vol.Any(None, parse_duration),
+    vol.Optional("decay", default=None): vol.Any(None, parse_duration),
+    vol.Optional("sustain", default=None): vol.Any(None, _finite(0.0, hi=1.0)),
+    vol.Optional("release", default=None): vol.Any(None, parse_duration),
+    vol.Optional("impulse", default=None): vol.Any(None, cv.boolean),
+    vol.Optional("retrigger", default=None): vol.Any(None, _ENUM["retrigger"]),
+    vol.Optional("unavailable", default=None): vol.Any(None, _ENUM["unavailable"]),
+    vol.Optional("debounce", default=None): vol.Any(None, parse_duration),
+}
+
 STIMULUS_SCHEMA = vol.Schema(
     {
         vol.Required("entity"): cv.entity_id,
@@ -115,14 +136,63 @@ STIMULUS_SCHEMA = vol.Schema(
         vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
         vol.Optional("key", default=None): vol.Any(None, vol.All(str, vol.Length(min=1))),
         vol.Optional("envelope", default=None): vol.Any(None, _group_id),
-        vol.Optional("attack", default=None): vol.Any(None, parse_duration),
-        vol.Optional("decay", default=None): vol.Any(None, parse_duration),
-        vol.Optional("sustain", default=None): vol.Any(None, _finite(0.0, hi=1.0)),
-        vol.Optional("release", default=None): vol.Any(None, parse_duration),
-        vol.Optional("impulse", default=None): vol.Any(None, cv.boolean),
-        vol.Optional("retrigger", default=None): vol.Any(None, _ENUM["retrigger"]),
-        vol.Optional("unavailable", default=None): vol.Any(None, _ENUM["unavailable"]),
-        vol.Optional("debounce", default=None): vol.Any(None, parse_duration),
+        **_ENVELOPE_OVERRIDES,
+    }
+)
+
+ADJACENT_SCHEMA = vol.Schema(
+    {
+        vol.Required("id"): _group_id,
+        vol.Optional("one_way", default=False): cv.boolean,
+    }
+)
+
+
+def _adjacent(value: Any) -> dict[str, Any]:
+    """`kitchen` and `{id: kitchen, one_way: true}` both name one edge.
+
+    The short form is what a door is: symmetric. The long form exists for the rare
+    thing that is not -- a laundry chute -- and stays YAML-only in v1.
+    """
+    if isinstance(value, str):
+        value = {"id": value}
+    if not isinstance(value, dict):
+        raise vol.Invalid("must be a group id or {id, one_way}")
+    result: dict[str, Any] = ADJACENT_SCHEMA(value)
+    return result
+
+
+GROUP_PRESENCE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
+        vol.Optional("envelope", default=None): vol.Any(None, _group_id),
+        **_ENVELOPE_OVERRIDES,
+    }
+)
+
+PRESENCE_DEVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required("device"): _device_tracker,
+        vol.Optional("name", default=None): vol.Any(None, vol.All(str, vol.Length(min=1))),
+    }
+)
+
+PRESENCE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("enabled", default=False): cv.boolean,
+        vol.Optional("devices", default=list): [PRESENCE_DEVICE_SCHEMA],
+        vol.Optional("envelope", default=None): vol.Any(None, _group_id),
+        vol.Optional("threshold", default=0.6): _finite(0.0, lo_exclusive=True, hi=1.0),
+        vol.Optional("stay", default=0.9): _finite(
+            0.0, lo_exclusive=True, hi=1.0, hi_exclusive=True
+        ),
+        vol.Optional("escape", default=0.001): _finite(0.0, hi=0.1),
+        vol.Optional("scale", default=3.0): _finite(0.0, lo_exclusive=True),
+        vol.Optional("floor", default=0.05): _finite(0.0, lo_exclusive=True, hi=1.0),
+        vol.Optional("stuck_after", default=60.0): vol.All(parse_duration, vol.Range(min=1.0)),
+        # keyed by the scanner's device-registry id (or its Bermuda address); the value
+        # is the room it is in, overriding whatever its area says
+        vol.Optional("scanner_areas", default=dict): {cv.string: _group_id},
     }
 )
 
@@ -204,6 +274,9 @@ def _group_schema(value: Any) -> dict[str, Any]:
             vol.Optional("stimuli", default=list): [STIMULUS_SCHEMA],
             vol.Optional("children", default=list): [_group_schema],
             vol.Optional(CONF_SIMULATION, default=dict): GROUP_SIMULATION_SCHEMA,
+            vol.Optional("adjacent", default=list): [_adjacent],
+            vol.Optional("exit", default=False): cv.boolean,
+            vol.Optional(CONF_PRESENCE, default=dict): GROUP_PRESENCE_SCHEMA,
         }
     )
     result: dict[str, Any] = schema(value)
@@ -218,6 +291,7 @@ CONFIG_SCHEMA = vol.Schema(
         vol.Optional(CONF_DEFAULTS, default=dict): DEFAULTS_SCHEMA,
         vol.Optional(CONF_ENVELOPES, default=list): [ENVELOPE_SCHEMA],
         vol.Optional(CONF_GROUPS, default=list): [_group_schema],
+        vol.Optional(CONF_PRESENCE, default=dict): PRESENCE_SCHEMA,
     }
 )
 
@@ -228,6 +302,7 @@ def default_options() -> dict[str, Any]:
         CONF_DEFAULTS: {},
         CONF_ENVELOPES: [{"id": DEFAULT_ENVELOPE_ID}],
         CONF_GROUPS: [],
+        CONF_PRESENCE: {},
     }
 
 
@@ -286,16 +361,18 @@ def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
         )
 
     seen_groups: set[str] = set()
+    walked: list[tuple[list[Any], dict[str, Any]]] = []
 
     def walk(group: dict[str, Any], path: list[Any]) -> None:
         if group["id"] in seen_groups:
             errors.append({"path": _path([*path, "id"]), "message": "duplicate group id"})
         seen_groups.add(group["id"])
+        walked.append((list(path), group))
         if not group["stimuli"] and not group["children"]:
             errors.append(
                 {"path": _path(path), "message": "group needs at least one stimulus or child"}
             )
-        labels: set[str] = {TRIGGER_KEY}
+        labels: set[str] = {TRIGGER_KEY, PRESENCE_KEY}  # both synthetic channels
         for i, stim in enumerate(group["stimuli"]):
             spath = [*path, "stimuli", i]
             if stim["envelope"] is not None and stim["envelope"] not in envelope_ids:
@@ -329,9 +406,54 @@ def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
                             "message": "must be a light entity",
                         }
                     )
+        presence = group[CONF_PRESENCE]
+        if presence["envelope"] is not None and presence["envelope"] not in envelope_ids:
+            errors.append(
+                {
+                    "path": _path([*path, CONF_PRESENCE, "envelope"]),
+                    "message": "unknown envelope",
+                }
+            )
 
     for i, group in enumerate(cfg[CONF_GROUPS]):
         walk(group, [CONF_GROUPS, i])
+
+    # Adjacency can only be checked once every id is known: an edge is allowed to point
+    # forwards, at a room the walk has not reached yet.
+    for path, group in walked:
+        seen_edges: set[str] = set()
+        for j, edge in enumerate(group["adjacent"]):
+            epath = _path([*path, "adjacent", j])
+            if edge["id"] == group["id"]:
+                errors.append({"path": epath, "message": "a group cannot be adjacent to itself"})
+            elif edge["id"] not in seen_groups:
+                errors.append({"path": epath, "message": f"unknown group '{edge['id']}'"})
+            if edge["id"] in seen_edges:
+                errors.append({"path": epath, "message": "duplicate adjacent group"})
+            seen_edges.add(edge["id"])
+
+    presence = cfg[CONF_PRESENCE]
+    if presence["envelope"] is not None and presence["envelope"] not in envelope_ids:
+        errors.append({"path": _path([CONF_PRESENCE, "envelope"]), "message": "unknown envelope"})
+    seen_devices: set[str] = set()
+    seen_names: set[str] = set()
+    for i, device in enumerate(presence["devices"]):
+        dpath = [CONF_PRESENCE, "devices", i]
+        if device["device"] in seen_devices:
+            errors.append({"path": _path([*dpath, "device"]), "message": "duplicate device"})
+        seen_devices.add(device["device"])
+        if device["name"] is not None:
+            if device["name"] in seen_names:
+                errors.append({"path": _path([*dpath, "name"]), "message": "duplicate name"})
+            seen_names.add(device["name"])
+    for scanner, gid in presence["scanner_areas"].items():
+        if gid not in seen_groups:
+            errors.append(
+                {
+                    "path": _path([CONF_PRESENCE, "scanner_areas", scanner]),
+                    "message": f"unknown group '{gid}'",
+                }
+            )
     return errors
 
 

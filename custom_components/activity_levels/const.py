@@ -19,14 +19,22 @@ PLATFORMS: list[Platform] = [
 MANUFACTURER = "Activity Levels"
 MODEL = "Group"
 MODEL_HUB = "Hub"
+MODEL_PRESENCE = "Presence"
 HUB_NAME = "Activity Levels"
 TRIGGER_KEY = "trigger"
+PRESENCE_KEY = "presence"  # the synthetic channel's label, like TRIGGER_KEY
+AWAY = "away"  # the state that is not a room
 
 STORAGE_VERSION = 1
+PRESENCE_STORAGE_VERSION = 1
 
 
 def storage_key(entry_id: str) -> str:
     return f"{DOMAIN}.{entry_id}"
+
+
+def presence_storage_key(entry_id: str) -> str:
+    return f"{DOMAIN}.{entry_id}.presence"
 
 
 CONF_VERSION = "version"
@@ -35,6 +43,7 @@ CONF_ENVELOPES = "envelopes"
 CONF_GROUPS = "groups"
 CONF_PATTERNS = "patterns"
 CONF_SIMULATION = "simulation"
+CONF_PRESENCE = "presence"
 
 SLOT_MINUTES = 15
 SLOTS_PER_DAY = 96
@@ -71,6 +80,19 @@ ATTR_PRODUCER_VERSION = "producer_version"
 ATTR_GROUPS_READY = "groups_ready"
 ATTR_GROUPS_TOTAL = "groups_total"
 ATTR_TRAINED = "trained"
+
+ATTR_CONFIDENCE = "confidence"
+ATTR_MOVING = "moving"
+ATTR_CANDIDATES = "candidates"
+ATTR_PATH = "path"
+ATTR_UPDATED = "updated"
+ATTR_WHO = "who"
+
+ISSUE_BERMUDA_MISSING = "bermuda_missing"
+ISSUE_NOT_BERMUDA = "not_a_bermuda_device"
+ISSUE_DISABLED_SENSORS = "disabled_distance_sensors"
+ISSUE_UNMAPPED_SCANNERS = "unmapped_scanners"
+ISSUE_TRANSITION = "transition_infeasible"
 
 PANEL_URL_PATH = "activity-levels"
 PANEL_ELEMENT = "activity-levels-panel"
