@@ -53,11 +53,13 @@ ATTR_COOLDOWN_AT = "cooldown_at"
 ATTR_CONTRIBUTORS = "contributors"
 
 SERVICE_TRIGGER = "trigger"
+SERVICE_SET_LEVEL = "set_level"
 SERVICE_RESET = "reset"
 SERVICE_REBUILD_PROFILE = "rebuild_profile"
 SERVICE_SIMULATE_NOW = "simulate_now"
 ATTR_GROUP_ID = "group_id"
 ATTR_PEAK = "peak"
+ATTR_VALUE = "value"
 ATTR_FORCE = "force"
 
 ATTR_P25 = "p25"

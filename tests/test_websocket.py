@@ -139,3 +139,79 @@ async def test_diagnostics(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     assert diag["config"]["groups"][0]["id"] == "house"
     assert "voices" in diag["snapshot"]
     assert "house" in diag["groups"]
+
+
+async def test_mute_command(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, entry: MockConfigEntry
+) -> None:
+    hass.states.async_set("binary_sensor.living_motion", "on")
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {"type": "activity_levels/mute", "group_id": "living_room", "muted": True}
+    )
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"] == {"muted": True}
+
+    await client.send_json_auto_id({"type": "activity_levels/state"})
+    msg = await client.receive_json()
+    groups = msg["result"]["groups"]
+    assert groups["living_room"]["muted"] is True
+    assert groups["house"]["muted"] is False
+    assert groups["house"]["value"] == 0.0
+    assert groups["living_room"]["value"] == pytest.approx(2.0)
+
+    await client.send_json_auto_id(
+        {"type": "activity_levels/mute", "group_id": "nope", "muted": True}
+    )
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "not_found"
+
+
+async def test_level_set_command(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, entry: MockConfigEntry
+) -> None:
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {"type": "activity_levels/level/set", "group_id": "kitchen", "value": 3.5}
+    )
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"]["value"] == pytest.approx(3.5)
+    assert hass.states.get("sensor.kitchen_activity_level").state == "3.5"
+
+    # the limiter has the last word, and the answer says where the level really landed
+    await client.send_json_auto_id(
+        {"type": "activity_levels/level/set", "group_id": "kitchen", "value": 99.0}
+    )
+    msg = await client.receive_json()
+    assert msg["result"]["value"] == pytest.approx(5.0)
+
+    await client.send_json_auto_id(
+        {"type": "activity_levels/level/set", "group_id": "kitchen", "value": -1.0}
+    )
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "invalid_format"
+
+    await client.send_json_auto_id(
+        {"type": "activity_levels/level/set", "group_id": "nope", "value": 1.0}
+    )
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "not_found"
+
+
+async def test_reset_command(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, entry: MockConfigEntry
+) -> None:
+    client = await hass_ws_client(hass)
+    await hass.services.async_call(
+        DOMAIN, "trigger", {"group_id": "kitchen", "peak": 3.0}, blocking=True
+    )
+    assert hass.states.get("sensor.kitchen_activity_level").state == "3.0"
+    await client.send_json_auto_id({"type": "activity_levels/reset", "group_id": "kitchen"})
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"] == {}
+    assert hass.states.get("sensor.kitchen_activity_level").state == "0.0"
+
+    await client.send_json_auto_id({"type": "activity_levels/reset", "group_id": "nope"})
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "not_found"

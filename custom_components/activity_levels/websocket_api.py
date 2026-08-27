@@ -50,6 +50,9 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_profile_rebuild)
     websocket_api.async_register_command(hass, ws_timeseries)
     websocket_api.async_register_command(hass, ws_simulation_log)
+    websocket_api.async_register_command(hass, ws_mute)
+    websocket_api.async_register_command(hass, ws_level_set)
+    websocket_api.async_register_command(hass, ws_reset)
 
 
 @websocket_api.require_admin
@@ -146,6 +149,17 @@ def _loaded(
     return runtime
 
 
+def _known_group(
+    runtime: RuntimeData, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> str | None:
+    """The message's group id, or None after answering the caller with why not."""
+    group_id: str = msg["group_id"]
+    if group_id not in runtime.coordinator.tree.groups:
+        connection.send_error(msg["id"], "not_found", f"Unknown group '{group_id}'")
+        return None
+    return group_id
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/profile/get"})
 @callback
@@ -221,9 +235,7 @@ async def ws_timeseries(
 ) -> None:
     if (runtime := _loaded(hass, connection, msg)) is None:
         return
-    group_id: str = msg["group_id"]
-    if group_id not in runtime.coordinator.tree.groups:
-        connection.send_error(msg["id"], "not_found", f"Unknown group '{group_id}'")
+    if (group_id := _known_group(runtime, connection, msg)) is None:
         return
     start: float = msg["start"]
     end: float = msg["end"]
@@ -280,3 +292,62 @@ def ws_simulation_log(
             "blocked": {gid: simulation.blocked_reason(gid) for gid in gids},
         },
     )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/mute",
+        vol.Required("group_id"): str,
+        vol.Required("muted"): bool,
+    }
+)
+@callback
+def ws_mute(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    if (group_id := _known_group(runtime, connection, msg)) is None:
+        return
+    muted: bool = msg["muted"]
+    runtime.coordinator.set_muted(group_id, muted)
+    connection.send_result(msg["id"], {"muted": muted})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/level/set",
+        vol.Required("group_id"): str,
+        vol.Required("value"): vol.All(vol.Coerce(float), vol.Range(min=0)),
+    }
+)
+@callback
+def ws_level_set(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    if (group_id := _known_group(runtime, connection, msg)) is None:
+        return
+    # the level actually reached, which the limiter -- or a louder channel of a MAX
+    # group -- can put somewhere other than where the fader was dragged
+    reached = runtime.coordinator.set_level(group_id, msg["value"])
+    connection.send_result(msg["id"], {"value": reached})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): f"{DOMAIN}/reset", vol.Required("group_id"): str}
+)
+@callback
+def ws_reset(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    if (group_id := _known_group(runtime, connection, msg)) is None:
+        return
+    runtime.coordinator.reset(group_id)
+    connection.send_result(msg["id"], {})

@@ -1,6 +1,7 @@
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -148,3 +149,18 @@ async def test_removing_a_group_removes_its_device_and_entities(
     assert entry.state is ConfigEntryState.LOADED
     assert dr.async_get(hass).async_get_device(identifiers={(DOMAIN, "kitchen")}) is None
     assert er.async_get(hass).async_get("sensor.kitchen_activity_level") is None
+
+
+async def test_set_level_service(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    await hass.services.async_call(
+        DOMAIN, "set_level", {"group_id": "kitchen", "value": 2.5}, blocking=True
+    )
+    assert hass.states.get("sensor.kitchen_activity_level").state == "2.5"
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "set_level", {"group_id": "nope", "value": 1.0}, blocking=True
+        )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "set_level", {"group_id": "kitchen", "value": -1.0}, blocking=True
+        )

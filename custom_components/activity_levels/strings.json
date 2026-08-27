@@ -34,6 +34,17 @@
         "peak": { "name": "Peak", "description": "Peak level of the impulse." }
       }
     },
+    "set_level": {
+      "name": "Set level",
+      "description": "Override a group's level: its trigger voice is sized so the group reads this value, and cools down from there.",
+      "fields": {
+        "group_id": { "name": "Group", "description": "The group id to override." },
+        "value": {
+          "name": "Value",
+          "description": "The level the group should read, clamped to its maximum."
+        }
+      }
+    },
     "reset": {
       "name": "Reset",
       "description": "Return all voices in a group (or all groups) to idle.",

@@ -13,6 +13,7 @@ from .const import (
     ATTR_FORCE,
     ATTR_GROUP_ID,
     ATTR_PEAK,
+    ATTR_VALUE,
     DOMAIN,
     HUB_NAME,
     MANUFACTURER,
@@ -21,6 +22,7 @@ from .const import (
     PLATFORMS,
     SERVICE_REBUILD_PROFILE,
     SERVICE_RESET,
+    SERVICE_SET_LEVEL,
     SERVICE_SIMULATE_NOW,
     SERVICE_TRIGGER,
 )
@@ -36,6 +38,12 @@ SERVICE_TRIGGER_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_GROUP_ID): cv.string,
         vol.Optional(ATTR_PEAK, default=1.0): vol.Coerce(float),
+    }
+)
+SERVICE_SET_LEVEL_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_GROUP_ID): cv.string,
+        vol.Required(ATTR_VALUE): vol.Coerce(float),
     }
 )
 SERVICE_RESET_SCHEMA = vol.Schema({vol.Optional(ATTR_GROUP_ID): cv.string})
@@ -147,6 +155,15 @@ def _register_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError(str(err)) from err
 
     @callback
+    def handle_set_level(call: ServiceCall) -> None:
+        coordinator = _runtime(hass).coordinator
+        group_id = _resolve_group(coordinator, call.data[ATTR_GROUP_ID])
+        try:
+            coordinator.set_level(group_id, call.data[ATTR_VALUE])
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+
+    @callback
     def handle_reset(call: ServiceCall) -> None:
         coordinator = _runtime(hass).coordinator
         group_id: str | None = call.data.get(ATTR_GROUP_ID)
@@ -167,6 +184,9 @@ def _register_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN, SERVICE_TRIGGER, handle_trigger, schema=SERVICE_TRIGGER_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_LEVEL, handle_set_level, schema=SERVICE_SET_LEVEL_SCHEMA
     )
     hass.services.async_register(DOMAIN, SERVICE_RESET, handle_reset, schema=SERVICE_RESET_SCHEMA)
     hass.services.async_register(
