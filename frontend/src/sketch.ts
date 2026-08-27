@@ -21,6 +21,14 @@ export interface SketchLabel {
 }
 
 /**
+ * How long the release actually takes, drawn to scale. `release` is the time to fall
+ * from full scale, and the box's y = 1 is full scale, so a note leaving from the
+ * sustain level covers that fraction of the drop in that fraction of the time --
+ * same slope, shorter segment.
+ */
+const releaseSpan = (e: SketchEnvelope): number => e.release * e.sustain;
+
+/**
  * The envelope as a polyline in a unit box: x runs 0..1 over time, y runs 0 (silence)
  * to 1 (peak). The sustain plateau has no duration of its own, so it is drawn as
  * `hold` of the total width; when every real duration is zero the whole box is the
@@ -34,7 +42,8 @@ export function envelopePoints(e: SketchEnvelope, hold = 0.25): SketchPoint[] {
       { x: 1, y: 0 },
     ];
   }
-  const timed = e.attack + e.decay + e.release;
+  const fall = releaseSpan(e);
+  const timed = e.attack + e.decay + fall;
   const holdLen = timed > 0 ? (timed * hold) / (1 - hold) : 1;
   const total = timed + holdLen;
   let t = 0;
@@ -45,7 +54,7 @@ export function envelopePoints(e: SketchEnvelope, hold = 0.25): SketchPoint[] {
   pts.push({ x: t / total, y: e.sustain });
   t += holdLen;
   pts.push({ x: t / total, y: e.sustain });
-  t += e.release;
+  t += fall;
   pts.push({ x: t / total, y: 0 });
   return pts;
 }
@@ -65,6 +74,6 @@ export function envelopeLabels(e: SketchEnvelope, hold = 0.25): SketchLabel[] {
   if (e.attack > 0) out.push({ text: `A ${formatDuration(e.attack)}`, x: mid(0) });
   if (e.decay > 0) out.push({ text: `D ${formatDuration(e.decay)}`, x: mid(1) });
   out.push({ text: `S ${round2(e.sustain)}`, x: mid(2) });
-  if (e.release > 0) out.push({ text: `R ${formatDuration(e.release)}`, x: mid(3) });
+  if (releaseSpan(e) > 0) out.push({ text: `R ${formatDuration(e.release)}`, x: mid(3) });
   return out;
 }

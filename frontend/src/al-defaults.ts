@@ -30,7 +30,8 @@ const HELPERS: Record<string, string> = {
   max_value: "Limiter for groups that don't set their own.",
   precision: "Display decimals.",
   unavailable: "What an entity going unavailable does to its note.",
-  retrigger: "Whether a note already sounding can be retriggered, or only one in its release.",
+  retrigger:
+    "Stack: each trigger adds its gain on top of the current level, up to the group's limiter. Only while releasing: a trigger only restarts a fading note. Always: a trigger restarts the note even while it is held.",
   debounce: "Minimum time between note-ons per stimulus.",
   safety_refresh: "Periodic recompute as a self-heal.",
   min_wake_interval: "Floor for the scheduler's timer delay.",
@@ -62,6 +63,7 @@ const RETRIGGER_SELECTOR: Selector = {
   select: {
     mode: "dropdown",
     options: [
+      { value: "stack", label: "Stack (add on top)" },
       { value: "only_in_release", label: "Only while releasing" },
       { value: "always", label: "Always" },
     ],

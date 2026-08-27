@@ -87,6 +87,28 @@ describe("al-defaults", () => {
     expect(item.selector?.select?.options?.map((o) => o.value)).toEqual(["default", "media"]);
   });
 
+  it("offers stack first among the retrigger modes", () => {
+    const item = form().schema?.[4] as {
+      name: string;
+      selector?: { select?: { options?: { value: string; label: string }[] } };
+    };
+    expect(item.name).toBe("retrigger");
+    expect(item.selector?.select?.options).toEqual([
+      { value: "stack", label: "Stack (add on top)" },
+      { value: "only_in_release", label: "Only while releasing" },
+      { value: "always", label: "Always" },
+    ]);
+  });
+
+  it("explains all three retrigger modes in the helper", () => {
+    const helper = (form() as unknown as { computeHelper?: (i: { name: string }) => string }).computeHelper?.({
+      name: "retrigger",
+    });
+    expect(helper).toContain("Stack:");
+    expect(helper).toContain("Only while releasing:");
+    expect(helper).toContain("Always:");
+  });
+
   it("converts a duration back to seconds and coalesces per field", async () => {
     await edit({ safety_refresh: { hours: 0, minutes: 5, seconds: 0 } });
     expect(changes.at(-1)?.defaults.safety_refresh).toBe(300);

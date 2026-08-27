@@ -1,6 +1,6 @@
 export type Mix = "sum" | "max" | "mean";
 export type NullHandling = "zero" | "ignore";
-export type Retrigger = "only_in_release" | "always";
+export type Retrigger = "stack" | "only_in_release" | "always";
 export type Unavailable = "hold" | "note_off";
 
 export interface EnvelopeOverrides {

@@ -86,7 +86,8 @@ export class AlOverrideField extends LitElement {
 
   /**
    * The inherited value as the dropdown would spell it: a `select` stores enum ids like
-   * `only_in_release`, and the helper should read the way the options do.
+   * `stack`, and the helper should read the way the options do -- "Stack (add on top)",
+   * not the raw id.
    */
   private describeInherited(): string {
     const value = this.inherited;

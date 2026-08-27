@@ -10,6 +10,7 @@ const RETRIGGER_SELECTOR = {
   select: {
     mode: "dropdown",
     options: [
+      { value: "stack", label: "Stack (add on top)" },
       { value: "only_in_release", label: "Only while releasing" },
       { value: "always", label: "Always" },
     ],

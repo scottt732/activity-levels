@@ -33,7 +33,8 @@ const HELPERS: Record<string, string> = {
   attack: "Time to rise from zero to the stimulus gain.",
   decay: "Time to fall from the peak to the sustain level.",
   sustain: "Fraction of peak held while the note is on.",
-  release: "Time to fall from the sustain level back to zero.",
+  release:
+    "Time to fall from the group's limiter (full scale) back to zero; lower levels fall faster, at the same slope.",
   impulse: "Fire and forget: the note ends the moment it starts, leaving only the release.",
 };
 
@@ -49,6 +50,7 @@ const RETRIGGER_SELECTOR: Selector = {
   select: {
     mode: "dropdown",
     options: [
+      { value: "stack", label: "Stack (add on top)" },
       { value: "only_in_release", label: "Only while releasing" },
       { value: "always", label: "Always" },
     ],

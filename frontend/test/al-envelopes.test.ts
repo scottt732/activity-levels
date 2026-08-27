@@ -80,6 +80,14 @@ beforeEach(async () => {
 });
 
 describe("al-envelopes", () => {
+  it("offers stack first in the retrigger override", () => {
+    const field = el.shadowRoot?.querySelector("al-override-field") as
+      | (HTMLElement & { label?: string; selector?: { select?: { options?: { value: string }[] } } })
+      | null;
+    expect(field?.label).toBe("Retrigger");
+    expect(field?.selector?.select?.options?.map((o) => o.value)).toEqual(["stack", "only_in_release", "always"]);
+  });
+
   it("lists every preset and sketches the selected one", () => {
     const names = [...(el.shadowRoot?.querySelectorAll(".preset button.link") ?? [])].map((n) => n.textContent?.trim());
     expect(names).toEqual(["default", "media"]);

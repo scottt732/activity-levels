@@ -38,6 +38,27 @@ describe("envelopePoints", () => {
     expect(pts[3]!.x - pts[2]!.x).toBeCloseTo(0.25);
   });
 
+  it("draws the release at the same slope whatever level it falls from", () => {
+    // `release` is the time to fall from full scale, so a note leaving from half of it
+    // covers half the drop in half the time. Widths are normalised per sketch, so
+    // compare the release against the decay drawn beside it in the same box.
+    const slope = (sustain: number): number => {
+      const pts = envelopePoints({ attack: 0, decay: 10, sustain, release: 100, impulse: false });
+      return sustain / ((pts[4]!.x - pts[3]!.x) / (pts[2]!.x - pts[1]!.x));
+    };
+    expect(slope(0.5)).toBeCloseTo(slope(1));
+    expect(slope(0.25)).toBeCloseTo(slope(1));
+  });
+
+  it("draws no release segment when the sustain is silent", () => {
+    const pts = envelopePoints({ attack: 0, decay: 10, sustain: 0, release: 100, impulse: false });
+    expect(pts[4]!.x).toBeCloseTo(pts[3]!.x);
+    expect(envelopeLabels({ attack: 0, decay: 10, sustain: 0, release: 100, impulse: false }).map((l) => l.text)).toEqual([
+      "D 10s",
+      "S 0",
+    ]);
+  });
+
   it("keeps x monotonically non-decreasing", () => {
     const pts = envelopePoints({ attack: 5, decay: 0, sustain: 0.2, release: 0, impulse: false });
     for (let i = 1; i < pts.length; i++) expect(pts[i]!.x).toBeGreaterThanOrEqual(pts[i - 1]!.x);
