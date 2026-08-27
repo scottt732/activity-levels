@@ -21,4 +21,6 @@ async def async_get_config_entry_diagnostics(
         "voices": coordinator.voice_states(),
         "snapshot": coordinator.snapshot(),
         "profile": entry.runtime_data.patterns.profile,
+        "topology": entry.runtime_data.topology.payload(),
+        "presence": None,  # Task 5 fills this in
     }

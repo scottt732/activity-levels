@@ -15,6 +15,7 @@ from .patterns.profile import ProfileError
 from .runtime import RuntimeData
 from .schema import ConfigError, validate_config
 from .simulation import MAX_LOG_ROWS
+from .topology import MAX_HOPS
 from .tree import build_tree
 
 _REGISTERED = f"{DOMAIN}_websocket_registered"
@@ -53,6 +54,8 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_mute)
     websocket_api.async_register_command(hass, ws_level_set)
     websocket_api.async_register_command(hass, ws_reset)
+    websocket_api.async_register_command(hass, ws_topology)
+    websocket_api.async_register_command(hass, ws_topology_paths)
 
 
 @websocket_api.require_admin
@@ -351,3 +354,39 @@ def ws_reset(
         return
     runtime.coordinator.reset(group_id)
     connection.send_result(msg["id"], {})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/topology"})
+@callback
+def ws_topology(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    connection.send_result(msg["id"], runtime.topology.payload())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/topology/paths",
+        vol.Required("from"): str,
+        vol.Required("to"): str,
+        vol.Optional("max_hops", default=MAX_HOPS): vol.All(int, vol.Range(min=1, max=MAX_HOPS)),
+    }
+)
+@callback
+def ws_topology_paths(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    topology = runtime.topology
+    for key in ("from", "to"):
+        if msg[key] not in topology.nodes:
+            connection.send_error(msg["id"], "not_found", f"'{msg[key]}' is not a room")
+            return
+    connection.send_result(
+        msg["id"], {"paths": topology.paths(msg["from"], msg["to"], msg["max_hops"])}
+    )

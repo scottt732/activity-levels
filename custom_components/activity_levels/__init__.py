@@ -31,6 +31,7 @@ from .panel import async_register_panel, async_unregister_panel
 from .patterns_coordinator import PatternsCoordinator
 from .runtime import ActivityLevelsConfigEntry, RuntimeData
 from .schema import ConfigError, validate_config
+from .topology import build_topology
 from .tree import Tree, build_tree
 from .websocket_api import async_register_websocket
 
@@ -59,6 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
         raise ConfigEntryError(f"Invalid Activity Levels configuration: {err}") from err
     try:
         tree = build_tree(config)
+        topology = build_topology(config)
     except Exception as err:  # a validated config the engine still cannot be built from
         raise ConfigEntryError(f"Could not build the Activity Levels tree: {err}") from err
     _create_devices(hass, entry, tree)
@@ -71,7 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
     coordinator.patterns = patterns
     entry.async_on_unload(patterns.async_stop)
     await patterns.async_start()
-    entry.runtime_data = RuntimeData(coordinator=coordinator, patterns=patterns)
+    entry.runtime_data = RuntimeData(coordinator=coordinator, patterns=patterns, topology=topology)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _register_services(hass)
