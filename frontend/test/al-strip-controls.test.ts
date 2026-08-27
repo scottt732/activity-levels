@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "../src/al-strip-controls";
 import { newGroup, newStimulus } from "../src/model";
+import { presenceConfig, roomsConfig } from "./fixtures";
 import type { AlStripControls } from "../src/al-strip-controls";
 import type { AlChangeEvent } from "../src/events";
 import type {
@@ -141,6 +142,23 @@ const show = async (path: Path | null): Promise<void> => {
 };
 
 const text = (sel: string): string => el.shadowRoot?.querySelector(sel)?.textContent?.trim() ?? "";
+
+/** Mounts a fresh `al-strip-controls` against `cfg`, navigated straight to `path`. */
+const fixture = async (cfg: Config, path: Path): Promise<AlStripControls> => {
+  document.body.innerHTML = "";
+  const node = document.createElement("al-strip-controls");
+  node.hass = hassStub({});
+  node.config = cfg;
+  node.errors = [];
+  node.path = path;
+  document.body.appendChild(node);
+  await node.updateComplete;
+  return node;
+};
+
+/** Resolves with the next event of `type` the element dispatches. */
+const listenFor = <T extends Event>(node: AlStripControls, type: string): Promise<T> =>
+  new Promise((resolve) => node.addEventListener(type, (e) => resolve(e as T), { once: true }));
 
 beforeEach(async () => {
   document.body.innerHTML = "";
@@ -427,5 +445,31 @@ describe("al-strip-controls: a group's stimuli", () => {
   it("has no stimuli section on a channel: a channel is one", async () => {
     await show(["groups", 0, "stimuli", 0]);
     expect(el.shadowRoot?.querySelector(".stimuli")).toBeNull();
+  });
+});
+
+describe("al-strip-controls: presence stimulus", () => {
+  const config = presenceConfig();
+
+  it("lists presence as the first stimulus of a room", async () => {
+    const el = await fixture(config, ["groups", 0, "children", 0, "children", 0]);
+    const heads = [...el.shadowRoot!.querySelectorAll(".stimulus-head .name")].map((n) => n.textContent!.trim());
+    expect(heads[0]).toBe("Presence (anyone here)");
+  });
+
+  it("edits the presence gain against the group's presence block", async () => {
+    const el = await fixture(config, ["groups", 0, "children", 0, "children", 0]);
+    const changed = listenFor<AlChangeEvent>(el, "al-change");
+    el.shadowRoot!.querySelector<HTMLElement>(".presence-gain")!
+      .dispatchEvent(new CustomEvent("value-changed", { detail: { value: 3 } }));
+    const next = (await changed).detail;
+    expect(next.groups[0]?.children[0]?.children[0]?.presence.gain).toBe(3);
+  });
+
+  it("does not list presence for a branch, or when presence is off", async () => {
+    const branch = await fixture(config, ["groups", 0, "children", 0]);
+    expect(branch.shadowRoot!.textContent).not.toContain("Presence (anyone here)");
+    const off = await fixture(roomsConfig(), ["groups", 0, "children", 0, "children", 0]);
+    expect(off.shadowRoot!.textContent).not.toContain("Presence (anyone here)");
   });
 });

@@ -1,6 +1,6 @@
 import { LitElement, css, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
-import { fieldErrors, pathKey } from "./errors";
+import { fieldErrors, listFieldError, pathKey } from "./errors";
 import { alChange, alSelect } from "./events";
 import {
   MAX_VALUE_SELECTOR,
@@ -19,7 +19,7 @@ import "./al-override-field";
 import type { GroupField } from "./group-form";
 import type { Config, HomeAssistant, Path, ValidationError } from "./types";
 
-const FIELDS: GroupField[] = ["id", "name", "area", "mix", "null_handling", "gain"];
+const FIELDS: GroupField[] = ["id", "name", "area", "mix", "null_handling", "gain", "adjacent", "exit"];
 
 /** Editor for one group: identity, mixing, and the overridable output settings. */
 @customElement("al-group-editor")
@@ -92,16 +92,18 @@ export class AlGroupEditor extends LitElement {
     if (!group) return html`<ha-card><span class="muted">This group no longer exists.</span></ha-card>`;
 
     const isRoot = path.length === 2;
-    const fields = fieldErrors(this.errors, path);
     const own = this.errors.filter((e) => e.path === pathKey(path));
+    const fields: Record<string, string> = { ...fieldErrors(this.errors, path) };
+    const adjacentError = listFieldError(this.errors, path, "adjacent");
+    if (adjacentError !== undefined) fields.adjacent = adjacentError;
 
     return html`
       <ha-card header="Group">
         ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
         <ha-form
           .hass=${this.hass}
-          .data=${groupData(group, isRoot, FIELDS)}
-          .schema=${groupSchema(group, isRoot, FIELDS)}
+          .data=${groupData(group, isRoot, FIELDS, config)}
+          .schema=${groupSchema(group, isRoot, FIELDS, config)}
           .error=${fields}
           .computeLabel=${groupLabel}
           .computeHelper=${groupHelper}

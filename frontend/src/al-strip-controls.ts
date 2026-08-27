@@ -14,11 +14,24 @@ import {
   groupSchema,
   mergeGroup,
 } from "./group-form";
-import { effectivePrecision, formatLevel, groupAt, parentGroupPath, resolvedEnvelope, stimulusAt } from "./model";
+import {
+  PRESENCE_KEY,
+  effectivePrecision,
+  formatLevel,
+  groupAt,
+  newPresenceOverrides,
+  parentGroupPath,
+  presenceSettings,
+  resolvedEnvelope,
+  roomIds,
+  stimulusAt,
+} from "./model";
 import { setAt } from "./store";
 import {
+  GAIN_SELECTOR,
   OVERRIDES,
   changedStimulusField,
+  envelopeOptions,
   mergeStimulus,
   overrideSource,
   phaseCountdown,
@@ -347,14 +360,91 @@ export class AlStripControls extends LitElement {
    * a group with a dozen sensors would otherwise bury everything else on the page.
    */
   private renderStimuli(config: Config, group: Group, path: Path): TemplateResult {
+    const presence = presenceSettings(config).enabled && roomIds(config).has(group.id);
     return html`
       <div class="stimuli">
         <h3>Stimuli</h3>
-        ${group.stimuli.length === 0
+        ${presence ? this.renderPresence(config, group, path) : nothing}
+        ${group.stimuli.length === 0 && !presence
           ? html`<div class="muted">No stimuli yet — point this group at an entity in Groups.</div>`
           : group.stimuli.map((stimulus, i) => this.renderStimulus(config, [...path, "stimuli", i], stimulus))}
       </div>
     `;
+  }
+
+  /**
+   * The room's presence channel: a stimulus with no entity. It is fed by the room
+   * estimate rather than by a sensor, so there is nothing to point at - but its gain
+   * and its envelope are tuned here like any other channel's.
+   */
+  private renderPresence(config: Config, group: Group, path: Path): TemplateResult {
+    const overrides = group.presence ?? newPresenceOverrides();
+    const resolved = resolvedEnvelope(config, {
+      ...overrides,
+      envelope: overrides.envelope ?? presenceSettings(config).envelope,
+    });
+    const voice = this.live?.voices[group.id]?.find((v) => v.label === PRESENCE_KEY);
+    const errors = fieldErrors(this.errors, [...path, "presence"]);
+    return html`
+      <ha-expansion-panel outlined left-chevron>
+        <div slot="header" class="stimulus-head">
+          <ha-icon icon="mdi:account-multiple"></ha-icon>
+          <span class="name">Presence (anyone here)</span>
+          ${voice ? html`<span class="chip phase ${voice.phase}">${voice.phase}</span>` : nothing}
+        </div>
+        <ha-selector
+          class="presence-envelope"
+          .hass=${this.hass}
+          .selector=${{ select: { mode: "dropdown", options: envelopeOptions(config) } }}
+          .label=${"Envelope preset"}
+          .required=${false}
+          .value=${overrides.envelope ?? ""}
+          @value-changed=${(ev: CustomEvent<{ value: string }>) =>
+            this.setPresence(path, "envelope", ev.detail.value === "" ? null : ev.detail.value)}
+        ></ha-selector>
+        <al-override-field
+          class="presence-gain"
+          .hass=${this.hass}
+          label="Gain"
+          kind="number"
+          .selector=${GAIN_SELECTOR}
+          .value=${overrides.gain}
+          .inherited=${1}
+          .inheritedFrom=${"presence"}
+          .error=${errors.gain}
+          @value-changed=${(ev: CustomEvent<{ value: number | null }>) =>
+            this.setPresence(path, "gain", ev.detail.value ?? 1)}
+        ></al-override-field>
+        ${OVERRIDES.map(
+          (item) => html`<al-override-field
+            class="presence-${item.name}"
+            .hass=${this.hass}
+            .label=${item.label}
+            .kind=${item.kind}
+            .selector=${item.selector}
+            .value=${overrides[item.name] as OverrideValue}
+            .inherited=${resolved[item.name] as OverrideValue}
+            .inheritedFrom=${overrides.envelope ?? presenceSettings(config).envelope ?? "defaults"}
+            .error=${errors[item.name]}
+            @value-changed=${(ev: CustomEvent<{ value: OverrideValue }>) =>
+              this.setPresence(path, item.name, ev.detail.value)}
+          ></al-override-field>`,
+        )}
+        <al-envelope-sketch .envelope=${resolved}></al-envelope-sketch>
+      </ha-expansion-panel>
+    `;
+  }
+
+  private setPresence(path: Path, name: string, value: unknown): void {
+    const config = this.config;
+    if (!config) return;
+    const group = groupAt(config, path);
+    if (!group) return;
+    const next = setAt(config, [...path, "presence"], {
+      ...(group.presence ?? newPresenceOverrides()),
+      [name]: value,
+    });
+    this.emitChange(next, `${pathKey(path)}:presence:${name}`);
   }
 
   private renderStimulus(config: Config, path: Path, stimulus: Stimulus): TemplateResult {

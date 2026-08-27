@@ -5,13 +5,16 @@ import {
   groupAt,
   newGroup,
   newStimulus,
+  presenceSettings,
   presetReferences,
   renamePreset,
   resolvedEnvelope,
+  roomIds,
   stimulusAt,
   uniqueGroupId,
   uniquePresetId,
 } from "../src/model";
+import { houseConfig, roomsConfig } from "./fixtures";
 import type { Config } from "../src/types";
 
 const cfg: Config = {
@@ -158,5 +161,23 @@ describe("effectivePrecision", () => {
   it("prefers the group's own precision and falls back to the defaults", () => {
     expect(effectivePrecision(cfg, { ...newGroup("house"), precision: 3 })).toBe(3);
     expect(effectivePrecision(cfg, newGroup("house"))).toBe(1);
+  });
+});
+
+describe("roomIds", () => {
+  it("knows which groups are rooms", () => {
+    expect(roomIds(roomsConfig())).toEqual(
+      new Set(["kitchen", "dining_room", "hall", "bedroom", "back_patio"]),
+    );
+    expect(roomIds(houseConfig()).size).toBe(0);
+  });
+});
+
+describe("presenceSettings", () => {
+  it("fills in presence defaults for a config that has never been saved", () => {
+    const config = { ...houseConfig() };
+    delete (config as { presence?: unknown }).presence;
+    expect(presenceSettings(config).enabled).toBe(false);
+    expect(presenceSettings(config).threshold).toBe(0.6);
   });
 });

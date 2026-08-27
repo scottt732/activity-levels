@@ -1,6 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
-import { callService, getConfig, getProfile, getSimulationLog, getTimeseries, rebuildProfile, resetGroup, saveConfig, setLevel, setMuted, validateConfig } from "../src/api";
-import type { Config, HomeAssistant, ProfileState, SimulationLog, TimeseriesResponse } from "../src/types";
+import {
+  callService,
+  getConfig,
+  getPresenceState,
+  getProfile,
+  getSimulationLog,
+  getTimeseries,
+  getTopology,
+  getTopologyPaths,
+  rebuildProfile,
+  resetGroup,
+  saveConfig,
+  setLevel,
+  setMuted,
+  validateConfig,
+} from "../src/api";
+import type { Config, HomeAssistant, PresenceState, ProfileState, SimulationLog, TimeseriesResponse } from "../src/types";
 
 const config: Config = {
   version: 1,
@@ -95,6 +110,38 @@ describe("getSimulationLog", () => {
     const hass = hassWith(callWS);
     await getSimulationLog(hass, "house", 10);
     expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/simulation/log", group_id: "house", limit: 10 });
+  });
+});
+
+describe("getTopology / getTopologyPaths", () => {
+  it("asks for the topology and for paths", async () => {
+    const calls: { type: string }[] = [];
+    const hass = hassWith(async (msg) => {
+      calls.push(msg);
+      return msg.type === "activity_levels/topology"
+        ? { nodes: ["kitchen"], edges: [], exits: [] }
+        : { paths: [["kitchen", "hall"]] };
+    });
+    await getTopology(hass);
+    await expect(getTopologyPaths(hass, "kitchen", "hall")).resolves.toEqual([["kitchen", "hall"]]);
+    expect(calls[1]).toEqual({ type: "activity_levels/topology/paths", from: "kitchen", to: "hall" });
+  });
+});
+
+describe("getPresenceState", () => {
+  it("requests the presence state", async () => {
+    const presence: PresenceState = {
+      enabled: true,
+      devices: {},
+      occupants: {},
+      scanners: [],
+      unmapped: [],
+      disabled: [],
+    };
+    const callWS = vi.fn(async () => presence);
+    const hass = hassWith(callWS);
+    await expect(getPresenceState(hass)).resolves.toBe(presence);
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/presence/state" });
   });
 });
 

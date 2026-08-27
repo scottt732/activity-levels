@@ -34,6 +34,12 @@ export interface Stimulus extends EnvelopeOverrides {
   envelope: string | null;
 }
 
+/** One edge out of a group: a plain id is a two-way door; the object form is one-way. */
+export interface Adjacency { id: string; one_way: boolean }
+
+/** A group's own presence-channel tuning: the same overridable shape as a stimulus's envelope. */
+export interface PresenceOverrides extends EnvelopeOverrides { gain: number; envelope: string | null }
+
 export interface Group {
   id: string;
   name: string | null;
@@ -43,6 +49,12 @@ export interface Group {
   max_value: number | null;
   precision: number | null;
   gain: number;
+  /** Rooms this one can be walked to from. A plain id is symmetric; see {@link Adjacency}. */
+  adjacent: (string | Adjacency)[];
+  /** Whether presence can leave the house from here, to Away. */
+  exit: boolean;
+  /** This room's presence channel, tuned like any other voice. */
+  presence: PresenceOverrides;
   stimuli: Stimulus[];
   children: Group[];
 }
@@ -63,11 +75,29 @@ export interface Defaults {
   patterns?: Record<string, unknown> & { min_days?: number };
 }
 
+export interface PresenceDevice { device: string; name: string | null }
+
+/** The top-level `presence` block, with every field the backend fills in filled in. */
+export interface PresenceSettings {
+  enabled: boolean;
+  devices: PresenceDevice[];
+  envelope: string | null;
+  threshold: number;
+  stay: number;
+  escape: number;
+  scale: number;
+  floor: number;
+  stuck_after: number;
+  scanner_areas: Record<string, string>;
+}
+
 export interface Config {
   version: 1;
   defaults: Defaults;
   envelopes: EnvelopePreset[];
   groups: Group[];
+  /** Optional: a config written before this feature shipped has none. Read via `presenceSettings`. */
+  presence?: PresenceSettings;
 }
 
 export interface ValidationError { path: string; message: string }
@@ -142,6 +172,38 @@ export interface SimulationLog {
   entries: SimulationLogEntry[];
   active: Record<string, boolean>;
   blocked: Record<string, string | null>;
+}
+
+/** `activity_levels/topology`. `edges` is `[from, to, one_way]`. */
+export interface TopologyPayload { nodes: string[]; edges: [string, string, boolean][]; exits: string[] }
+
+/** One tracked device's room estimate, as `presence/state` reports it. */
+export interface PresenceOutputs {
+  t: number;
+  room: string;
+  confidence: number;
+  moving: boolean;
+  candidates: Record<string, number>;
+  path: string[];
+}
+
+/** One Bermuda scanner, as discovered from the device and entity registries. */
+export interface ScannerRow {
+  key: string;
+  device_id: string;
+  name: string;
+  area_id: string | null;
+  group_id: string | null;
+}
+
+/** `activity_levels/presence/state`. */
+export interface PresenceState {
+  enabled: boolean;
+  devices: Record<string, PresenceOutputs>;
+  occupants: Record<string, string[]>;
+  scanners: ScannerRow[];
+  unmapped: string[];
+  disabled: string[];
 }
 
 export interface HaDuration { days?: number; hours: number; minutes: number; seconds: number; milliseconds?: number }

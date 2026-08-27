@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { newGroup } from "../src/model";
 import { Draft, getAt, insertAt, moveAt, removeAt, setAt } from "../src/store";
 import type { Config } from "../src/types";
 
@@ -6,9 +7,7 @@ const base: Config = {
   version: 1,
   defaults: { envelope: "default", max_value: 5, precision: 1, unavailable: "hold", retrigger: "only_in_release", debounce: 0, safety_refresh: 60, min_wake_interval: 1 },
   envelopes: [{ id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null }],
-  groups: [{ id: "house", name: "House", area: null, mix: "sum", null_handling: "zero", max_value: null, precision: null, gain: 1, stimuli: [], children: [
-    { id: "kitchen", name: null, area: null, mix: "sum", null_handling: "zero", max_value: null, precision: null, gain: 1, stimuli: [], children: [] },
-  ] }],
+  groups: [{ ...newGroup("house"), name: "House", children: [newGroup("kitchen")] }],
 };
 
 describe("path ops", () => {

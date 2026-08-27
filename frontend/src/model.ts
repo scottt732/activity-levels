@@ -1,5 +1,5 @@
 import { getAt } from "./store";
-import type { Config, EnvelopeOverrides, EnvelopePreset, Group, Path, Stimulus } from "./types";
+import type { Adjacency, Config, EnvelopeOverrides, EnvelopePreset, Group, Path, PresenceOverrides, PresenceSettings, Stimulus } from "./types";
 
 export const newGroup = (id: string): Group => ({
   id,
@@ -10,8 +10,52 @@ export const newGroup = (id: string): Group => ({
   max_value: null,
   precision: null,
   gain: 1,
+  adjacent: [],
+  exit: false,
+  presence: newPresenceOverrides(),
   stimuli: [],
   children: [],
+});
+
+/** The key the live frame labels a room's presence voice with, in `LiveState.voices`. */
+export const PRESENCE_KEY = "presence";
+
+export const newPresenceOverrides = (): PresenceOverrides => ({
+  gain: 1,
+  envelope: null,
+  attack: null,
+  decay: null,
+  sustain: null,
+  release: null,
+  impulse: null,
+  retrigger: null,
+  unavailable: null,
+  debounce: null,
+});
+
+/** The id an adjacency entry names, whether it is a plain id or a one-way `{ id, one_way }`. */
+export const adjacencyId = (a: string | Adjacency): string => (typeof a === "string" ? a : a.id);
+
+/** Whether an adjacency entry is a one-way door. A plain id is always two-way. */
+export const isOneWay = (a: string | Adjacency): boolean => typeof a !== "string" && a.one_way;
+
+const PRESENCE_DEFAULTS: PresenceSettings = {
+  enabled: false,
+  devices: [],
+  envelope: null,
+  threshold: 0.6,
+  stay: 0.9,
+  escape: 0.001,
+  scale: 3,
+  floor: 0.05,
+  stuck_after: 60,
+  scanner_areas: {},
+};
+
+/** The presence block with every default filled in; a config that predates it reads as off. */
+export const presenceSettings = (config: Config): PresenceSettings => ({
+  ...PRESENCE_DEFAULTS,
+  ...(config.presence ?? {}),
 });
 
 export const newPreset = (id: string): EnvelopePreset => ({
@@ -64,6 +108,31 @@ export function allGroupIds(config: Config): Set<string> {
   };
   config.groups.forEach(walk);
   return ids;
+}
+
+/**
+ * Which groups are rooms, by the same rule the backend uses: a group that declares an
+ * edge, is named by somebody else's edge, or is a way out of the house. The panel needs
+ * the answer before the websocket has one - the group form has to know whether to offer
+ * a presence row while the config is still a draft.
+ */
+export function roomIds(config: Config): Set<string> {
+  const declared = new Set<string>();
+  const named = new Set<string>();
+  const exits = new Set<string>();
+  const known = allGroupIds(config);
+  const walk = (g: Group): void => {
+    for (const edge of g.adjacent ?? []) {
+      const other = adjacencyId(edge);
+      if (other === g.id || !known.has(other)) continue;
+      declared.add(g.id);
+      named.add(other);
+    }
+    if (g.exit) exits.add(g.id);
+    g.children.forEach(walk);
+  };
+  config.groups.forEach(walk);
+  return new Set([...declared, ...named, ...exits]);
 }
 
 export function slugify(text: string): string {

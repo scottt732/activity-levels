@@ -101,12 +101,20 @@ beforeEach(async () => {
 
 describe("al-group-editor schema", () => {
   it("offers no gain on a root group: it has no parent to scale into", () => {
-    expect(form().schema?.map((f) => f.name)).toEqual(["id", "name", "area", "mix"]);
+    expect(form().schema?.map((f) => f.name)).toEqual(["id", "name", "area", "mix", "adjacent", "exit"]);
   });
 
   it("offers gain on a child group", async () => {
     await show(["groups", 0, "children", 0]);
-    expect(form().schema?.map((f) => f.name)).toEqual(["id", "name", "area", "mix", "gain"]);
+    expect(form().schema?.map((f) => f.name)).toEqual([
+      "id",
+      "name",
+      "area",
+      "mix",
+      "gain",
+      "adjacent",
+      "exit",
+    ]);
     expect(form().data?.gain).toBe(1);
   });
 

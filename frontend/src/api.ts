@@ -1,4 +1,14 @@
-import type { Config, HomeAssistant, LiveState, ProfileState, SimulationLog, TimeseriesResponse, ValidationError } from "./types";
+import type {
+  Config,
+  HomeAssistant,
+  LiveState,
+  PresenceState,
+  ProfileState,
+  SimulationLog,
+  TimeseriesResponse,
+  TopologyPayload,
+  ValidationError,
+} from "./types";
 
 export interface ValidateResult {
   ok: boolean;
@@ -75,6 +85,16 @@ export const setMuted = (hass: HomeAssistant, group_id: string, muted: boolean):
 /** Drops every voice the group is holding, back to zero. */
 export const resetGroup = (hass: HomeAssistant, group_id: string): Promise<void> =>
   hass.callWS<Record<string, never>>({ type: "activity_levels/reset", group_id }).then(() => undefined);
+
+export const getTopology = (hass: HomeAssistant): Promise<TopologyPayload> =>
+  hass.callWS<TopologyPayload>({ type: "activity_levels/topology" });
+
+/** Every simple route between two rooms, shortest first. Empty when there is none. */
+export const getTopologyPaths = (hass: HomeAssistant, from: string, to: string): Promise<string[][]> =>
+  hass.callWS<{ paths: string[][] }>({ type: "activity_levels/topology/paths", from, to }).then((r) => r.paths);
+
+export const getPresenceState = (hass: HomeAssistant): Promise<PresenceState> =>
+  hass.callWS<PresenceState>({ type: "activity_levels/presence/state" });
 
 export const callService = (
   hass: HomeAssistant,
