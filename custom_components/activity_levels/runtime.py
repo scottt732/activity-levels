@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 
 from .coordinator import ActivityLevelsCoordinator
 from .patterns_coordinator import PatternsCoordinator
+from .presence_coordinator import PresenceCoordinator
 from .topology import Topology
 
 
@@ -18,7 +19,7 @@ class RuntimeData:
     coordinator: ActivityLevelsCoordinator
     patterns: PatternsCoordinator
     topology: Topology
-    presence: None = None  # Task 5 replaces the type with PresenceCoordinator | None
+    presence: PresenceCoordinator | None = None
 
 
 type ActivityLevelsConfigEntry = ConfigEntry[RuntimeData]

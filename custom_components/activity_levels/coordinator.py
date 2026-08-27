@@ -205,10 +205,13 @@ class ActivityLevelsCoordinator:
         """Open or close a room's presence gate.
 
         A note, not a level: the caller decides who counts as an occupant (a confidence
-        threshold, and never two note-ons for two people), and this only moves on the
-        0 <-> occupied crossings. A group with no presence voice -- a branch, or any
-        group at all while presence is off -- is a no-op rather than an error, so the
-        presence coordinator never has to know which groups are rooms.
+        threshold, and never two note-ons for two people), and this is idempotent, so
+        the caller says where everybody is on every evaluation rather than watching for
+        the 0 <-> occupied crossings itself. That is what lets a gate closed underneath
+        it -- by ``reset``, say -- come back on the next tick. A group with no presence
+        voice -- a branch, or any group at all while presence is off -- is a no-op
+        rather than an error, so the presence coordinator never has to know which groups
+        are rooms.
         """
         info = self.tree.groups.get(group_id)
         if info is None or info.presence is None:

@@ -56,6 +56,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_reset)
     websocket_api.async_register_command(hass, ws_topology)
     websocket_api.async_register_command(hass, ws_topology_paths)
+    websocket_api.async_register_command(hass, ws_presence_state)
 
 
 @websocket_api.require_admin
@@ -390,3 +391,29 @@ def ws_topology_paths(
     connection.send_result(
         msg["id"], {"paths": topology.paths(msg["from"], msg["to"], msg["max_hops"])}
     )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/presence/state"})
+@callback
+def ws_presence_state(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    presence = runtime.presence
+    if presence is None:
+        # opted out is an answer, not an error: the panel hides the tab and moves on
+        connection.send_result(
+            msg["id"],
+            {
+                "enabled": False,
+                "devices": {},
+                "occupants": {},
+                "scanners": [],
+                "unmapped": [],
+                "disabled": [],
+            },
+        )
+        return
+    connection.send_result(msg["id"], presence.payload())

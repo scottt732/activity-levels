@@ -14,6 +14,7 @@ from .const import (
     ATTR_GROUP_ID,
     ATTR_PEAK,
     ATTR_VALUE,
+    CONF_PRESENCE,
     DOMAIN,
     HUB_NAME,
     MANUFACTURER,
@@ -29,6 +30,7 @@ from .const import (
 from .coordinator import ActivityLevelsCoordinator
 from .panel import async_register_panel, async_unregister_panel
 from .patterns_coordinator import PatternsCoordinator
+from .presence_coordinator import PresenceCoordinator
 from .runtime import ActivityLevelsConfigEntry, RuntimeData
 from .schema import ConfigError, validate_config
 from .topology import build_topology
@@ -73,7 +75,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntr
     coordinator.patterns = patterns
     entry.async_on_unload(patterns.async_stop)
     await patterns.async_start()
-    entry.runtime_data = RuntimeData(coordinator=coordinator, patterns=patterns, topology=topology)
+    presence: PresenceCoordinator | None = None
+    if config[CONF_PRESENCE]["enabled"]:
+        presence = PresenceCoordinator(hass, entry, coordinator, topology, config)
+        entry.async_on_unload(presence.async_stop)
+        await presence.async_start()
+    entry.runtime_data = RuntimeData(
+        coordinator=coordinator, patterns=patterns, topology=topology, presence=presence
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     _register_services(hass)

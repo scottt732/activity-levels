@@ -1,8 +1,17 @@
-"""Sample configurations."""
+"""Sample configurations, and a fake Bermuda install to discover."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
+
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+PHONE_ADDRESS = "aa:bb:cc:dd:ee:ff"
 
 
 def house_config() -> dict[str, Any]:
@@ -73,7 +82,7 @@ def rooms_config() -> dict[str, Any]:
                             {
                                 "id": "dining_room",
                                 "name": "Dining Room",
-                                "area": "dining_area",
+                                "area": "dining_room_area",
                                 "adjacent": ["hall"],
                                 "stimuli": [{"entity": "binary_sensor.dining_motion"}],
                             },
@@ -93,7 +102,7 @@ def rooms_config() -> dict[str, Any]:
                             {
                                 "id": "back_patio",
                                 "name": "Back Patio",
-                                "area": "patio_area",
+                                "area": "back_patio_area",
                                 "exit": True,
                                 "stimuli": [{"entity": "binary_sensor.patio_motion"}],
                             },
@@ -117,3 +126,102 @@ def presence_config() -> dict[str, Any]:
     }
     config["groups"][0]["children"][0]["children"][0]["presence"] = {"gain": 2.0}
     return config
+
+
+@dataclass
+class FakeBermuda:
+    """What a fake Bermuda install looks like from the registries.
+
+    Bermuda gives each tracked device one ``device_tracker`` plus a ``sensor`` per
+    scanner, keyed ``<device address>_<scanner address>_distance``, and registers each
+    scanner as a device of its own carrying its Bluetooth address as an identifier. That
+    is the whole contract we consume, so it is the whole thing this fake reproduces.
+    """
+
+    entry: MockConfigEntry
+    tracker: str  # device_tracker entity id
+    sensors: dict[str, str]  # room id -> distance sensor entity id
+    scanner_devices: dict[str, str]  # room id -> device registry id
+    areas: dict[str, str]  # room id -> area id
+
+
+def fake_bermuda(
+    hass: HomeAssistant,
+    rooms: tuple[str, ...] = ("kitchen", "dining_room", "hall", "bedroom", "back_patio"),
+    *,
+    disabled: tuple[str, ...] = (),
+    unmapped: tuple[str, ...] = (),
+) -> FakeBermuda:
+    """Register a Bermuda entry with one scanner per room and one tracked phone.
+
+    ``disabled`` names rooms whose distance sensor is registered but switched off (which
+    is how Bermuda ships them). ``unmapped`` names rooms whose scanner device is given no
+    area at all, so nothing can place it.
+    """
+    # The presence side keys off the loaded component, not off any Bermuda import.
+    hass.config.components.add("bermuda")
+    entry = MockConfigEntry(domain="bermuda", data={}, title="Bermuda BLE Trilateration")
+    entry.add_to_hass(hass)
+
+    areas = ar.async_get(hass)
+    devices = dr.async_get(hass)
+    entities = er.async_get(hass)
+
+    phone = devices.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={("bermuda", PHONE_ADDRESS)},
+        name="Scott's Phone",
+    )
+    tracker = entities.async_get_or_create(
+        "device_tracker",
+        "bermuda",
+        f"{PHONE_ADDRESS}_tracker",
+        config_entry=entry,
+        device_id=phone.id,
+        original_name="Scott's Phone",
+        suggested_object_id="scotts_phone",
+    )
+    # a device-level entity that is not a per-scanner reading; discovery must ignore it
+    entities.async_get_or_create(
+        "sensor",
+        "bermuda",
+        f"{PHONE_ADDRESS}_area",
+        config_entry=entry,
+        device_id=phone.id,
+        suggested_object_id="scotts_phone_area",
+    )
+
+    sensors: dict[str, str] = {}
+    scanner_devices: dict[str, str] = {}
+    room_areas: dict[str, str] = {}
+    for index, room in enumerate(rooms):
+        address = f"11:22:33:44:55:{index:02d}"
+        area = areas.async_get_or_create(f"{room}_area")
+        room_areas[room] = area.id
+        scanner = devices.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={("bermuda", address)},
+            name=f"{room} scanner",
+        )
+        if room not in unmapped:
+            devices.async_update_device(scanner.id, area_id=area.id)
+        scanner_devices[room] = scanner.id
+        sensor = entities.async_get_or_create(
+            "sensor",
+            "bermuda",
+            f"{PHONE_ADDRESS}_{address}_distance",
+            config_entry=entry,
+            device_id=phone.id,
+            original_device_class="distance",
+            suggested_object_id=f"scotts_phone_distance_to_{room}",
+            disabled_by=er.RegistryEntryDisabler.INTEGRATION if room in disabled else None,
+        )
+        sensors[room] = sensor.entity_id
+
+    return FakeBermuda(
+        entry=entry,
+        tracker=tracker.entity_id,
+        sensors=sensors,
+        scanner_devices=scanner_devices,
+        areas=room_areas,
+    )

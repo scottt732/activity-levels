@@ -67,5 +67,27 @@
         "group_id": { "name": "Group", "description": "The group id to simulate." }
       }
     }
+  },
+  "issues": {
+    "bermuda_missing": {
+      "title": "Bermuda is not installed",
+      "description": "Activity Levels has presence tracking switched on, but the Bermuda BLE Trilateration integration is not installed, so there is nothing to estimate rooms from. Install Bermuda, or turn presence off in the Presence tab of the Activity Levels panel."
+    },
+    "not_a_bermuda_device": {
+      "title": "Tracked device is not a Bermuda device_tracker",
+      "description": "These tracked devices are not provided by Bermuda and are being ignored: {entities}. Pick a device_tracker that Bermuda created, in the Presence tab of the Activity Levels panel."
+    },
+    "disabled_distance_sensors": {
+      "title": "Bermuda distance sensors are disabled",
+      "description": "Bermuda ships its per-scanner distance sensors disabled, and these are still off: {entities}. Enable them under Settings > Devices & services > Bermuda > the tracked device, then reload Activity Levels."
+    },
+    "unmapped_scanners": {
+      "title": "Some Bermuda scanners are in no room",
+      "description": "These scanners are not in an area that any room group claims, so their readings are ignored: {scanners}. Give the scanner device an area that matches a room's area, or map it directly with presence.scanner_areas."
+    },
+    "transition_infeasible": {
+      "title": "Presence settings cannot make a transition matrix",
+      "description": "{detail} Presence stays off until this is fixed in the Presence tab of the Activity Levels panel."
+    }
   }
 }
