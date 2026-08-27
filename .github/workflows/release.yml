@@ -1,0 +1,43 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  hacs-zip:
+    name: attach activity_levels.zip
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Check the version against the tag
+        run: |
+          expected="${TAG#v}"
+          actual="$(jq -r '.version' custom_components/activity_levels/manifest.json)"
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::tag ${TAG} expects manifest version ${expected}, found ${actual}"
+            exit 1
+          fi
+          python3 scripts/check_version.py
+
+      - name: Build activity_levels.zip
+        run: |
+          cd custom_components/activity_levels
+          zip -r -q -X "${GITHUB_WORKSPACE}/activity_levels.zip" . \
+            -x '*__pycache__*' -x '*.pyc'
+          unzip -l "${GITHUB_WORKSPACE}/activity_levels.zip" | head -20
+
+      - name: Attach it to the release
+        run: gh release upload "$TAG" activity_levels.zip --clobber
