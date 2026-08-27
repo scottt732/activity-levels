@@ -9,3 +9,9 @@ node_modules/
 frontend/dist/
 
 .superpowers/
+
+.DS_Store
+coverage.xml
+.coverage
+.coverage.*
+frontend/coverage/

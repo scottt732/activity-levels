@@ -1,0 +1,47 @@
+# https://docs.codecov.com/docs/codecovyml-reference
+codecov:
+  require_ci_to_pass: false
+
+comment: false
+
+coverage:
+  precision: 1
+  round: down
+  range: "60...90"
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+      python:
+        target: auto
+        threshold: 1%
+        flags:
+          - python
+      frontend:
+        target: auto
+        threshold: 1%
+        flags:
+          - frontend
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+
+flags:
+  python:
+    paths:
+      - custom_components/activity_levels/
+    carryforward: true
+  frontend:
+    paths:
+      - frontend/src/
+    carryforward: true
+
+ignore:
+  - "custom_components/activity_levels/frontend/**"
+  - "docs/**"
+  - "examples/**"
+  - "scripts/**"
+  - "tests/**"
+  - "frontend/test/**"

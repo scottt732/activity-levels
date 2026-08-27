@@ -15,5 +15,13 @@ export default defineConfig({
     rollupOptions: { output: { inlineDynamicImports: true } },
   },
   server: { port: 5173, cors: true, strictPort: true },
-  test: { environment: "jsdom", include: ["test/**/*.test.ts"] },
+  test: {
+    environment: "jsdom",
+    include: ["test/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      include: ["src/**"],
+    },
+  },
 });
