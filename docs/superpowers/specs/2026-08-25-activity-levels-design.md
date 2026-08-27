@@ -49,7 +49,7 @@ defaults:                     # bottom of the resolution chain; all optional
   max_value: 5.0
   precision: 1                # display decimals
   unavailable: hold           # hold | note_off
-  retrigger: only_in_release  # only_in_release | always
+  retrigger: stack  # stack | only_in_release | always
   debounce: 0s
   safety_refresh: 60s         # periodic recompute as a self-heal
 
@@ -116,26 +116,50 @@ Pure Python, no HA imports, `mypy --strict`, clock injected as a callable return
 State: `phase ∈ {idle, attack, decay, sustain, release}`, `phase_start: (t, value)`,
 `gate: bool`, `last_note_on: float | None`.
 
+A voice also carries a fixed `ceiling`: the effective `max_value` of the group that owns
+it (the node's own override, else `defaults.max_value`), wired in by `build_tree` for
+stimulus voices and the synthetic trigger voice alike. It is the voice's hard upper
+bound — a stack never piles up height the group's limiter would only throw away — and it
+is the full scale the release slope is referenced to. A standalone voice built without
+one has `ceiling = ∞`, and then `gain` stands in as full scale. `ceiling` must be `∞` or
+finite and `>= gain`.
+
 Every phase is a linear segment with a known start value, target value, and duration:
 
 | phase | from | to | duration |
 |---|---|---|---|
-| attack | current value | `gain` | `attack` |
-| decay | `gain` | `gain × sustain` | `decay` |
+| attack | current value | `gain`, or under `stack` `min(current + gain, ceiling)` | `attack` |
+| decay | `peak` (the value the attack reached) | `peak × sustain` | `decay` |
 | sustain | held | held | ∞ (while gated) |
-| release | current value | 0 | `release` scaled by `current / gain` so the slope is constant regardless of where release starts |
+| release | current value | 0 | `release` scaled by `current / scale`, where `scale` is `ceiling` (or `gain` when unbounded) |
 | idle | 0 | 0 | ∞ |
 
-Zero-duration segments collapse instantly (attack `0s` jumps to `gain`; `sustain = 1.0`
-makes decay a no-op).
+Zero-duration segments collapse instantly (attack `0s` jumps to its target; `sustain =
+1.0` makes decay a no-op).
+
+`release` therefore means "time to fall from full scale to zero", and every level below
+full scale falls at that same slope: with `max_value: 5` and `release: 2h`, a voice at
+5.0 reaches zero in 2h and a voice at 1.0 in 24 minutes. The ramp ends when it hits 0.
+
+Decay is relative to the peak the attack actually reached rather than to `gain`. For an
+unstacked note that peak *is* `gain`, so the other two retrigger modes are unchanged; a
+note stacked to 3.0 with `sustain 0.5` settles at 1.5, not 0.5.
 
 Operations (all pure functions of `(state, t)` returning new state):
 
 - `value_at(t)`: interpolate along the current segment; if `t` is past the segment end,
   roll into the next phase (attack→decay→sustain; release→idle) and recurse. Idempotent.
 - `note_on(t)`: ignored if `t - last_note_on < debounce`. If `gate` and
-  `retrigger == only_in_release` → no-op. Otherwise enter `attack` from `value_at(t)`
-  toward `gain`, set `gate`, record `last_note_on`. If `impulse`, then apply `note_off(t)`.
+  `retrigger == only_in_release` → no-op. Otherwise enter `attack` from `value_at(t)`,
+  set `gate`, record `last_note_on`. The attack target depends on the mode:
+  - `stack` (the default): `min(value_at(t) + gain, ceiling)` — each trigger adds its own
+    gain on top of whatever is sounding, gated or releasing alike, which is the legacy
+    additive behaviour. From `idle` the current value is 0, so the target is plain `gain`
+    and the mode is indistinguishable from the other two.
+  - `only_in_release` / `always`: `gain`, exactly as before.
+
+  If `impulse`, the voice enters `release` directly instead, without a gate, from `gain`
+  — or under `stack` from `min(value_at(t) + gain, ceiling)`.
 - `note_off(t)`: clear `gate`; enter `release` from `value_at(t)` toward 0.
 - `unavailable(t)`: `hold` → no-op; `note_off` → `note_off(t)`.
 - `next_boundary(t) -> float | None`: time of the next phase transition; `None` in
@@ -144,7 +168,10 @@ Operations (all pure functions of `(state, t)` returning new state):
 
 Retrigger during release starts the attack from the *current* value. There is no separate
 stored peak, which removes the class of bug the C# version had (a stale peak reasserting
-itself after a retrigger).
+itself after a retrigger); under `stack` the target is derived from the segment's own
+start value, so a restored snapshot needs no extra field either. `restore()` clamps the
+stored value to `ceiling`, not to `gain`, since a stacked voice legitimately sits above
+its own gain.
 
 ### 4.2 Group (mixer)
 
@@ -320,7 +347,7 @@ time.
 Tests
 
 1. Engine (pytest + `FakeClock`): every phase transition; retrigger in each phase under
-   both `retrigger` modes; impulse; unavailable under both modes; debounce; mixer
+   all three `retrigger` modes; stacking up to the ceiling; impulse; unavailable under both modes; debounce; mixer
    functions incl. nested gains and limiter; `next_boundary`; snapshot/restore
    round-trip. `hypothesis` properties: value continuous across boundaries; value in
    `[0, gain]`; `next_boundary` never in the past.

@@ -11,8 +11,12 @@ whole house) into a single "how much is going on here" number per area.
 Each configured stimulus is a **voice**: an envelope with attack, decay, sustain, and
 release stages. When the source entity enters its configured `to` state, that's
 note-on — the envelope attacks up to its peak (`gain`), decays to its sustain level, and
-holds there. When the entity leaves that state, that's note-off — the envelope releases
-back toward zero over its `release` time. A group **mixes** the current values of its
+holds there. By default a second note-on **stacks**: it adds another `gain` on top of
+what is already sounding, up to the group's limiter, so a busy room climbs. When the
+entity leaves that state, that's note-off — the envelope releases back toward zero at a
+fixed slope, `release` being the time to fall the whole way from the group's limiter, so
+a level a fifth of the way up empties in a fifth of that time. A group **mixes** the
+current values of its
 child voices and child groups using `sum`, `max`, or `mean`, then applies a limiter
 (`max_value`) so the group's own activity level stays in a bounded range. Groups can
 nest, so a `living_room` group rolls up into a `house` group, and the same mixed value
@@ -265,7 +269,10 @@ defaults:
   max_value: 5.0             # limiter for groups that don't set their own
   precision: 1               # display decimals
   unavailable: hold          # hold | note_off — what an entity going unavailable does
-  retrigger: only_in_release # only_in_release | always
+  retrigger: stack           # stack | only_in_release | always — what a note-on does to a
+                             # note that is already sounding: stack adds another gain on
+                             # top (up to the group limiter), only_in_release restarts
+                             # just a fading note, always restarts even a held one
   debounce: 0s               # minimum time between note-ons per stimulus
   safety_refresh: 60s        # periodic recompute as a self-heal
   min_wake_interval: 1s      # floor for the scheduler's timer delay
@@ -284,7 +291,8 @@ envelopes:
     attack: 0s
     decay: 0s
     sustain: 1.0             # fraction of peak held while the note is on
-    release: 30m             # time to fall from peak to zero
+    release: 30m             # time to fall from full scale (the group's max_value) to
+                             # zero; lower levels fall faster, at that same slope
     impulse: false           # true = note-off immediately (momentary sensors)
 groups:
   - id: house                # ^[a-z][a-z0-9_]*$, unique; entity ids derive from it

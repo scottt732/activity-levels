@@ -6,13 +6,17 @@ defaults:
   max_value: 5.0
   precision: 1
   unavailable: hold
-  retrigger: only_in_release
+  # stack is the legacy additive behaviour: every trigger adds another `gain` on top
+  # of the level already sounding, clamped at the group's max_value.
+  retrigger: stack
   debounce: 0s
   safety_refresh: 60s
   min_wake_interval: 1s
 
 envelopes:
-  - id: default          # 30 minutes to release from peak to zero
+  # `release` is the time to fall from full scale (max_value 5.0) to zero, so every
+  # level below it empties proportionally faster at that same slope.
+  - id: default          # 30 minutes to fall from full scale to zero
     release: 30m
   - id: fifteen_minutes
     release: 15m
