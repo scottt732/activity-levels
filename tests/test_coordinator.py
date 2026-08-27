@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
@@ -303,6 +304,45 @@ async def test_set_level_on_a_max_group_cannot_undercut_a_louder_child(
     assert coordinator.set_level("house", 4.0) == pytest.approx(4.0)
     # the living room is still at 2.0 and MAX keeps it; the caller is told what happened
     assert coordinator.set_level("house", 1.0) == pytest.approx(2.0)
+
+
+def mean_config(null_handling: str) -> dict[str, Any]:
+    """One MEAN group with a single stimulus, so an override has to carry the average."""
+    return {
+        "version": 1,
+        "defaults": {"envelope": "default", "min_wake_interval": 1},
+        "envelopes": [{"id": "default", "release": "30m"}],
+        "groups": [
+            {
+                "id": "room",
+                "name": "Room",
+                "mix": "mean",
+                "null_handling": null_handling,
+                "max_value": 5.0,
+                "stimuli": [{"entity": "binary_sensor.living_motion", "gain": 2.0}],
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize("null_handling", ["zero", "ignore"])
+async def test_set_level_reaches_the_limiter_on_a_mean_group(
+    hass: HomeAssistant, null_handling: str
+) -> None:
+    hass.states.async_set("binary_sensor.living_motion", "off")
+    coord = ActivityLevelsCoordinator(
+        hass, "entry_mean", build_tree(validate_config(mean_config(null_handling)))
+    )
+    await coord.async_start()
+    try:
+        hass.states.async_set("binary_sensor.living_motion", "on")
+        await hass.async_block_till_done()
+        # averaging the stimulus at 2.0 with the trigger, the trigger has to reach 8.0
+        # for the group to read its ceiling: a peak clamped at 5.0 tops out at 3.5
+        assert coord.set_level("room", 5.0) == pytest.approx(5.0)
+        assert coord.data["room"].value == pytest.approx(5.0)
+    finally:
+        await coord.async_stop()
 
 
 async def test_set_level_rejects_negative_or_non_finite_values(

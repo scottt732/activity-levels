@@ -1,3 +1,5 @@
+from math import inf
+
 import pytest
 
 from custom_components.activity_levels.engine import Mix, Phase, Retrigger
@@ -63,8 +65,12 @@ def test_voices_inherit_the_owning_group_max_value_as_their_ceiling() -> None:
     kitchen = tree.voices_by_entity["binary_sensor.kitchen_motion"][0].voice
     assert living.ceiling == 4.0  # inherited from defaults
     assert kitchen.ceiling == 7.0  # node override
-    assert tree.groups["living_room"].trigger.ceiling == 4.0
-    assert tree.groups["kitchen"].trigger.ceiling == 7.0
+    # The trigger voice is not one more stimulus: an override has to be able to size it
+    # to whatever the mix needs, which for MEAN is a multiple of the limiter. Only its
+    # release stays referenced to max_value.
+    assert tree.groups["living_room"].trigger.ceiling == inf
+    assert tree.groups["living_room"].trigger.scale == 4.0
+    assert tree.groups["kitchen"].trigger.scale == 7.0
 
 
 def test_voice_ceilings_default_to_the_default_max_value() -> None:
@@ -74,4 +80,17 @@ def test_voice_ceilings_default_to_the_default_max_value() -> None:
     for ref in tree.all_voice_refs():
         assert ref.voice.ceiling == default_max
     for info in tree.group_order():
-        assert info.trigger.ceiling == default_max
+        assert info.trigger.ceiling == inf
+        assert info.trigger.scale == default_max
+
+
+def test_the_trigger_voice_still_releases_from_the_limiter_in_one_release() -> None:
+    cfg = house_config()
+    cfg["envelopes"][0]["release"] = "2h"
+    tree = build_tree(validate_config(cfg))
+    trig = tree.groups["kitchen"].trigger
+    trig.gain = 5.0  # the limiter, the highest an override can leave the group at
+    trig.note_on(0.0)
+    assert trig.value_at(3600.0) == pytest.approx(2.5)
+    assert trig.value_at(7200.0) == 0.0
+    assert trig.is_active(7200.0) is False

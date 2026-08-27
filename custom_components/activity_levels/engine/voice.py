@@ -21,6 +21,11 @@ class Voice:
     gain: float
     envelope: Envelope
     ceiling: float = inf
+    #: Full scale for the release slope, when it is not the ceiling. A voice the mix may
+    #: have to size past the limiter -- a group's trigger -- is uncapped but still has to
+    #: fall at the slope its group's limiter defines, or its release would stretch with
+    #: the peak.
+    release_scale: float | None = None
     phase: Phase = Phase.IDLE
     phase_start_t: float = 0.0
     phase_start_value: float = 0.0
@@ -34,14 +39,22 @@ class Voice:
             raise ValueError("ceiling must be a finite number or inf")
         if self.ceiling < self.gain:
             raise ValueError("ceiling must be >= gain")
+        if self.release_scale is not None and (
+            not isfinite(self.release_scale) or self.release_scale <= 0
+        ):
+            raise ValueError("release_scale must be a finite number > 0")
 
     @property
     def scale(self) -> float:
         """Full scale: the group limiter this voice feeds, or its own gain if unbounded.
 
         The release slope is referenced to this, so ``release`` reads as "time to fall
-        from full scale to zero" and every level below it falls at that same slope.
+        from full scale to zero" and every level below it falls at that same slope. An
+        uncapped voice says what its full scale is with ``release_scale``; without one
+        there is nothing to reference but its own gain.
         """
+        if self.release_scale is not None:
+            return self.release_scale
         return self.ceiling if isfinite(self.ceiling) else self.gain
 
     # -- segment geometry -------------------------------------------------

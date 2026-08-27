@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from math import inf
 from typing import Any
 
 from .const import TRIGGER_KEY
@@ -90,14 +91,23 @@ def resolve_envelope(
 
 
 def _trigger_voice(
-    defaults: Mapping[str, Any], presets: Mapping[str, Mapping[str, Any]], ceiling: float
+    defaults: Mapping[str, Any], presets: Mapping[str, Mapping[str, Any]], max_value: float
 ) -> Voice:
+    """The synthetic voice a level override and the ``trigger`` service play.
+
+    Unlike a stimulus it is not capped at the group's limiter: what an override has to
+    size it to is whatever the *mix* needs, and a MEAN of N channels needs one of them at
+    N times the limiter to read the limiter. The coordinator clamps it to what the mix
+    can use; here only the release stays referenced to ``max_value``, so an override
+    cools down over one release however the mix arrived at it.
+    """
     base = resolve_envelope(defaults, presets, {})
     return Voice(
         id=TRIGGER_KEY,
         gain=1.0,
         envelope=Envelope(release=base.release, impulse=True),
-        ceiling=ceiling,
+        ceiling=inf,
+        release_scale=max_value,
     )
 
 

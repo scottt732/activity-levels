@@ -173,7 +173,7 @@ class ActivityLevelsCoordinator:
         """Override a group's level: size its trigger voice so the mix reads ``value``.
 
         Returns what the group actually ends up showing, which need not be what was
-        asked for: the peak is clamped to the group's limiter, and a MAX group cannot be
+        asked for: the peak is clamped to what the mix can use, and a MAX group cannot be
         pulled below its loudest channel. The level cools down from there like any other
         impulse.
         """
@@ -181,7 +181,10 @@ class ActivityLevelsCoordinator:
             raise ValueError("value must be a non-negative finite number")
         info = self.tree.groups[group_id]
         t = self.now()
-        peak = min(info.group.contribution_for(t, TRIGGER_KEY, value), info.max_value)
+        # The bound is the mix's own, not the limiter: a MEAN group only reads its ceiling
+        # when one channel carries the whole average, which is a multiple of that ceiling.
+        wanted = info.group.contribution_for(t, TRIGGER_KEY, value)
+        peak = min(max(wanted, 0.0), info.group.max_contribution(t))
         # From idle every time: note_on stacks onto whatever the trigger is still
         # sounding, and an override is an absolute level, not one more impulse on top.
         info.trigger.reset()

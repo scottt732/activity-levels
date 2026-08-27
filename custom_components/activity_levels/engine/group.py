@@ -106,6 +106,13 @@ class Group:
     def contributions_at(self, t: float) -> dict[str, float]:
         return {ch.label: ch.value_at(t) for ch in self.channels}
 
+    def _counted(self, values: list[float]) -> list[float]:
+        """The values a MEAN actually divides by: all of them, or -- under
+        ``null_handling: ignore`` -- only the ones above zero."""
+        if self.null_handling is NullHandling.IGNORE:
+            return [v for v in values if v > 0.0]
+        return values
+
     def _mix(self, values: list[float]) -> float:
         if not values:
             return 0.0
@@ -113,10 +120,8 @@ class Group:
             return sum(values)
         if self.mix is Mix.MAX:
             return max(values)
-        if self.null_handling is NullHandling.IGNORE:
-            active = [v for v in values if v > 0.0]
-            return sum(active) / len(active) if active else 0.0
-        return sum(values) / len(values)
+        counted = self._counted(values)
+        return sum(counted) / len(counted) if counted else 0.0
 
     def _limit(self, raw: float) -> float:
         return min(max(raw, 0.0), self.max_value)
@@ -162,6 +167,23 @@ class Group:
             active = [v for v in others if v > 0.0]
             return target * (len(active) + 1) - sum(active)
         return target * (len(others) + 1) - sum(others)
+
+    def max_contribution(self, t: float) -> float:
+        """The most one channel can be worth sizing to: the peak that puts this group at
+        its limiter and no higher.
+
+        SUM and MAX read a channel at face value, so the limiter is the whole story. MEAN
+        divides, and a channel asked to carry the whole average has to reach the limiter
+        *times the divisor* to get there -- clamping it at ``max_value`` is why a MEAN
+        group could never be pushed to full scale. The divisor is the one :meth:`_mix`
+        uses: the live channels, minus (under ``ignore``) the ones sitting at zero, plus
+        the channel being sized, which is about to be one of the counted ones.
+        """
+        if self.mix is not Mix.MEAN:
+            return self.max_value
+        live = [ch.value_at(t) for ch in self._live()]
+        divisor = max(1, min(len(self._counted(live)) + 1, len(live)))
+        return self.max_value * divisor
 
     def display_value_at(self, t: float) -> float:
         return round(self.value_at(t), self.precision)

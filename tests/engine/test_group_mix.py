@@ -168,13 +168,51 @@ def test_value_at_excluding_everything_is_zero() -> None:
     assert g.value_at_excluding(0.0, "trigger") == 0.0
 
 
+def test_max_contribution_is_what_one_channel_can_be_worth_to_the_mix() -> None:
+    a, trigger = voice("a", 2.0), voice("trigger", 1.0)
+    channels = [Channel(a), Channel(trigger, key="trigger")]
+    a.note_on(0.0)
+    assert Group(id="sum", channels=channels, max_value=5.0).max_contribution(0.0) == 5.0
+    biggest = Group(id="max", channels=channels, mix=Mix.MAX, max_value=5.0)
+    assert biggest.max_contribution(0.0) == 5.0
+    # MEAN divides, so one channel carrying the whole average is worth the divisor over
+    average = Group(id="mean", channels=channels, mix=Mix.MEAN, max_value=5.0)
+    assert average.max_contribution(0.0) == pytest.approx(10.0)
+
+
+def test_max_contribution_counts_the_channels_the_mean_actually_divides_by() -> None:
+    a, b, trigger = voice("a", 2.0), voice("b", 2.0), voice("trigger", 1.0)
+    a.note_on(0.0)  # b stays idle: a null, counted under ZERO and dropped under IGNORE
+    channels = [Channel(a), Channel(b), Channel(trigger, key="trigger")]
+    zero = Group(id="zero", channels=channels, mix=Mix.MEAN, max_value=5.0)
+    assert zero.max_contribution(0.0) == pytest.approx(15.0)  # all three divide
+    ignore = Group(
+        id="ignore",
+        channels=channels,
+        mix=Mix.MEAN,
+        null_handling=NullHandling.IGNORE,
+        max_value=5.0,
+    )
+    # only `a` and the channel being sized are above zero, so only those two divide
+    assert ignore.max_contribution(0.0) == pytest.approx(10.0)
+    silenced = Group(
+        id="muted",
+        channels=[Channel(a), Channel(b, muted=True), Channel(trigger, key="trigger")],
+        mix=Mix.MEAN,
+        max_value=5.0,
+    )
+    assert silenced.max_contribution(0.0) == pytest.approx(10.0)  # the muted one is gone
+
+
 def sized(g: Group, trigger: Voice, t: float, target: float) -> float:
     """Fire the trigger at the contribution the group asks for, then read the group.
 
     Deliberately checks the round trip rather than the arithmetic: the contract is that
-    the mix ends up at the target, whatever ``_mix`` happens to do to get there.
+    the mix ends up at the target, whatever ``_mix`` happens to do to get there. The peak
+    is clamped exactly the way the coordinator clamps it, so a clamp too tight for the
+    mix to reach its target shows up here rather than only in the integration.
     """
-    peak = g.contribution_for(t, "trigger", target)
+    peak = min(max(g.contribution_for(t, "trigger", target), 0.0), g.max_contribution(t))
     trigger.reset()
     if peak > 0.0:
         trigger.gain = peak
@@ -192,6 +230,23 @@ def test_contribution_for_hits_the_target_in_every_mix() -> None:
     assert sized(biggest, trigger, 0.0, 3.5) == pytest.approx(3.5)
     average = Group(id="mean", channels=channels, mix=Mix.MEAN, max_value=10.0)
     assert sized(average, trigger, 0.0, 3.5) == pytest.approx(3.5)
+
+
+def test_a_mean_group_can_be_sized_all_the_way_to_its_limiter() -> None:
+    a, trigger = voice("a", 2.0), voice("trigger", 1.0)
+    channels = [Channel(a), Channel(trigger, key="trigger")]
+    a.note_on(0.0)
+    for handling in NullHandling:
+        # two channels averaging 5.0 needs a peak of 8.0 from this one: a clamp at the
+        # limiter would stop it at 5.0 and the group would never read more than 3.5
+        average = Group(
+            id="mean",
+            channels=channels,
+            mix=Mix.MEAN,
+            null_handling=handling,
+            max_value=5.0,
+        )
+        assert sized(average, trigger, 0.0, 5.0) == pytest.approx(5.0)
 
 
 def test_contribution_for_counts_the_mean_denominator_the_way_the_mix_does() -> None:
