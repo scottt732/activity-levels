@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.2.0](https://github.com/scottt732/activity-levels/compare/v0.1.0...v0.2.0) (2026-08-27)
+
+
+### Added
+
+* **engine:** give every room a visible presence channel driven by set_occupied ([f1ea556](https://github.com/scottt732/activity-levels/commit/f1ea5568920e1b80050d2e91775166244feb4200))
+* **frontend:** adjacency and exit fields, presence types and the presence channel row ([f9d4c16](https://github.com/scottt732/activity-levels/commit/f9d4c16f541b48b78acb905d46405b13bec1a2dd))
+* **frontend:** Presence tab with a room map, device rows, scanner table and settings ([91e6a6a](https://github.com/scottt732/activity-levels/commit/91e6a6aa1fd6452a1c468e018fbb5e4cf06abe38))
+* **presence:** Bermuda-backed presence coordinator with repair issues and occupancy ([f7a3cc6](https://github.com/scottt732/activity-levels/commit/f7a3cc6d11350ba5b58bd21d27178c0ca87815df))
+* **presence:** hidden Markov room estimator with a stuck detector and bounded Viterbi ([ba7f629](https://github.com/scottt732/activity-levels/commit/ba7f6291a7dfe385f5bb9dccef8d5c5ef02115e7))
+* **presence:** room, moving and occupants entities ([a1be4c1](https://github.com/scottt732/activity-levels/commit/a1be4c127382e6c5343b0d24bf6a35de1b5bb019))
+* **schema:** room adjacency, exits and the opt-in presence block ([13967d2](https://github.com/scottt732/activity-levels/commit/13967d294a7291dafe24de4694c91dc3cee32cc7))
+* **topology:** room graph with one-way edges, bounded paths and a transition matrix ([54e1972](https://github.com/scottt732/activity-levels/commit/54e1972d94dbac53bcb86539f878ad5f06153596))
+
+
+### Fixed
+
+* **frontend:** keep stale adjacency for validation, add adjacency to the controls row, badge one-way edges ([7694455](https://github.com/scottt732/activity-levels/commit/76944551a9a1cfbcff38026b2072c1524b4b2fc5))
+* **frontend:** keep the tab list valid on undo, draw one-way arrows on node borders, expose map nodes to AT ([c8a762c](https://github.com/scottt732/activity-levels/commit/c8a762c96c4fd7aad5f053e2befd5de81f569046))
+* **panel:** bound the presence sliders to what the schema accepts ([581697b](https://github.com/scottt732/activity-levels/commit/581697b77769df330f51b19d62c5ec26db89d5b3))
+* **presence:** detect Bermuda through its config entry and clear stale repair issues ([5dccdf9](https://github.com/scottt732/activity-levels/commit/5dccdf90cb79bc706107f64dc6282e9df01092e1))
+* **presence:** freeze the stuck threshold for the duration of a low run ([fb32c50](https://github.com/scottt732/activity-levels/commit/fb32c50cd37bb6f71b571effc4837c9a37349e04))
+* **presence:** keep the pure packages free of homeassistant, refuse a malformed belief store, release gates when every tracker vanishes ([28a962e](https://github.com/scottt732/activity-levels/commit/28a962eaa19bc539cf88c2669c3ec99367634030))
+
+
+### Documentation
+
+* AGENTS.md guides, with CLAUDE.md symlinked to each ([0bf3219](https://github.com/scottt732/activity-levels/commit/0bf32193bee6b5dffa62ca420b7a7585ee739593))
+* design spec for room topology and Bermuda-constrained presence ([99cf438](https://github.com/scottt732/activity-levels/commit/99cf4382fcb78834ab1dc11b7d1c3c99836e281c))
+* implementation plan for topology and presence ([ddce588](https://github.com/scottt732/activity-levels/commit/ddce5881926d5d26abe916bb64d847a9725a16b9))
+* plan 7 topology and presence ledger ([d372bc0](https://github.com/scottt732/activity-levels/commit/d372bc02deaa90d8d9e6f7a94189e1d4004fecb4))
+* room adjacency and presence, with adjacency for the example house ([28d6c2f](https://github.com/scottt732/activity-levels/commit/28d6c2f9f272a2860414dc2f38f68a79b5c1127e))
+
 ## 0.1.0 (2026-08-27)
 
 
