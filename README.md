@@ -101,7 +101,11 @@ picking a strip here also opens it in Groups, and back:
 - **Groups** — the structure editor: the tree of groups on the left, the editor for
   whatever you select on the right. Each group row can add a stimulus, add a child group,
   move itself among its siblings, or delete itself and everything under it. A red badge
-  on a row counts the validation problems inside it.
+  on a row counts the validation problems inside it. The same editor carries *Adjacent
+  rooms* — the neighbours presence can move this room to or from, which is what makes it
+  a room instead of a branch — and *exit* — whether presence can leave the house from
+  here. A one-way edge (`{id, one_way: true}` in YAML) shows on the badge as an arrow but
+  is not editable from either field; flip it in the configuration instead.
 - **Envelopes** — the preset library, with a sketch of the selected preset's ADSR shape.
   Renaming a preset rewrites every stimulus and default that names it; a preset something
   still points at cannot be deleted until those references move.
@@ -111,6 +115,14 @@ picking a strip here also opens it in Groups, and back:
   learned, the expected-activity sensor's current reading), which groups presence
   simulation is currently blocked on and why, the simulation log, and a "rebuild profile"
   button with a "force" switch for overwriting a profile an external producer owns.
+- **Presence** — shown only while `presence.enabled` is on. A room map (a row per
+  top-level branch, doorways drawn between rooms, a door glyph on each exit, occupant
+  counts and names on the rooms, the two most likely rooms joined by a line while someone
+  is `moving`) that also answers "how would I get from A to B", one row per tracked
+  device with its room, confidence and moving state, a table of Bermuda's scanners with
+  the room each maps to (or a fix, when it does not), and a settings card — in the same
+  style as Defaults — for the top-level `presence` block, whose device picker only offers
+  Bermuda's `device_tracker`s.
 
 Edits are held as a draft: **Undo**/**Redo** walk it, **Discard** throws it away, and
 **Save** validates first — problems come back attached to the fields that caused them —
@@ -153,6 +165,7 @@ Each configured group produces:
 | `sensor.<id>_expected_activity` | The level the profile expects right now. Attributes: `p25`, `p75`, `day_type`, `ready`, `producer`. `unknown` until the group is ready. |
 | `sensor.<id>_activity_anomaly` | How far today's real level sits outside that band, signed. `unknown` until the group is ready. |
 | `switch.<id>_presence_simulation` | Arms presence simulation for the group. Only created when the group has lights and its `simulation.enabled` is true. |
+| `sensor.<id>_occupants` | How many people are believed to be in this room. Attribute: `who`. Only for rooms, and only while presence is on. |
 
 And once, on the **Activity Levels** hub device:
 
@@ -160,6 +173,14 @@ And once, on the **Activity Levels** hub device:
 | --- | --- |
 | `switch.activity_levels_presence_simulation` | The master arm for presence simulation. |
 | `sensor.activity_levels_profile` | Diagnostic: when the profile was generated. Attributes: `producer`, `producer_version`, `groups_ready`, `groups_total`, `trained`, `ready`. |
+
+And, while presence is on, one pair per tracked person, each on its own **Presence:
+`<name>`** device under the hub:
+
+| Entity | Description |
+| --- | --- |
+| `sensor.<name>_room` | Which room a tracked person is in, or `Away`. Attributes: `group_id`, `confidence`, `moving`, `candidates`, `path`, `updated`. |
+| `binary_sensor.<name>_moving` | On while the person's two most likely rooms are adjacent and both plausible. |
 
 ## Services
 
@@ -267,12 +288,66 @@ The shape:
 and `trained`, and `activity_levels/timeseries` serves history, forecast, day-type spans
 and light/plan intervals for one group. Both are admin-only, like the rest of the API.
 
+## Rooms & presence
+
+**Adjacency, on its own.** `adjacent` and `exit` describe the house's floor plan, and they
+mean something even before presence is turned on: they say which groups are *rooms* — a
+place a person can be — rather than a *branch* that only mixes rooms together. A group
+becomes a room the moment it declares an edge, is named by another room's edge, or is
+marked `exit: true`; a group with none of those (a floor, a wing, the whole house) stays a
+branch, with no room-shaped entities of its own. `adjacent` is symmetric by default —
+naming a doorway from either side is enough — and one-way edges (a chute, a one-way stair)
+are YAML-only: `{id: some_room, one_way: true}` in place of the plain id.
+
+**Turning presence on.** Nothing above needs [Bermuda](https://github.com/agittins/bermuda).
+Presence itself does: it is off unless `presence.enabled` is set, and if it is set but
+Bermuda is not installed, the integration raises a repair issue and otherwise carries on —
+adjacency still validates, `topology` still answers, nothing presence-shaped is built.
+
+**How the estimate works, roughly.** Bermuda already turns raw BLE signal strength into a
+distance from each tracked device to each of its scanners; those per-scanner distances
+become one observation per device roughly twice a second. A filter that runs over the room
+graph turns a stream of those observations into a belief about which room the device is
+in, weighing each candidate room against how well its scanners' distances fit and how
+plausible it is to have gotten there from the last belief. Because the graph is the
+transition model, a jump between two rooms with no door between them is not something a
+single noisy reading can do — the filter has to be dragged there step by step, or not at
+all. `escape` is the small leftover probability of appearing somewhere with no path from
+here, and it exists purely so a wrong guess is not permanent: without it, an estimate that
+starts (or is nudged) wrong could never recover.
+
+**What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`) and
+`binary_sensor.<name>_moving` (on while their two most likely rooms are adjacent and both
+still plausible). Per room: `sensor.<room>_occupants`, plus a `presence` channel folded
+into that room's mix — silent, note-on when the room fills, note-off when it empties,
+tuned in the mixer's controls row exactly like any other channel (gain, envelope, and it
+mutes the same way).
+
+**Setting it up.**
+
+1. Install and configure Bermuda so it is tracking your phones (or other BLE trackers) and
+   your rooms have scanners.
+2. Enable Bermuda's per-scanner distance sensors — they ship **disabled**, and the
+   integration raises a repair issue naming the ones it still finds off.
+3. Give each scanner device an area matching a room's `area`, or map it directly with
+   `presence.scanner_areas` when that is not convenient.
+4. List your phones' `device_tracker` entities under `presence.devices`.
+5. Set `adjacent` (and `exit`, where it applies) on every room — an unreachable room is
+   invisible to the filter, not just poorly connected to it.
+
+**Where the line is.** Someone standing in a doorway is not confidently in either room, so
+they are an occupant of nowhere and show up as `moving` instead. `threshold` is what draws
+that line: below it, no room is sure enough to claim the person; at or above it, they
+count.
+
 ## Configuration reference
 
 Durations accept `30s`, `5m`, `2h`, `1d`, `HH:MM:SS`, or a plain number of seconds.
 
 Renaming a group's `id` creates new entities (history is not carried over); `area` is
-applied only when a group's device is first created.
+applied only when a group's device is first created. A tracked person's entities are
+keyed off their (slugified) `presence.devices[].name`, so renaming one renames their
+entities the same way.
 
 ```yaml
 version: 1
@@ -325,10 +400,31 @@ groups:
       lights:
         include: []          # extra lights beyond the ones in the group's area
         exclude: []          # lights in the area to leave out
+    adjacent: [dining_room, back_patio]   # rooms you can walk to; symmetric
+    # adjacent: [{id: laundry_chute, one_way: true}]   # the rare thing that is not
+    exit: false              # true = people can leave the house from here
+    presence:                # optional overrides for this room's presence channel
+      gain: 1.0              # how loudly "somebody is here" contributes
+      envelope: hour         # any envelope field may be overridden inline
     children:
       - id: living_room
         gain: 1.0            # this subgroup's channel gain into the parent
         stimuli: [...]
+
+presence:                    # absent or enabled: false = the whole feature is off
+  enabled: true
+  devices:
+    - device: device_tracker.scotts_phone   # a Bermuda device_tracker
+      name: Scott                            # entity name; defaults to the tracker's own name
+  envelope: default          # preset the presence channels start from
+  threshold: 0.6             # confidence needed before somebody counts as in the room
+  stay: 0.9                  # P(staying put between updates)
+  escape: 0.001              # P(appearing in a room with no path to this one)
+  scale: 3.0                 # emission distance scale, metres
+  floor: 0.05                # likelihood of a room with no scanner
+  stuck_after: 60s           # implausible readings for this long reset the estimate
+  scanner_areas:             # scanner device id -> room, overriding its area
+    "1a2b3c4d5e6f": kitchen
 ```
 
 ## Development
