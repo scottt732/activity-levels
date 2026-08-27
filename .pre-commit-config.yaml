@@ -38,6 +38,10 @@ repos:
         args: [--maxkb=512]
       # Belt and braces alongside gitleaks: this one catches a key file pasted in whole.
       - id: detect-private-key
+      # The CLAUDE.md -> AGENTS.md symlinks: catch one pointing at nothing, and catch a
+      # checkout on a filesystem without symlinks turning one into a text file.
+      - id: check-symlinks
+      - id: destroyed-symlinks
 
   # Secrets. Scans the staged patch, so a token never reaches a commit object.
   - repo: https://github.com/gitleaks/gitleaks

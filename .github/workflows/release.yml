@@ -36,7 +36,7 @@ jobs:
         run: |
           cd custom_components/activity_levels
           zip -r -q -X "${GITHUB_WORKSPACE}/activity_levels.zip" . \
-            -x '*__pycache__*' -x '*.pyc'
+            -x '*__pycache__*' -x '*.pyc' -x 'AGENTS.md' -x 'CLAUDE.md'
           unzip -l "${GITHUB_WORKSPACE}/activity_levels.zip" | head -20
 
       - name: Attach it to the release

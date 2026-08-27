@@ -10,6 +10,9 @@ frontend/dist/
 
 .superpowers/
 
+# Per-developer Claude Code overrides; .claude/settings.json is shared and committed.
+.claude/settings.local.json
+
 .DS_Store
 coverage.xml
 .coverage
