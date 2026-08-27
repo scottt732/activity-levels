@@ -17,13 +17,15 @@ def test_defaults_match_spec() -> None:
     assert e.sustain == 1.0
     assert e.release == 1800.0
     assert e.impulse is False
-    assert e.retrigger is Retrigger.ONLY_IN_RELEASE
+    assert e.retrigger is Retrigger.STACK
     assert e.unavailable is Unavailable.HOLD
     assert e.debounce == 0.0
 
 
 def test_enum_values_are_config_strings() -> None:
+    assert Retrigger.STACK == "stack"
     assert Retrigger.ONLY_IN_RELEASE == "only_in_release"
+    assert Retrigger.ALWAYS == "always"
     assert Unavailable.NOTE_OFF == "note_off"
     assert Mix.SUM == "sum"
     assert NullHandling.IGNORE == "ignore"

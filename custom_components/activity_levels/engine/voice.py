@@ -50,16 +50,26 @@ class Voice:
         """Return (target_value, duration_seconds) for the current phase."""
         e = self.envelope
         if self.phase is Phase.ATTACK:
+            if e.retrigger is Retrigger.STACK:
+                # Stacking adds this note's gain on top of whatever is already sounding;
+                # from idle the start value is 0, so the target is plain `gain`.
+                return self._stacked_peak(self.phase_start_value), e.attack
             return self.gain, e.attack
         if self.phase is Phase.DECAY:
+            # Decay is relative to the peak the attack actually reached, which for a
+            # stacked note is higher than `gain`.
             if e.sustain >= 1.0:
-                return self.gain, 0.0
-            return self.gain * e.sustain, e.decay
+                return self.phase_start_value, 0.0
+            return self.phase_start_value * e.sustain, e.decay
         if self.phase is Phase.RELEASE:
             if self.phase_start_value <= 0.0:
                 return 0.0, 0.0
             return 0.0, e.release * (self.phase_start_value / self.scale)
         return self.phase_start_value, inf  # SUSTAIN and IDLE hold forever
+
+    def _stacked_peak(self, base: float) -> float:
+        """One note's gain piled on ``base``, never above the ceiling."""
+        return min(base + self.gain, self.ceiling)
 
     def _phase_end_t(self) -> float:
         return self.phase_start_t + self._segment()[1]
@@ -120,7 +130,12 @@ class Voice:
         self.last_note_on = t
         if e.impulse:
             self.gate = False
-            self._enter(Phase.RELEASE, t, self.gain)
+            peak = (
+                self._stacked_peak(self.value_at(t))
+                if e.retrigger is Retrigger.STACK
+                else self.gain
+            )
+            self._enter(Phase.RELEASE, t, peak)
             self._advance(t)
             return True
         self.gate = True

@@ -16,6 +16,8 @@ positive_durations = st.floats(
     min_value=1.0, max_value=3600.0, allow_nan=False, allow_infinity=False
 )
 gains = st.floats(min_value=0.1, max_value=10.0, allow_nan=False, allow_infinity=False)
+# A ceiling is always >= gain; 1.0 exercises the "no headroom at all" edge.
+headrooms = st.floats(min_value=1.0, max_value=8.0, allow_nan=False, allow_infinity=False)
 fractions = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
 # Real deployments run at epoch scale, where a float has ~2.4e-7 s of resolution.
 # Exercise both that and the tidy 0.0 base so precision bugs cannot hide.
@@ -70,14 +72,21 @@ def run(v: Voice, script: list[tuple[str, float]]) -> list[float]:
     return values
 
 
+# The ceiling is the voice's hard upper bound in every mode: `stack` is the only one
+# that can climb past `gain`, and it must never climb past the group's limiter.
 @settings(max_examples=300)
-@given(envelopes(), gains, scripts())
-def test_value_always_within_zero_and_gain(
-    env: Envelope, gain: float, script: list[tuple[str, float]]
+@given(envelopes(), gains, headrooms, scripts())
+def test_value_never_exceeds_the_ceiling(
+    env: Envelope, gain: float, headroom: float, script: list[tuple[str, float]]
 ) -> None:
-    v = Voice(id="v", gain=gain, envelope=env)
+    ceiling = gain * headroom
+    v = Voice(id="v", gain=gain, envelope=env, ceiling=ceiling)
     for value in run(v, script):
-        assert -1e-9 <= value <= gain + 1e-9
+        assert -1e-9 <= value <= ceiling + 1e-9
+    if env.retrigger is not Retrigger.STACK:
+        w = Voice(id="w", gain=gain, envelope=env)
+        for value in run(w, script):
+            assert -1e-9 <= value <= gain + 1e-9
 
 
 @settings(max_examples=300)

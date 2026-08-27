@@ -16,6 +16,7 @@ class Phase(StrEnum):
 
 
 class Retrigger(StrEnum):
+    STACK = "stack"
     ONLY_IN_RELEASE = "only_in_release"
     ALWAYS = "always"
 
@@ -45,7 +46,7 @@ class Envelope:
     sustain: float = 1.0
     release: float = 1800.0
     impulse: bool = False
-    retrigger: Retrigger = Retrigger.ONLY_IN_RELEASE
+    retrigger: Retrigger = Retrigger.STACK
     unavailable: Unavailable = Unavailable.HOLD
     debounce: float = 0.0
 
