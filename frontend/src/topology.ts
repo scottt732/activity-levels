@@ -135,9 +135,6 @@ export const edgePoint = (edge: MapEdge, f: number): { x: number; y: number } =>
   y: edge.y1 + (edge.y2 - edge.y1) * f,
 });
 
-export const nodeById = (map: MapLayout, id: string): MapNode | undefined =>
-  map.nodes.find((n) => n.id === id);
-
 /** The edge between two rooms, in whichever orientation the map holds it. */
 export const edgeBetween = (map: MapLayout, a: string, b: string): MapEdge | undefined =>
   map.edges.find((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a));

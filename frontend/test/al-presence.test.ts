@@ -214,4 +214,19 @@ describe("al-presence", () => {
       entity: { multiple: true, filter: { domain: "device_tracker", integration: "bermuda" } },
     });
   });
+
+  // The bounds are the ones PRESENCE_SCHEMA in schema.py enforces. A slider whose end
+  // the backend rejects is worse than no slider: the save fails with a validation error
+  // and the panel looks broken. `threshold` and `floor` are (0, 1]; `stay` is open at
+  // both ends; `escape` is [0, 0.1]; `scale` is open at zero with no ceiling.
+  it("bounds every number field to what the config schema accepts", async () => {
+    const { el } = await tab();
+    const form = el.shadowRoot!.querySelector<HTMLElement & { schema: FormItem[] }>("ha-form.presence-settings")!;
+    const selectorFor = (name: string) => form.schema.find((i) => i.name === name)!.selector;
+    expect(selectorFor("threshold")).toEqual({ number: { min: 0.01, max: 1, step: 0.01, mode: "slider" } });
+    expect(selectorFor("stay")).toEqual({ number: { min: 0.01, max: 0.99, step: 0.01, mode: "slider" } });
+    expect(selectorFor("floor")).toEqual({ number: { min: 0.01, max: 1, step: 0.01, mode: "box" } });
+    expect(selectorFor("escape")).toEqual({ number: { min: 0, max: 0.1, step: 0.001, mode: "box" } });
+    expect(selectorFor("scale")).toEqual({ number: { min: 0.1, step: 0.1, mode: "box" } });
+  });
 });

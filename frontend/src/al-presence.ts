@@ -80,10 +80,14 @@ type FormField = (typeof FORM_FIELDS)[number];
 const DEVICES_SELECTOR: Selector = {
   entity: { multiple: true, filter: { domain: "device_tracker", integration: "bermuda" } },
 };
-const PROBABILITY_SELECTOR: Selector = { number: { min: 0.01, max: 0.99, step: 0.01, mode: "slider" } };
+// Each of these mirrors the bound `schema.py` enforces, so a slider dragged to its end
+// still saves. `stay` is open at both ends, `threshold` and `floor` are open at zero and
+// closed at one, and a step of 0.01 is the smallest value the exclusive ends admit.
+const STAY_SELECTOR: Selector = { number: { min: 0.01, max: 0.99, step: 0.01, mode: "slider" } };
+const THRESHOLD_SELECTOR: Selector = { number: { min: 0.01, max: 1, step: 0.01, mode: "slider" } };
 const ESCAPE_SELECTOR: Selector = { number: { min: 0, max: 0.1, step: 0.001, mode: "box" } };
 const SCALE_SELECTOR: Selector = { number: { min: 0.1, step: 0.1, mode: "box" } };
-const FLOOR_SELECTOR: Selector = { number: { min: 0, max: 1, step: 0.01, mode: "box" } };
+const FLOOR_SELECTOR: Selector = { number: { min: 0.01, max: 1, step: 0.01, mode: "box" } };
 const DURATION_SELECTOR: Selector = { duration: {} };
 
 const ARROW = " → ";
@@ -288,8 +292,8 @@ export class AlPresence extends LitElement {
       { name: "enabled", selector: { boolean: {} } },
       { name: "devices", selector: DEVICES_SELECTOR },
       { name: "envelope", selector: { select: { mode: "dropdown", options: envelopeOptions(config) } } },
-      { name: "threshold", selector: PROBABILITY_SELECTOR },
-      { name: "stay", selector: PROBABILITY_SELECTOR },
+      { name: "threshold", selector: THRESHOLD_SELECTOR },
+      { name: "stay", selector: STAY_SELECTOR },
       { name: "escape", selector: ESCAPE_SELECTOR },
       { name: "scale", selector: SCALE_SELECTOR },
       { name: "floor", selector: FLOOR_SELECTOR },

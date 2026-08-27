@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { COL_W, NODE_W, PAD, ROW_H, edgeBetween, edgePoint, layout, nodeById, pathEdges } from "../src/topology";
+import { COL_W, NODE_W, PAD, ROW_H, edgeBetween, edgePoint, layout, pathEdges } from "../src/topology";
+import type { MapLayout, MapNode } from "../src/topology";
 import { roomsConfig } from "./fixtures";
 import type { TopologyPayload } from "../src/types";
+
+const nodeById = (map: MapLayout, id: string): MapNode => map.nodes.find((n) => n.id === id)!;
 
 const TOPO: TopologyPayload = {
   nodes: ["kitchen", "dining_room", "hall", "bedroom", "back_patio"],
@@ -62,8 +65,8 @@ describe("layout", () => {
 
   it("stops each edge at the node borders, so an arrowhead is not buried under a box", () => {
     const map = layout(roomsConfig(), TOPO);
-    const from = nodeById(map, "kitchen")!;
-    const to = nodeById(map, "dining_room")!;
+    const from = nodeById(map, "kitchen");
+    const to = nodeById(map, "dining_room");
     const edge = edgeBetween(map, "kitchen", "dining_room")!;
     expect(edge.x1).toBe(from.x + NODE_W / 2);
     expect(edge.x2).toBe(to.x - NODE_W / 2);
@@ -73,7 +76,7 @@ describe("layout", () => {
 
   it("ends a one-way edge on the destination's border", () => {
     const map = layout(roomsConfig(), TOPO);
-    const bedroom = nodeById(map, "bedroom")!;
+    const bedroom = nodeById(map, "bedroom");
     const edge = edgeBetween(map, "hall", "bedroom")!;
     expect(edge.oneWay).toBe(true);
     expect(edge.x2).toBe(bedroom.x - NODE_W / 2);
