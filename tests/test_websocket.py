@@ -106,8 +106,10 @@ async def test_state_command(
     msg = await client.receive_json()
     trigger = next(v for v in msg["result"]["voices"]["kitchen"] if v["label"] == "trigger")
     assert trigger["entity"] is None
-    assert trigger["value"] == pytest.approx(3.0)
-    assert msg["result"]["groups"]["kitchen"]["value"] == pytest.approx(3.0)
+    # real time passes between the service call and the read, and the release slope is
+    # max_value / release, so allow the few milliseconds of fall that CI can see
+    assert trigger["value"] == pytest.approx(3.0, abs=0.01)
+    assert msg["result"]["groups"]["kitchen"]["value"] == pytest.approx(3.0, abs=0.01)
 
 
 async def test_state_reads_the_clock_once(
