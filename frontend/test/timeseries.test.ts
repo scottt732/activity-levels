@@ -7,6 +7,7 @@ import {
   cacheKey,
   decimate,
   forecastLine,
+  liveTail,
   nearestIndex,
   pathFor,
   spanRects,
@@ -166,5 +167,33 @@ describe("cacheKey", () => {
   it("distinguishes optional fields from their defaults", () => {
     expect(cacheKey(q)).not.toBe(cacheKey({ ...q, include_children: true }));
     expect(cacheKey(q)).not.toBe(cacheKey({ ...q, forecast_until: 500 }));
+  });
+});
+
+describe("liveTail", () => {
+  const pts: [number, number][] = [
+    [100, 1],
+    [200, 2],
+  ];
+
+  it("joins the last recorded sample to the live reading", () => {
+    expect(liveTail(pts, 260, 3, 0, 1000)).toEqual([
+      [200, 2],
+      [260, 3],
+    ]);
+  });
+
+  it("has nothing to add without any history", () => {
+    expect(liveTail([], 260, 3, 0, 1000)).toEqual([]);
+  });
+
+  it("has nothing to add when the history already reaches the live frame", () => {
+    expect(liveTail(pts, 200, 9, 0, 1000)).toEqual([]);
+    expect(liveTail(pts, 150, 9, 0, 1000)).toEqual([]);
+  });
+
+  it("draws nothing rather than stretching a tail across a window the live frame left", () => {
+    expect(liveTail(pts, 1001, 3, 0, 1000)).toEqual([]);
+    expect(liveTail(pts, 260, 3, 300, 1000)).toEqual([]);
   });
 });

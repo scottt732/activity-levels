@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/al-timeline";
-import { computePaths, timelineCache } from "../src/al-timeline";
+import { AlTimeline as AlTimelineClass, computePaths, timelineCache } from "../src/al-timeline";
 import type { AlTimeline, TimelineRangeDetail } from "../src/al-timeline";
-import type { HomeAssistant, ProfileState, TimeseriesResponse } from "../src/types";
+import type { GroupLive, HomeAssistant, LiveState, ProfileState, TimeseriesResponse } from "../src/types";
 
 /** Minute-aligned: query windows are quantized to the minute, so a round `now` keeps the
     fixtures and the window the element asks for in agreement. */
@@ -42,6 +42,35 @@ const makeResponse = (gid: string, points = 200): TimeseriesResponse => {
     plan: [[NOW + 3600, NOW + 5400, "light.den"]],
   };
 };
+
+const EMPTY: TimeseriesResponse = { series: {}, forecast: null, day_types: [], lights: {}, plan: [] };
+
+const groupLive = (over: Partial<GroupLive> = {}): GroupLive => ({
+  value: 0,
+  real_value: 0,
+  raw_value: 0,
+  active: false,
+  gated: false,
+  active_voices: 0,
+  last_activity: null,
+  cooldown_at: null,
+  contributors: {},
+  name: "House",
+  parent_id: null,
+  precision: 1,
+  max_value: 5,
+  mix: "sum",
+  next_wake: null,
+  lights: 0,
+  ...over,
+});
+
+/** One live frame: `now`, and the selected group reading `value`. */
+const liveFor = (gid: string, now: number, value: number, over: Partial<GroupLive> = {}): LiveState => ({
+  now,
+  groups: { [gid]: groupLive({ value, ...over }) },
+  voices: {},
+});
 
 interface Harness {
   hass: HomeAssistant;
@@ -344,6 +373,99 @@ describe("al-timeline rendering", () => {
   it("draws y ticks at 0, half and full scale and three time labels", () => {
     expect(qa(el, "text.ytick").map((n) => n.textContent?.trim())).toEqual(["5", "2.5", "0"]);
     expect(qa(el, "text.xlabel")).toHaveLength(3);
+  });
+});
+
+describe("al-timeline live tail", () => {
+  /** The chart is 800 wide with 32 of left margin, so the plot spans 768px of 48h. */
+  const tailD = (el: AlTimeline): string => q(el, "path.tail")?.getAttribute("d") ?? "";
+
+  const mountWith = async (live: LiveState | null, data?: TimeseriesResponse): Promise<AlTimeline> => {
+    const gid = nextGid();
+    const h = hassStub(async () => data ?? makeResponse(gid));
+    return mount({ groupId: gid, heading: "House", range: "24h", horizon: "24h", live }, h);
+  };
+
+  it("continues the history line from its last sample to the live reading", async () => {
+    const gid = nextGid();
+    const h = hassStub(async () => makeResponse(gid));
+    const el = await mount(
+      { groupId: gid, heading: "House", range: "24h", horizon: "24h", live: liveFor(gid, NOW + 30, 2.5) },
+      h,
+    );
+    const bus = q(el, "path.bus")?.getAttribute("d") ?? "";
+    const d = tailD(el);
+    expect(d.split(" ")).toHaveLength(2);
+    // It starts exactly where the recorded line stopped: it is that line, continued.
+    expect(d.split(" ")[0]).toBe(`M${bus.split(" ").at(-1)!.slice(1)}`);
+    // …and ends at (now, value): 30s past the middle of a 48h plot, at half of a 5 scale.
+    expect(d.split(" ")[1]).toBe(`L${((DAY + 30) / (2 * DAY)) * 768},96`);
+    el.remove();
+  });
+
+  it("is drawn in the history line's own style, being that line continued", () => {
+    const sheet = String([AlTimelineClass.styles]).replace(/\s+/g, " ");
+    expect(sheet).toContain("path.bus, path.tail {");
+  });
+
+  it("leaves the tail off when the line on screen is not this group's history", async () => {
+    // The live frame names a group the response did not key its bus by: nothing to continue.
+    const el = await mountWith(liveFor("nobody", NOW + 30, 2.5));
+    expect(q(el, "path.tail")).toBeNull();
+    el.remove();
+  });
+
+  it("leaves the tail off without a live frame, an entry for the group, or any history", async () => {
+    const none = await mountWith(null);
+    expect(q(none, "path.tail")).toBeNull();
+    none.remove();
+
+    const gid = nextGid();
+    const empty = await mount(
+      { groupId: gid, range: "24h", horizon: "24h", live: { now: NOW + 30, groups: {}, voices: {} } },
+      hassStub(async () => makeResponse(gid)),
+    );
+    expect(q(empty, "path.tail")).toBeNull();
+    empty.remove();
+
+    const noHistory = await mountWith(liveFor("x", NOW + 30, 2.5), EMPTY);
+    expect(q(noHistory, "path.tail")).toBeNull();
+    noHistory.remove();
+  });
+
+  it("leaves the tail off when the recorded history already reaches the live frame", async () => {
+    const gid = nextGid();
+    const el = await mount(
+      { groupId: gid, range: "24h", horizon: "24h", live: liveFor(gid, NOW - 60, 2.5) },
+      hassStub(async () => makeResponse(gid)),
+    );
+    expect(q(el, "path.tail")).toBeNull();
+    el.remove();
+  });
+
+  it("draws nothing rather than a tail across the forecast when the live frame is off the window", async () => {
+    const gid = nextGid();
+    const el = await mount(
+      { groupId: gid, range: "24h", horizon: "24h", live: liveFor(gid, NOW + 2 * DAY, 2.5) },
+      hassStub(async () => makeResponse(gid)),
+    );
+    expect(q(el, "path.tail")).toBeNull();
+    el.remove();
+  });
+
+  it("redraws the tail on every live frame without going back to the server", async () => {
+    const gid = nextGid();
+    const h = hassStub(async () => makeResponse(gid));
+    const el = await mount(
+      { groupId: gid, range: "24h", horizon: "24h", live: liveFor(gid, NOW + 10, 1) },
+      h,
+    );
+    const first = tailD(el);
+    el.live = liveFor(gid, NOW + 20, 4);
+    await el.updateComplete;
+    expect(tailD(el)).not.toBe(first);
+    expect(h.callWS).toHaveBeenCalledTimes(1);
+    el.remove();
   });
 });
 

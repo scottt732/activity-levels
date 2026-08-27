@@ -9,6 +9,7 @@ import {
   cacheKey,
   decimate,
   forecastLine,
+  liveTail,
   nearestIndex,
   pathFor,
   spanRects,
@@ -304,7 +305,9 @@ export class AlTimeline extends LitElement {
         outline: 2px solid var(--primary-color);
         outline-offset: 2px;
       }
-      path.bus {
+      /* The tail is the bus line continued, so it is the same line to look at. */
+      path.bus,
+      path.tail {
         fill: none;
         stroke: var(--primary-color);
         stroke-width: 2;
@@ -597,6 +600,22 @@ export class AlTimeline extends LitElement {
     return clamp(this.live?.now ?? Math.floor(Date.now() / 1000), p.t0, p.t1);
   }
 
+  /**
+   * The live tail, in plot-local pixels: the recorded line's last sample joined to the
+   * reading this live frame carries. It costs no round trip, so it moves on every frame
+   * while the recorded history behind it catches up on its own schedule.
+   */
+  private tailPath(p: ComputedTimeline): string {
+    const gid = this.groupId;
+    const live = this.live;
+    if (gid === null || live === null) return "";
+    const group = live.groups[gid];
+    // The tail belongs to the line that is drawn; a response that keyed its bus by some
+    // other id is not this group's history, so there is nothing to continue.
+    if (!group || p.bus.id !== gid) return "";
+    return pathFor(liveTail(p.bus.points, live.now, group.value, p.t0, p.t1), p.x, p.y);
+  }
+
   private emitSettings(): void {
     this.dispatchEvent(
       alTimelineRange({
@@ -732,6 +751,7 @@ export class AlTimeline extends LitElement {
     const w = this.width;
     const h = this.height;
     const nowX = p.x(this.nowAt(p));
+    const tail = this.tailPath(p);
     const stripY = p.plotH + STRIP_OFFSET;
     const cursorX = this.cursorIndex === null ? null : p.x(p.bus.points[this.cursorIndex]?.[0] ?? p.t0);
     const label = `${this.heading} activity, ${this.range} history, ${this.horizon} forecast`;
@@ -769,6 +789,7 @@ export class AlTimeline extends LitElement {
           ${p.p50 ? svg`<path class="p50" d=${p.p50} stroke-dasharray="4 3"></path>` : nothing}
           ${p.children.map((c) => svg`<path class="child" d=${c.d} stroke=${c.color}></path>`)}
           ${p.bus.d ? svg`<path class="bus" d=${p.bus.d}></path>` : nothing}
+          ${tail ? svg`<path class="tail" d=${tail}></path>` : nothing}
           ${this.showLights
             ? p.lights.map(
                 (r) => svg`<rect

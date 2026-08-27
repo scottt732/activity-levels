@@ -105,6 +105,28 @@ export function forecastLine(f: Forecast, key: "p50"): [number, number][] {
   return f[key].map((v, i): [number, number] => [f.t0 + i * f.step, v]);
 }
 
+/**
+ * The live tail: the segment continuing a drawn history line from its last recorded sample
+ * to what the group is reading right now. It is the history line's continuation, not a
+ * forecast, so it is the last sample that anchors it rather than a fresh point of its own.
+ *
+ * Nothing is drawn when there is no history, when the recorded line already reaches the
+ * live frame (a sample at or after `now` leaves no gap to fill), or when the live frame
+ * lies outside the drawn window `[t0, t1]` - clamping an out-of-window reading onto the
+ * edge would stretch the tail across the forecast, which is exactly what it is not.
+ */
+export function liveTail(
+  points: [number, number][],
+  now: number,
+  value: number,
+  t0: number,
+  t1: number,
+): [number, number][] {
+  const last = points[points.length - 1];
+  if (!last || now <= last[0] || now < t0 || now > t1) return [];
+  return [last, [now, value]];
+}
+
 /** Maps `[start, end|null, tag]` spans onto pixel rects; a null end extends to `t1`. */
 export function spanRects<T>(
   spans: [number, number | null, T][],
