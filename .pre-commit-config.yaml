@@ -1,0 +1,157 @@
+# https://pre-commit.com — install the hooks with:
+#
+#   uvx pre-commit install --install-hooks
+#
+# The commit-stage hooks are the fast ones: formatting, lint, secrets. The slow ones
+# (mypy, the two test suites) run at push time, so a commit stays cheap and nothing
+# reaches the remote that CI would reject.
+
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
+
+# Generated files nobody hand-edits. The panel bundle in particular is compared
+# byte-for-byte against a fresh `pnpm build` in CI, so a whitespace fixer touching it
+# would break the frontend workflow.
+exclude: |
+  (?x)^(
+    uv\.lock|
+    frontend/pnpm-lock\.yaml|
+    custom_components/activity_levels/frontend/.*|
+    CHANGELOG\.md
+  )$
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      # Belt and braces alongside gitleaks: this one catches a key file pasted in whole.
+      - id: detect-private-key
+
+  # Secrets. Scans the staged patch, so a token never reaches a commit object.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
+        # hass is Home Assistant's own name for the core object; the rest are real
+        # identifiers or spellings codespell guesses at.
+        args: [--ignore-words-list=hass,ons,clickin,unparseable]
+
+  # release-please reads the subject line to decide the next version and to write the
+  # changelog, so a malformed one is a release bug, not a style nit. Types and scopes
+  # are the ones CONTRIBUTING.md documents.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - feat
+          - fix
+          - perf
+          - refactor
+          - docs
+          - deps
+          - chore
+          - ci
+          - test
+          - build
+          - style
+          - revert
+
+  # Everything below runs the tool the project already pins, through `uv run` or the
+  # panel's pnpm scripts, so a hook can never disagree with CI about which version of
+  # ruff or mypy is the one of record.
+  - repo: local
+    hooks:
+      # `--fix` and the formatter rewrite the file and fail the commit; stage the result
+      # and commit again.
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --force-exclude --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+
+      # `uv sync --locked` in CI fails if uv.lock drifts from pyproject.toml.
+      - id: uv-lock-check
+        name: uv.lock is in sync
+        entry: uv lock --check
+        language: system
+        pass_filenames: false
+        files: ^(pyproject\.toml|uv\.lock)$
+
+      - id: no-ds-store
+        name: no .DS_Store
+        entry: .DS_Store must not be committed
+        language: fail
+        files: (^|/)\.DS_Store$
+
+      # HACS installs straight from the repository with no build step, so the bundle is
+      # committed. Rebuild it whenever its sources move, or the frontend workflow's
+      # `git diff --exit-code` fails on a stale one.
+      - id: panel-bundle
+        name: rebuild the committed panel bundle
+        entry: scripts/hooks/build-panel.sh
+        language: script
+        pass_filenames: false
+        files: ^frontend/(src/.*|package\.json|pnpm-lock\.yaml|vite\.config\.ts|tsconfig\.json)$
+
+      - id: eslint
+        name: eslint (panel)
+        entry: pnpm -C frontend lint
+        language: system
+        pass_filenames: false
+        files: ^frontend/(src|test)/.*\.(ts|js)$
+
+      - id: mypy
+        name: mypy (strict)
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(custom_components/.*\.py|pyproject\.toml)$
+
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(custom_components/|tests/|pyproject\.toml$)
+
+      - id: vitest
+        name: vitest (panel)
+        entry: pnpm -C frontend test
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^frontend/

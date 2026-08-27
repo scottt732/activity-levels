@@ -31,4 +31,3 @@ Final: parked — absence-only reconcile can release a gated voice during HA sta
 Final: parked — build_tree failures lose their traceback (no _LOGGER.exception) — Ruling: defer; add a logger line in Plan 3
 Final: deferred to Plan 3: bool-accepting int validators; per-call schema rebuild; GroupState dict field; _state_of traversals; wall-clock t clamp note; state payload additions (raw value, next_wake, precision, max_value; timestamp format); admin-rejection test for websocket; _create_devices before coordinator start leaves devices on failed setup; tautological _unrecorded_attributes test
 Plan 2 complete at e5d0a80 (148 tests).
-

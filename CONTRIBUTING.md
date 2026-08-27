@@ -12,9 +12,35 @@ The repository is two halves: the Home Assistant integration in
 TypeScript, built by Vite, managed with [pnpm](https://pnpm.io) on Node 24).
 
 ```bash
-uv sync                      # Python dependencies, into .venv
-cd frontend && pnpm install  # panel dependencies
+uv sync                                  # Python dependencies, into .venv
+cd frontend && pnpm install              # panel dependencies
+uvx pre-commit install --install-hooks   # the git hooks, from the repository root
 ```
+
+## Hooks
+
+[pre-commit](https://pre-commit.com) runs the same checks CI does, early. Installing it
+is one command and worth it: it will save you a round trip through a red build.
+
+**On commit** — the fast half. Whitespace and line endings, `ruff check --fix` and
+`ruff format`, [gitleaks](https://github.com/gitleaks/gitleaks) over the staged patch,
+`actionlint` on the workflows, `codespell`, `uv lock --check`, and — only when something
+under `frontend/` moved — `pnpm lint` and a panel rebuild. The hooks that rewrite files
+fail the commit after fixing them; stage the result and commit again.
+
+**On the commit message** — that the subject is a Conventional Commit, because
+release-please reads it.
+
+**On push** — `mypy`, `pytest` and the panel's `vitest`, each only if that side changed.
+This is where a commit takes a few seconds; nothing that CI would reject reaches the
+remote.
+
+Every hook runs the version this project pins — `uv run ruff`, not a separately
+versioned copy — so a hook and CI can't disagree.
+
+`git commit --no-verify` skips them when you need it to. The `pre-commit` workflow and a
+full-history gitleaks scan run on every pull request regardless, so a skipped hook is
+caught, not lost.
 
 ## Checks
 
