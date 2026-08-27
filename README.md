@@ -1,5 +1,13 @@
 # Activity Levels
 
+[![python](https://github.com/scottt732/activity-levels/actions/workflows/python.yml/badge.svg)](https://github.com/scottt732/activity-levels/actions/workflows/python.yml)
+[![frontend](https://github.com/scottt732/activity-levels/actions/workflows/frontend.yml/badge.svg)](https://github.com/scottt732/activity-levels/actions/workflows/frontend.yml)
+[![codecov](https://codecov.io/gh/scottt732/activity-levels/branch/main/graph/badge.svg)](https://codecov.io/gh/scottt732/activity-levels)
+[![release](https://img.shields.io/github/v/release/scottt732/activity-levels?sort=semver)](https://github.com/scottt732/activity-levels/releases/latest)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
+[![license MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196.svg)](https://www.conventionalcommits.org/en/v1.0.0/)
+
 Home Assistant custom integration (HACS) that turns entity state changes into per-area
 activity-level sensors. Every stimulus you configure — a door opening, a motion sensor
 firing, a media player starting — drives a synthesizer-style ADSR envelope, and a
@@ -334,6 +342,26 @@ uv run mypy
 
 The panel lives in [`frontend/`](frontend/README.md), which covers `pnpm dev` against a
 running Home Assistant and why the built bundle is committed.
+
+## Releases
+
+Every release is tagged `vX.Y.Z` and carries an `activity_levels.zip` asset whose root
+is the integration itself — that is the archive HACS downloads and unpacks into
+`custom_components/activity_levels/`. To install without HACS, take the zip from the
+[latest release](https://github.com/scottt732/activity-levels/releases/latest), unpack
+it into `<config>/custom_components/activity_levels/`, and restart Home Assistant.
+
+The version, the tag and the zip always agree: CI refuses to publish a release whose
+manifest disagrees with its tag. [`CHANGELOG.md`](CHANGELOG.md) is generated from the
+commit history.
+
+## Contributing
+
+Bug reports, ideas and pull requests are all welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for the toolchains, the checks CI runs, the fact that
+the panel bundle is committed, and the commit-message convention releases depend on.
+Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md); security
+problems go through [SECURITY.md](SECURITY.md) rather than a public issue.
 
 ## License
 
