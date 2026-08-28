@@ -20,7 +20,7 @@ const config = (): Config => ({
   version: 1,
   defaults,
   envelopes: [],
-  groups: [{ ...newGroup("house"), name: "House", children: [{ ...newGroup("kitchen"), name: "Kitchen" }] }],
+  groups: [{ ...newGroup("house", "structure"), name: "House", children: [{ ...newGroup("kitchen", "area"), name: "Kitchen" }] }],
 });
 
 const profileState = (over: Partial<ProfileState> = {}): ProfileState => ({

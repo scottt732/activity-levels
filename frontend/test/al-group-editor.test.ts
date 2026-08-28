@@ -6,7 +6,7 @@ import type { AlChangeEvent } from "../src/events";
 import type { Config, Group, Path } from "../src/types";
 
 const child = (): Group => ({
-  ...newGroup("kitchen"),
+  ...newGroup("kitchen", "area"),
   stimuli: [newStimulus("binary_sensor.kitchen")],
 });
 
@@ -25,7 +25,7 @@ const baseConfig = (): Config => ({
   envelopes: [],
   groups: [
     {
-      ...newGroup("house"),
+      ...newGroup("house", "structure"),
       stimuli: [newStimulus("binary_sensor.hall")],
       children: [child()],
     },
@@ -101,7 +101,7 @@ beforeEach(async () => {
 
 describe("al-group-editor schema", () => {
   it("offers no gain on a root group: it has no parent to scale into", () => {
-    expect(form().schema?.map((f) => f.name)).toEqual(["id", "name", "area", "mix", "adjacent", "exit"]);
+    expect(form().schema?.map((f) => f.name)).toEqual(["id", "name", "area_id", "mix", "adjacent", "exit"]);
   });
 
   it("offers gain on a child group", async () => {
@@ -109,7 +109,7 @@ describe("al-group-editor schema", () => {
     expect(form().schema?.map((f) => f.name)).toEqual([
       "id",
       "name",
-      "area",
+      "area_id",
       "mix",
       "gain",
       "adjacent",

@@ -11,12 +11,12 @@ import type { Config, Group, Mix, NullHandling } from "./types";
  */
 
 /** The fields either editor can show, in the order the schema lists them. */
-export type GroupField = "id" | "name" | "area" | "mix" | "null_handling" | "gain" | "adjacent" | "exit";
+export type GroupField = "id" | "name" | "area_id" | "mix" | "null_handling" | "gain" | "adjacent" | "exit";
 
 export const GROUP_LABELS: Record<string, string> = {
   id: "ID",
   name: "Name",
-  area: "Area",
+  area_id: "Area",
   mix: "Mix",
   null_handling: "Idle contributors",
   gain: "Gain",
@@ -27,7 +27,7 @@ export const GROUP_LABELS: Record<string, string> = {
 export const GROUP_HELPERS: Record<string, string> = {
   id: "Identifies the group and its entities.",
   name: "Friendly name; falls back to the id.",
-  area: "Area the group's entities are assigned to.",
+  area_id: "Area the group's entities are assigned to.",
   mix: "How stimuli and child groups combine into this group's value.",
   null_handling: "Whether idle contributors count as zero or drop out of the mean.",
   gain: "Scales this group's contribution to its parent.",
@@ -43,7 +43,7 @@ export const groupHelper = (item: FormItem): string => GROUP_HELPERS[item.name] 
 export const GROUP_FORM_FIELDS: (keyof Group)[] = [
   "id",
   "name",
-  "area",
+  "area_id",
   "mix",
   "null_handling",
   "gain",
@@ -105,7 +105,7 @@ export function groupSchema(
   const selectors: Record<GroupField, Selector> = {
     id: { text: {} },
     name: { text: {} },
-    area: { area: {} },
+    area_id: { area: {} },
     mix: { select: { mode: "dropdown", options: MIX_OPTIONS } },
     null_handling: { select: { mode: "dropdown", options: NULL_HANDLING_OPTIONS } },
     gain: GROUP_GAIN_SELECTOR,
@@ -140,7 +140,7 @@ export function groupData(
   const all: Record<GroupField, unknown> = {
     id: group.id,
     name: group.name ?? "",
-    area: group.area,
+    area_id: group.area_id,
     mix: group.mix,
     null_handling: group.null_handling,
     gain: group.gain,
@@ -149,7 +149,7 @@ export function groupData(
   };
   return Object.fromEntries(
     fields
-      .filter((name) => applies(name, group, isRoot) && !(name === "area" && group.area === null))
+      .filter((name) => applies(name, group, isRoot) && !(name === "area_id" && group.area_id === null))
       .map((name) => [name, all[name]]),
   );
 }
@@ -164,7 +164,7 @@ export function mergeGroup(group: Group, v: Record<string, unknown>): Group {
   const merged: Group = { ...group };
   if ("id" in v) merged.id = String(v.id ?? "");
   if ("name" in v) merged.name = emptyToNull(v.name as string | null | undefined);
-  if ("area" in v) merged.area = emptyToNull(v.area as string | null | undefined);
+  if ("area_id" in v) merged.area_id = emptyToNull(v.area_id as string | null | undefined);
   if ("mix" in v) merged.mix = (v.mix as Mix | undefined) ?? group.mix;
   if ("null_handling" in v) merged.null_handling = (v.null_handling as NullHandling | undefined) ?? group.null_handling;
   if ("gain" in v) merged.gain = typeof v.gain === "number" ? v.gain : group.gain;

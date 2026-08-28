@@ -21,7 +21,7 @@ const baseConfig = (): Config => ({
     { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
     { id: "media", attack: 10, decay: 300, sustain: 0.6, release: 900, impulse: false, retrigger: null, unavailable: null, debounce: null },
   ],
-  groups: [newGroup("house")],
+  groups: [newGroup("house", "structure")],
 });
 
 let el: AlDefaults;

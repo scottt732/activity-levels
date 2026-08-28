@@ -27,7 +27,7 @@ describe("adjacency fields", () => {
   it("keeps a one-way edge one-way when the picker did not touch it", () => {
     const hall = roomsConfig().groups[0]!.children[0]!.children[2]!;
     const merged = mergeGroup(hall, { adjacent: ["bedroom", "dining_room"] });
-    expect(merged.adjacent).toEqual([{ id: "bedroom", one_way: true }, "dining_room"]);
+    expect(merged.adjacent).toEqual([{ id: "bedroom", connection: "door", one_way: true }, "dining_room"]);
     expect(changedGroupField(merged, hall)).toBe("adjacent");
   });
 

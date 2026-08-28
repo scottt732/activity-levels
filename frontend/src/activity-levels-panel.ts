@@ -69,6 +69,8 @@ export class ActivityLevelsPanel extends LitElement {
   @property({ type: Boolean }) narrow = false;
 
   @state() private draft?: Draft;
+  /** Ids of the groups whose kind the config loader had to guess. */
+  @state() private inferred: string[] = [];
   @state() private tab: Tab = "mixer";
   @state() private selection: Path | null = null;
   @state() private nav: MixerNav = { expanded: new Set(), selection: null };
@@ -127,10 +129,11 @@ export class ActivityLevelsPanel extends LitElement {
 
   private async load(): Promise<void> {
     try {
-      const cfg = await getConfig(this.hass);
-      this.draft = new Draft(cfg);
+      const { config, inferred } = await getConfig(this.hass);
+      this.draft = new Draft(config);
+      this.inferred = inferred;
       this.syncTabs();
-      this.nav = restoreNav(cfg);
+      this.nav = restoreNav(config);
       this.selection = this.nav.selection;
       this.errors = [];
       this.banner = null;

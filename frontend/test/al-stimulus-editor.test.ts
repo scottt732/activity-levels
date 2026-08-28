@@ -19,7 +19,7 @@ const baseConfig = (): Config => ({
   envelopes: [
     { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
   ],
-  groups: [{ ...newGroup("house"), stimuli: [newStimulus("binary_sensor.motion")] }],
+  groups: [{ ...newGroup("house", "structure"), stimuli: [newStimulus("binary_sensor.motion")] }],
 });
 
 let el: AlStimulusEditor;

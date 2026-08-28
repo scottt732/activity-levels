@@ -37,10 +37,10 @@ const baseConfig = (): Config => ({
   envelopes,
   groups: [
     {
-      ...newGroup("house"),
+      ...newGroup("house", "structure"),
       name: "House",
       stimuli: [newStimulus("binary_sensor.front_door")],
-      children: [{ ...newGroup("den"), name: "Den" }],
+      children: [{ ...newGroup("den", "area"), name: "Den" }],
     },
   ],
 });

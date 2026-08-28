@@ -22,8 +22,16 @@ interface RawValidateResult {
 
 const normalize = (r: RawValidateResult): ValidateResult => ({ ok: r.ok, errors: r.errors ?? [] });
 
-export const getConfig = (hass: HomeAssistant): Promise<Config> =>
-  hass.callWS<{ config: Config }>({ type: "activity_levels/config/get" }).then((r) => r.config);
+/** `activity_levels/config/get`. `inferred` names the groups whose kind the loader guessed. */
+export interface ConfigGet {
+  config: Config;
+  inferred: string[];
+}
+
+export const getConfig = (hass: HomeAssistant): Promise<ConfigGet> =>
+  hass
+    .callWS<{ config: Config; inferred?: string[] }>({ type: "activity_levels/config/get" })
+    .then((r) => ({ config: r.config, inferred: r.inferred ?? [] }));
 
 export const validateConfig = (hass: HomeAssistant, config: Config): Promise<ValidateResult> =>
   hass.callWS<RawValidateResult>({ type: "activity_levels/config/validate", config }).then(normalize);

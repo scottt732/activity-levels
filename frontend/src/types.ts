@@ -1,3 +1,6 @@
+export type { Connection, Kind } from "./kinds";
+import type { Connection, Kind } from "./kinds";
+
 export type Mix = "sum" | "max" | "mean";
 export type NullHandling = "zero" | "ignore";
 export type Retrigger = "stack" | "only_in_release" | "always";
@@ -34,8 +37,8 @@ export interface Stimulus extends EnvelopeOverrides {
   envelope: string | null;
 }
 
-/** One edge out of a group: a plain id is a two-way door; the object form is one-way. */
-export interface Adjacency { id: string; one_way: boolean }
+/** One edge out of a group. A plain id in the document means `{ connection: "door", one_way: false }`. */
+export interface Adjacency { id: string; connection: Connection; one_way: boolean }
 
 /** A group's own presence-channel tuning: the same overridable shape as a stimulus's envelope. */
 export interface PresenceOverrides extends EnvelopeOverrides { gain: number; envelope: string | null }
@@ -43,17 +46,21 @@ export interface PresenceOverrides extends EnvelopeOverrides { gain: number; env
 export interface Group {
   id: string;
   name: string | null;
-  area: string | null;
+  /** What this group is on the property. Null only in a document the backend refused. */
+  kind: Kind;
+  /** The Home Assistant floor this group binds, for a `floor`. Optional: a floor need not exist. */
+  floor_id: string | null;
+  /** The Home Assistant area this group binds. Was `area`; the backend rewrites the old spelling. */
+  area_id: string | null;
   mix: Mix;
   null_handling: NullHandling;
   max_value: number | null;
   precision: number | null;
   gain: number;
-  /** Rooms this one can be walked to from. A plain id is symmetric; see {@link Adjacency}. */
+  /** Groups you can walk between from here. See {@link Adjacency}. */
   adjacent: (string | Adjacency)[];
-  /** Whether presence can leave the house from here, to Away. */
+  /** Whether presence can leave the property from here, to Away. */
   exit: boolean;
-  /** This room's presence channel, tuned like any other voice. */
   presence: PresenceOverrides;
   stimuli: Stimulus[];
   children: Group[];

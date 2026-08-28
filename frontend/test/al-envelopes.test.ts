@@ -23,9 +23,9 @@ const baseConfig = (): Config => ({
   ],
   groups: [
     {
-      ...newGroup("house"),
+      ...newGroup("house", "structure"),
       stimuli: [{ ...newStimulus("media_player.tv"), envelope: "media" }],
-      children: [{ ...newGroup("kitchen"), stimuli: [newStimulus("binary_sensor.motion")] }],
+      children: [{ ...newGroup("kitchen", "area"), stimuli: [newStimulus("binary_sensor.motion")] }],
     },
   ],
 });

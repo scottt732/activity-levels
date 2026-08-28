@@ -20,7 +20,7 @@ const baseConfig = (): Config => ({
   envelopes: [
     { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
   ],
-  groups: [{ ...newGroup("house"), stimuli: [newStimulus("binary_sensor.motion")] }],
+  groups: [{ ...newGroup("house", "structure"), stimuli: [newStimulus("binary_sensor.motion")] }],
 });
 
 let el: AlTree;
@@ -89,7 +89,7 @@ describe("al-tree", () => {
   });
 });
 describe("al-tree structural changes", () => {
-  const twoGroups = (): Config => ({ ...baseConfig(), groups: [newGroup("a"), newGroup("b")] });
+  const twoGroups = (): Config => ({ ...baseConfig(), groups: [newGroup("a", "area"), newGroup("b", "area")] });
 
   it("flags an add, so the shell can drop path-keyed errors that no longer line up", async () => {
     await click("ha-button");
@@ -117,7 +117,7 @@ describe("al-tree structural changes", () => {
 describe("al-tree reordering", () => {
   const threeGroups = (): Config => ({
     ...baseConfig(),
-    groups: [newGroup("a"), { ...newGroup("b"), stimuli: [newStimulus("binary_sensor.b")] }, newGroup("c")],
+    groups: [newGroup("a", "area"), { ...newGroup("b", "area"), stimuli: [newStimulus("binary_sensor.b")] }, newGroup("c", "area")],
   });
 
   /** Move the first group down, which swaps it with the second. */

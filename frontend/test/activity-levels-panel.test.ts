@@ -49,11 +49,11 @@ const houseConfig = (): Config => ({
   ...config(),
   groups: [
     {
-      ...newGroup("house"),
+      ...newGroup("house", "structure"),
       name: "House",
       max_value: 8,
       stimuli: [newStimulus("binary_sensor.front_door")],
-      children: [{ ...newGroup("kitchen"), name: "Kitchen" }],
+      children: [{ ...newGroup("kitchen", "area"), name: "Kitchen" }],
     },
   ],
 });
@@ -296,7 +296,7 @@ describe("activity-levels-panel validation errors", () => {
 
   /** An edit arriving from the tree, exactly as the tree dispatches it. */
   const change = async (structural?: true): Promise<void> => {
-    tree()?.dispatchEvent(alChange({ ...config(), groups: [newGroup("x")] }, undefined, structural));
+    tree()?.dispatchEvent(alChange({ ...config(), groups: [newGroup("x", "area")] }, undefined, structural));
     await el.updateComplete;
   };
 
@@ -326,7 +326,7 @@ describe("activity-levels-panel shared selection", () => {
     expect(placeholder()).toBe("Select a group or stimulus.");
     el.shadowRoot
       ?.querySelector("al-tree")
-      ?.dispatchEvent(alChange({ ...config(), groups: [newGroup("x")] }, undefined, true));
+      ?.dispatchEvent(alChange({ ...config(), groups: [newGroup("x", "area")] }, undefined, true));
     await settle();
     expect(placeholder()).toBe("Select a group or stimulus.");
     await selectTab(0);

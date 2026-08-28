@@ -38,9 +38,14 @@ const hassWith = (callWS: (msg: { type: string }) => Promise<unknown>): HomeAssi
   ({ callWS }) as unknown as HomeAssistant;
 
 describe("api", () => {
-  it("unwraps the config out of the config/get result", async () => {
+  it("pairs the config with the groups whose kind was inferred", async () => {
+    const hass = hassWith(vi.fn(async () => ({ config, inferred: ["groups.0"] })));
+    await expect(getConfig(hass)).resolves.toEqual({ config, inferred: ["groups.0"] });
+  });
+
+  it("defaults the inferred list to empty when the backend omits it", async () => {
     const hass = hassWith(vi.fn(async () => ({ config })));
-    await expect(getConfig(hass)).resolves.toBe(config);
+    await expect(getConfig(hass)).resolves.toEqual({ config, inferred: [] });
   });
 
   it("fills in an empty error list when validate reports none", async () => {

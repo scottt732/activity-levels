@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { newGroup } from "../src/model";
-import { Draft, getAt, insertAt, moveAt, removeAt, setAt } from "../src/store";
-import type { Config } from "../src/types";
+import { Draft, getAt, insertAt, legalDrop, moveAt, moveNode, removeAt, setAt } from "../src/store";
+import { kindsConfig } from "./fixtures";
+import type { Config, Path } from "../src/types";
 
 const base: Config = {
   version: 1,
   defaults: { envelope: "default", max_value: 5, precision: 1, unavailable: "hold", retrigger: "only_in_release", debounce: 0, safety_refresh: 60, min_wake_interval: 1 },
   envelopes: [{ id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null }],
-  groups: [{ ...newGroup("house"), name: "House", children: [newGroup("kitchen")] }],
+  groups: [{ ...newGroup("house", "structure"), name: "House", children: [newGroup("kitchen", "area")] }],
 };
 
 describe("path ops", () => {
@@ -101,5 +102,100 @@ describe("Draft coalescing", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("legalDrop", () => {
+  const cfg = kindsConfig();
+  const PROPERTY: Path = ["groups", 0];
+  const HOUSE: Path = ["groups", 0, "children", 0];
+  const DOWNSTAIRS: Path = ["groups", 0, "children", 0, "children", 0];
+  const KITCHEN: Path = ["groups", 0, "children", 0, "children", 0, "children", 0];
+  const PATIO: Path = ["groups", 0, "children", 1];
+  const KITCHEN_STIMULUS: Path = [...KITCHEN, "stimuli", 0];
+
+  it("allows a move the nesting rules permit", () => {
+    expect(legalDrop(cfg, KITCHEN, [...HOUSE, "children"], 1)).toEqual({ ok: true });
+  });
+
+  it("refuses a kind the destination cannot contain", () => {
+    const verdict = legalDrop(cfg, KITCHEN, ["groups", 0, "children"], 0);
+    expect(verdict.ok).toBe(false);
+    expect(verdict).toMatchObject({ reason: expect.stringContaining("property cannot contain") });
+  });
+
+  it("refuses a group into itself or into its own descendant", () => {
+    expect(legalDrop(cfg, HOUSE, [...HOUSE, "children"], 0).ok).toBe(false);
+    expect(legalDrop(cfg, HOUSE, [...DOWNSTAIRS, "children"], 0)).toMatchObject({
+      reason: expect.stringContaining("into itself"),
+    });
+  });
+
+  it("only lets a root list take a property, and only a property", () => {
+    expect(legalDrop(cfg, PATIO, ["groups"], 1)).toMatchObject({
+      reason: expect.stringContaining("every root group is a property"),
+    });
+    expect(legalDrop(cfg, PROPERTY, ["groups"], 0)).toEqual({ ok: true });
+  });
+
+  it("keeps a stimulus inside a stimuli list and a group out of one", () => {
+    expect(legalDrop(cfg, KITCHEN_STIMULUS, [...HOUSE, "children"], 0)).toMatchObject({
+      reason: expect.stringContaining("belongs to a group"),
+    });
+    expect(legalDrop(cfg, KITCHEN, [...KITCHEN, "stimuli"], 0)).toMatchObject({
+      reason: expect.stringContaining("not a stimulus"),
+    });
+  });
+
+  it("refuses an index outside the destination list", () => {
+    expect(legalDrop(cfg, KITCHEN, [...HOUSE, "children"], 9).ok).toBe(false);
+    expect(legalDrop(cfg, KITCHEN, [...HOUSE, "children"], -1).ok).toBe(false);
+  });
+
+  it("refuses a path that names nothing", () => {
+    expect(legalDrop(cfg, ["groups", 7], ["groups"], 0).ok).toBe(false);
+    expect(legalDrop(cfg, KITCHEN, ["groups", 7, "children"], 0).ok).toBe(false);
+  });
+});
+
+describe("moveNode", () => {
+  const ids = (c: Config, path: Path): string[] =>
+    (getAt<{ id: string }[]>(c, path) ?? []).map((g) => g.id);
+
+  it("reparents a group and leaves the rest of the document shared", () => {
+    const cfg = kindsConfig();
+    const next = moveNode(cfg, ["groups", 0, "children", 0, "children", 0, "children", 0], ["groups", 0, "children", 0, "children"], 1);
+    expect(ids(next, ["groups", 0, "children", 0, "children"])).toEqual(["downstairs", "kitchen"]);
+    expect(ids(next, ["groups", 0, "children", 0, "children", 0, "children"])).toEqual(["hall"]);
+    expect(next.envelopes).toBe(cfg.envelopes);
+    expect(cfg.groups[0]!.children[0]!.children[0]!.children).toHaveLength(2);
+  });
+
+  it("compensates for its own removal when moving down inside one list", () => {
+    const cfg = kindsConfig();
+    const list: Path = ["groups", 0, "children", 0, "children", 0, "children"];
+    expect(ids(cfg, list)).toEqual(["kitchen", "hall"]);
+    // "put the kitchen at slot 2 of the list as it reads now" = after the hall
+    expect(ids(moveNode(cfg, [...list, 0], list, 2), list)).toEqual(["hall", "kitchen"]);
+    // and moving up needs no compensation at all
+    expect(ids(moveNode(cfg, [...list, 1], list, 0), list)).toEqual(["hall", "kitchen"]);
+  });
+
+  it("is a no-op move, not a duplication, when the slot is where it already is", () => {
+    const cfg = kindsConfig();
+    const list: Path = ["groups", 0, "children", 0, "children", 0, "children"];
+    expect(ids(moveNode(cfg, [...list, 0], list, 0), list)).toEqual(["kitchen", "hall"]);
+  });
+
+  it("moves a stimulus between groups", () => {
+    const cfg = kindsConfig();
+    const kitchen: Path = ["groups", 0, "children", 0, "children", 0, "children", 0];
+    const hall: Path = ["groups", 0, "children", 0, "children", 0, "children", 1];
+    const next = moveNode(cfg, [...kitchen, "stimuli", 0], [...hall, "stimuli"], 0);
+    expect(getAt<unknown[]>(next, [...kitchen, "stimuli"])).toHaveLength(0);
+    expect(getAt<{ entity: string }[]>(next, [...hall, "stimuli"])!.map((s) => s.entity)).toEqual([
+      "binary_sensor.kitchen_motion",
+      "binary_sensor.hall_motion",
+    ]);
   });
 });

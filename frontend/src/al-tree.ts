@@ -137,7 +137,7 @@ export class AlTree extends LitElement {
   private addGroup(listPath: Path, index: number): void {
     const config = this.config;
     if (!config) return;
-    this.emitChange(insertAt(config, listPath, index, newGroup(uniqueGroupId(config, "new_group"))));
+    this.emitChange(insertAt(config, listPath, index, newGroup(uniqueGroupId(config, "new_group"), "area")));
     this.emitSelect([...listPath, index]);
   }
 

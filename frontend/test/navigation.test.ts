@@ -34,15 +34,15 @@ const houseConfig = (): Config => ({
   envelopes,
   groups: [
     {
-      ...newGroup("house"),
+      ...newGroup("house", "structure"),
       name: "House",
       stimuli: [newStimulus("binary_sensor.front_door"), newStimulus("binary_sensor.back_door")],
       children: [
-        { ...newGroup("kitchen"), stimuli: [newStimulus("binary_sensor.kitchen_motion")] },
+        { ...newGroup("kitchen", "area"), stimuli: [newStimulus("binary_sensor.kitchen_motion")] },
         {
-          ...newGroup("living_room"),
+          ...newGroup("living_room", "area"),
           name: "Living Room",
-          children: [{ ...newGroup("den"), stimuli: [newStimulus("binary_sensor.den_motion")] }],
+          children: [{ ...newGroup("den", "area"), stimuli: [newStimulus("binary_sensor.den_motion")] }],
         },
       ],
     },
@@ -54,7 +54,7 @@ const emptyConfig = (): Config => ({ version: 1, defaults, envelopes, groups: []
 /** Two roots, so "every root expanded" and root-to-root walking have something to chew on. */
 const twoRoots = (): Config => {
   const one = houseConfig();
-  return { ...one, groups: [one.groups[0]!, { ...newGroup("shed"), children: [newGroup("workbench")] }] };
+  return { ...one, groups: [one.groups[0]!, { ...newGroup("shed", "structure"), children: [newGroup("workbench", "area")] }] };
 };
 
 const navOf = (ids: string[], selection: Path | null): MixerNav => ({ expanded: new Set(ids), selection });

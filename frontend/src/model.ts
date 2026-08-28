@@ -1,10 +1,14 @@
+import { DEFAULT_CONNECTION, NODE_KINDS } from "./kinds";
 import { getAt } from "./store";
+import type { Connection, Kind } from "./kinds";
 import type { Adjacency, Config, EnvelopeOverrides, EnvelopePreset, Group, Path, PresenceOverrides, PresenceSettings, Stimulus } from "./types";
 
-export const newGroup = (id: string): Group => ({
+export const newGroup = (id: string, kind: Kind): Group => ({
   id,
   name: null,
-  area: null,
+  kind,
+  floor_id: null,
+  area_id: null,
   mix: "sum",
   null_handling: "zero",
   max_value: null,
@@ -38,6 +42,52 @@ export const adjacencyId = (a: string | Adjacency): string => (typeof a === "str
 
 /** Whether an adjacency entry is a one-way door. A plain id is always two-way. */
 export const isOneWay = (a: string | Adjacency): boolean => typeof a !== "string" && a.one_way;
+
+/** How an adjacency entry joins the two groups. A plain id is a doorway. */
+export const adjacencyConnection = (a: string | Adjacency): Connection =>
+  typeof a === "string" ? DEFAULT_CONNECTION : a.connection;
+
+/** Every group in the document, in tree order, with its path and its parent. */
+export function walkGroups(config: Config): { group: Group; path: Path; parent: Group | null }[] {
+  const out: { group: Group; path: Path; parent: Group | null }[] = [];
+  const walk = (group: Group, path: Path, parent: Group | null): void => {
+    out.push({ group, path, parent });
+    group.children.forEach((child, i) => walk(child, [...path, "children", i], group));
+  };
+  config.groups.forEach((group, i) => walk(group, ["groups", i], null));
+  return out;
+}
+
+/**
+ * The edges *other* groups declare against this one. An edge is written once, from
+ * whichever side read more naturally, so the table has to show both halves — the rows it
+ * owns and can edit, and the rows somebody else owns and it can only read.
+ */
+export function declaredOn(config: Config, id: string): { group: Group; edge: Adjacency }[] {
+  const out: { group: Group; edge: Adjacency }[] = [];
+  for (const { group } of walkGroups(config)) {
+    if (group.id === id) continue;
+    for (const entry of group.adjacent ?? []) {
+      if (adjacencyId(entry) !== id) continue;
+      out.push({
+        group,
+        edge: {
+          id,
+          connection: adjacencyConnection(entry),
+          one_way: isOneWay(entry),
+        },
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Whether anything outdoors is modelled. It decides one rule: a room may only be the way
+ * off the property when there is no outside area to leave from instead.
+ */
+export const hasOutside = (config: Config): boolean =>
+  walkGroups(config).some(({ group }) => group.kind === "outside");
 
 const PRESENCE_DEFAULTS: PresenceSettings = {
   enabled: false,
@@ -111,28 +161,15 @@ export function allGroupIds(config: Config): Set<string> {
 }
 
 /**
- * Which groups are rooms, by the same rule the backend uses: a group that declares an
- * edge, is named by somebody else's edge, or is a way out of the house. The panel needs
- * the answer before the websocket has one - the group form has to know whether to offer
- * a presence row while the config is still a draft.
+ * Which groups are rooms — the states the room graph has. The document says so now, so
+ * this is the kind and nothing else: a room with no doorway declared yet is still a room.
  */
 export function roomIds(config: Config): Set<string> {
-  const declared = new Set<string>();
-  const named = new Set<string>();
-  const exits = new Set<string>();
-  const known = allGroupIds(config);
-  const walk = (g: Group): void => {
-    for (const edge of g.adjacent ?? []) {
-      const other = adjacencyId(edge);
-      if (other === g.id || !known.has(other)) continue;
-      declared.add(g.id);
-      named.add(other);
-    }
-    if (g.exit) exits.add(g.id);
-    g.children.forEach(walk);
-  };
-  config.groups.forEach(walk);
-  return new Set([...declared, ...named, ...exits]);
+  return new Set(
+    walkGroups(config)
+      .filter(({ group }) => NODE_KINDS.has(group.kind))
+      .map(({ group }) => group.id),
+  );
 }
 
 export function slugify(text: string): string {

@@ -19,7 +19,7 @@ import "./al-override-field";
 import type { GroupField } from "./group-form";
 import type { Config, HomeAssistant, Path, ValidationError } from "./types";
 
-const FIELDS: GroupField[] = ["id", "name", "area", "mix", "null_handling", "gain", "adjacent", "exit"];
+const FIELDS: GroupField[] = ["id", "name", "area_id", "mix", "null_handling", "gain", "adjacent", "exit"];
 
 /** Editor for one group: identity, mixing, and the overridable output settings. */
 @customElement("al-group-editor")

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  adjacencyConnection,
+  declaredOn,
   effectivePrecision,
   formatLevel,
   groupAt,
+  hasOutside,
   newGroup,
   newStimulus,
   presenceSettings,
@@ -14,7 +17,7 @@ import {
   uniqueGroupId,
   uniquePresetId,
 } from "../src/model";
-import { houseConfig, roomsConfig } from "./fixtures";
+import { houseConfig, kindsConfig, roomsConfig } from "./fixtures";
 import type { Config } from "../src/types";
 
 const cfg: Config = {
@@ -24,7 +27,7 @@ const cfg: Config = {
     { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
     { id: "media", attack: 10, decay: 300, sustain: 0.6, release: 900, impulse: false, retrigger: "always", unavailable: null, debounce: 5 },
   ],
-  groups: [newGroup("house"), { ...newGroup("house_2"), children: [newGroup("kitchen")] }],
+  groups: [newGroup("house", "structure"), { ...newGroup("house_2", "structure"), children: [newGroup("kitchen", "area")] }],
 };
 
 describe("model", () => {
@@ -61,14 +64,14 @@ const refCfg = (): Config => ({
   defaults: { ...cfg.defaults, envelope: "media" },
   groups: [
     {
-      ...newGroup("house"),
+      ...newGroup("house", "structure"),
       stimuli: [
         { ...newStimulus("media_player.tv"), envelope: "media" },
         { ...newStimulus("binary_sensor.door"), envelope: null },
       ],
       children: [
-        { ...newGroup("kitchen"), stimuli: [{ ...newStimulus("light.hob"), envelope: "media" }] },
-        { ...newGroup("study"), stimuli: [{ ...newStimulus("light.desk"), envelope: "default" }] },
+        { ...newGroup("kitchen", "area"), stimuli: [{ ...newStimulus("light.hob"), envelope: "media" }] },
+        { ...newGroup("study", "area"), stimuli: [{ ...newStimulus("light.desk"), envelope: "default" }] },
       ],
     },
   ],
@@ -159,8 +162,8 @@ describe("formatLevel", () => {
 
 describe("effectivePrecision", () => {
   it("prefers the group's own precision and falls back to the defaults", () => {
-    expect(effectivePrecision(cfg, { ...newGroup("house"), precision: 3 })).toBe(3);
-    expect(effectivePrecision(cfg, newGroup("house"))).toBe(1);
+    expect(effectivePrecision(cfg, { ...newGroup("house", "structure"), precision: 3 })).toBe(3);
+    expect(effectivePrecision(cfg, newGroup("house", "structure"))).toBe(1);
   });
 });
 
@@ -179,5 +182,33 @@ describe("presenceSettings", () => {
     delete (config as { presence?: unknown }).presence;
     expect(presenceSettings(config).enabled).toBe(false);
     expect(presenceSettings(config).threshold).toBe(0.6);
+  });
+});
+
+describe("kinds on the model", () => {
+  it("makes a new group of the kind it was asked for", () => {
+    expect(newGroup("den", "area")).toMatchObject({ id: "den", kind: "area", area_id: null, floor_id: null });
+  });
+
+  it("reads a plain adjacency id as a two-way door", () => {
+    expect(adjacencyConnection("hall")).toBe("door");
+    expect(adjacencyConnection({ id: "hall", connection: "stairs", one_way: true })).toBe("stairs");
+  });
+
+  it("finds the edges other groups declare against one", () => {
+    const declared = declaredOn(kindsConfig(), "hall");
+    expect(declared).toHaveLength(1);
+    expect(declared[0]!.group.id).toBe("kitchen");
+    expect(declared[0]!.edge).toMatchObject({ id: "hall", connection: "open" });
+    expect(declaredOn(kindsConfig(), "kitchen")).toEqual([]);
+  });
+
+  it("says whether the property models anything outside", () => {
+    expect(hasOutside(kindsConfig())).toBe(true);
+    expect(hasOutside(houseConfig())).toBe(false);
+  });
+
+  it("counts areas and outside areas as rooms, whatever they declare", () => {
+    expect([...roomIds(kindsConfig())].sort()).toEqual(["back_patio", "hall", "kitchen"]);
   });
 });

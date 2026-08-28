@@ -31,19 +31,19 @@ const houseConfig = (): Config => ({
   envelopes,
   groups: [
     {
-      ...newGroup("property"),
+      ...newGroup("property", "property"),
       name: "Property",
       mix: "sum",
       children: [
         {
-          ...newGroup("house"),
+          ...newGroup("house", "structure"),
           name: "House",
           gain: 2,
           stimuli: [{ ...newStimulus("binary_sensor.front_door"), gain: 3 }],
-          children: [newGroup("den")],
+          children: [newGroup("den", "area")],
         },
-        { ...newGroup("garage"), name: "Garage" },
-        newGroup("outside"),
+        { ...newGroup("garage", "structure"), name: "Garage" },
+        newGroup("outside", "outside"),
       ],
     },
   ],
