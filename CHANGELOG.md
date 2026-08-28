@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/scottt732/activity-levels/compare/v0.3.0...v0.4.0) (2026-08-28)
+
+
+### Added
+
+* **config:** publish a JSON Schema for the configuration document ([7c7e660](https://github.com/scottt732/activity-levels/commit/7c7e66007b6e013922b863c512960b4a0df498bc))
+* **engine:** split retrigger into when and stacking, free the sustain multiplier ([db5be48](https://github.com/scottt732/activity-levels/commit/db5be4800dcfe3ce1d7867f6a2c8a16ec212ac5f))
+* **panel:** edit the whole configuration as YAML in a Code tab ([d91f4f7](https://github.com/scottt732/activity-levels/commit/d91f4f713ee9171857fc38815495ef455e908047))
+* **panel:** name and reorder envelope presets, split the retrigger controls ([689f933](https://github.com/scottt732/activity-levels/commit/689f933d9dcdba8c8b9deea12dbcd97e824e34a3))
+
+
+### Documentation
+
+* say trigger where the project said note and voice ([eade7c9](https://github.com/scottt732/activity-levels/commit/eade7c91749a577678dc7c8a4f1d95cc173806e5))
+
 ## [0.3.0](https://github.com/scottt732/activity-levels/compare/v0.2.0...v0.3.0) (2026-08-28)
 
 
