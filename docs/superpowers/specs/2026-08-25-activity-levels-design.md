@@ -145,6 +145,16 @@ Decay is relative to the peak the attack actually reached rather than to `gain`.
 unstacked note that peak *is* `gain`, so the other two retrigger modes are unchanged; a
 note stacked to 3.0 with `sustain 0.5` settles at 1.5, not 0.5.
 
+> **Superseded (2026-08-28).** The single `retrigger` setting described in this section
+> has since been split into two fields on `Envelope`: `retrigger: RetriggerWhen`
+> (`always` | `after_attack` | `after_decay` | `release` | `idle`), which decides *when* a
+> fresh trigger is honoured, and `stack: bool`, which decides what an honoured one does.
+> The old spellings are rewritten on load — `only_in_release` → `release` + `stack: false`,
+> `always` → `always` + `stack: false`, `stack` → `always` + `stack: true` — and the
+> defaults are now `always` + `stack: true`. `sustain` also lost its upper bound of 1: it
+> is a multiplier on the peak, so above 1 the decay segment climbs (capped at the
+> voice's ceiling). See `README.md` for the current configuration reference.
+
 Operations (all pure functions of `(state, t)` returning new state):
 
 - `value_at(t)`: interpolate along the current segment; if `t` is past the segment end,

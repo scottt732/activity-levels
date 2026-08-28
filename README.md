@@ -16,19 +16,25 @@ whole house) into a single "how much is going on here" number per area.
 
 ## How it works
 
-Each configured stimulus is a **voice**: an envelope with attack, decay, sustain, and
-release stages. When the source entity enters its configured `to` state, that's
-note-on — the envelope attacks up to its peak (`gain`), decays to its sustain level, and
-holds there. By default a second note-on **stacks**: it adds another `gain` on top of
+Each configured stimulus is a **trigger**: an envelope with attack, decay, sustain, and
+release stages. When the source entity enters its configured `to` state, the trigger
+starts — the envelope attacks up to its peak (`gain`), decays to its sustain level, and
+holds there. By default a second trigger **stacks**: it adds another `gain` on top of
 what is already sounding, up to the group's limiter, so a busy room climbs. When the
-entity leaves that state, that's note-off — the envelope releases back toward zero at a
+entity leaves that state, the trigger ends — the envelope releases back toward zero at a
 fixed slope, `release` being the time to fall the whole way from the group's limiter, so
 a level a fifth of the way up empties in a fifth of that time. A group **mixes** the
 current values of its
-child voices and child groups using `sum`, `max`, or `mean`, then applies a limiter
+child triggers and child groups using `sum`, `max`, or `mean`, then applies a limiter
 (`max_value`) so the group's own activity level stays in a bounded range. Groups can
 nest, so a `living_room` group rolls up into a `house` group, and the same mixed value
-is recomputed recursively at every level whenever a leaf voice changes.
+is recomputed recursively at every level whenever a leaf trigger changes.
+
+Two settings say what a *second* trigger does to an envelope that is still sounding.
+**Allow retrigger** decides whether it counts at all: `always`, `after_attack`,
+`after_decay`, `release` (only a note that is already fading) or `idle` (only once the
+envelope has finished). **Stacks** decides what an honoured one does — add its gain on
+top of the current level, or restart the rise toward plain `gain`.
 
 ## Install
 
@@ -64,7 +70,7 @@ moving groups and stimuli is done in **Groups** (below), not here:
    DAW nests track groups: a group with children carries a chevron (`▸ 3` / `▾ 3`) that
    opens and closes them in place, and a left-hand marker steps in and fades with depth so
    a child reads as sitting under the parent it follows. Roots start open, and the row
-   reopens the way it was left. The **MASTER** strip at the right of the row follows
+   reopens the way it was left. The **group strip** at the right of the row follows
    whatever is selected:
 
    | Config or state | Mixer |
@@ -73,9 +79,9 @@ moving groups and stimuli is done in **Groups** (below), not here:
    | group level | the strip's **value fader**, with the level read out below it |
    | the level without simulated stimuli | a tick on the fader, while the two differ |
    | muted / reset | the strip's **M** and **R** buttons |
-   | group `mix` | the MASTER strip's mix selector (`sum` / `max` / `mean`) |
-   | group `max_value` | the MASTER strip's **limiter** ceiling |
-   | `switch.<gid>_presence_simulation` | the MASTER strip's ⏻ — hidden if the group has no lights |
+   | group `mix` | the group strip's mix selector (`sum` / `max` / `mean`) |
+   | group `max_value` | the group strip's **limiter** ceiling |
+   | `switch.<gid>_presence_simulation` | the group strip's ⏻ — hidden if the group has no lights |
 
    Clicking a strip selects it (the timeline and the controls row below follow); the
    chevron only opens and closes. Dragging the value fader **overrides** the group's level
@@ -150,7 +156,7 @@ the background.
   load. Home Assistant registers them lazily; visiting **Settings → Devices & services**
   once and reloading the page is enough to bring them in.
 - The timeline charts a group's own series; a channel strip has no series of its own, so
-  selecting one charts the bus it belongs to.
+  selecting one charts the group it belongs to.
 - A forecast's day types for days beyond today are provisional: they fall back to a plain
   weekday/weekend guess rather than checking configured calendars, which are only
   resolved as those days actually arrive.
@@ -164,11 +170,11 @@ Each configured group produces:
 
 | Entity | Description |
 | --- | --- |
-| `sensor.<id>_activity_level` | The group's mixed, limited activity level. Attributes: `mix`, `max_value`, `gated`, `active_voices`, `cooldown_at`, `contributors`. |
+| `sensor.<id>_activity_level` | The group's mixed, limited activity level. Attributes: `mix`, `max_value`, `gated`, `active_voices` (active triggers), `cooldown_at`, `contributors`. |
 | `binary_sensor.<id>_active` | On while the group's activity level is above zero. |
-| `sensor.<id>_last_activity` | Diagnostic: timestamp of the group's most recent note-on. |
+| `sensor.<id>_last_activity` | Diagnostic: timestamp of the group's most recent trigger. |
 | `sensor.<id>_cooldown_at` | Diagnostic: when the group's release/cooldown is expected to finish. |
-| `button.<id>_trigger` | Diagnostic: manually fires the group's synthetic trigger voice. |
+| `button.<id>_trigger` | Diagnostic: manually fires the group's built-in trigger channel. |
 | `sensor.<id>_expected_activity` | The level the profile expects right now. Attributes: `p25`, `p75`, `day_type`, `ready`, `producer`. `unknown` until the group is ready. |
 | `sensor.<id>_activity_anomaly` | How far today's real level sits outside that band, signed. `unknown` until the group is ready. |
 | `switch.<id>_presence_simulation` | Arms presence simulation for the group. Only created when the group has lights and its `simulation.enabled` is true. |
@@ -183,7 +189,7 @@ And once, on the **Activity Levels** hub device:
 
 | Entity | Description |
 | --- | --- |
-| `switch.activity_levels_presence_simulation` | The master arm for presence simulation. |
+| `switch.activity_levels_presence_simulation` | The house-wide arm for presence simulation. |
 | `sensor.activity_levels_profile` | Diagnostic: when the profile was generated. Attributes: `producer`, `producer_version`, `groups_ready`, `groups_total`, `trained`, `ready`. |
 
 And, while presence is on, one pair per tracked person, each on its own **Presence:
@@ -196,9 +202,9 @@ And, while presence is on, one pair per tracked person, each on its own **Presen
 
 ## Services
 
-- `activity_levels.trigger` — manually fire a synthetic note-on. Fields: `group_id`
+- `activity_levels.trigger` — manually fire a synthetic trigger. Fields: `group_id`
   (required), `peak` (optional, defaults to 1.0).
-- `activity_levels.reset` — clear all active voices back to idle. Fields: `group_id`
+- `activity_levels.reset` — return every trigger in a group to idle. Fields: `group_id`
   (optional; omit to reset every group).
 - `activity_levels.rebuild_profile` — refit the learned profile now instead of waiting for
   `rebuild_time`. Fields: `force` (optional; required to overwrite a profile that belongs
@@ -232,7 +238,7 @@ vacation week is learned separately from an ordinary one.
 
 | Precondition | Where it comes from |
 | --- | --- |
-| the master switch is on | `switch.activity_levels_presence_simulation` |
+| the house-wide switch is on | `switch.activity_levels_presence_simulation` |
 | the group's own switch is on | `switch.<id>_presence_simulation` |
 | the group is not opted out | `simulation.enabled` in its config |
 | the group owns at least one light | its `area_id`, plus `simulation.lights.include`/`exclude` |
@@ -253,7 +259,7 @@ written to a rolling log of the last 500, readable from the panel.
 Three things worth knowing:
 
 - **A child's trigger button counts as real activity for its parents.** `real_value` drops
-  the group's *own* synthetic trigger voice, not its children's, so pressing the kitchen's
+  the group's *own* built-in trigger channel, not its children's, so pressing the kitchen's
   test button cancels any simulation running on the house above it.
 - **Do not use a group's own lights as its stimuli.** The simulation switching a light on
   would raise the group's real level, which cancels the simulation — a loop that stops
@@ -376,7 +382,7 @@ starts (or is nudged) wrong could never recover.
 **What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`) and
 `binary_sensor.<name>_moving` (on while their two most likely rooms are adjacent and both
 still plausible). Per room: `sensor.<room>_occupants`, plus a `presence` channel folded
-into that room's mix — silent, note-on when the room fills, note-off when it empties,
+into that room's mix — silent, starting when the room fills and ending when it empties,
 tuned in the mixer's controls row exactly like any other channel (gain, envelope, and it
 mutes the same way).
 
@@ -433,11 +439,14 @@ defaults:
   max_value: 5.0             # limiter for groups that don't set their own
   precision: 1               # display decimals
   unavailable: hold          # hold | note_off — what an entity going unavailable does
-  retrigger: stack           # stack | only_in_release | always — what a note-on does to a
-                             # note that is already sounding: stack adds another gain on
-                             # top (up to the group limiter), only_in_release restarts
-                             # just a fading note, always restarts even a held one
-  debounce: 0s               # minimum time between note-ons per stimulus
+                             # to its trigger (`note_off` ends it; the key keeps its name)
+  retrigger: always          # when a fresh trigger counts while the envelope is still
+                             # sounding: always | after_attack | after_decay | release
+                             # (only while it is fading) | idle (only once it has finished)
+  stack: true                # what an honoured trigger does: true adds another gain on
+                             # top of the current level (up to the group limiter), false
+                             # restarts the rise toward plain gain
+  debounce: 0s               # minimum time between triggers per stimulus
   safety_refresh: 60s        # periodic recompute as a self-heal
   min_wake_interval: 1s      # floor for the scheduler's timer delay
   patterns:
@@ -454,10 +463,13 @@ envelopes:
   - id: default
     attack: 0s
     decay: 0s
-    sustain: 1.0             # fraction of peak held while the note is on
+    label: Thirty Minutes    # optional display name; stimuli still name the id
+    sustain: 1.0             # multiplier on the peak, held while the trigger is on;
+                             # above 1.0 the decay climbs instead of falling
     release: 30m             # time to fall from full scale (the group's max_value) to
                              # zero; lower levels fall faster, at that same slope
-    impulse: false           # true = note-off immediately (momentary sensors)
+    impulse: false           # true = the trigger ends the moment it starts (momentary
+                             # sensors), leaving only the release
 groups:
   - id: house                # ^[a-z][a-z0-9_]*$, unique; entity ids derive from it
     kind: structure          # property | structure | floor | area | outside
@@ -470,7 +482,7 @@ groups:
     stimuli:
       - entity: binary_sensor.front_door
         to: "on"             # trigger state(s); string or list
-        gain: 1.0            # peak level (velocity)
+        gain: 1.0            # peak level one trigger of this stimulus reaches
         envelope: default    # preset; any envelope field may be overridden inline
         key: null            # required only when the same entity appears twice in a group
     simulation:

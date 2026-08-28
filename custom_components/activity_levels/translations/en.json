@@ -38,7 +38,7 @@
     },
     "set_level": {
       "name": "Set level",
-      "description": "Override a group's level: its trigger voice is sized so the group reads this value, and cools down from there.",
+      "description": "Override a group's level: its built-in trigger is sized so the group reads this value, and cools down from there.",
       "fields": {
         "group_id": { "name": "Group", "description": "The group id to override." },
         "value": {
@@ -49,7 +49,7 @@
     },
     "reset": {
       "name": "Reset",
-      "description": "Return all voices in a group (or all groups) to idle.",
+      "description": "Return every trigger in a group (or all groups) to idle.",
       "fields": { "group_id": { "name": "Group", "description": "Group id; omit to reset every group." } }
     },
     "rebuild_profile": {
