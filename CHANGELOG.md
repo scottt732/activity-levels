@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.3.0](https://github.com/scottt732/activity-levels/compare/v0.2.0...v0.3.0) (2026-08-28)
+
+
+### Added
+
+* **api:** report whether Bermuda is loaded from presence/state ([1209a52](https://github.com/scottt732/activity-levels/commit/1209a52aed934b92830010453592ba9293d34a6d))
+* **config:** group kinds, floor and area binding, and connection types ([a8d689a](https://github.com/scottt732/activity-levels/commit/a8d689ac623cc8aaa89c88a52ce681f320f5b10e))
+* **config:** kinds decide the topology, the device model and config/get ([e6ed96d](https://github.com/scottt732/activity-levels/commit/e6ed96de2c534cd3cd06608c79d3ea54fa145305))
+* **panel:** flat groups tree with drag-and-drop and Alt+arrow moves ([30f8a93](https://github.com/scottt732/activity-levels/commit/30f8a93e77cd7378a1b448adb93a10da9e8d4c9c))
+* **panel:** kind vocabulary and pure move/drop reducers ([bb70f44](https://github.com/scottt732/activity-levels/commit/bb70f448ee96f3d33583159091f8e2e4f15eca0a))
+* **panel:** paneled group editor with an adjacency table ([21eb82b](https://github.com/scottt732/activity-levels/commit/21eb82b1f0f2372a6a3e7f36238f67f49ac09d96))
+* **panel:** paneled stimulus editor with a collapsed override preset ([bbb1cc2](https://github.com/scottt732/activity-levels/commit/bbb1cc294acf1bf67ef53231cdf1e197cd656b0f))
+* **panel:** presence setup card on an always-reachable tab ([ba40696](https://github.com/scottt732/activity-levels/commit/ba406964e60420104a4f7e8d9c18090452382835))
+
+
+### Fixed
+
+* **config:** amnesty inferred kinds on both ends of a rule, drop the unreachable null-kind branch ([809eec9](https://github.com/scottt732/activity-levels/commit/809eec9b3710f53f51fee0b1a142d64554ce651c))
+* **config:** let migrated documents save back, keep evidence-based kinds to leaves, warn on root rooms, suggest areas by name ([ee747b8](https://github.com/scottt732/activity-levels/commit/ee747b8ec48b5e718f98db7abf8aef7d8c2bb7b7))
+* **panel:** give the mixer's stimulus view the shared paneled editor ([dc1a8ce](https://github.com/scottt732/activity-levels/commit/dc1a8ce27a112505fae50d7bb4bcf2b25f9c3321))
+* **panel:** make tree drag-and-drop work in real browsers, roving tabindex, stimulus drop targets ([669f2fb](https://github.com/scottt732/activity-levels/commit/669f2fb3d59b87bce9b3f3b83390922dfbe8bcaf))
+* **panel:** prefill ids from the registry id, share the presence overrides panel and the panel chrome ([8cc1e9a](https://github.com/scottt732/activity-levels/commit/8cc1e9a23bc59aa7ce2cfcf34627b7360742690f))
+* **panel:** rebase the drop target after removal, open a new group, show migration warnings ([5f58587](https://github.com/scottt732/activity-levels/commit/5f585878efdebd58ed961dfd5df6a499bf571203))
+
+
+### Documentation
+
+* design spec for group kinds, adjacency table, tree UX and paneled editor ([2c86eca](https://github.com/scottt732/activity-levels/commit/2c86eca07d9effc556afa5ac0f452cc0c9e5f65d))
+* group kinds, the adjacency table and the example house ([ee872a3](https://github.com/scottt732/activity-levels/commit/ee872a34b60af22f787d9de1ba1c3aa59e9b37bc))
+* implementation plan for group kinds, tree UX and paneled editors ([d74a2f8](https://github.com/scottt732/activity-levels/commit/d74a2f8dbd98a911ce29d3c40fd1cc09d8a77f9b))
+* plan 8 group kinds, tree and editor ledger ([6089eed](https://github.com/scottt732/activity-levels/commit/6089eed5f7d16f0ad3795b8b83bc800fc6a6bf7f))
+
 ## [0.2.0](https://github.com/scottt732/activity-levels/compare/v0.1.0...v0.2.0) (2026-08-27)
 
 
