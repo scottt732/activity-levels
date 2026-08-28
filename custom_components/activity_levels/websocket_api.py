@@ -411,10 +411,12 @@ def ws_presence_state(
         return
     presence = runtime.presence
     if presence is None:
-        # opted out is an answer, not an error: the panel hides the tab and moves on
+        # opted out is an answer, not an error: the panel shows the setup card and
+        # needs to know whether Bermuda is there before offering to switch it on
         connection.send_result(
             msg["id"],
             {
+                "bermuda": "bermuda" in hass.config.components,
                 "enabled": False,
                 "devices": {},
                 "occupants": {},
@@ -424,4 +426,6 @@ def ws_presence_state(
             },
         )
         return
-    connection.send_result(msg["id"], presence.payload())
+    connection.send_result(
+        msg["id"], {"bermuda": "bermuda" in hass.config.components, **presence.payload()}
+    )

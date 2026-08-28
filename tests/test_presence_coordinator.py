@@ -515,6 +515,7 @@ async def test_the_websocket_says_presence_is_off(
     msg = await client.receive_json()
     assert msg["success"]
     assert msg["result"] == {
+        "bermuda": False,
         "enabled": False,
         "devices": {},
         "occupants": {},

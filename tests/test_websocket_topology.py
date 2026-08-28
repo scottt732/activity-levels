@@ -56,6 +56,22 @@ async def test_topology_paths_command(
     assert not msg["success"] and msg["error"]["code"] == "not_found"
 
 
+async def test_presence_state_says_whether_bermuda_is_installed(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, entry: MockConfigEntry
+) -> None:
+    """The panel's setup card asks this before presence has ever been switched on."""
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/presence/state"})
+    msg = await client.receive_json()
+    assert msg["result"]["enabled"] is False
+    assert msg["result"]["bermuda"] is False
+
+    hass.config.components.add("bermuda")
+    await client.send_json_auto_id({"type": "activity_levels/presence/state"})
+    msg = await client.receive_json()
+    assert msg["result"]["bermuda"] is True
+
+
 async def test_diagnostics_carry_the_topology(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     from custom_components.activity_levels.diagnostics import (
         async_get_config_entry_diagnostics,
