@@ -49,6 +49,16 @@ describe("flattenRows", () => {
     expect(rows.at(-1)!.depth).toBe(2);
   });
 
+  it("numbers each row among the siblings it shares a level with", () => {
+    const rows = flattenRows(kindsConfig(), new Set(["groups/0", "groups/0/children/1"]));
+    const at = (path: string) => rows.find((r) => r.path.join("/") === path)!;
+    expect([at("groups/0").posinset, at("groups/0").setsize]).toEqual([1, 1]);
+    expect([at("groups/0/children/1").posinset, at("groups/0/children/1").setsize]).toEqual([2, 2]);
+    // a stimulus shares its level with the child groups, and is counted after them
+    const stimulus = at("groups/0/children/1/stimuli/0");
+    expect([stimulus.posinset, stimulus.setsize]).toEqual([1, 1]);
+  });
+
   it("shows no placeholder for a group that has something in it", () => {
     expect(keys(kindsConfig(), new Set(["groups/0"])).some((k) => k.endsWith(":placeholder"))).toBe(false);
   });

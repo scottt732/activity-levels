@@ -212,10 +212,13 @@ export const sharedStyles = css`
     font-size: 0.9em;
     min-height: 28px;
   }
+  /* Anchored under the row's action column, which is where the button that opens it is. */
   .add-menu {
     position: absolute;
+    top: 100%;
+    right: 0;
     z-index: 2;
-    background: var(--card-background-color, #fff);
+    background: var(--card-background-color, var(--primary-background-color));
     border: 1px solid var(--divider-color);
     border-radius: 6px;
     padding: 4px;

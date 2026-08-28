@@ -66,13 +66,22 @@ const expand = async (path: string): Promise<void> => {
   await el.updateComplete;
 };
 
+/**
+ * A DataTransfer that lies the way a real one does: the *type list* is readable throughout
+ * the drag, but the data behind it is only readable during `dragstart` and `drop`. Every
+ * other event sees the drag data store in protected mode, where `getData` returns "".
+ */
 const dragEvent = (type: string, data: Record<string, string>, clientY = 0): DragEvent => {
   const store = new Map(Object.entries(data));
+  const readable = type === "dragstart" || type === "drop";
   const dataTransfer = {
     effectAllowed: "move",
     dropEffect: "move",
+    get types(): string[] {
+      return [...store.keys()];
+    },
     setData: (k: string, v: string) => void store.set(k, v),
-    getData: (k: string) => store.get(k) ?? "",
+    getData: (k: string) => (readable ? (store.get(k) ?? "") : ""),
     setDragImage: () => undefined,
   } as unknown as DataTransfer;
   const ev = new MouseEvent(type, { bubbles: true, composed: true, cancelable: true, clientY }) as DragEvent;
@@ -201,6 +210,50 @@ describe("al-tree rows", () => {
     expect(changes.at(-1)!.groups[0]!.children.map((g) => g.id)).toEqual(["back_patio", "house"]);
   });
 
+  it("shows the drop target during dragover, when the data store is protected", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    rowFor("groups/0/children/1").dispatchEvent(dragEvent("dragstart", {}));
+    const target = rowFor("groups/0/children/0");
+    const over = dragEvent("dragover", { "text/plain": "unreadable until the drop" }, 1);
+    expect(target.dispatchEvent(over)).toBe(false); // preventDefault: a drop may land here
+    await el.updateComplete;
+    expect(target.classList.contains("drop-before")).toBe(true);
+    expect(over.dataTransfer?.dropEffect).toBe("move");
+  });
+
+  it("ignores a drag that did not start in the tree", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    const target = rowFor("groups/0/children/0");
+    const over = dragEvent("dragover", { "text/plain": "a paragraph from another page" }, 1);
+    expect(target.dispatchEvent(over)).toBe(true); // not prevented: nothing may land here
+    await el.updateComplete;
+    expect(target.className).not.toContain("drop-");
+  });
+
+  it("drops a stimulus into a group that has none yet", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    await expand("groups/0/children/0");
+    await expand("groups/0/children/0/children/0");
+    await expand("groups/0/children/0/children/0/children/1");
+    const from = "groups/0/children/0/children/0/children/1/stimuli/0";
+    rowFor(from).dispatchEvent(dragEvent("dragstart", {}));
+    const path = JSON.stringify(["groups", 0, "children", 0, "children", 0, "children", 1, "stimuli", 0]);
+    const house = rowFor("groups/0/children/0");
+    house.dispatchEvent(dragEvent("dragover", { "text/plain": path }, 12)); // middle third: into
+    house.dispatchEvent(dragEvent("drop", { "text/plain": path }, 12));
+    await el.updateComplete;
+    const moved = changes.at(-1)!.groups[0]!.children[0]!;
+    expect(moved.stimuli.map((s) => s.entity)).toEqual(["binary_sensor.hall_motion"]);
+    expect(moved.children[0]!.children[1]!.stimuli).toEqual([]);
+    expect(selects.at(-1)).toEqual(["groups", 0, "children", 0, "stimuli", 0]);
+  });
+
   it("refuses an illegal drop and says why in the row", async () => {
     el.config = kindsConfig();
     el.selection = null;
@@ -208,7 +261,7 @@ describe("al-tree rows", () => {
     await expand("groups/0");
     const target = rowFor("groups/0/children/0");
     const path = JSON.stringify(["groups", 0, "children", 1]); // the patio, into the house
-    target.dispatchEvent(dragEvent("dragstart", {}));
+    rowFor("groups/0/children/1").dispatchEvent(dragEvent("dragstart", {}));
     target.dispatchEvent(dragEvent("dragover", { "text/plain": path }, 12)); // middle: into
     await el.updateComplete;
     expect(target.classList.contains("illegal")).toBe(true);
@@ -251,15 +304,67 @@ describe("al-tree rows", () => {
     expect(kitchen[0]!.children.map((g) => g.id)).toEqual(["hall"]);
   });
 
-  it("selects a row with the keyboard, and leaves plain arrows to the browser", async () => {
+  it("leaves a stimulus where it is when Alt+Left or Alt+Right asks it to be a group", async () => {
+    el.config = {
+      ...baseConfig(),
+      groups: [
+        {
+          ...newGroup("house", "structure"),
+          stimuli: [newStimulus("binary_sensor.one"), newStimulus("binary_sensor.two")],
+        },
+      ],
+    };
+    await el.updateComplete;
+    await expand("groups/0");
+    const second = rowFor("groups/0/stimuli/1");
+    second.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true }));
+    second.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true, bubbles: true }));
+    await el.updateComplete;
+    expect(changes).toHaveLength(0);
+  });
+
+  it("selects a row with Enter and moves focus with the plain arrows", async () => {
     el.config = kindsConfig();
     await el.updateComplete;
+    await expand("groups/0");
     rowFor("groups/0").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await el.updateComplete;
     expect(selects).toEqual([["groups", 0]]);
-    rowFor("groups/0").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    const root = rowFor("groups/0");
+    root.focus();
+    root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     await el.updateComplete;
+    expect(el.shadowRoot?.activeElement).toBe(rowFor("groups/0/children/0"));
+    rowFor("groups/0/children/0").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    await el.updateComplete;
+    expect(el.shadowRoot?.activeElement).toBe(rowFor("groups/0/children/1"));
+    expect(selects).toHaveLength(1); // walking the tree is not choosing anything
     expect(changes).toHaveLength(0);
+  });
+
+  it("opens a group with plain Right and closes it with plain Left", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    const root = rowFor("groups/0");
+    root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await el.updateComplete;
+    expect(rows()).toHaveLength(3);
+    rowFor("groups/0").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    await el.updateComplete;
+    expect(rows()).toHaveLength(1);
+  });
+
+  it("keeps one tab stop, on the selected row, and numbers the rows within their level", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    expect(rows().map((r) => r.tabIndex)).toEqual([0, -1, -1]); // no selection: the first row
+    el.selection = ["groups", 0, "children", 1];
+    await el.updateComplete;
+    expect(rows().map((r) => r.tabIndex)).toEqual([-1, -1, 0]);
+    expect(rowFor("groups/0").getAttribute("aria-setsize")).toBe("1");
+    expect(rowFor("groups/0/children/1").getAttribute("aria-posinset")).toBe("2");
+    expect(rowFor("groups/0/children/1").getAttribute("aria-setsize")).toBe("2");
   });
 
   // A group with nothing in it has no caret, so the only way to be looking inside one is

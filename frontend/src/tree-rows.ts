@@ -15,17 +15,23 @@ export interface Row {
   /** Whether there is anything under it to open. A leaf gets no caret, not a disabled one. */
   expandable: boolean;
   expanded: boolean;
+  /** Where this row sits among the siblings sharing its level, and how many of them there are. */
+  posinset: number;
+  setsize: number;
 }
 
 export function flattenRows(config: Config, expanded: ReadonlySet<string>): Row[] {
   const rows: Row[] = [];
-  const walk = (group: Group, path: Path, depth: number): void => {
+  const walk = (group: Group, path: Path, depth: number, posinset: number, setsize: number): void => {
     const key = pathKey(path);
     const expandable = group.children.length > 0 || group.stimuli.length > 0;
     const open = expandable && expanded.has(key);
-    rows.push({ path, depth, kind: "group", group, expandable, expanded: open });
+    rows.push({ path, depth, kind: "group", group, expandable, expanded: open, posinset, setsize });
     if (!expanded.has(key)) return;
-    group.children.forEach((child, i) => walk(child, [...path, "children", i], depth + 1));
+    // Child groups and stimuli share a level, so they share one numbering: the groups come
+    // first, and a stimulus counts from where they leave off.
+    const size = group.children.length + group.stimuli.length;
+    group.children.forEach((child, i) => walk(child, [...path, "children", i], depth + 1, i + 1, size));
     group.stimuli.forEach((stimulus, i) =>
       rows.push({
         path: [...path, "stimuli", i],
@@ -34,14 +40,25 @@ export function flattenRows(config: Config, expanded: ReadonlySet<string>): Row[
         stimulus,
         expandable: false,
         expanded: false,
+        posinset: group.children.length + i + 1,
+        setsize: size,
       }),
     );
     // The placeholder is for a group that is open and holds nothing at all — not for one
     // whose stimuli list happens to be empty while it has children.
     if (!expandable)
-      rows.push({ path, depth: depth + 1, kind: "placeholder", group, expandable: false, expanded: false });
+      rows.push({
+        path,
+        depth: depth + 1,
+        kind: "placeholder",
+        group,
+        expandable: false,
+        expanded: false,
+        posinset: 1,
+        setsize: 1,
+      });
   };
-  config.groups.forEach((group, i) => walk(group, ["groups", i], 0));
+  config.groups.forEach((group, i) => walk(group, ["groups", i], 0, i + 1, config.groups.length));
   return rows;
 }
 

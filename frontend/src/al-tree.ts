@@ -102,7 +102,8 @@ export class AlTree extends LitElement {
   @property({ attribute: false }) live: LiveState | null = null;
 
   @state() private expanded: Set<string> = loadExpanded();
-  @state() private dragging: string | null = null;
+  /** The node under the cursor right now: its path, because `dragover` cannot read it. */
+  @state() private dragging: { key: string; path: Path } | null = null;
   @state() private target: DropTarget | null = null;
   /** The row whose add-group menu is open, if any. One at a time. */
   @state() private menu: string | null = null;
@@ -185,6 +186,8 @@ export class AlTree extends LitElement {
     if (!legalDrop(config, from, toParent, index).ok) return false;
     const next = moveNode(config, from, toParent, index);
     if (next === config) return false;
+    // Dropping into a closed group would otherwise put the node somewhere invisible.
+    this.open(toParent.slice(0, -1));
     this.emitChange(next);
     // The node has moved, so the selection's old path names something else now.
     const same = pathKey(toParent) === pathKey(this.listOf(from).list);
@@ -196,7 +199,7 @@ export class AlTree extends LitElement {
   private onDragStart(ev: DragEvent, path: Path): void {
     ev.dataTransfer?.setData(DRAG_TYPE, JSON.stringify(path));
     if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
-    this.dragging = pathKey(path);
+    this.dragging = { key: pathKey(path), path };
   }
 
   private onDragEnd(): void {
@@ -218,10 +221,17 @@ export class AlTree extends LitElement {
     return row.kind === "group" ? "into" : "after";
   }
 
-  /** The destination list and slot a (row, where) pair names. */
-  private destination(row: Row, where: Where): { toParent: Path; index: number } {
-    if (where === "into")
-      return { toParent: [...row.path, "children"], index: row.group?.children.length ?? 0 };
+  /**
+   * The destination list and slot a (row, where) pair names. *Into* means the end of the
+   * list the dragged node itself belongs in — a group's `children`, a stimulus's `stimuli`
+   * — so a stimulus can be dropped into a group that has none yet.
+   */
+  private destination(row: Row, where: Where, from: Path): { toParent: Path; index: number } {
+    if (where === "into") {
+      const stimulus = from[from.length - 2] === "stimuli";
+      const into = stimulus ? row.group?.stimuli : row.group?.children;
+      return { toParent: [...row.path, stimulus ? "stimuli" : "children"], index: into?.length ?? 0 };
+    }
     const { list, index } = this.listOf(row.path);
     return { toParent: list, index: where === "before" ? index : index + 1 };
   }
@@ -237,26 +247,100 @@ export class AlTree extends LitElement {
     }
   }
 
+  /**
+   * What is being dragged, if it is ours. During `dragover` the browser holds the drag data
+   * store in protected mode and `getData` returns "", so the path has to come from the state
+   * set at `dragstart`; the *type list* stays readable, and that is what says whether the
+   * thing being dragged over the tree is one of our rows rather than a file or a selection.
+   */
+  private draggedPath(ev: DragEvent): Path | null {
+    if (this.dragging === null) return null;
+    return ev.dataTransfer?.types.includes(DRAG_TYPE) === true ? this.dragging.path : null;
+  }
+
   private onDragOver(ev: DragEvent, row: Row): void {
     const config = this.config;
-    const from = this.readPath(ev);
+    const from = this.draggedPath(ev);
     if (!config || from === null) return;
     ev.preventDefault();
     const where = this.whereIn(ev, row);
-    const { toParent, index } = this.destination(row, where);
+    const { toParent, index } = this.destination(row, where, from);
     const verdict = legalDrop(config, from, toParent, index);
     if (ev.dataTransfer) ev.dataTransfer.dropEffect = verdict.ok ? "move" : "none";
     this.target = { key: pathKey(row.path), where, verdict };
   }
 
   private onDrop(ev: DragEvent, row: Row): void {
-    const from = this.readPath(ev);
+    // The data store is readable again on drop, so the payload confirms what state says.
+    const from = this.dragging === null ? null : (this.readPath(ev) ?? this.dragging.path);
     if (from === null) return;
     ev.preventDefault();
     const where = this.whereIn(ev, row);
-    const { toParent, index } = this.destination(row, where);
+    const { toParent, index } = this.destination(row, where, from);
     this.tryMove(from, toParent, index);
     this.onDragEnd();
+  }
+
+  /** Every node row in view order. The placeholder is not one, so it is not a stop. */
+  private rowElements(): HTMLElement[] {
+    return [...(this.shadowRoot?.querySelectorAll<HTMLElement>(".row") ?? [])];
+  }
+
+  /** Focuses a row by position, clamped: the ends of the tree hold rather than wrap. */
+  private focusAt(index: number): void {
+    const els = this.rowElements();
+    if (els.length === 0) return;
+    els[Math.max(0, Math.min(els.length - 1, index))]?.focus();
+  }
+
+  private focusFrom(current: EventTarget | null, delta: number): void {
+    const at = this.rowElements().indexOf(current as HTMLElement);
+    if (at >= 0) this.focusAt(at + delta);
+  }
+
+  private focusPath(path: Path): void {
+    this.shadowRoot?.querySelector<HTMLElement>(`.row[data-path="${pathKey(path)}"]`)?.focus();
+  }
+
+  /**
+   * The tree's own keyboard, which is what `role="tree"` promises: up and down walk the
+   * rows in view, right opens a closed group and then steps into it, left closes an open
+   * one and otherwise steps out to the parent, Home and End jump to the ends.
+   */
+  private onNavigate(ev: KeyboardEvent, row: Row): void {
+    switch (ev.key) {
+      case "Enter":
+      case " ":
+        this.emitSelect(row.path);
+        break;
+      case "ArrowDown":
+        this.focusFrom(ev.currentTarget, 1);
+        break;
+      case "ArrowUp":
+        this.focusFrom(ev.currentTarget, -1);
+        break;
+      case "ArrowRight":
+        if (row.expandable && !row.expanded) this.toggle(row.path);
+        else if (row.expanded) this.focusFrom(ev.currentTarget, 1);
+        break;
+      case "ArrowLeft":
+        if (row.expanded) this.toggle(row.path);
+        else this.focusPath(parentGroupPath(row.path));
+        break;
+      case "Home":
+        this.focusAt(0);
+        break;
+      case "End":
+        this.focusAt(this.rowElements().length - 1);
+        break;
+      case "Escape":
+        if (this.menu === null) return;
+        this.menu = null;
+        break;
+      default:
+        return;
+    }
+    ev.preventDefault();
   }
 
   /**
@@ -267,12 +351,7 @@ export class AlTree extends LitElement {
    */
   private onRowKeydown(ev: KeyboardEvent, row: Row): void {
     if (!ev.altKey) {
-      if (ev.key === "Enter" || ev.key === " ") {
-        ev.preventDefault();
-        this.emitSelect(row.path);
-      } else if (ev.key === "Escape" && this.menu !== null) {
-        this.menu = null;
-      }
+      this.onNavigate(ev, row);
       return;
     }
     const config = this.config;
@@ -287,12 +366,15 @@ export class AlTree extends LitElement {
         moved = this.tryMove(row.path, list, index + 2);
         break;
       case "ArrowRight": {
-        const above = getAt<Group>(config, [...list, index - 1]);
+        // Only a group has a `children` list to be appended to, and only a group's siblings
+        // are groups: asking a stimulus for one would read `undefined.length`.
+        const above = row.kind === "group" ? getAt<Group>(config, [...list, index - 1]) : undefined;
         if (above !== undefined)
           moved = this.tryMove(row.path, [...list, index - 1, "children"], above.children.length);
         break;
       }
       case "ArrowLeft": {
+        if (row.kind !== "group") break;
         const parentList = list.slice(0, -2);
         const parentIndex = list[list.length - 2];
         if (typeof parentIndex === "number") moved = this.tryMove(row.path, parentList, parentIndex + 1);
@@ -343,10 +425,12 @@ export class AlTree extends LitElement {
     const config = this.config;
     if (!config) return html`<ha-card><span class="muted">Loading…</span></ha-card>`;
     if (config.groups.length === 0) return this.renderEmpty();
+    const rows = flattenRows(config, this.expanded);
+    const tabbable = this.tabbableKey(rows);
     return html`
       <ha-card>
         <div class="tree" role="tree">
-          ${flattenRows(config, this.expanded).map((row) => this.renderRow(config, row))}
+          ${rows.map((row) => this.renderRow(config, row, tabbable))}
         </div>
         <div class="footer">
           <ha-button @click=${() => this.addGroup(["groups"], config.groups.length, "property")}>
@@ -371,7 +455,18 @@ export class AlTree extends LitElement {
     `;
   }
 
-  private renderRow(config: Config, row: Row): TemplateResult {
+  /**
+   * The tree holds one tab stop, not one per row: the selected row, or the first row when
+   * the selection is elsewhere or hidden inside something closed. Arrows do the rest.
+   */
+  private tabbableKey(rows: Row[]): string {
+    const nodes = rows.filter((r) => r.kind !== "placeholder");
+    const selected = this.selection === null ? null : pathKey(this.selection);
+    if (selected !== null && nodes.some((r) => pathKey(r.path) === selected)) return selected;
+    return nodes.length === 0 ? "" : pathKey(nodes[0]!.path);
+  }
+
+  private renderRow(config: Config, row: Row, tabbable: string): TemplateResult {
     if (row.kind === "placeholder")
       return html`<div class="tree-row placeholder" role="none" style="--al-indent: ${row.depth}">
         <span class="guides"></span>
@@ -384,7 +479,7 @@ export class AlTree extends LitElement {
       "row",
       "tree-row",
       selected ? "selected" : "",
-      this.dragging === key ? "dragging" : "",
+      this.dragging?.key === key ? "dragging" : "",
       target === null ? "" : target.verdict.ok ? `drop-${target.where}` : "illegal",
     ]
       .filter(Boolean)
@@ -394,9 +489,11 @@ export class AlTree extends LitElement {
       style="--al-indent: ${row.depth}"
       data-path=${key}
       role="treeitem"
-      tabindex="0"
+      tabindex=${key === tabbable ? "0" : "-1"}
       draggable="true"
       aria-level=${row.depth + 1}
+      aria-setsize=${row.setsize}
+      aria-posinset=${row.posinset}
       aria-selected=${selected ? "true" : "false"}
       aria-expanded=${row.expandable ? (row.expanded ? "true" : "false") : nothing}
       @click=${(ev: Event) => this.select(ev, row.path)}
@@ -525,7 +622,14 @@ export class AlTree extends LitElement {
   private renderAddMenu(row: Row): TemplateResult {
     const group = row.group;
     if (group === undefined) return html`${nothing}`;
-    return html`<div class="add-menu" role="menu" @click=${stop} @keydown=${stopSelectKeys}>
+    return html`<div
+      class="add-menu"
+      role="menu"
+      draggable="false"
+      @click=${stop}
+      @keydown=${stopSelectKeys}
+      @dragstart=${stop}
+    >
       ${allowedChildKinds(group.kind).map(
         (kind) => html`<button
           type="button"
