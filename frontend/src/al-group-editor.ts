@@ -21,7 +21,7 @@ import {
   mergeGroup,
 } from "./group-form";
 import { KIND_DEFS, NODE_KINDS } from "./kinds";
-import { groupAt, hasOutside, parentGroupPath, presenceSettings } from "./model";
+import { groupAt, parentGroupPath, presenceSettings } from "./model";
 import { renderPanel } from "./panels";
 import { removeAt, setAt } from "./store";
 import { sharedStyles } from "./styles";
@@ -241,19 +241,17 @@ export class AlGroupEditor extends LitElement {
           .path=${this.path}
           .errors=${this.errors}
         ></al-adjacency-table>
-        ${this.renderExit(config, group, fields)}
+        ${this.renderExit(group, fields)}
       `,
     );
   }
 
   /**
-   * Leaving the property happens from outside where there is an outside, so a room only
-   * offers the switch when nothing outdoors is modelled - or when it already claims the
-   * exit, because a document the rules now refuse still has to be fixable from here.
+   * Every room may lead off the property, indoors or out: a front door in the hall and a
+   * gate on the driveway are both exits. Only the kinds nobody stands in refuse one, and
+   * this is only ever reached from the adjacency panel, which those kinds do not get.
    */
-  private renderExit(config: Config, group: Group, fields: Record<string, string>) {
-    const allowed = group.kind === "outside" || !hasOutside(config) || group.exit === true;
-    if (!allowed) return nothing;
+  private renderExit(group: Group, fields: Record<string, string>) {
     return html`<div class="exit row">
       <ha-switch
         .checked=${group.exit === true}

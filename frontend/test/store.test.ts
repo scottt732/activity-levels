@@ -187,6 +187,61 @@ describe("moveNode", () => {
     expect(ids(moveNode(cfg, [...list, 0], list, 0), list)).toEqual(["kitchen", "hall"]);
   });
 
+  /** Three root properties, each holding one building: room enough to move forwards. */
+  const threeRoots = (): Config => ({
+    ...base,
+    groups: [
+      { ...newGroup("a", "property"), children: [newGroup("a_house", "structure")] },
+      { ...newGroup("b", "property"), children: [newGroup("b_house", "structure")] },
+      { ...newGroup("c", "property"), children: [newGroup("c_house", "structure")] },
+    ],
+  });
+
+  // The destination is named against the document as it reads *now*, and lifting the node
+  // out shifts everything after it in its own list up by one — including the ancestor the
+  // destination is inside. Without rebasing, this walked into a slot that no longer exists.
+  it("rebases a destination that sits under a later sibling of the node it moves", () => {
+    const next = moveNode(threeRoots(), ["groups", 0], ["groups", 2, "children"], 0);
+    expect(ids(next, ["groups"])).toEqual(["b", "c"]);
+    expect(ids(next, ["groups", 1, "children"])).toEqual(["a", "c_house"]);
+  });
+
+  it("lands a forward move before or after the row the caller named", () => {
+    const list: Path = ["groups", 2, "children"];
+    expect(ids(moveNode(threeRoots(), ["groups", 0], list, 0), ["groups", 1, "children"])).toEqual(["a", "c_house"]);
+    expect(ids(moveNode(threeRoots(), ["groups", 0], list, 1), ["groups", 1, "children"])).toEqual(["c_house", "a"]);
+  });
+
+  it("moves one root property into another", () => {
+    const next = moveNode(threeRoots(), ["groups", 0], ["groups", 1, "children"], 0);
+    expect(ids(next, ["groups"])).toEqual(["b", "c"]);
+    expect(ids(next, ["groups", 0, "children"])).toEqual(["a", "b_house"]);
+  });
+
+  it("leaves a backward move's destination alone", () => {
+    const next = moveNode(threeRoots(), ["groups", 2], ["groups", 0, "children"], 0);
+    expect(ids(next, ["groups"])).toEqual(["a", "b"]);
+    expect(ids(next, ["groups", 0, "children"])).toEqual(["c", "a_house"]);
+  });
+
+  it("rebases a destination nested deeper under a later sibling", () => {
+    const cfg: Config = {
+      ...base,
+      groups: [
+        {
+          ...newGroup("p", "property"),
+          children: [
+            { ...newGroup("h1", "structure"), children: [newGroup("f1", "floor")] },
+            { ...newGroup("h2", "structure"), children: [newGroup("f2", "floor")] },
+          ],
+        },
+      ],
+    };
+    const next = moveNode(cfg, ["groups", 0, "children", 0], ["groups", 0, "children", 1, "children"], 1);
+    expect(ids(next, ["groups", 0, "children"])).toEqual(["h2"]);
+    expect(ids(next, ["groups", 0, "children", 0, "children"])).toEqual(["f2", "h1"]);
+  });
+
   it("moves a stimulus between groups", () => {
     const cfg = kindsConfig();
     const kitchen: Path = ["groups", 0, "children", 0, "children", 0, "children", 0];

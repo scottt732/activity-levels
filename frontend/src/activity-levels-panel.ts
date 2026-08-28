@@ -76,6 +76,7 @@ export class ActivityLevelsPanel extends LitElement {
   @state() private draft?: Draft;
   /** Ids of the groups whose kind the config loader had to guess. */
   @state() private inferred: string[] = [];
+  @state() private warnings: string[] = [];
   @state() private tab: Tab = "mixer";
   @state() private selection: Path | null = null;
   @state() private nav: MixerNav = { expanded: new Set(), selection: null };
@@ -132,9 +133,10 @@ export class ActivityLevelsPanel extends LitElement {
 
   private async load(): Promise<void> {
     try {
-      const { config, inferred } = await getConfig(this.hass);
+      const { config, inferred, warnings } = await getConfig(this.hass);
       this.draft = new Draft(config);
       this.inferred = inferred;
+      this.warnings = warnings;
       this.syncTabs();
       this.nav = restoreNav(config);
       this.selection = this.nav.selection;
@@ -480,7 +482,7 @@ export class ActivityLevelsPanel extends LitElement {
             >${d?.dirty ? "Save" : "Saved"}</ha-button
           >
         </div>
-        ${this.renderBanner()} ${this.renderInferred()}
+        ${this.renderBanner()} ${this.renderInferred()} ${this.renderWarnings()}
         <div class="tabs" role="tablist" aria-label="Sections" @keydown=${this.onTabsKeydown}>
           ${this.tabs.map(
             (t, i) => html`<button
@@ -549,7 +551,7 @@ export class ActivityLevelsPanel extends LitElement {
   private renderInferred() {
     const count = this.inferred.length;
     if (count === 0) return nothing;
-    return html`<ha-alert alert-type="warning">
+    return html`<ha-alert class="inferred-notice" alert-type="warning">
       ${count} ${count === 1 ? "group has" : "groups have"} an inferred kind — check them and save. Until you
       do, the kinds above are a guess and nothing has been written.
       <ha-button
@@ -561,6 +563,21 @@ export class ActivityLevelsPanel extends LitElement {
         }}
         >Show me</ha-button
       >
+    </ha-alert>`;
+  }
+
+  /**
+   * What the document said that this schema cannot honour. Separate from the migration
+   * notice above it on purpose: that one counts guesses somebody has to confirm, this one
+   * quotes back a thing the file asked for and did not get, which no amount of confirming
+   * will fix. Both can be up at once, and usually are.
+   */
+  private renderWarnings() {
+    if (this.warnings.length === 0) return nothing;
+    return html`<ha-alert class="config-warnings" alert-type="warning">
+      <ul>
+        ${this.warnings.map((w) => html`<li>${w}</li>`)}
+      </ul>
     </ha-alert>`;
   }
 

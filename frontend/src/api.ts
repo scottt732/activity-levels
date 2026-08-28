@@ -22,16 +22,22 @@ interface RawValidateResult {
 
 const normalize = (r: RawValidateResult): ValidateResult => ({ ok: r.ok, errors: r.errors ?? [] });
 
-/** `activity_levels/config/get`. `inferred` names the groups whose kind the loader guessed. */
+/**
+ * `activity_levels/config/get`. `inferred` names the groups whose kind the loader guessed;
+ * `warnings` is what the document said that the schema could not honour, in sentences.
+ */
 export interface ConfigGet {
   config: Config;
   inferred: string[];
+  warnings: string[];
 }
 
 export const getConfig = (hass: HomeAssistant): Promise<ConfigGet> =>
   hass
-    .callWS<{ config: Config; inferred?: string[] }>({ type: "activity_levels/config/get" })
-    .then((r) => ({ config: r.config, inferred: r.inferred ?? [] }));
+    .callWS<{ config: Config; inferred?: string[]; warnings?: string[] }>({
+      type: "activity_levels/config/get",
+    })
+    .then((r) => ({ config: r.config, inferred: r.inferred ?? [], warnings: r.warnings ?? [] }));
 
 export const validateConfig = (hass: HomeAssistant, config: Config): Promise<ValidateResult> =>
   hass.callWS<RawValidateResult>({ type: "activity_levels/config/validate", config }).then(normalize);

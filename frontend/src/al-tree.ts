@@ -6,7 +6,7 @@ import { pathKey, subtreeErrorCount } from "./errors";
 import { alChange, alSelect } from "./events";
 import { KIND_DEFS, allowedChildKinds } from "./kinds";
 import { newGroup, newStimulus, parentGroupPath, uniqueGroupId } from "./model";
-import { getAt, insertAt, legalDrop, moveNode, removeAt } from "./store";
+import { getAt, insertAt, legalDrop, moveNode, rebaseDrop, removeAt } from "./store";
 import { sharedStyles } from "./styles";
 import { flattenRows, loadExpanded, saveExpanded } from "./tree-rows";
 import type { Kind } from "./kinds";
@@ -153,6 +153,10 @@ export class AlTree extends LitElement {
     if (!config) return;
     this.menu = null;
     this.open(listPath.slice(0, -1));
+    // and the new group itself: it is added empty, and a group nobody has opened shows
+    // nothing inside it at all -- not even the placeholder that says it is empty, which
+    // is the one row that would let anything be dropped in there.
+    this.open([...listPath, index]);
     this.emitChange(insertAt(config, listPath, index, newGroup(uniqueGroupId(config, kind), kind)));
     this.emitSelect([...listPath, index]);
   }
@@ -186,13 +190,15 @@ export class AlTree extends LitElement {
     if (!legalDrop(config, from, toParent, index).ok) return false;
     const next = moveNode(config, from, toParent, index);
     if (next === config) return false;
+    // The pointer named a destination in the tree as it reads now, and the node has left
+    // its old slot since — so everything downstream of the move works from the rebased
+    // pair, not the one that came in.
+    const { parent, index: landed } = rebaseDrop(from, toParent, index);
     // Dropping into a closed group would otherwise put the node somewhere invisible.
-    this.open(toParent.slice(0, -1));
+    this.open(parent.slice(0, -1));
     this.emitChange(next);
     // The node has moved, so the selection's old path names something else now.
-    const same = pathKey(toParent) === pathKey(this.listOf(from).list);
-    const landed = same && index > this.listOf(from).index ? index - 1 : index;
-    this.emitSelect([...toParent, landed]);
+    this.emitSelect([...parent, landed]);
     return true;
   }
 

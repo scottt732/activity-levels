@@ -5,7 +5,6 @@ import {
   effectivePrecision,
   formatLevel,
   groupAt,
-  hasOutside,
   newGroup,
   newStimulus,
   presenceSettings,
@@ -201,11 +200,6 @@ describe("kinds on the model", () => {
     expect(declared[0]!.group.id).toBe("kitchen");
     expect(declared[0]!.edge).toMatchObject({ id: "hall", connection: "open" });
     expect(declaredOn(kindsConfig(), "kitchen")).toEqual([]);
-  });
-
-  it("says whether the property models anything outside", () => {
-    expect(hasOutside(kindsConfig())).toBe(true);
-    expect(hasOutside(houseConfig())).toBe(false);
   });
 
   it("counts areas and outside areas as rooms, whatever they declare", () => {

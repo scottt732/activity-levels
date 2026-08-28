@@ -78,6 +78,8 @@ let validateResult: { ok: boolean; errors: { path: string; message: string }[] }
 let current: Config = config();
 /** Which groups `config/get` says it had to guess a kind for; reset per test. */
 let inferredIds: string[] = [];
+/** What `config/get` says the document lost on the way in; reset per test. */
+let configWarnings: string[] = [];
 /** What `profile/rebuild` answers next. */
 let rebuilt = true;
 /** Set to make `profile/rebuild` fail. */
@@ -100,7 +102,7 @@ const hass = () => ({
   callWS: vi.fn(async (msg: { type: string }) => {
     switch (msg.type) {
       case "activity_levels/config/get":
-        return { config: current, inferred: inferredIds };
+        return { config: current, inferred: inferredIds, warnings: configWarnings };
       case "activity_levels/config/validate":
       case "activity_levels/config/save":
         return validateResult;
@@ -176,6 +178,7 @@ const press = async (key: string): Promise<void> => {
 beforeEach(async () => {
   validateResult = { ok: true, errors: [] };
   inferredIds = [];
+  configWarnings = [];
   rebuilt = true;
   rebuildError = null;
   serviceError = null;
@@ -757,7 +760,7 @@ describe("activity-levels-panel presence tab", () => {
 
 describe("activity-levels-panel inferred kinds", () => {
   const warning = (): HTMLElement | null =>
-    el.shadowRoot?.querySelector<HTMLElement>('ha-alert[alert-type="warning"]') ?? null;
+    el.shadowRoot?.querySelector<HTMLElement>("ha-alert.inferred-notice") ?? null;
 
   it("says so, once, when the loader had to guess the kinds", async () => {
     inferredIds = ["groups/0", "groups/0/children/0"];
@@ -778,6 +781,23 @@ describe("activity-levels-panel inferred kinds", () => {
   it("says nothing when every kind came from the document", async () => {
     await mount(houseConfig());
     expect(warning()).toBeNull();
+  });
+
+  it("shows what the document lost, apart from the count of guesses", async () => {
+    inferredIds = ["groups/0"];
+    configWarnings = ["groups/0: 'kitchen' declares doors but is a root group."];
+    await mount(houseConfig());
+    const lost = el.shadowRoot?.querySelector<HTMLElement>("ha-alert.config-warnings");
+    expect(lost).toBeTruthy();
+    expect(lost!.textContent).toContain("declares doors but is a root group");
+    // the two notices are separate: one counts guesses, the other quotes the document
+    expect(warning()!.textContent).toContain("1 group has");
+    expect(warning()!.textContent).not.toContain("declares doors");
+  });
+
+  it("says nothing about what was lost when nothing was", async () => {
+    await mount(houseConfig());
+    expect(el.shadowRoot?.querySelector("ha-alert.config-warnings")).toBeNull();
   });
 
   it("shows the first guess: the Groups tab, with that group selected", async () => {

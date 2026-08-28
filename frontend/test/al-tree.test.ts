@@ -101,6 +101,23 @@ describe("al-tree", () => {
     expect(selects[0]).toEqual(["groups", 1]);
   });
 
+  // A group is added empty, so the only thing to see inside it is the placeholder that
+  // says so — and a group nobody opened shows nothing at all.
+  it("opens a group it has just added, so what is inside it is reachable", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    rowFor("groups/0/children/0").querySelector<HTMLElement>('[data-action="add-group"]')!.click();
+    await el.updateComplete;
+    el.shadowRoot!.querySelector<HTMLElement>('.add-menu button[data-kind="area"]')!.click();
+    await el.updateComplete;
+    el.config = changes.at(-1)!;
+    await el.updateComplete;
+    const added = rowFor("groups/0/children/0/children/1");
+    expect(added).toBeTruthy();
+    expect(el.shadowRoot?.querySelector(".placeholder")?.textContent).toContain("Nothing in here yet");
+  });
+
   it("adds a stimulus to a group and selects it", async () => {
     await click('ha-icon-button[label="Add stimulus"]');
     expect(changes[0]?.groups[0]?.stimuli).toHaveLength(2);
@@ -208,6 +225,27 @@ describe("al-tree rows", () => {
     target.dispatchEvent(dragEvent("drop", { "text/plain": path }, 1));
     await el.updateComplete;
     expect(changes.at(-1)!.groups[0]!.children.map((g) => g.id)).toEqual(["back_patio", "house"]);
+  });
+
+  // The drop target is named against the tree as the pointer saw it, and the dragged row
+  // sits above it in the same list — so lifting it out moves the destination. This used to
+  // insert into a slot that no longer existed and throw on the way.
+  it("lands a forward drop into a later sibling, after its own removal moved it", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    await expand("groups/0/children/0");
+    await expand("groups/0/children/0/children/0");
+    const rooms: Path = ["groups", 0, "children", 0, "children", 0, "children"];
+    rowFor("groups/0/children/0/children/0/children/0").dispatchEvent(dragEvent("dragstart", {}));
+    const target = rowFor("groups/0/children/0/children/0/children/1"); // the hall, after it
+    const path = JSON.stringify([...rooms, 0]);
+    target.dispatchEvent(dragEvent("drop", { "text/plain": path }, 12)); // middle third: into
+    await el.updateComplete;
+    const downstairs = changes.at(-1)!.groups[0]!.children[0]!.children[0]!;
+    expect(downstairs.children.map((g) => g.id)).toEqual(["hall"]);
+    expect(downstairs.children[0]!.children.map((g) => g.id)).toEqual(["kitchen"]);
+    expect(selects.at(-1)).toEqual([...rooms, 0, "children", 0]);
   });
 
   it("shows the drop target during dragover, when the data store is protected", async () => {

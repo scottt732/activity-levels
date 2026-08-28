@@ -191,16 +191,29 @@ const pathsEqual = (a: Path, b: Path): boolean =>
   a.length === b.length && a.every((step, i) => b[i] === step);
 
 /**
- * Moves a node to `index` of `toParent`. The caller passes the slot as the list reads
- * *now*; when the node is already in that list and above the slot, its own removal shifts
- * everything below it up by one, and this is where that is paid for — so a drag and an
- * Alt+arrow can both say "put it there" and mean the same thing.
+ * Where a destination ends up once the node being moved has been lifted out of the
+ * document. The caller names `toParent` and `index` against the document as it reads
+ * *now* — that is what the pointer was over — and removing the node shifts every later
+ * slot in *its own list* up by one. Two things can sit in that list: the destination slot
+ * itself, when the node is moving within one list, and the ancestor the destination is
+ * nested inside, when it is moving into a sibling that came after it. Both are rebased
+ * here, so a drag and an Alt+arrow can both say "put it there" and mean the same thing.
  */
-export function moveNode<T extends Config>(config: T, from: Path, toParent: Path, index: number): T {
+export function rebaseDrop(from: Path, toParent: Path, index: number): { parent: Path; index: number } {
   const { list, index: at } = listOf(from);
-  const same = pathsEqual(list, toParent);
-  if (same && (index === at || index === at + 1)) return config;
+  const parent = [...toParent];
+  const step = parent[list.length];
+  const nested = list.length < parent.length && pathsEqual(list, parent.slice(0, list.length));
+  if (nested && typeof step === "number" && step > at) parent[list.length] = step - 1;
+  return { parent, index: pathsEqual(list, toParent) && index > at ? index - 1 : index };
+}
+
+/** Moves a node to `index` of `toParent`, as {@link rebaseDrop} reads that pair. */
+export function moveNode<T extends Config>(config: T, from: Path, toParent: Path, index: number): T {
+  const { index: at } = listOf(from);
+  if (pathsEqual(listOf(from).list, toParent) && (index === at || index === at + 1)) return config;
   const node = getAt(config, from);
   const removed = removeAt(config, from);
-  return insertAt(removed, toParent, same && index > at ? index - 1 : index, node);
+  const { parent, index: slot } = rebaseDrop(from, toParent, index);
+  return insertAt(removed, parent, slot, node);
 }

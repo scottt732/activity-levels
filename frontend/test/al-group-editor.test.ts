@@ -124,15 +124,16 @@ describe("al-group-editor panels", () => {
     expect(exit.closest("table")).toBeNull();
   });
 
-  it("offers the way out only where the document may have one", async () => {
-    // The property has an outside area, so leaving happens from there, not from a room -
-    // but a room that already claims the exit keeps the switch that turns it back off.
-    expect(el.shadowRoot!.querySelector(".exit")).toBeNull();
-    await show(["groups", 0, "children", 0, "children", 0, "children", 1]);
-    expect(el.shadowRoot!.querySelector(".exit")).toBeNull();
-    el.config = { ...config, groups: [{ ...config.groups[0]!, children: [config.groups[0]!.children[0]!] }] };
-    await show(KITCHEN);
+  it("offers the way out on every room, outdoor area or not", async () => {
+    // A front door in the kitchen and a gate on the driveway are both exits, and the
+    // property having a patio does not take the kitchen's door away.
+    expect(el.shadowRoot!.querySelector(".exit")).toBeTruthy(); // the kitchen, beside a patio
+    await show(["groups", 0, "children", 0, "children", 0, "children", 1]); // the hall
     expect(el.shadowRoot!.querySelector(".exit")).toBeTruthy();
+    await show(PATIO);
+    expect(el.shadowRoot!.querySelector(".exit")).toBeTruthy();
+    await show(HOUSE); // a structure is not somewhere anybody stands to leave from
+    expect(el.shadowRoot!.querySelector(".exit")).toBeNull();
   });
 
   it("flips the exit through the draft", async () => {

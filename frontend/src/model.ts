@@ -82,13 +82,6 @@ export function declaredOn(config: Config, id: string): { group: Group; edge: Ad
   return out;
 }
 
-/**
- * Whether anything outdoors is modelled. It decides one rule: a room may only be the way
- * off the property when there is no outside area to leave from instead.
- */
-export const hasOutside = (config: Config): boolean =>
-  walkGroups(config).some(({ group }) => group.kind === "outside");
-
 const PRESENCE_DEFAULTS: PresenceSettings = {
   enabled: false,
   devices: [],
