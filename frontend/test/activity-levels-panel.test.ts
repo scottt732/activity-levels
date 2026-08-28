@@ -283,11 +283,11 @@ describe("activity-levels-panel mixer sim state", () => {
 });
 
 describe("activity-levels-panel notices", () => {
-  it("offers a first group when there are none", async () => {
+  it("offers a first property when there are none", async () => {
     await selectTab(1);
     const tree = el.shadowRoot?.querySelector("al-tree");
     const button = tree?.shadowRoot?.querySelector("ha-button");
-    expect(button?.textContent?.trim()).toBe("Add your first group");
+    expect(button?.textContent?.trim()).toBe("Add your first property");
   });
 });
 

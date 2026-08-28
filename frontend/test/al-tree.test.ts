@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/al-tree";
 import { newGroup, newStimulus } from "../src/model";
+import { kindsConfig } from "./fixtures";
 import type { AlTree } from "../src/al-tree";
 import type { AlChangeEvent } from "../src/events";
 import type { Config, LiveState, Path } from "../src/types";
@@ -31,6 +32,7 @@ let selects: (Path | null)[];
 
 beforeEach(async () => {
   document.body.innerHTML = "";
+  localStorage.clear();
   config = baseConfig();
   changes = [];
   changeEvents = [];
@@ -54,13 +56,38 @@ const click = async (selector: string): Promise<void> => {
   await el.updateComplete;
 };
 
+const rows = (): HTMLElement[] => [...(el.shadowRoot?.querySelectorAll<HTMLElement>(".row") ?? [])];
+const rowFor = (path: string): HTMLElement =>
+  rows().find((r) => r.dataset.path === path) ?? (expect.fail(`no row ${path}`) as never);
+
+/** Opens a row's caret, the only thing that expands one. */
+const expand = async (path: string): Promise<void> => {
+  rowFor(path).querySelector<HTMLElement>(".caret")!.click();
+  await el.updateComplete;
+};
+
+const dragEvent = (type: string, data: Record<string, string>, clientY = 0): DragEvent => {
+  const store = new Map(Object.entries(data));
+  const dataTransfer = {
+    effectAllowed: "move",
+    dropEffect: "move",
+    setData: (k: string, v: string) => void store.set(k, v),
+    getData: (k: string) => store.get(k) ?? "",
+    setDragImage: () => undefined,
+  } as unknown as DataTransfer;
+  const ev = new MouseEvent(type, { bubbles: true, composed: true, cancelable: true, clientY }) as DragEvent;
+  Object.defineProperty(ev, "dataTransfer", { value: dataTransfer });
+  return ev;
+};
+
 describe("al-tree", () => {
   it("adds a root group without mutating the current config", async () => {
     const before = JSON.stringify(config);
     await click("ha-button");
     expect(changes).toHaveLength(1);
     expect(changes[0]).not.toBe(config);
-    expect(changes[0]?.groups.map((g) => g.id)).toEqual(["house", "new_group"]);
+    expect(changes[0]?.groups.map((g) => g.id)).toEqual(["house", "property"]);
+    expect(changes[0]?.groups[1]?.kind).toBe("property");
     expect(JSON.stringify(config)).toBe(before);
     expect(selects[0]).toEqual(["groups", 1]);
   });
@@ -71,41 +98,18 @@ describe("al-tree", () => {
     expect(changes[0]?.groups[0]?.stimuli[1]?.entity).toBe("");
     expect(selects[0]).toEqual(["groups", 0, "stimuli", 1]);
   });
-
-  it("selects a group from its name button, and leaves the header row unfocusable", async () => {
-    const header = el.shadowRoot?.querySelector(".header");
-    expect(header?.getAttribute("role")).toBeNull();
-    expect(header?.getAttribute("tabindex")).toBeNull();
-    await click(".header button.link");
-    expect(selects).toEqual([["groups", 0]]);
-    expect(changes).toHaveLength(0);
-  });
-
-  it("selects a stimulus row with the keyboard", async () => {
-    const row = el.shadowRoot?.querySelector(".stimulus");
-    row?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }));
-    await el.updateComplete;
-    expect(selects).toEqual([["groups", 0, "stimuli", 0]]);
-  });
 });
-describe("al-tree structural changes", () => {
-  const twoGroups = (): Config => ({ ...baseConfig(), groups: [newGroup("a", "area"), newGroup("b", "area")] });
 
+describe("al-tree structural changes", () => {
   it("flags an add, so the shell can drop path-keyed errors that no longer line up", async () => {
     await click("ha-button");
-    expect(changeEvents[0]?.structural).toBe(true);
-  });
-
-  it("flags a move", async () => {
-    el.config = twoGroups();
-    await el.updateComplete;
-    await click('ha-icon-button[label="Move down"]');
     expect(changeEvents[0]?.structural).toBe(true);
   });
 
   it("flags a delete", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     try {
+      await expand("groups/0");
       await click('ha-icon-button[label="Delete stimulus"]');
       expect(changeEvents[0]?.structural).toBe(true);
     } finally {
@@ -114,38 +118,170 @@ describe("al-tree structural changes", () => {
   });
 });
 
-describe("al-tree reordering", () => {
-  const threeGroups = (): Config => ({
-    ...baseConfig(),
-    groups: [newGroup("a", "area"), { ...newGroup("b", "area"), stimuli: [newStimulus("binary_sensor.b")] }, newGroup("c", "area")],
-  });
-
-  /** Move the first group down, which swaps it with the second. */
-  const moveFirstDown = async (selection: Path | null): Promise<void> => {
-    el.config = threeGroups();
-    el.selection = selection;
+describe("al-tree rows", () => {
+  it("draws one flat row per node, with no expansion panels", async () => {
+    el.config = kindsConfig();
     await el.updateComplete;
-    await click('ha-icon-button[label="Move down"]');
-  };
-
-  it("follows the moved node when it was the selected one", async () => {
-    await moveFirstDown(["groups", 0]);
-    expect(selects).toEqual([["groups", 1]]);
+    expect(el.shadowRoot?.querySelector("ha-expansion-panel")).toBeNull();
+    expect(rows()).toHaveLength(1); // only the root until something is expanded
+    await expand("groups/0");
+    expect(rows().map((r) => r.dataset.path)).toEqual(["groups/0", "groups/0/children/0", "groups/0/children/1"]);
   });
 
-  it("follows the sibling that was pushed the other way, at any depth", async () => {
-    await moveFirstDown(["groups", 1, "stimuli", 0]);
-    expect(selects).toEqual([["groups", 0, "stimuli", 0]]);
+  it("indents each row by its depth and draws no up or down arrows", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    expect(rowFor("groups/0").style.getPropertyValue("--al-indent").trim()).toBe("0");
+    expect(rowFor("groups/0/children/0").style.getPropertyValue("--al-indent").trim()).toBe("1");
+    expect(el.shadowRoot?.querySelector('ha-icon-button[label="Move up"]')).toBeNull();
+    expect(el.shadowRoot?.querySelector('ha-icon-button[label="Move down"]')).toBeNull();
   });
 
-  it("leaves a selection outside the swap alone", async () => {
-    await moveFirstDown(["groups", 2]);
-    expect(selects).toEqual([]);
+  it("selects from the label and toggles only from the caret", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    rowFor("groups/0").querySelector<HTMLElement>(".label")!.click();
+    await el.updateComplete;
+    expect(selects).toEqual([["groups", 0]]);
+    expect(rows()).toHaveLength(1); // selecting did not expand
+    rowFor("groups/0").querySelector<HTMLElement>(".caret")!.click();
+    await el.updateComplete;
+    expect(selects).toHaveLength(1); // toggling did not select
+    expect(rows().length).toBeGreaterThan(1);
   });
 
-  it("selects nothing when nothing was selected", async () => {
-    await moveFirstDown(null);
-    expect(selects).toEqual([]);
+  it("selects from blank row space too, and keeps the expansion across a reload", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    rowFor("groups/0/children/0").dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(selects).toEqual([["groups", 0, "children", 0]]);
+    const fresh = document.createElement("al-tree");
+    fresh.config = kindsConfig();
+    document.body.appendChild(fresh);
+    await fresh.updateComplete;
+    expect(fresh.shadowRoot?.querySelectorAll(".row")).toHaveLength(3);
+  });
+
+  it("offers only the kinds the nesting rules allow here", async () => {
+    el.config = kindsConfig();
+    el.selection = ["groups", 0, "children", 0];
+    await el.updateComplete;
+    await expand("groups/0");
+    rowFor("groups/0/children/0").querySelector<HTMLElement>('[data-action="add-group"]')!.click();
+    await el.updateComplete;
+    const items = [...el.shadowRoot!.querySelectorAll<HTMLElement>(".add-menu button")].map((b) => b.dataset.kind);
+    expect(items).toEqual(["floor", "area"]); // a structure takes floors and areas
+  });
+
+  it("adds a group of the kind that was picked", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    rowFor("groups/0").querySelector<HTMLElement>('[data-action="add-group"]')!.click();
+    await el.updateComplete;
+    el.shadowRoot!.querySelector<HTMLElement>('.add-menu button[data-kind="outside"]')!.click();
+    await el.updateComplete;
+    expect(changes[0]!.groups[0]!.children.at(-1)).toMatchObject({ kind: "outside" });
+    expect(changeEvents[0]!.structural).toBe(true);
+  });
+
+  it("moves a node on a legal drop, computing before/after from the pointer", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    const source = rowFor("groups/0/children/1");
+    const target = rowFor("groups/0/children/0");
+    source.dispatchEvent(dragEvent("dragstart", {}));
+    const path = JSON.stringify(["groups", 0, "children", 1]);
+    target.dispatchEvent(dragEvent("dragover", { "text/plain": path }, 1)); // top third: before
+    target.dispatchEvent(dragEvent("drop", { "text/plain": path }, 1));
+    await el.updateComplete;
+    expect(changes.at(-1)!.groups[0]!.children.map((g) => g.id)).toEqual(["back_patio", "house"]);
+  });
+
+  it("refuses an illegal drop and says why in the row", async () => {
+    el.config = kindsConfig();
+    el.selection = null;
+    await el.updateComplete;
+    await expand("groups/0");
+    const target = rowFor("groups/0/children/0");
+    const path = JSON.stringify(["groups", 0, "children", 1]); // the patio, into the house
+    target.dispatchEvent(dragEvent("dragstart", {}));
+    target.dispatchEvent(dragEvent("dragover", { "text/plain": path }, 12)); // middle: into
+    await el.updateComplete;
+    expect(target.classList.contains("illegal")).toBe(true);
+    expect(target.querySelector(".hint")?.textContent).toContain("cannot contain");
+    target.dispatchEvent(dragEvent("drop", { "text/plain": path }, 12));
+    await el.updateComplete;
+    expect(changes).toHaveLength(0);
+  });
+
+  it("reorders and reparents with Alt+arrows", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    const patio = rowFor("groups/0/children/1");
+    patio.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", altKey: true, bubbles: true }));
+    await el.updateComplete;
+    expect(changes.at(-1)!.groups[0]!.children.map((g) => g.id)).toEqual(["back_patio", "house"]);
+    // outdenting the patio would make it a root, and a root has to be a property
+    el.config = changes.at(-1)!;
+    await el.updateComplete;
+    rowFor("groups/0/children/0").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true, bubbles: true }),
+    );
+    await el.updateComplete;
+    expect(changes).toHaveLength(1); // refused, and nothing was emitted
+  });
+
+  it("indents a node under the sibling above it with Alt+Right", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    await expand("groups/0");
+    await expand("groups/0/children/0");
+    await expand("groups/0/children/0/children/0");
+    rowFor("groups/0/children/0/children/0/children/1").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true }),
+    );
+    await el.updateComplete;
+    const kitchen = changes.at(-1)!.groups[0]!.children[0]!.children[0]!.children;
+    expect(kitchen.map((g) => g.id)).toEqual(["kitchen"]);
+    expect(kitchen[0]!.children.map((g) => g.id)).toEqual(["hall"]);
+  });
+
+  it("selects a row with the keyboard, and leaves plain arrows to the browser", async () => {
+    el.config = kindsConfig();
+    await el.updateComplete;
+    rowFor("groups/0").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await el.updateComplete;
+    expect(selects).toEqual([["groups", 0]]);
+    rowFor("groups/0").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    await el.updateComplete;
+    expect(changes).toHaveLength(0);
+  });
+
+  // A group with nothing in it has no caret, so the only way to be looking inside one is
+  // to have emptied it while it was open — which is exactly when the placeholder is wanted.
+  it("shows the placeholder only for an expanded group with nothing left in it", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      el.config = kindsConfig();
+      await el.updateComplete;
+      await expand("groups/0");
+      await expand("groups/0/children/1");
+      expect(el.shadowRoot?.querySelector(".placeholder")).toBeNull(); // it still has a stimulus
+      rowFor("groups/0/children/1/stimuli/0").querySelector<HTMLElement>('[data-action="delete"]')!.click();
+      await el.updateComplete;
+      el.config = changes.at(-1)!;
+      await el.updateComplete;
+      expect(el.shadowRoot?.querySelectorAll(".placeholder")).toHaveLength(1);
+      expect(el.shadowRoot?.querySelector(".placeholder")?.textContent).toContain("Nothing in here yet");
+      expect(rowFor("groups/0/children/1").querySelector(".caret")?.tagName.toLowerCase()).toBe("span");
+    } finally {
+      confirm.mockRestore();
+    }
   });
 });
 
@@ -192,6 +328,7 @@ describe("al-tree live view", () => {
   beforeEach(async () => {
     el.live = live;
     await el.updateComplete;
+    await expand("groups/0");
   });
 
   it("fills the meter to the group's share of its limit", () => {
@@ -207,7 +344,7 @@ describe("al-tree live view", () => {
   });
 
   it("colours the voice's phase chip and counts down to the end of the phase", () => {
-    const chip = el.shadowRoot?.querySelector(".stimulus .phase");
+    const chip = rowFor("groups/0/stimuli/0").querySelector(".phase");
     expect(chip?.className).toContain("release");
     expect(chip?.textContent?.trim()).toBe("release");
     expect(chip?.getAttribute("title")).toBe("Phase: release, ends in 30.5s");
@@ -215,19 +352,12 @@ describe("al-tree live view", () => {
 });
 
 describe("al-tree empty states", () => {
-  it("invites a first group when the config has none", async () => {
+  it("invites a first property when the config has none", async () => {
     el.config = { ...baseConfig(), groups: [] };
     await el.updateComplete;
-    expect(el.shadowRoot?.querySelector("ha-button")?.textContent?.trim()).toBe("Add your first group");
+    expect(el.shadowRoot?.querySelector("ha-button")?.textContent?.trim()).toBe("Add your first property");
     await click("ha-button");
-    expect(changes[0]?.groups.map((g) => g.id)).toEqual(["new_group"]);
-  });
-
-  it("hints at the + button when a group has no stimuli", async () => {
-    const next = baseConfig();
-    next.groups[0]!.stimuli = [];
-    el.config = next;
-    await el.updateComplete;
-    expect(el.shadowRoot?.querySelector(".empty")?.textContent).toContain("+ button");
+    expect(changes[0]?.groups.map((g) => g.id)).toEqual(["property"]);
+    expect(changes[0]?.groups[0]?.kind).toBe("property");
   });
 });
