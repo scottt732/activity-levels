@@ -33,43 +33,68 @@ envelopes:
 # whichever side reads more naturally. This is inferred from the door and window sensors
 # above -- check it against your actual floor plan before relying on it, because a wrong
 # edge is worse than a missing one: it lets the room estimate walk through a wall.
+#
+# Kinds say what each group is on the property, and they decide what can go inside it: a
+# property holds structures and outdoor areas, a structure holds floors, a floor holds
+# areas, and an outdoor area holds outdoor areas. `floor_id` and `area_id` bind a group to
+# Home Assistant's own floor and area registries -- the ids below are what a fresh Home
+# Assistant would call them, so change them to match yours or delete them: an unbound floor
+# or area is perfectly fine, and only means you type the name here instead of once there.
 groups:
   - id: property
+    kind: property
     name: Property
     mix: max
     children:
       - id: house
+        kind: structure
         name: House
         mix: max
         # (old binary_sensor.smoke_detector no longer exists; add a smoke/safety sensor here if you have one)
         children:
           - id: basement
+            kind: floor
+            floor_id: basement
             name: Basement
             mix: max
             children:
               - id: play_room
+                kind: area
+                area_id: play_room
                 name: Play Room
-                adjacent: [laundry_room, downstairs_hallway]   # the basement stairs door
+                adjacent:
+                  - laundry_room
+                  - {id: downstairs_hallway, connection: stairs}   # the basement stairs
                 stimuli:
                   - entity: binary_sensor.basement_hallway_door
                   - entity: binary_sensor.play_room_motion
                     envelope: hour
                   - entity: binary_sensor.play_room_front_window
               - id: laundry_room
+                kind: area
+                area_id: laundry_room
                 name: Laundry Room
-                adjacent: [driveway]                            # basement exterior door
+                adjacent:
+                  - {id: driveway, connection: exterior_door}      # basement exterior door
                 stimuli:
                   - entity: binary_sensor.basement_exterior_door
                     gain: 2.5
                   - entity: binary_sensor.basement_motion
                     gain: 2.5
           - id: downstairs
+            kind: floor
+            floor_id: downstairs
             name: Downstairs
             mix: max
             children:
               - id: living_room
+                kind: area
+                area_id: living_room
                 name: Living Room
-                adjacent: [dining_room, downstairs_hallway, front_yard]   # front door
+                adjacent:
+                  - dining_room
+                  - downstairs_hallway
+                  - {id: front_yard, connection: exterior_door}    # the front door
                 stimuli:
                   - entity: binary_sensor.living_room_motion
                     envelope: two_hours
@@ -77,6 +102,8 @@ groups:
                   - entity: binary_sensor.front_door
                     envelope: fifteen_minutes
               - id: office
+                kind: area
+                area_id: office
                 name: Office
                 adjacent: [downstairs_hallway]
                 stimuli:
@@ -86,6 +113,8 @@ groups:
                     debounce: 15s
                   - entity: binary_sensor.office_window
               - id: dining_room
+                kind: area
+                area_id: dining_room
                 name: Dining Room
                 adjacent: [kitchen, downstairs_hallway]
                 stimuli:
@@ -93,29 +122,41 @@ groups:
                     envelope: hour
                   - entity: binary_sensor.dining_room_windows
               - id: kitchen
+                kind: area
+                area_id: kitchen
                 name: Kitchen
-                adjacent: [back_patio]                          # back door
+                adjacent:
+                  - {id: back_patio, connection: exterior_door}    # the back door
                 stimuli:
                   # (old binary_sensor.kitchen_motion no longer exists; add a kitchen motion/occupancy sensor here)
                   - entity: binary_sensor.kitchen_windows
                   - entity: binary_sensor.back_door
                     envelope: fifteen_minutes
               - id: downstairs_hallway
+                kind: area
+                area_id: downstairs_hallway
                 name: Downstairs Hallway
-                adjacent: [upstairs_hallway]
+                adjacent:
+                  - {id: upstairs_hallway, connection: stairs}
                 stimuli:
                   - entity: binary_sensor.basement_hallway_door
           - id: upstairs
+            kind: floor
+            floor_id: upstairs
             name: Upstairs
             mix: max
             children:
               - id: guest_room
+                kind: area
+                area_id: guest_room
                 name: Guest Room
                 adjacent: [upstairs_hallway]
                 stimuli:
                   - entity: binary_sensor.guest_room_motion
                     envelope: hour
               - id: main_bedroom
+                kind: area
+                area_id: main_bedroom
                 name: Main Bedroom
                 adjacent: [upstairs_hallway]
                 stimuli:
@@ -124,22 +165,38 @@ groups:
                   - entity: binary_sensor.master_bedroom_motion
                     envelope: hour
               - id: upstairs_hallway
+                kind: area
+                area_id: upstairs_hallway
                 name: Upstairs Hallway
                 stimuli:
                   - entity: binary_sensor.upstairs_hallway_motion
+      # A garage is a building, so it is a structure; the space inside it is the area you
+      # actually walk into, and that is what is next to the driveway.
       - id: garage
+        kind: structure
         name: Garage
-        adjacent: [driveway]
-        exit: true
-        stimuli:
-          - entity: binary_sensor.garage_door
-          - entity: binary_sensor.garage_motion
-          - entity: binary_sensor.garage_side_door
+        mix: max
+        children:
+          - id: garage_bay
+            kind: area
+            area_id: garage
+            name: Garage Bay
+            adjacent: [driveway]
+            stimuli:
+              - entity: binary_sensor.garage_door
+              - entity: binary_sensor.garage_motion
+              - entity: binary_sensor.garage_side_door
+      # Every outdoor area is a place, including the ones that only contain other outdoor
+      # areas -- so `outside` and `back_yard` are rooms on the map too, with no doorways of
+      # their own. Put the yards directly under the property instead if you would rather not
+      # see them there.
       - id: outside
+        kind: outside
         name: Outside
         mix: max
         children:
           - id: front_yard
+            kind: outside
             name: Front Yard
             mix: max
             adjacent: [driveway]
@@ -151,10 +208,12 @@ groups:
               - entity: binary_sensor.front_yard_protect_motion
                 envelope: fifteen_minutes
           - id: back_yard
+            kind: outside
             name: Back Yard
             mix: max
             children:
               - id: back_patio
+                kind: outside
                 name: Back Patio
                 adjacent: [driveway]
                 exit: true
@@ -162,6 +221,7 @@ groups:
                   - entity: binary_sensor.back_patio_doorbell_protect_motion
                     envelope: fifteen_minutes
               - id: driveway
+                kind: outside
                 name: Driveway
                 exit: true
                 stimuli:

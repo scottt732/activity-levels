@@ -98,14 +98,22 @@ time — the tooltip without a mouse — and **Esc** clears it.
 Groups, Envelopes and Defaults edit the same draft as the Mixer and share its selection —
 picking a strip here also opens it in Groups, and back:
 
-- **Groups** — the structure editor: the tree of groups on the left, the editor for
-  whatever you select on the right. Each group row can add a stimulus, add a child group,
-  move itself among its siblings, or delete itself and everything under it. A red badge
-  on a row counts the validation problems inside it. The same editor carries *Adjacent
-  rooms* — the neighbours presence can move this room to or from, which is what makes it
-  a room instead of a branch — and *exit* — whether presence can leave the house from
-  here. A one-way edge (`{id, one_way: true}` in YAML) shows on the badge as an arrow but
-  is not editable from either field; flip it in the configuration instead.
+- **Groups** — the structure editor: a flat tree of every group and stimulus on the left
+  (no card padding or borders between rows, just indent guides and a kind icon per row —
+  `mdi:flash` for a stimulus), the editor for whatever you select on the right. The caret
+  opens and closes a row; the label — and the rest of the row's blank space — selects it.
+  Each row's action column (add stimulus, add group, delete) appears on hover, on
+  keyboard focus, and on the selected row, and is otherwise hidden. Reordering and
+  reparenting is native drag and drop — before, after or into another row — or, from the
+  keyboard, Alt+↑/↓ to reorder among siblings and Alt+←/→ to outdent or indent; a drop the
+  nesting rules refuse shows a not-allowed cursor and says why in a one-line hint, rather
+  than silently refusing it.
+
+  The editor on the right is built from the same kind of panel either way — an
+  `ha-expansion-panel` with a header, a one-line definition and, sometimes, a badge:
+  *Identity*, *Mix*, *Adjacent groups* and *Presence* for a group; *Source*, *Envelope*
+  and *Override preset* for a stimulus. Each panel remembers, per browser, whether you
+  left it open or closed.
 - **Envelopes** — the preset library, with a sketch of the selected preset's ADSR shape.
   Renaming a preset rewrites every stimulus and default that names it; a preset something
   still points at cannot be deleted until those references move.
@@ -166,6 +174,11 @@ Each configured group produces:
 | `sensor.<id>_activity_anomaly` | How far today's real level sits outside that band, signed. `unknown` until the group is ready. |
 | `switch.<id>_presence_simulation` | Arms presence simulation for the group. Only created when the group has lights and its `simulation.enabled` is true. |
 | `sensor.<id>_occupants` | How many people are believed to be in this room. Attribute: `who`. Only for rooms, and only while presence is on. |
+
+A group's device model in Home Assistant is now its kind — *Property*, *Structure*,
+*Floor*, *Area* or *Outside* — and an area-bound group suggests that area for its
+devices, while a floor-bound one suggests nothing, because Home Assistant devices belong
+to areas, not floors.
 
 And once, on the **Activity Levels** hub device:
 
@@ -290,14 +303,58 @@ and light/plan intervals for one group. Both are admin-only, like the rest of th
 
 ## Rooms & presence
 
-**Adjacency, on its own.** `adjacent` and `exit` describe the house's floor plan, and they
-mean something even before presence is turned on: they say which groups are *rooms* — a
-place a person can be — rather than a *branch* that only mixes rooms together. A group
-becomes a room the moment it declares an edge, is named by another room's edge, or is
-marked `exit: true`; a group with none of those (a floor, a wing, the whole house) stays a
-branch, with no room-shaped entities of its own. `adjacent` is symmetric by default —
-naming a doorway from either side is enough — and one-way edges (a chute, a one-way stair)
-are YAML-only: `{id: some_room, one_way: true}` in place of the plain id.
+### What each group is
+
+Every group has a `kind`, and the kind decides what may go inside it:
+
+| Kind | What it is | What can go inside it |
+| --- | --- | --- |
+| **Property** | The whole lot: everything you own, inside and out. Every configuration starts with one. | Structures, outdoor areas, and other properties (for more than one lot in one document). |
+| **Structure** | A building on the property — the house, a garage, a shed. | Floors, or areas directly (a one-storey building). |
+| **Floor** | One level of a structure. Bind it to a Home Assistant floor to reuse its name. | Areas. |
+| **Area** | A room or zone people occupy. Bind it to a Home Assistant area to reuse its name and put its entities in the right place. | Other areas (an ensuite, an alcove). |
+| **Outside** | An outdoor area — a yard, a patio, the driveway. Outside areas can lead off the property. | Other outdoor areas. |
+
+Every root group is a property, and this table is exactly what the tree's *Add group*
+menu offers at each level — it will not let you nest something the layering forbids.
+
+`floor_id` and `area_id` bind a floor or an area to Home Assistant's own floor and area
+registries; both are entirely optional, because a house whose Home Assistant areas do not
+match its rooms is a normal house. Picking a floor or an area in the editor fills in the
+group's `id` and `name` from the registry entry — but only while both are still untouched
+defaults, and never afterwards, so binding a registry entry never overwrites a name or an
+id you already gave something. A group with an `area_id` and no name of its own takes the
+area's name.
+
+Only `area` and `outside` groups are *rooms* — the states the presence estimator has. An
+`outside` group that only holds other outdoor areas (a "back yard" wrapping a patio and a
+driveway) is a room too, with no doorways of its own, sitting on the map right alongside
+the areas it contains.
+
+A configuration written before kinds existed has none. Activity Levels works them out
+when it loads — the root is the property, a group bound to an area is an area, and
+everything else follows the layering — and the panel says so with a banner until you
+look at them and save. Nothing is written to your configuration until you do, and no
+entity id changes either way: they come from the group's `id`, which nothing here
+touches. Two things are worth checking when the banner appears. A building that
+declared a doorway will have been guessed as an *outdoor* area, because a structure
+cannot have one — move the doorway to a room inside it and set the kind back. And a
+room that leads off a property with outdoor areas on it will have to hand that
+`exit` to the yard it opens onto.
+
+**Adjacency, on its own.** `adjacent` describes the house's floor plan, and it means
+something even before presence is turned on: it is only meaningful between groups that
+are rooms — `area` and `outside` kinds, from the table above — because those are the only
+kinds a person can be in. A bare id in the list (`adjacent: [dining_room]`) is a doorway:
+symmetric, and the commonest kind of connection, so it is also the default. `{id:
+dining_room, connection: stairs}` says the same thing about a different kind of opening —
+`open` (no door at all), `door`, `stairs`, or `exterior_door`. The connection type is
+recorded and shown in the panel; nothing weights a transition by it yet. Clearing "both
+ways" on an edge is the one-way case, which used to be YAML-only: `{id: some_room,
+one_way: true}` in place of the plain id. Separately, a room may lead off the property —
+*"People can leave the property from here, so presence can move from here to Away."* —
+which only an `area` or `outside` group may declare, and only an `area` may declare it
+when the property has no outdoor areas of its own.
 
 **Turning presence on.** Nothing above needs [Bermuda](https://github.com/agittins/bermuda).
 Presence itself does: it is off unless `presence.enabled` is set, and if it is set but
@@ -352,6 +409,23 @@ entities the same way.
 `presence` and `trigger` are reserved channel labels — a stimulus `key` or a child group
 `id` of either name is rejected as a duplicate, whether or not presence is switched on.
 
+Every group's keys, including the ones [kinds](#what-each-group-is) added:
+
+```yaml
+groups:
+  - id: kitchen
+    kind: area              # property | structure | floor | area | outside
+    area_id: kitchen        # binds a Home Assistant area (was `area`, still accepted)
+    # floor_id: downstairs  # on a `floor` group, binds a Home Assistant floor instead
+    adjacent:
+      - hall                                          # a two-way door
+      - {id: back_patio, connection: exterior_door}   # open | door | stairs | exterior_door
+      - {id: laundry_chute, one_way: true}            # the rare thing that is not two-way
+    exit: false             # true = people can leave the property from here
+```
+
+The rest of the configuration, in full:
+
 ```yaml
 version: 1
 defaults:
@@ -386,8 +460,9 @@ envelopes:
     impulse: false           # true = note-off immediately (momentary sensors)
 groups:
   - id: house                # ^[a-z][a-z0-9_]*$, unique; entity ids derive from it
+    kind: structure          # property | structure | floor | area | outside
     name: House
-    area: null               # HA area id → device suggested area
+    area_id: null            # HA area id → device suggested area (was `area`, still accepted)
     mix: sum                 # sum | max | mean
     null_handling: zero      # zero | ignore (mean only)
     max_value: 5.0           # optional; inherits defaults
@@ -403,9 +478,10 @@ groups:
       lights:
         include: []          # extra lights beyond the ones in the group's area
         exclude: []          # lights in the area to leave out
-    adjacent: [dining_room, back_patio]   # rooms you can walk to; symmetric
-    # adjacent: [{id: laundry_chute, one_way: true}]   # the rare thing that is not
-    exit: false              # true = people can leave the house from here
+    adjacent: [dining_room, back_patio]   # rooms you can walk to; symmetric doors by default
+    # adjacent: [{id: back_patio, connection: exterior_door}]  # open | door | stairs | exterior_door
+    # adjacent: [{id: laundry_chute, one_way: true}]   # the rare thing that is not two-way
+    exit: false              # true = people can leave the property from here
     presence:                # optional overrides for this room's presence channel
       gain: 1.0              # how loudly "somebody is here" contributes
       envelope: hour         # any envelope field may be overridden inline
