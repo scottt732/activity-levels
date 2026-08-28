@@ -66,29 +66,32 @@ moving groups and stimuli is done in **Groups** (below), not here:
    "now" line marks the present. The forecast chips are disabled, with a
    "learning… *n*/14 days" hint in their place, until the pattern profile has actually
    seen the selected group — the history half of the chart is unaffected either way.
-2. **Mixer** — every group in one horizontally scrolling row of track strips, the way a
-   DAW nests track groups: a group with children carries a chevron (`▸ 3` / `▾ 3`) that
-   opens and closes them in place, and a left-hand marker steps in and fades with depth so
-   a child reads as sitting under the parent it follows. Roots start open, and the row
-   reopens the way it was left. The **group strip** at the right of the row follows
-   whatever is selected:
+2. **Mixer** — every group in one horizontally scrolling console of identical track
+   strips, with the tree drawn *above* them the way a DAW brackets track groups: a group
+   with children gets a **band** spanning its own strip and its whole subtree, one row
+   higher per level of nesting. The band's caret closes it — the subtree leaves the row
+   and the band folds into a narrow vertical tab beside the group's own strip, which opens
+   it again. Roots start open, and the row reopens the way it was left.
+
+   The row is **read-only** until you say otherwise: it shows levels, and nothing on it
+   can be leant on by accident. The **Edit** switch above the strips turns the meters back
+   into faders and puts the **M** and **R** buttons back; like the open groups, it is
+   remembered per browser rather than in the configuration.
 
    | Config or state | Mixer |
    | --- | --- |
-   | a group | a track strip, at its depth in the tree |
-   | group level | the strip's **value fader**, with the level read out below it |
+   | a group | a track strip; a group with children, a band over its subtree |
+   | group level | the strip's meter — its **value fader** in Edit mode, with the level read out below it |
    | the level without simulated stimuli | a tick on the fader, while the two differ |
-   | muted / reset | the strip's **M** and **R** buttons |
-   | group `mix` | the group strip's mix selector (`sum` / `max` / `mean`) |
-   | group `max_value` | the group strip's **limiter** ceiling |
-   | `switch.<gid>_presence_simulation` | the group strip's ⏻ — hidden if the group has no lights |
+   | muted / reset | the strip's **M** and **R** buttons, in Edit mode |
 
-   Clicking a strip selects it (the timeline and the controls row below follow); the
-   chevron only opens and closes. Dragging the value fader **overrides** the group's level
-   — a simulated stimulus, which then cools down from where it was left — and **M** mutes
-   the group out of its parent's mix while it keeps publishing its own value. None of
-   those three touch the configuration: they go straight to the engine, and the next live
-   frame says where it ended up.
+   Clicking a strip selects it (the timeline and the controls row below follow); a band's
+   caret only opens and closes. In Edit mode, dragging the value fader **overrides** the
+   group's level — a simulated stimulus, which then cools down from where it was left —
+   and **M** mutes the group out of its parent's mix while it keeps publishing its own
+   value. Neither touches the configuration: they go straight to the engine, and the next
+   live frame says where it ended up. Everything a strip cannot hold — mix, limiter, the
+   presence-simulation switch — is in the controls row below.
 3. **Controls** — everything about the selected group that doesn't fit on a strip: name,
    mix, null handling, limiter, precision, gain into its parent (not for a root), how many
    lights it owns, its presence-simulation switch and the last few things it has done, the
@@ -97,8 +100,8 @@ moving groups and stimuli is done in **Groups** (below), not here:
    trigger (`to`) states and debounce, every override showing what it falls back to.
 
 Keyboard, in the mixer row: **←/→** moves the selection along the visible tracks
-(wrapping), **Enter** or **Space** opens and closes the selected group, **Home**/**End**
-jump to the first and last track. In the timeline: **←/→** move a cursor one sample at a
+(wrapping), **Enter** or **Space** opens and closes the selected group's band,
+**Home**/**End** jump to the first and last track. In the timeline: **←/→** move a cursor one sample at a
 time — the tooltip without a mouse — and **Esc** clears it.
 
 Groups, Envelopes and Defaults edit the same draft as the Mixer and share its selection —

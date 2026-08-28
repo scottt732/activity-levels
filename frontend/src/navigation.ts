@@ -1,4 +1,4 @@
-import { allGroupIds } from "./model";
+import { allGroupIds, groupAt } from "./model";
 import { getAt } from "./store";
 import type { Config, Group, Path } from "./types";
 
@@ -62,6 +62,90 @@ export function visibleTracks(config: Config, nav: MixerNav): VisibleTrack[] {
   walk(config.groups, ["groups"], 0);
   return tracks;
 }
+
+/**
+ * One bracket header drawn over the strips: a group that has children, named once above
+ * the run of strips it owns rather than on every strip in it.
+ *
+ * `colStart` and `colEnd` are 1-based CSS grid lines, so `grid-column: colStart / colEnd`
+ * places a band without the caller counting anything. An **open** band spans its own
+ * strip through the last strip of its subtree, one row higher per level of nesting. A
+ * **closed** one has no subtree on screen to span, so it takes the single narrow column
+ * immediately right of its own strip - the vertical tab that opens it again.
+ */
+export interface Band {
+  id: string;
+  label: string;
+  depth: number;
+  colStart: number;
+  colEnd: number;
+  expanded: boolean;
+}
+
+/** What a column of the mixer grid holds: a track strip, or a closed band's vertical tab. */
+export type ColumnKind = "strip" | "tab";
+
+/** Everything the mixer needs to lay its grid out, from the config and the nav alone. */
+export interface MixerLayout {
+  /** The column each visible track's strip sits in, parallel to {@link visibleTracks}. */
+  columns: number[];
+  /** Every column of the row, in order; the length of this is the width of the grid. */
+  kinds: ColumnKind[];
+  bands: Band[];
+  /** How many band rows sit above the strips: one per level of nesting that has one. */
+  rows: number;
+}
+
+/**
+ * The grid the mixer draws: a column per visible strip, an extra narrow one after every
+ * closed group, and a band over each group that has children.
+ *
+ * The walk is {@link visibleTracks}' own pre-order, so a band's subtree is the run of
+ * tracks that follows it until the depth comes back to its own - which is exactly when
+ * the band's span ends.
+ */
+export function mixerLayout(config: Config, nav: MixerNav): MixerLayout {
+  const tracks = visibleTracks(config, nav);
+  const columns: number[] = [];
+  const kinds: ColumnKind[] = [];
+  const found: Band[] = [];
+  /** Open bands still waiting for the column their subtree ends at, deepest last. */
+  const pending: { band: Band; depth: number }[] = [];
+  let rows = 0;
+  const closeTo = (depth: number): void => {
+    while (pending.length > 0 && pending[pending.length - 1]!.depth >= depth) {
+      pending.pop()!.band.colEnd = kinds.length + 1;
+    }
+  };
+  for (const track of tracks) {
+    closeTo(track.depth);
+    kinds.push("strip");
+    columns.push(kinds.length);
+    if (!track.hasChildren) continue;
+    const label = groupAt(config, track.path)?.name ?? track.id;
+    if (track.expanded) {
+      const band: Band = { id: track.id, label, depth: track.depth, colStart: kinds.length, colEnd: 0, expanded: true };
+      found.push(band);
+      pending.push({ band, depth: track.depth });
+      rows = Math.max(rows, track.depth + 1);
+    } else {
+      kinds.push("tab");
+      found.push({
+        id: track.id,
+        label,
+        depth: track.depth,
+        colStart: kinds.length,
+        colEnd: kinds.length + 1,
+        expanded: false,
+      });
+    }
+  }
+  closeTo(0);
+  return { columns, kinds, bands: found, rows };
+}
+
+/** The bands of {@link mixerLayout}, for callers that only want the headers. */
+export const bands = (config: Config, nav: MixerNav): Band[] => mixerLayout(config, nav).bands;
 
 export function reduce(nav: MixerNav, action: NavAction): MixerNav {
   switch (action.type) {
@@ -163,4 +247,29 @@ export function restoreNav(config: Config): MixerNav {
   const nav = initialNav(config);
   const stored = loadExpanded(config);
   return stored === null ? nav : { ...nav, expanded: stored };
+}
+
+/** Where the mixer's Edit switch survives a reload; per browser, like the open groups. */
+export const EDIT_KEY = "activity_levels.mixer.edit";
+
+/**
+ * Whether this browser left the mixer in Edit mode. Anything other than a stored "on"
+ * reads as off: a mixer that hands out faders and mute buttons because storage returned
+ * something unexpected is worse than one that forgets the switch was ever flipped.
+ */
+export function loadEditing(): boolean {
+  try {
+    return localStorage.getItem(EDIT_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/** Remembers the Edit switch. Best effort: a full or disabled store just forgets. */
+export function saveEditing(on: boolean): void {
+  try {
+    localStorage.setItem(EDIT_KEY, on ? "true" : "false");
+  } catch {
+    /* storage disabled or full: the mode still applies to this session */
+  }
 }

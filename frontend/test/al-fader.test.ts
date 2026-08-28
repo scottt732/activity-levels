@@ -275,3 +275,54 @@ describe("al-fader in level mode", () => {
     expect(slider().getAttribute("aria-valuenow")).toBe("2");
   });
 });
+
+describe("al-fader read-only", () => {
+  beforeEach(async () => {
+    el.mode = "level";
+    el.max = 5;
+    el.precision = 1;
+    el.value = 2;
+    el.readOnly = true;
+    await el.updateComplete;
+  });
+
+  it("announces itself as a meter rather than a slider", () => {
+    expect(el.shadowRoot?.querySelector('[role="slider"]')).toBeFalsy();
+    const meter = el.shadowRoot?.querySelector('[role="meter"]');
+    expect(meter?.getAttribute("aria-valuenow")).toBe("2");
+    expect(meter?.getAttribute("aria-valuemax")).toBe("5");
+    expect(meter?.getAttribute("aria-label")).toBe("House gain");
+    // Not a tab stop at all: there is nothing here to operate from the keyboard.
+    expect(meter?.hasAttribute("tabindex")).toBe(false);
+    expect(el.hasAttribute("readonly")).toBe(true);
+  });
+
+  it("draws the fill but no grip", () => {
+    expect(el.shadowRoot?.querySelector<HTMLElement>(".fill")?.style.height).toBe("40%");
+    expect(el.shadowRoot?.querySelector(".knob")).toBeFalsy();
+  });
+
+  it("still marks the value the group would be at without a simulated one", async () => {
+    el.tick = 0.5;
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector(".tick")).toBeTruthy();
+  });
+
+  it("reports nothing from a drag or a key", async () => {
+    const t = stubTrack();
+    t.dispatchEvent(pointer("pointerdown", 160));
+    t.dispatchEvent(pointer("pointerup", 160));
+    el.shadowRoot
+      ?.querySelector(".fader")
+      ?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(events).toEqual([]);
+  });
+
+  it("is a slider again once the host says it may be moved", async () => {
+    el.readOnly = false;
+    await el.updateComplete;
+    expect(el.shadowRoot?.querySelector('[role="slider"]')).toBeTruthy();
+    expect(el.shadowRoot?.querySelector(".knob")).toBeTruthy();
+  });
+});

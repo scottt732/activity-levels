@@ -1,7 +1,7 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import "./al-fader";
-import { alLevelOverride, alMuteToggle, alReset, alSelectStrip, alToggleStrip } from "./events";
+import { alLevelOverride, alMuteToggle, alReset, alSelectStrip } from "./events";
 import { formatLevel } from "./model";
 import type { FaderChangeDetail } from "./events";
 import type { PropertyValues } from "lit";
@@ -14,20 +14,24 @@ import type { PropertyValues } from "lit";
 export const STEP_DEBOUNCE_MS = 250;
 
 /**
- * One mixer track: a group, at its depth in the tree.
+ * One mixer track: a group, as a channel of the console.
  *
- * It reports intent and nothing else - the mixer owns the config and calls the engine. Its
- * events bubble and are composed so the mixer can listen once on the strip container;
- * which strip they came from is the event's `target`, since a strip does not know its own
- * place in the row.
+ * Every strip is the same shape whatever its place in the tree - name, meter, readout, on
+ * one baseline. Where a group sits is the mixer's business, drawn as the bands above the
+ * row rather than as furniture on the strip itself; the strip only says which group it is
+ * and how loud it is.
+ *
+ * Read-only unless the mixer says otherwise: `editable` is what turns the meter back into
+ * a fader and puts the mute and reset buttons back. It reports intent and nothing else -
+ * the mixer owns the config and calls the engine. Its events bubble and are composed so
+ * the mixer can listen once on the strip container; which strip they came from is the
+ * event's `target`, since a strip does not know its own place in the row.
  */
 @customElement("al-strip")
 export class AlStrip extends LitElement {
   static styles = css`
     :host {
       display: block;
-      width: 96px;
-      flex: 0 0 auto;
       box-sizing: border-box;
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 6px;
@@ -36,9 +40,6 @@ export class AlStrip extends LitElement {
       color: var(--primary-text-color);
       cursor: pointer;
       outline: none;
-    }
-    :host([narrow]) {
-      width: 72px;
     }
     :host([selected]),
     :host(:focus-visible) {
@@ -49,33 +50,21 @@ export class AlStrip extends LitElement {
     :host([muted]) .readout {
       opacity: 0.55;
     }
+    /* One column, one baseline: the name is a fixed line and the fader a fixed height, so
+       the meter and the readout land at the same place on every strip in the row. */
     .strip {
-      position: relative;
       display: flex;
       flex-direction: column;
       align-items: stretch;
       gap: 6px;
       min-width: 0;
-      /* Each level of nesting steps the content right, past its parent's marker. */
-      padding-left: calc(var(--al-depth, 0) * 5px + 6px);
-    }
-    /* The depth marker: a bar down the left, inset and faded one step per level, so a
-       child reads as sitting under the parent it follows in the row. */
-    .depth {
-      position: absolute;
-      left: calc(var(--al-depth, 0) * 5px);
-      top: 0;
-      bottom: 0;
-      width: 3px;
-      border-radius: 2px;
-      background: var(--primary-color);
-      opacity: calc(1 - var(--al-depth, 0) * 0.22);
+      height: 100%;
     }
     .head {
       display: flex;
       align-items: center;
-      gap: 4px;
       min-width: 0;
+      height: 1.4em;
     }
     .name {
       flex: 1;
@@ -100,10 +89,6 @@ export class AlStrip extends LitElement {
       outline: 2px solid var(--primary-color);
       outline-offset: 1px;
     }
-    .chevron {
-      color: var(--secondary-text-color);
-      white-space: nowrap;
-    }
     al-fader {
       align-self: center;
     }
@@ -127,11 +112,13 @@ export class AlStrip extends LitElement {
       color: var(--text-primary-color, #fff);
       border-color: var(--warning-color, #ffa600);
     }
+    /* Pushed to the bottom, so a badge on one strip does not shorten the others. */
     .foot {
       display: flex;
       align-items: center;
       gap: 4px;
       min-height: 20px;
+      margin-top: auto;
     }
     .badge {
       background: var(--error-color, #db4437);
@@ -144,11 +131,13 @@ export class AlStrip extends LitElement {
   `;
 
   @property({ type: String }) label = "";
-  /** How deep in the tree this group sits; 0 for a root. Published as `--al-depth`. */
-  @property({ type: Number }) depth = 0;
-  @property({ type: Boolean }) hasChildren = false;
-  @property({ type: Boolean }) expanded = false;
-  @property({ type: Number }) childCount = 0;
+
+  /**
+   * Whether the mixer is in Edit mode. Off - the default - the fader is a meter and the
+   * mute and reset buttons are not rendered at all: a mixer left open on a wall tablet
+   * reads levels, and nothing on it can be leant on by accident.
+   */
+  @property({ type: Boolean, reflect: true }) editable = false;
 
   /** The group's live level, and what it would be without a simulated stimulus holding it. */
   @property({ type: Number }) value = 0;
@@ -167,7 +156,6 @@ export class AlStrip extends LitElement {
 
   @property({ type: Boolean, reflect: true }) muted = false;
   @property({ type: Boolean, reflect: true }) selected = false;
-  @property({ type: Boolean, reflect: true }) narrow = false;
   @property({ type: Number }) errors = 0;
 
   /**
@@ -196,7 +184,13 @@ export class AlStrip extends LitElement {
     // A fresh live frame is the answer to whatever was asked for: stop showing the ask.
     // Not mid-drag, though - the pointer is still holding the fader where it is.
     if ((changed.has("liveNow") || changed.has("value")) && !this.dragging) this.pending = null;
-    if (!this.hasUpdated || changed.has("depth")) this.style.setProperty("--al-depth", String(this.depth));
+    // Leaving Edit mode takes the fader out from under whatever was holding it: drop the
+    // ask and the drag with it, so the meter shows the engine rather than a leftover.
+    if (changed.has("editable") && !this.editable) {
+      this.dragging = false;
+      this.pending = null;
+      this.clearStepTimer();
+    }
   }
 
   /**
@@ -219,20 +213,6 @@ export class AlStrip extends LitElement {
     this.dispatchEvent(alSelectStrip());
   }
 
-  /** Opening a track's children is its own intent: it must not also read as selecting it. */
-  private onChevron(ev: Event): void {
-    ev.stopPropagation();
-    this.dispatchEvent(alToggleStrip());
-  }
-
-  /**
-   * Enter and Space on the chevron are the button's own; the mixer listens for them on the
-   * whole row and would toggle the same track a second time.
-   */
-  private onChevronKey(ev: KeyboardEvent): void {
-    if (ev.key === "Enter" || ev.key === " ") ev.stopPropagation();
-  }
-
   private clearStepTimer(): void {
     if (this.stepTimer === undefined) return;
     clearTimeout(this.stepTimer);
@@ -248,9 +228,13 @@ export class AlStrip extends LitElement {
    * A fader move. A drag reports its steps live and settles on pointer-up, which is the
    * user saying "there" - that goes out at once. A keyboard or wheel step settles
    * immediately with no live moves before it, so a run of them is coalesced instead.
+   *
+   * A read-only fader reports nothing, but the guard is here as well: the level is the
+   * engine's, and Edit mode is the only thing that says it may be written to.
    */
   private onFader(ev: CustomEvent<FaderChangeDetail>): void {
     ev.stopPropagation();
+    if (!this.editable) return;
     const { value, live } = ev.detail;
     this.pending = value;
     if (live) {
@@ -281,25 +265,12 @@ export class AlStrip extends LitElement {
     const shown = this.pending ?? this.value;
     return html`
       <div class="strip" @click=${this.select}>
-        <div class="depth"></div>
         <div class="head">
           <span class="name" title=${this.label}>${this.label}</span>
         </div>
-        ${this.hasChildren
-          ? html`<button
-              class="chevron"
-              type="button"
-              tabindex=${this.stop}
-              aria-expanded=${this.expanded ? "true" : "false"}
-              title=${`${this.expanded ? "Collapse" : "Expand"} ${this.label}`}
-              @click=${this.onChevron}
-              @keydown=${this.onChevronKey}
-            >
-              ${this.expanded ? "▾" : "▸"} ${this.childCount}
-            </button>`
-          : nothing}
         <al-fader
           mode="level"
+          ?readonly=${!this.editable}
           .value=${shown}
           .max=${this.maxValue}
           .precision=${this.precision}
@@ -309,27 +280,29 @@ export class AlStrip extends LitElement {
           @value-changed=${this.onFader}
         ></al-fader>
         <div class="readout">${formatLevel(shown, this.precision)}</div>
-        <div class="buttons">
-          <button
-            class="mute"
-            type="button"
-            tabindex=${this.stop}
-            aria-pressed=${this.muted ? "true" : "false"}
-            title=${this.muted ? `Unmute ${this.label}` : `Mute ${this.label}`}
-            @click=${this.onMute}
-          >
-            M
-          </button>
-          <button
-            class="reset"
-            type="button"
-            tabindex=${this.stop}
-            title=${`Reset ${this.label}`}
-            @click=${this.onReset}
-          >
-            R
-          </button>
-        </div>
+        ${this.editable
+          ? html`<div class="buttons">
+              <button
+                class="mute"
+                type="button"
+                tabindex=${this.stop}
+                aria-pressed=${this.muted ? "true" : "false"}
+                title=${this.muted ? `Unmute ${this.label}` : `Mute ${this.label}`}
+                @click=${this.onMute}
+              >
+                M
+              </button>
+              <button
+                class="reset"
+                type="button"
+                tabindex=${this.stop}
+                title=${`Reset ${this.label}`}
+                @click=${this.onReset}
+              >
+                R
+              </button>
+            </div>`
+          : nothing}
         <div class="foot">
           ${this.errors > 0
             ? html`<span class="badge" title=${`${this.errors} problem${this.errors === 1 ? "" : "s"}`}

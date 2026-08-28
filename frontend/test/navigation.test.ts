@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { newGroup, newStimulus } from "../src/model";
 import {
+  EDIT_KEY,
   EXPANDED_KEY,
+  bands,
   expandTo,
   initialNav,
+  loadEditing,
   loadExpanded,
+  mixerLayout,
   reduce,
   restoreNav,
+  saveEditing,
   saveExpanded,
   visibleTracks,
   type MixerNav,
@@ -324,5 +329,115 @@ describe("restoreNav", () => {
   it("honours a stored empty set rather than re-opening the roots", () => {
     localStorage.setItem(EXPANDED_KEY, "[]");
     expect(restoreNav(houseConfig())).toEqual(navOf([], ["groups", 0]));
+  });
+});
+
+describe("mixerLayout", () => {
+  it("gives every visible strip a column of its own, in row order", () => {
+    const layout = mixerLayout(houseConfig(), navOf(["house", "living_room"], null));
+    expect(layout.columns).toEqual([1, 2, 3, 4]);
+    expect(layout.kinds).toEqual(["strip", "strip", "strip", "strip"]);
+  });
+
+  it("brackets an open group from its own strip to the end of its subtree", () => {
+    const layout = mixerLayout(houseConfig(), navOf(["house", "living_room"], null));
+    expect(layout.bands).toEqual([
+      { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 5, expanded: true },
+      { id: "living_room", label: "Living Room", depth: 1, colStart: 3, colEnd: 5, expanded: true },
+    ]);
+    // One band row per level of nesting that has a band, with the strips below them.
+    expect(layout.rows).toBe(2);
+  });
+
+  it("gives a closed group a narrow column of its own, right of its strip", () => {
+    const layout = mixerLayout(houseConfig(), navOf(["house"], null));
+    expect(layout.columns).toEqual([1, 2, 3]);
+    expect(layout.kinds).toEqual(["strip", "strip", "strip", "tab"]);
+    expect(layout.bands).toEqual([
+      // The open root spans the tab too: the closed branch is still inside it.
+      { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 5, expanded: true },
+      { id: "living_room", label: "Living Room", depth: 1, colStart: 4, colEnd: 5, expanded: false },
+    ]);
+    expect(layout.rows).toBe(1);
+  });
+
+  it("has no band rows at all when every group is closed", () => {
+    const layout = mixerLayout(houseConfig(), navOf([], null));
+    expect(layout.columns).toEqual([1]);
+    expect(layout.kinds).toEqual(["strip", "tab"]);
+    expect(layout.bands).toEqual([
+      { id: "house", label: "House", depth: 0, colStart: 2, colEnd: 3, expanded: false },
+    ]);
+    expect(layout.rows).toBe(0);
+  });
+
+  it("closes each band at its own subtree, not at the end of the row", () => {
+    // house(1) kitchen(2) living_room(3) [its tab](4) shed(5) workbench(6)
+    const layout = mixerLayout(twoRoots(), navOf(["house", "shed"], null));
+    expect(layout.bands).toEqual([
+      { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 5, expanded: true },
+      { id: "living_room", label: "Living Room", depth: 1, colStart: 4, colEnd: 5, expanded: false },
+      { id: "shed", label: "shed", depth: 0, colStart: 5, colEnd: 7, expanded: true },
+    ]);
+  });
+
+  it("names a group with no name of its own by its id", () => {
+    const layout = mixerLayout(houseConfig(), navOf(["kitchen"], null));
+    expect(layout.bands).toEqual([
+      { id: "house", label: "House", depth: 0, colStart: 2, colEnd: 3, expanded: false },
+    ]);
+  });
+
+  it("gives a group with no children no band, open or closed", () => {
+    const config = { ...emptyConfig(), groups: [newGroup("shed", "structure")] };
+    expect(mixerLayout(config, navOf(["shed"], null))).toEqual({
+      columns: [1],
+      kinds: ["strip"],
+      bands: [],
+      rows: 0,
+    });
+  });
+
+  it("is empty for a config with no groups", () => {
+    const config = emptyConfig();
+    expect(mixerLayout(config, initialNav(config))).toEqual({ columns: [], kinds: [], bands: [], rows: 0 });
+  });
+
+  it("is what bands() reports", () => {
+    const config = houseConfig();
+    const nav = navOf(["house", "living_room"], null);
+    expect(bands(config, nav)).toEqual(mixerLayout(config, nav).bands);
+  });
+});
+
+describe("edit mode", () => {
+  it("is off until this browser has turned it on", () => {
+    expect(loadEditing()).toBe(false);
+    saveEditing(true);
+    expect(localStorage.getItem(EDIT_KEY)).toBe("true");
+    expect(loadEditing()).toBe(true);
+    saveEditing(false);
+    expect(loadEditing()).toBe(false);
+  });
+
+  it("reads anything else stored under the key as off", () => {
+    localStorage.setItem(EDIT_KEY, "yes");
+    expect(loadEditing()).toBe(false);
+  });
+
+  it("survives storage that refuses to answer", () => {
+    const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    const set = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    try {
+      expect(loadEditing()).toBe(false);
+      expect(() => saveEditing(true)).not.toThrow();
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+    }
   });
 });

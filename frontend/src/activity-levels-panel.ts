@@ -18,14 +18,12 @@ import { expandTo, reduce, restoreNav, saveExpanded } from "./navigation";
 import { runSave } from "./save-flow";
 import { Draft } from "./store";
 import { sharedStyles } from "./styles";
-import type { SimState } from "./al-mixer";
 import type { AlChangeEvent, CodeStatus, TimelineRangeDetail } from "./events";
 import type { MixerNav, NavAction } from "./navigation";
 import type { Banner } from "./save-flow";
 import type { Horizon, Range } from "./timeseries";
 import type {
   Config,
-  Group,
   HomeAssistant,
   LiveState,
   Path,
@@ -108,12 +106,6 @@ export class ActivityLevelsPanel extends LitElement {
   private liveSeq = 0;
   /** When the profile was last read, so switching tabs does not re-ask for it every time. */
   private profileAt = 0;
-  /**
-   * The last `simStates` answer. The Mixer re-renders on every live poll, and a fresh
-   * object each time would re-render every strip with it for nothing.
-   */
-  private simStatesMemo: { key: unknown[]; value: Record<string, SimState> } | null = null;
-
   private get tabs(): Tab[] {
     return TABS;
   }
@@ -413,24 +405,6 @@ export class ActivityLevelsPanel extends LitElement {
     }
   };
 
-  /**
-   * What the mixer needs beyond the live frame. Whether the simulation is running is not
-   * in here: the strips read that off the switch entity they are given.
-   */
-  private simStates(config: Config): Record<string, SimState> {
-    const key: unknown[] = [config, this.simLog, this.hass.states];
-    const memo = this.simStatesMemo;
-    if (memo && memo.key.every((v, i) => v === key[i])) return memo.value;
-    const states: Record<string, SimState> = {};
-    const walk = (g: Group): void => {
-      states[g.id] = { blocked: this.simLog?.blocked[g.id] ?? null };
-      g.children.forEach(walk);
-    };
-    config.groups.forEach(walk);
-    this.simStatesMemo = { key, value: states };
-    return states;
-  }
-
   private restoreTimeline(): void {
     try {
       this.timeline = parseTimeline(localStorage.getItem(TIMELINE_KEY)) ?? DEFAULT_TIMELINE;
@@ -706,7 +680,6 @@ export class ActivityLevelsPanel extends LitElement {
         .nav=${this.nav}
         .errors=${this.errors}
         .live=${this.live}
-        .simState=${this.simStates(config)}
         .narrow=${this.narrow}
         @al-nav=${this.onNav}
         @al-change=${this.onChange}

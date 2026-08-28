@@ -85,6 +85,10 @@ export class AlFader extends LitElement {
       cursor: default;
       opacity: 0.5;
     }
+    /* Nothing to take hold of, so nothing that invites it. */
+    :host([readonly]) .track {
+      cursor: default;
+    }
   `;
 
   @property({ type: Number }) value = 1;
@@ -95,6 +99,13 @@ export class AlFader extends LitElement {
    * focus is there, which is what separates this from `disabled`.
    */
   @property({ type: Boolean }) focusable = true;
+  /**
+   * A fader with nothing to hold: no knob, no pointer or keyboard control, and out of the
+   * tab order however `focusable` is set. The fill still reads the value, so this is the
+   * same bar the mixer draws when it is showing levels rather than setting them - a meter,
+   * which is what it announces itself as, rather than a slider that quietly refuses.
+   */
+  @property({ type: Boolean, reflect: true, attribute: "readonly" }) readOnly = false;
   @property({ type: String }) label = "Gain";
 
   /** Which quantity the fader is holding: a gain into a parent, or a group's own level. */
@@ -236,6 +247,28 @@ export class AlFader extends LitElement {
     const pos = scale.toPosition(value);
     // A tick that lands on the value itself is not a second reading, just a duplicate line.
     const tick = this.tick === null || scale.clamp(this.tick) === value ? null : scale.clamp(this.tick);
+    const marks = html`
+      ${this.mode === "gain" ? html`<div class="unity"></div>` : nothing}
+      <div class="fill" style="height: ${pct(pos)}"></div>
+      ${tick === null
+        ? nothing
+        : html`<div class="tick" style="bottom: ${pct(scale.toPosition(tick))}" title=${scale.format(tick)}></div>`}
+    `;
+    if (this.readOnly)
+      return html`
+        <div
+          class="fader"
+          role="meter"
+          aria-label=${this.label}
+          aria-valuemin=${scale.min}
+          aria-valuemax=${scale.max}
+          aria-valuenow=${value}
+          aria-valuetext=${scale.format(value)}
+        >
+          <div class="track">${marks}</div>
+          <div class="value">${scale.format(value)}</div>
+        </div>
+      `;
     return html`
       <div
         class="fader"
@@ -258,11 +291,7 @@ export class AlFader extends LitElement {
           @pointerup=${this.onPointerUp}
           @pointercancel=${this.onPointerUp}
         >
-          ${this.mode === "gain" ? html`<div class="unity"></div>` : nothing}
-          <div class="fill" style="height: ${pct(pos)}"></div>
-          ${tick === null
-            ? nothing
-            : html`<div class="tick" style="bottom: ${pct(scale.toPosition(tick))}" title=${scale.format(tick)}></div>`}
+          ${marks}
           <div class="knob" style="bottom: calc(${pct(pos)} - ${Math.round((pos - 0.5) * KNOB * 10) / 10}px - ${KNOB / 2}px)"></div>
         </div>
         <div class="value">${scale.format(value)}</div>

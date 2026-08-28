@@ -1,50 +1,33 @@
 import { LitElement, css, html, nothing } from "lit";
 import type { PropertyValues, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import "./al-master-strip";
 import "./al-strip";
 import { resetGroup, setLevel, setMuted } from "./api";
-import { simSwitchId } from "./entities";
 import { pathKey, subtreeErrorCount } from "./errors";
-import { alChange, alLiveRefresh, alNav, alSimToggle } from "./events";
+import { alLiveRefresh, alNav } from "./events";
 import { effectivePrecision, groupAt, groupPathFor } from "./model";
-import { visibleTracks } from "./navigation";
-import { setAt } from "./store";
+import { loadEditing, mixerLayout, saveEditing, visibleTracks } from "./navigation";
 import { sharedStyles } from "./styles";
-import type { StripLevel } from "./al-meter";
 import type { AlStrip } from "./al-strip";
-import type { MixerNav, NavAction, VisibleTrack } from "./navigation";
-import type { Config, Group, HomeAssistant, LiveState, Mix, Path, ValidationError } from "./types";
-
-/** What the shell knows about a group's presence simulation, beyond the switch entity itself. */
-export interface SimState {
-  /** Why the group cannot be simulated right now, or null when nothing is stopping it. */
-  blocked: string | null;
-}
+import type { Band, MixerLayout, MixerNav, NavAction, VisibleTrack } from "./navigation";
+import type { Config, Group, HomeAssistant, LiveState, Path, ValidationError } from "./types";
 
 /** How long a failed command's notice stays up before it stops being news. */
 const ERROR_MS = 8000;
 
-/**
- * True when the key was typed into a control that wants it: the master strip's limiter box
- * and mix selector are real form elements, and a composed keydown from inside their shadow
- * root reaches the strip row. Space there is a space, not "toggle this track".
- */
-const isTextEntry = (ev: Event): boolean => {
-  const target = ev.composedPath()[0];
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLSelectElement ||
-    target instanceof HTMLTextAreaElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
-  );
-};
-
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /**
- * Row 2 of the mixer page: every group, in one horizontally scrolling row of track strips,
- * with groups opening and closing in place.
+ * Row 2 of the mixer page: every group, as one horizontally scrolling console of track
+ * strips under the bracket headers that say how they nest.
+ *
+ * Every strip is the same size and sits on one baseline; the tree is drawn *above* them,
+ * as a band per group that has children, spanning its own strip and its whole subtree and
+ * stepping up a row per level of nesting. Closing a band takes its subtree off the row and
+ * leaves a narrow vertical tab beside the group's own strip to bring it back.
+ *
+ * The row reads levels by default. **Edit** turns the meters back into faders and puts the
+ * mute and reset buttons back; it is a per-browser preference, not part of the config.
  *
  * Config edits go out as `al-change` against the draft store and navigation as `al-nav`
  * for the shell to reduce. Runtime commands - a level override, a mute, a reset - are the
@@ -60,19 +43,95 @@ export class AlMixer extends LitElement {
         display: block;
         background: none;
       }
-      .strips {
+      .toolbar {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 8px;
+        padding: 0 4px;
+      }
+      .edit {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.9em;
+        color: var(--secondary-text-color);
+      }
+      /* A column per strip, plus a narrow one after each closed group; a row per level of
+         nesting that has a band, and the strips themselves on the last one. */
+      .grid {
+        display: grid;
+        gap: 8px;
+        align-items: stretch;
+        justify-content: start;
         overflow-x: auto;
         padding: 4px;
         outline: none;
+        --al-strip-w: 96px;
+        --al-tab-w: 26px;
       }
-      /* The master sits at the right of the row, past every track, like a console. */
-      al-master-strip {
-        margin-left: auto;
-        position: sticky;
-        right: 0;
+      :host([narrow]) .grid {
+        --al-strip-w: 72px;
+      }
+      /* A bracket over the run of strips it owns: open at the bottom, into them. */
+      .band {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 2px 6px;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-bottom: none;
+        border-radius: 6px 6px 0 0;
+        background: var(--secondary-background-color);
+      }
+      .band .label,
+      .tab .label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.8em;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .caret {
+        flex: 0 0 auto;
+        background: none;
+        border: 1px solid transparent;
+        margin: 0;
+        padding: 0 2px;
+        font: inherit;
+        font-size: 0.8em;
+        color: var(--secondary-text-color);
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .caret:focus-visible,
+      .tab:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 1px;
+      }
+      /* A closed band, stood on end beside the strip it belongs to: the whole subtree,
+         folded into one column that opens it again. */
+      .tab {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        min-width: 0;
+        padding: 4px 0;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 6px;
+        background: var(--secondary-background-color);
+        color: var(--primary-text-color);
+        cursor: pointer;
+        outline: none;
+      }
+      .tab .label {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        max-height: 100%;
       }
       .empty {
         padding: 8px 4px;
@@ -85,8 +144,14 @@ export class AlMixer extends LitElement {
   @property({ attribute: false }) nav: MixerNav = { expanded: new Set(), selection: null };
   @property({ attribute: false }) errors: ValidationError[] = [];
   @property({ attribute: false }) live: LiveState | null = null;
-  @property({ attribute: false }) simState: Record<string, SimState> = {};
   @property({ type: Boolean, reflect: true }) narrow = false;
+
+  /**
+   * Whether the strips may be operated. Off, the row is a set of meters; on, it is a
+   * console. Remembered per browser rather than per config: it is how this screen is being
+   * used right now, not something about the home.
+   */
+  @state() private editing = loadEditing();
 
   /** What the last command that failed said, until it stops being worth reading. */
   @state() private commandError: string | null = null;
@@ -110,13 +175,21 @@ export class AlMixer extends LitElement {
     return this.config ? visibleTracks(this.config, this.nav) : [];
   }
 
-  /** The group the master strip follows: whatever is selected, or the group that owns it. */
+  /** The group the selection names, or the one that owns the selected stimulus. */
   private get selected(): { path: Path; group: Group } | null {
     const { config, nav } = this;
     if (!config || nav.selection === null) return null;
     const path = groupPathFor(nav.selection);
     const group = groupAt(config, path);
     return group === undefined ? null : { path, group };
+  }
+
+  /**
+   * Which group's band owns the row's one tab stop, so a caret or a closed tab joins the
+   * tab order behind the strip it belongs to rather than adding stops of its own.
+   */
+  private get selectedId(): string | null {
+    return this.selected?.group.id ?? null;
   }
 
   private isSelected(path: Path): boolean {
@@ -126,10 +199,6 @@ export class AlMixer extends LitElement {
   private navigate(action: NavAction): void {
     this.pendingFocus = true;
     this.dispatchEvent(alNav(action));
-  }
-
-  private emitChange(next: Config, coalesceKey?: string): void {
-    this.dispatchEvent(alChange(next, coalesceKey));
   }
 
   private clearErrorTimer(): void {
@@ -186,11 +255,6 @@ export class AlMixer extends LitElement {
     if (track) this.dispatchEvent(alNav({ type: "select", path: track.path }));
   }
 
-  private onStripToggle(ev: Event): void {
-    const track = this.trackOf(ev);
-    if (track) this.navigate({ type: "toggle", id: track.id });
-  }
-
   private onLevelOverride(ev: Event): void {
     const track = this.trackOf(ev);
     if (!track) return;
@@ -219,42 +283,37 @@ export class AlMixer extends LitElement {
     void this.command(`reset ${track.id}`, (hass) => resetGroup(hass, track.id));
   }
 
-  private onMasterSelect(): void {
-    const selection = this.selected;
-    if (selection) this.dispatchEvent(alNav({ type: "select", path: selection.path }));
+  private onEditToggle(ev: Event): void {
+    this.editing = (ev.target as unknown as { checked?: boolean }).checked === true;
+    saveEditing(this.editing);
   }
 
-  private onMix(ev: Event): void {
-    const { config } = this;
-    const selection = this.selected;
-    if (!config || !selection) return;
-    const { mix } = (ev as CustomEvent<{ mix: Mix }>).detail;
-    this.emitChange(setAt(config, [...selection.path, "mix"], mix));
+  /** Opening or closing a band is its own intent: it must not also read as a selection. */
+  private onBandToggle(ev: Event): void {
+    ev.stopPropagation();
+    const id = (ev.currentTarget as HTMLElement).dataset.band;
+    if (id !== undefined) this.navigate({ type: "toggle", id });
   }
 
-  private onLimiter(ev: Event): void {
-    const { config } = this;
-    const selection = this.selected;
-    if (!config || !selection) return;
-    const { value } = (ev as CustomEvent<{ value: number }>).detail;
-    this.emitChange(
-      setAt(config, [...selection.path, "max_value"], value),
-      `${pathKey(selection.path)}:limiter`,
-    );
-  }
-
-  private onSim(ev: Event): void {
-    const selection = this.selected;
-    if (!selection) return;
-    const { on } = (ev as CustomEvent<{ on: boolean }>).detail;
-    this.dispatchEvent(alSimToggle(selection.group.id, on));
+  /**
+   * Enter and Space on a band belong to the band. The row listens for them too and would
+   * toggle the same group a second time; and the closed tab is a `div`, so on that one the
+   * key has to do the work a button would have done for it.
+   */
+  private onBandKey(ev: KeyboardEvent): void {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    ev.stopPropagation();
+    const node = ev.currentTarget as HTMLElement;
+    if (node.tagName === "BUTTON") return;
+    ev.preventDefault();
+    const id = node.dataset.band;
+    if (id !== undefined) this.navigate({ type: "toggle", id });
   }
 
   /** Console keys: ←/→ walk the row, Enter or Space opens and closes, Home/End jump. */
   private onKeyDown(ev: KeyboardEvent): void {
     const config = this.config;
-    // No `preventDefault` on the way out: the control the key was typed into still wants it.
-    if (!config || isTextEntry(ev)) return;
+    if (!config) return;
     switch (ev.key) {
       case "ArrowRight":
       case "ArrowLeft":
@@ -293,7 +352,7 @@ export class AlMixer extends LitElement {
    */
   private async revealSelected(focus: boolean): Promise<void> {
     await this.updateComplete;
-    const node = this.shadowRoot?.querySelector<HTMLElement>('.strips > [tabindex="0"]');
+    const node = this.shadowRoot?.querySelector<HTMLElement>('al-strip[tabindex="0"]');
     if (!node) return;
     if (focus) node.focus();
     try {
@@ -303,7 +362,7 @@ export class AlMixer extends LitElement {
     }
   }
 
-  private renderTrack(config: Config, track: VisibleTrack, index: number): TemplateResult {
+  private renderTrack(config: Config, track: VisibleTrack, index: number, layout: MixerLayout): TemplateResult {
     const group = groupAt(config, track.path);
     if (!group) return html``;
     const live = this.live?.groups[group.id];
@@ -311,13 +370,10 @@ export class AlMixer extends LitElement {
     return html`
       <al-strip
         data-index=${index}
+        style="grid-column: ${layout.columns[index]}; grid-row: ${layout.rows + 1};"
         tabindex=${selected ? 0 : -1}
-        ?narrow=${this.narrow}
+        ?editable=${this.editing}
         .label=${group.name ?? group.id}
-        .depth=${track.depth}
-        .hasChildren=${track.hasChildren}
-        .expanded=${track.expanded}
-        .childCount=${group.children.length}
         .value=${live?.value ?? 0}
         .liveNow=${this.live?.now ?? 0}
         .realValue=${live?.real_value ?? 0}
@@ -330,43 +386,55 @@ export class AlMixer extends LitElement {
     `;
   }
 
-  private renderMaster(config: Config): TemplateResult | typeof nothing {
-    const selection = this.selected;
-    // Nothing selected is nothing to master: the row is the whole tree, so there is no
-    // "current bus" left to fall back to.
-    if (!selection) return nothing;
-    const { group, path } = selection;
-    const live = this.live?.groups[group.id];
-    const level: StripLevel | null = live ? { value: live.value, max: live.max_value, gated: live.gated } : null;
-    const entityId = simSwitchId(group.id);
-    // The master follows the selection rather than being it: the row's one tab stop and
-    // its outline belong to the track strip, and the bus name says which one this is.
-    // The property still travels, so the master's own controls join the tab order behind
-    // the strip they belong to.
-    const selected = this.isSelected(path);
-    return html`
-      <al-master-strip
-        tabindex="-1"
-        .selected=${selected}
-        ?narrow=${this.narrow}
-        .label=${(group.name ?? group.id).toUpperCase()}
-        .mix=${group.mix}
-        .maxValue=${group.max_value ?? config.defaults.max_value}
-        .precision=${live?.precision ?? effectivePrecision(config, group)}
-        .live=${level}
-        .lights=${live?.lights ?? 0}
-        .simEntityId=${entityId}
-        .simOn=${this.hass?.states[entityId]?.state === "on"}
-        .blockedReason=${this.simState[group.id]?.blocked ?? null}
-        @click=${this.onMasterSelect}
-      ></al-master-strip>
-    `;
+  private renderBand(band: Band, layout: MixerLayout): TemplateResult {
+    const row = band.expanded ? band.depth + 1 : layout.rows + 1;
+    const style = `grid-column: ${band.colStart} / ${band.colEnd}; grid-row: ${row};`;
+    const stop = band.id === this.selectedId ? 0 : -1;
+    return band.expanded
+      ? html`
+          <div class="band" role="group" aria-label=${band.label} style=${style}>
+            <button
+              class="caret"
+              type="button"
+              data-band=${band.id}
+              tabindex=${stop}
+              aria-expanded="true"
+              aria-label=${`Collapse ${band.label}`}
+              title=${`Collapse ${band.label}`}
+              @click=${this.onBandToggle}
+              @keydown=${this.onBandKey}
+            >
+              ▾
+            </button>
+            <span class="label" title=${band.label}>${band.label}</span>
+          </div>
+        `
+      : html`
+          <div
+            class="tab"
+            role="button"
+            data-band=${band.id}
+            tabindex=${stop}
+            aria-expanded="false"
+            aria-label=${`Expand ${band.label}`}
+            title=${`Expand ${band.label}`}
+            style=${style}
+            @click=${this.onBandToggle}
+            @keydown=${this.onBandKey}
+          >
+            <span class="label">${band.label}</span>
+          </div>
+        `;
   }
 
   override render() {
     const config = this.config;
     if (!config || config.groups.length === 0)
       return html`<div class="empty muted">Nothing to mix: add a group first.</div>`;
+    const layout = mixerLayout(config, this.nav);
+    const columns = layout.kinds.map((k) => (k === "tab" ? "var(--al-tab-w)" : "var(--al-strip-w)")).join(" ");
+    // `repeat(0, ...)` is not a track list: with nothing open there are no band rows at all.
+    const rows = layout.rows > 0 ? `repeat(${layout.rows}, auto) auto` : "auto";
     return html`
       ${this.commandError === null
         ? nothing
@@ -380,21 +448,25 @@ export class AlMixer extends LitElement {
             }}
             >${this.commandError}</ha-alert
           >`}
+      <div class="toolbar">
+        <label class="edit">
+          <ha-switch class="edit-switch" .checked=${this.editing} @change=${this.onEditToggle}></ha-switch>
+          <span>Edit</span>
+        </label>
+      </div>
       <div
-        class="strips"
+        class="grid"
         role="group"
         aria-label="Mixer"
+        style="grid-template-columns: ${columns}; grid-template-rows: ${rows};"
         @keydown=${this.onKeyDown}
         @al-select-strip=${this.onStripSelect}
-        @al-toggle-strip=${this.onStripToggle}
         @al-level-override=${this.onLevelOverride}
         @al-mute-toggle=${this.onMuteToggle}
         @al-reset=${this.onReset}
-        @al-mix-changed=${this.onMix}
-        @al-limiter-changed=${this.onLimiter}
-        @al-sim-toggled=${this.onSim}
       >
-        ${this.tracks.map((track, i) => this.renderTrack(config, track, i))}${this.renderMaster(config)}
+        ${layout.bands.map((band) => this.renderBand(band, layout))}
+        ${this.tracks.map((track, i) => this.renderTrack(config, track, i, layout))}
       </div>
     `;
   }

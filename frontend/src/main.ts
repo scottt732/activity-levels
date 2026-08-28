@@ -8,7 +8,6 @@ import "./al-defaults";
 import "./al-fader";
 import "./al-meter";
 import "./al-strip";
-import "./al-master-strip";
 import "./al-mixer";
 import "./al-timeline";
 import "./al-strip-controls";

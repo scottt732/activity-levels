@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/al-mixer";
 import { newGroup, newStimulus } from "../src/model";
-import { initialNav, reduce } from "../src/navigation";
+import { EDIT_KEY, initialNav, reduce } from "../src/navigation";
 import type { AlMixer } from "../src/al-mixer";
-import type { AlMasterStrip } from "../src/al-master-strip";
 import type { AlStrip } from "../src/al-strip";
 import type { AlChangeEvent } from "../src/events";
 import type { MixerNav, NavAction } from "../src/navigation";
@@ -94,7 +93,6 @@ let el: AlMixer;
 let config: Config;
 let navs: NavAction[];
 let changes: AlChangeEvent[];
-let sims: { gid: string; on: boolean }[];
 let refreshes: number;
 
 /** Waits out the update *and* the focus move it schedules on the microtask queue. */
@@ -111,16 +109,31 @@ const withNavReducer = (): void => {
 };
 
 const strips = (): AlStrip[] => [...(el.shadowRoot?.querySelectorAll<AlStrip>("al-strip") ?? [])];
-const master = (): AlMasterStrip | null => el.shadowRoot?.querySelector<AlMasterStrip>("al-master-strip") ?? null;
-const container = (): HTMLElement | null => el.shadowRoot?.querySelector<HTMLElement>(".strips") ?? null;
+const container = (): HTMLElement | null => el.shadowRoot?.querySelector<HTMLElement>(".grid") ?? null;
 const labels = (): string[] => strips().map((s) => s.label);
+const bands = (): HTMLElement[] => [...(el.shadowRoot?.querySelectorAll<HTMLElement>(".band") ?? [])];
+const tabs = (): HTMLElement[] => [...(el.shadowRoot?.querySelectorAll<HTMLElement>(".tab") ?? [])];
+const textOf = (nodes: HTMLElement[]): string[] =>
+  nodes.map((n) => n.querySelector(".label")?.textContent?.trim() ?? "");
+/** Where a band, a tab or a strip was placed. jsdom parses no grid shorthands, so this
+    reads the inline style the mixer wrote rather than a computed track. */
+const placed = (node: HTMLElement | undefined): string => node?.getAttribute("style") ?? "";
+
+/** Flips the mixer's own Edit switch, the way a click on it does. */
+const setEditing = async (on: boolean): Promise<void> => {
+  const sw = el.shadowRoot?.querySelector(".edit-switch");
+  expect(sw, "missing edit switch").toBeTruthy();
+  (sw as unknown as { checked: boolean }).checked = on;
+  sw?.dispatchEvent(new Event("change", { bubbles: true }));
+  await settle();
+};
 
 const ws = (type: string): Record<string, unknown>[] =>
   (el.hass as unknown as { callWS: { mock: { calls: [Record<string, unknown>][] } } }).callWS.mock.calls
     .map((call) => call[0])
     .filter((msg) => msg.type === type);
 
-const clickIn = async (host: AlStrip | AlMasterStrip, sel: string): Promise<void> => {
+const clickIn = async (host: AlStrip, sel: string): Promise<void> => {
   const node = host.shadowRoot?.querySelector(sel);
   expect(node, `missing ${sel}`).toBeTruthy();
   node?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
@@ -146,12 +159,12 @@ afterEach(() => {
 
 beforeEach(async () => {
   document.body.innerHTML = "";
+  localStorage.clear();
   wsError = null;
   levelResult = null;
   config = houseConfig();
   navs = [];
   changes = [];
-  sims = [];
   refreshes = 0;
   el = document.createElement("al-mixer");
   el.hass = hassStub({ "switch.property_presence_simulation": { state: "off" } });
@@ -160,7 +173,6 @@ beforeEach(async () => {
   el.errors = [];
   el.addEventListener("al-nav", (e) => navs.push((e as CustomEvent<NavAction>).detail));
   el.addEventListener("al-change", (e) => changes.push(e as AlChangeEvent));
-  el.addEventListener("al-sim-toggle", (e) => sims.push((e as CustomEvent<{ gid: string; on: boolean }>).detail));
   el.addEventListener("al-live-refresh", () => refreshes++);
   document.body.appendChild(el);
   await el.updateComplete;
@@ -169,17 +181,12 @@ beforeEach(async () => {
 describe("al-mixer rendering", () => {
   it("draws one strip per visible track, roots open", () => {
     expect(labels()).toEqual(["Property", "House", "Garage", "outside"]);
-    expect(strips().map((s) => s.depth)).toEqual([0, 1, 1, 1]);
-    expect(strips().map((s) => s.hasChildren)).toEqual([true, true, false, false]);
-    expect(strips().map((s) => s.childCount)).toEqual([3, 1, 0, 0]);
-    expect(strips().map((s) => s.expanded)).toEqual([true, false, false, false]);
   });
 
   it("shows a group's children only while it is open", async () => {
     el.nav = { expanded: new Set(["property", "house"]), selection: ["groups", 0] };
     await el.updateComplete;
     expect(labels()).toEqual(["Property", "House", "den", "Garage", "outside"]);
-    expect(strips().map((s) => s.depth)).toEqual([0, 1, 2, 1, 1]);
   });
 
   it("keeps a collapsed root's whole subtree out of the row", async () => {
@@ -235,61 +242,25 @@ describe("al-mixer rendering", () => {
     expect(strips().map((s) => s.selected)).toEqual([false, false, true, false]);
   });
 
-  it("passes narrow down to every strip", async () => {
-    expect(strips()[0]?.hasAttribute("narrow")).toBe(false);
+  // Strip width is the grid's now, not the strip's: narrow is reflected so the column
+  // template's --al-strip-w can be narrowed for the whole row at once.
+  it("reflects narrow, which is what narrows the columns", async () => {
+    expect(el.hasAttribute("narrow")).toBe(false);
     el.narrow = true;
     await el.updateComplete;
-    expect(strips().every((s) => s.hasAttribute("narrow"))).toBe(true);
-    expect(master()?.hasAttribute("narrow")).toBe(true);
+    expect(el.hasAttribute("narrow")).toBe(true);
+    expect(placed(container() ?? undefined)).toContain("var(--al-strip-w)");
   });
 
   it("says so rather than drawing a row when there is nothing configured", async () => {
     el.config = { ...config, groups: [] };
     await el.updateComplete;
     expect(strips()).toHaveLength(0);
-    expect(master()).toBeNull();
+    expect(bands()).toEqual([]);
     expect(el.shadowRoot?.textContent).toContain("Nothing to mix");
     el.config = undefined;
     await el.updateComplete;
     expect(el.shadowRoot?.textContent).toContain("Nothing to mix");
-  });
-});
-
-describe("al-mixer master strip", () => {
-  it("follows the selected group", async () => {
-    expect(master()?.label).toBe("PROPERTY");
-    el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
-    await el.updateComplete;
-    expect(master()?.label).toBe("HOUSE");
-    expect(master()?.mix).toBe("sum");
-    expect(master()?.maxValue).toBe(5);
-    expect(master()?.precision).toBe(1);
-    expect(master()?.simEntityId).toBe("switch.house_presence_simulation");
-  });
-
-  it("follows the group that owns a selected stimulus", async () => {
-    el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0, "stimuli", 0] };
-    await el.updateComplete;
-    expect(master()?.label).toBe("HOUSE");
-  });
-
-  it("renders empty with nothing selected", async () => {
-    el.nav = { expanded: new Set(["property"]), selection: null };
-    await el.updateComplete;
-    expect(master()).toBeNull();
-    expect(strips()).toHaveLength(4);
-  });
-
-  it("renders empty when the selection no longer names a group", async () => {
-    el.nav = { expanded: new Set(["property"]), selection: ["groups", 9] };
-    await el.updateComplete;
-    expect(master()).toBeNull();
-  });
-
-  it("shows the selected group's live level against its own ceiling", async () => {
-    el.live = { now: 0, groups: { property: groupLive({ value: 3, max_value: 8, gated: true }) }, voices: {} };
-    await el.updateComplete;
-    expect(master()?.live).toEqual({ value: 3, max: 8, gated: true });
   });
 });
 
@@ -299,41 +270,11 @@ describe("al-mixer navigation", () => {
     expect(navs).toEqual([{ type: "select", path: ["groups", 0, "children", 1] }]);
   });
 
-  it("toggles the track whose chevron was clicked, without selecting it", async () => {
-    await clickIn(strips()[1]!, ".chevron");
-    expect(navs).toEqual([{ type: "toggle", id: "house" }]);
-  });
-
-  // The master follows the selection; it is not the selection. Outlining it too drew a
-  // second focus ring, and a tab stop of its own put two of them in a row that is meant
-  // to be one.
-  it("leaves the row's single tab stop and its outline on the track that is selected", async () => {
+  it("leaves the row's single strip tab stop and its outline on the track that is selected", async () => {
     el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
     await el.updateComplete;
-    // Shadow content is not matched here, so this is the row itself: strips and master.
-    expect([...(container()?.querySelectorAll('[tabindex="0"]') ?? [])]).toEqual([strips()[1]]);
-    expect(master()?.getAttribute("tabindex")).toBe("-1");
-    expect(master()?.hasAttribute("selected")).toBe(false);
+    expect(strips().map((s) => s.getAttribute("tabindex"))).toEqual(["-1", "0", "-1", "-1"]);
     expect(strips()[1]?.hasAttribute("selected")).toBe(true);
-    // what it does say is which bus it is following
-    expect(master()?.label).toBe("HOUSE");
-  });
-
-  it("keeps the master's own controls reachable while it follows the selection", async () => {
-    el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
-    await el.updateComplete;
-    await master()?.updateComplete;
-    expect(
-      [...(master()?.shadowRoot?.querySelectorAll("select, input") ?? [])].map((n) => n.getAttribute("tabindex")),
-    ).toEqual(["0", "0"]);
-  });
-
-  it("selects the group itself when the master strip is clicked", async () => {
-    el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
-    await el.updateComplete;
-    master()?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
-    await settle();
-    expect(navs).toEqual([{ type: "select", path: ["groups", 0, "children", 0] }]);
   });
 
   // jsdom has no scrollIntoView at all, which is exactly why the mixer calls it optionally.
@@ -416,6 +357,7 @@ describe("al-mixer keyboard", () => {
   });
 
   it("keeps the whole strip out of the tab order, controls included, until it is selected", async () => {
+    await setEditing(true);
     const stops = (host: AlStrip): number => (host.shadowRoot?.querySelectorAll('[tabindex="0"]') ?? []).length;
     const slider = (host: AlStrip): Element | null | undefined =>
       host.shadowRoot?.querySelector("al-fader")?.shadowRoot?.querySelector('[role="slider"]');
@@ -426,54 +368,19 @@ describe("al-mixer keyboard", () => {
     await press("ArrowRight");
     await house.updateComplete;
     await house.shadowRoot?.querySelector("al-fader")?.updateComplete;
-    expect(house.shadowRoot?.querySelector(".chevron")?.getAttribute("tabindex")).toBe("0");
     expect(house.shadowRoot?.querySelector(".mute")?.getAttribute("tabindex")).toBe("0");
     expect(slider(house)?.getAttribute("tabindex")).toBe("0");
     expect(stops(strips()[2]!)).toBe(0);
   });
 });
 
-describe("al-mixer keyboard and the master's own controls", () => {
-  beforeEach(() => withNavReducer());
-
-  /** The keydown a real browser fires from inside the master strip's shadow root. */
-  const typeInto = async (sel: string, key: string): Promise<KeyboardEvent> => {
-    const node = master()?.shadowRoot?.querySelector(sel);
-    expect(node, `missing ${sel}`).toBeTruthy();
-    const ev = new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true });
-    node?.dispatchEvent(ev);
-    await settle();
-    return ev;
-  };
-
-  it.each(["Backspace", "ArrowRight", "ArrowLeft", "Home", "End", "Enter", " "])(
-    "leaves %o typed into the limiter box to the limiter box",
-    async (key) => {
-      const ev = await typeInto(".limiter", key);
-      expect(navs).toEqual([]);
-      expect(el.nav).toEqual(initialNav(config));
-      expect(ev.defaultPrevented).toBe(false);
-    },
-  );
-
-  it.each(["ArrowRight", "ArrowLeft", "Home", "End", " "])(
-    "leaves %o typed into the mix selector to the mix selector",
-    async (key) => {
-      const ev = await typeInto(".mix", key);
-      expect(navs).toEqual([]);
-      expect(el.nav).toEqual(initialNav(config));
-      expect(ev.defaultPrevented).toBe(false);
-    },
-  );
-
-  it("still navigates on a key from the strip itself", async () => {
-    master()?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }));
-    await settle();
-    expect(el.nav.selection).toEqual(["groups", 0, "children", 0]);
-  });
-});
-
 describe("al-mixer runtime commands", () => {
+  // Every one of these is an edit to what the engine is doing, so they only exist at all
+  // once the Edit switch is on.
+  beforeEach(async () => {
+    await setEditing(true);
+  });
+
   it("sends a dragged level to the engine and asks for a live frame", async () => {
     await drag(strips()[1]!, 3.5);
     expect(ws("activity_levels/level/set")).toEqual([
@@ -575,70 +482,9 @@ describe("al-mixer runtime commands", () => {
   });
 });
 
-describe("al-mixer edits", () => {
-  beforeEach(async () => {
-    el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
-    await el.updateComplete;
-  });
-
-  it("writes the master's mix onto the selected group", async () => {
-    const select = master()?.shadowRoot?.querySelector<HTMLSelectElement>(".mix");
-    if (select) select.value = "max";
-    select?.dispatchEvent(new Event("change", { bubbles: true }));
-    await settle();
-    const next = changes[0]!.detail;
-    expect(next.groups[0]?.children[0]?.mix).toBe("max");
-    // Everything the edit did not touch is shared with the config it came from.
-    expect(next.defaults).toBe(config.defaults);
-    expect(next.groups[0]?.children[1]).toBe(config.groups[0]?.children[1]);
-  });
-
-  it("writes the master's limiter onto the selected group's ceiling", async () => {
-    const input = master()?.shadowRoot?.querySelector<HTMLInputElement>(".limiter");
-    if (input) input.value = "9";
-    input?.dispatchEvent(new Event("change", { bubbles: true }));
-    await settle();
-    expect(changes[0]?.detail.groups[0]?.children[0]?.max_value).toBe(9);
-    expect(changes[0]?.coalesceKey).toBe("groups/0/children/0:limiter");
-  });
-});
-
-describe("al-mixer simulation", () => {
-  it("hides the ⏻ for a group with no lights and shows it once there are some", async () => {
-    expect(master()?.lights).toBe(0);
-    expect(master()?.shadowRoot?.querySelector("ha-switch")).toBeFalsy();
-    el.live = { now: 0, groups: { property: groupLive({ lights: 4 }) }, voices: {} };
-    await el.updateComplete;
-    await master()?.updateComplete;
-    expect(master()?.lights).toBe(4);
-    expect(master()?.shadowRoot?.querySelector("ha-switch")).toBeTruthy();
-  });
-
-  it("takes the switch's own state and the shell's block reason", async () => {
-    el.hass = hassStub({ "switch.property_presence_simulation": { state: "on" } });
-    el.live = { now: 0, groups: { property: groupLive({ lights: 4 }) }, voices: {} };
-    el.simState = { property: { blocked: "quiet hours" } };
-    await el.updateComplete;
-    expect(master()?.simOn).toBe(true);
-    expect(master()?.blockedReason).toBe("quiet hours");
-  });
-
-  it("asks the shell to toggle presence simulation for the selected group", async () => {
-    el.live = { now: 0, groups: { property: groupLive({ lights: 4 }) }, voices: {} };
-    await el.updateComplete;
-    await master()?.updateComplete;
-    const sw = master()?.shadowRoot?.querySelector("ha-switch");
-    (sw as unknown as { checked: boolean }).checked = true;
-    sw?.dispatchEvent(new Event("change", { bubbles: true }));
-    await settle();
-    expect(sims).toEqual([{ gid: "property", on: true }]);
-    expect(changes).toHaveLength(0);
-  });
-});
-
 describe("al-mixer track resolution", () => {
   it("ignores a strip event that does not come from a strip", async () => {
-    for (const type of ["al-select-strip", "al-toggle-strip", "al-reset"]) {
+    for (const type of ["al-select-strip", "al-reset"]) {
       container()?.dispatchEvent(new CustomEvent(type, { detail: null, bubbles: true, composed: true }));
     }
     container()?.dispatchEvent(
@@ -654,11 +500,163 @@ describe("al-mixer track resolution", () => {
   });
 
   it("does nothing without a Home Assistant connection to talk to", async () => {
+    await setEditing(true);
     const nav: MixerNav = el.nav;
     el.hass = undefined;
     await el.updateComplete;
     await clickIn(strips()[0]!, ".reset");
     expect(refreshes).toBe(0);
     expect(el.nav).toBe(nav);
+  });
+});
+
+describe("al-mixer bands", () => {
+  // Property(1) House(2) [House's tab](3) Garage(4) outside(5), one band row above.
+  it("brackets each open group over its own strip and its subtree", () => {
+    expect(textOf(bands())).toEqual(["Property"]);
+    expect(placed(bands()[0])).toBe("grid-column: 1 / 6; grid-row: 1;");
+    expect(bands()[0]?.getAttribute("role")).toBe("group");
+    expect(bands()[0]?.getAttribute("aria-label")).toBe("Property");
+  });
+
+  it("puts the strips on the row below every band", () => {
+    expect(strips().map((n) => placed(n))).toEqual([
+      "grid-column: 1; grid-row: 2;",
+      "grid-column: 2; grid-row: 2;",
+      "grid-column: 4; grid-row: 2;",
+      "grid-column: 5; grid-row: 2;",
+    ]);
+  });
+
+  it("steps a nested band up one row per level", async () => {
+    el.nav = { expanded: new Set(["property", "house"]), selection: null };
+    await el.updateComplete;
+    expect(textOf(bands())).toEqual(["Property", "House"]);
+    expect(placed(bands()[0])).toBe("grid-column: 1 / 6; grid-row: 1;");
+    expect(placed(bands()[1])).toBe("grid-column: 2 / 4; grid-row: 2;");
+    expect(strips().map((n) => placed(n))).toEqual([
+      "grid-column: 1; grid-row: 3;",
+      "grid-column: 2; grid-row: 3;",
+      "grid-column: 3; grid-row: 3;",
+      "grid-column: 4; grid-row: 3;",
+      "grid-column: 5; grid-row: 3;",
+    ]);
+  });
+
+  it("gives a group with no children no band of its own", async () => {
+    el.nav = { expanded: new Set(["property", "house"]), selection: null };
+    await el.updateComplete;
+    // Garage, outside and den all have children of nobody: four of the five strips.
+    expect(textOf(bands())).toEqual(["Property", "House"]);
+  });
+
+  it("labels the caret with what it will do", () => {
+    const caret = bands()[0]?.querySelector(".caret");
+    expect(caret?.getAttribute("aria-expanded")).toBe("true");
+    expect(caret?.getAttribute("aria-label")).toBe("Collapse Property");
+  });
+
+  it("closes the band the caret was clicked on, without selecting anything", async () => {
+    bands()[0]?.querySelector(".caret")?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await settle();
+    expect(navs).toEqual([{ type: "toggle", id: "property" }]);
+  });
+});
+
+describe("al-mixer collapsed bands", () => {
+  it("stands a closed band on end, right of the group's own strip", () => {
+    expect(textOf(tabs())).toEqual(["House"]);
+    // Column 3 is the one immediately after House's strip; the strips' own row.
+    expect(placed(tabs()[0])).toBe("grid-column: 3 / 4; grid-row: 2;");
+    expect(tabs()[0]?.getAttribute("role")).toBe("button");
+    expect(tabs()[0]?.getAttribute("aria-expanded")).toBe("false");
+    expect(tabs()[0]?.getAttribute("aria-label")).toBe("Expand House");
+  });
+
+  it("opens the subtree again when it is clicked", async () => {
+    withNavReducer();
+    tabs()[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await settle();
+    expect(el.nav.expanded.has("house")).toBe(true);
+    expect(labels()).toEqual(["Property", "House", "den", "Garage", "outside"]);
+    expect(tabs()).toEqual([]);
+  });
+
+  it.each(["Enter", " "])("opens it on %o, and does not toggle it twice", async (key) => {
+    withNavReducer();
+    const ev = new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true });
+    tabs()[0]?.dispatchEvent(ev);
+    await settle();
+    expect(navs).toEqual([{ type: "toggle", id: "house" }]);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  // The caret is a real button: the key press is already its click, so all the band has to
+  // do is keep the row from hearing it as well.
+  it.each(["Enter", " "])("keeps %o typed on a caret from reaching the row", async (key) => {
+    bands()[0]
+      ?.querySelector(".caret")
+      ?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true }));
+    await settle();
+    expect(navs).toEqual([]);
+  });
+
+  it("gives the band controls the tab stop only for the selected group", async () => {
+    expect(bands()[0]?.querySelector(".caret")?.getAttribute("tabindex")).toBe("0");
+    expect(tabs()[0]?.getAttribute("tabindex")).toBe("-1");
+    el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
+    await el.updateComplete;
+    expect(bands()[0]?.querySelector(".caret")?.getAttribute("tabindex")).toBe("-1");
+    expect(tabs()[0]?.getAttribute("tabindex")).toBe("0");
+  });
+});
+
+describe("al-mixer edit mode", () => {
+  it("starts read-only, with no fader grip and no mute or reset", async () => {
+    const house = strips()[1]!;
+    await house.updateComplete;
+    expect(strips().every((s) => s.editable === false)).toBe(true);
+    expect(house.shadowRoot?.querySelector(".mute")).toBeFalsy();
+    expect(house.shadowRoot?.querySelector(".reset")).toBeFalsy();
+    await house.shadowRoot?.querySelector("al-fader")?.updateComplete;
+    expect(house.shadowRoot?.querySelector("al-fader")?.shadowRoot?.querySelector('[role="slider"]')).toBeFalsy();
+  });
+
+  it("sends nothing to the engine from a fader move while it is read-only", async () => {
+    await drag(strips()[1]!, 3.5);
+    expect(ws("activity_levels/level/set")).toEqual([]);
+    expect(refreshes).toBe(0);
+  });
+
+  it("hands the strips the console back, and remembers the switch", async () => {
+    await setEditing(true);
+    const house = strips()[1]!;
+    await house.updateComplete;
+    expect(strips().every((s) => s.editable)).toBe(true);
+    expect(house.shadowRoot?.querySelector(".mute")).toBeTruthy();
+    expect(localStorage.getItem(EDIT_KEY)).toBe("true");
+    await setEditing(false);
+    expect(strips().every((s) => s.editable === false)).toBe(true);
+    expect(localStorage.getItem(EDIT_KEY)).toBe("false");
+  });
+
+  it("comes up in Edit mode when this browser left it there", async () => {
+    localStorage.setItem(EDIT_KEY, "true");
+    const other = document.createElement("al-mixer");
+    other.config = config;
+    other.nav = initialNav(config);
+    document.body.appendChild(other);
+    await other.updateComplete;
+    expect(other.shadowRoot?.querySelector<AlStrip>("al-strip")?.editable).toBe(true);
+  });
+
+  it("still selects, walks and opens the row while it is read-only", async () => {
+    withNavReducer();
+    await clickIn(strips()[2]!, ".name");
+    expect(el.nav.selection).toEqual(["groups", 0, "children", 1]);
+    await press("Home");
+    expect(el.nav.selection).toEqual(["groups", 0]);
+    await press("Enter");
+    expect(el.nav.expanded.has("property")).toBe(false);
   });
 });

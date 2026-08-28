@@ -306,22 +306,6 @@ describe("activity-levels-panel mixer timeline wiring", () => {
   });
 });
 
-describe("activity-levels-panel mixer sim state", () => {
-  const simState = (): unknown =>
-    (el.shadowRoot?.querySelector("al-mixer") as unknown as { simState: unknown }).simState;
-
-  // The Mixer re-renders on every live poll; a fresh object each time would re-render
-  // every strip with it for nothing.
-  it("hands the mixer the same object while nothing it is derived from has changed", async () => {
-    await mount(houseConfig());
-    const first = simState();
-    expect(first).toMatchObject({ house: { blocked: null }, kitchen: { blocked: null } });
-    (el as unknown as { requestUpdate: () => void }).requestUpdate();
-    await settle();
-    expect(simState()).toBe(first);
-  });
-});
-
 describe("activity-levels-panel notices", () => {
   it("offers a first property when there are none", async () => {
     await selectTab(1);

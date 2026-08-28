@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import "../src/al-master-strip";
 import "../src/al-meter";
 import { STEP_DEBOUNCE_MS } from "../src/al-strip";
 import type { AlFader } from "../src/al-fader";
-import type { AlMasterStrip } from "../src/al-master-strip";
 import type { AlMeter } from "../src/al-meter";
 import type { AlStrip } from "../src/al-strip";
 import type { FaderChangeDetail } from "../src/events";
@@ -92,7 +90,6 @@ describe("al-strip", () => {
     document.body.appendChild(bus);
     el = document.createElement("al-strip");
     el.label = "Downstairs";
-    el.depth = 1;
     el.value = 2;
     el.realValue = 2;
     el.maxValue = 5;
@@ -126,12 +123,12 @@ describe("al-strip", () => {
     expect(root?.querySelector("al-meter")).toBeFalsy();
   });
 
-  it("publishes its depth as a CSS variable and draws a marker for it", async () => {
-    expect(el.style.getPropertyValue("--al-depth")).toBe("1");
-    expect(el.shadowRoot?.querySelector(".depth")).toBeTruthy();
-    el.depth = 3;
-    await el.updateComplete;
-    expect(el.style.getPropertyValue("--al-depth")).toBe("3");
+  // Depth is the mixer's to draw, as the bands over the row: every strip is the same
+  // shape, whatever it is nested under, so nothing on it says where it sits.
+  it("draws neither a depth marker nor a chevron of its own", () => {
+    expect(el.style.getPropertyValue("--al-depth")).toBe("");
+    expect(el.shadowRoot?.querySelector(".depth")).toBeFalsy();
+    expect(el.shadowRoot?.querySelector(".chevron")).toBeFalsy();
   });
 
   it("selects when the strip is clicked", async () => {
@@ -140,55 +137,12 @@ describe("al-strip", () => {
     expect(toggles).toHaveLength(0);
   });
 
-  describe("chevron", () => {
-    beforeEach(async () => {
-      el.hasChildren = true;
-      el.childCount = 3;
-      await el.updateComplete;
-    });
-
-    it("appears only for a group with children, with the count beside it", async () => {
-      expect(el.shadowRoot?.querySelector(".chevron")?.textContent?.trim()).toBe("▸ 3");
-      el.expanded = true;
-      await el.updateComplete;
-      const chevron = el.shadowRoot?.querySelector(".chevron");
-      expect(chevron?.textContent?.trim()).toBe("▾ 3");
-      expect(chevron?.getAttribute("aria-expanded")).toBe("true");
-      el.hasChildren = false;
-      await el.updateComplete;
-      expect(el.shadowRoot?.querySelector(".chevron")).toBeFalsy();
-    });
-
-    it("toggles without also selecting the strip", async () => {
-      await click(el, ".chevron");
-      expect(toggles).toHaveLength(1);
-      expect(selects).toHaveLength(0);
-    });
-
-    // The mixer listens for Enter/Space on the whole row; the button already answers them,
-    // and both firing would toggle the same track twice.
-    it.each(["Enter", " "])("keeps %o typed on the chevron inside the strip", async (key) => {
-      const seen: string[] = [];
-      bus.addEventListener("keydown", (e) => seen.push((e as KeyboardEvent).key));
-      el.shadowRoot
-        ?.querySelector(".chevron")
-        ?.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, composed: true }));
-      await el.updateComplete;
-      expect(seen).toEqual([]);
-    });
-
-    it("lets other keys through to the row", async () => {
-      const seen: string[] = [];
-      bus.addEventListener("keydown", (e) => seen.push((e as KeyboardEvent).key));
-      el.shadowRoot
-        ?.querySelector(".chevron")
-        ?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }));
-      await el.updateComplete;
-      expect(seen).toEqual(["ArrowRight"]);
-    });
-  });
-
   describe("value fader", () => {
+    beforeEach(async () => {
+      el.editable = true;
+      await el.updateComplete;
+    });
+
     it("is a level fader over the group's own range", () => {
       const f = fader();
       expect(f.mode).toBe("level");
@@ -316,6 +270,11 @@ describe("al-strip", () => {
   });
 
   describe("mute and reset", () => {
+    beforeEach(async () => {
+      el.editable = true;
+      await el.updateComplete;
+    });
+
     it("shows the mute as a pressed toggle and asks for the other state", async () => {
       const mute = (): Element | null | undefined => el.shadowRoot?.querySelector(".mute");
       expect(mute()?.getAttribute("aria-pressed")).toBe("false");
@@ -355,7 +314,7 @@ describe("al-strip", () => {
   });
 
   it("keeps its own controls out of the tab order until the strip is selected", async () => {
-    el.hasChildren = true;
+    el.editable = true;
     await el.updateComplete;
     await fader().updateComplete;
     expect(el.shadowRoot?.querySelectorAll('[tabindex="0"]')).toHaveLength(0);
@@ -366,131 +325,61 @@ describe("al-strip", () => {
     expect([...(el.shadowRoot?.querySelectorAll("button") ?? [])].map((b) => b.getAttribute("tabindex"))).toEqual([
       "0",
       "0",
-      "0",
     ]);
     expect(fader().shadowRoot?.querySelector('[role="slider"]')?.getAttribute("tabindex")).toBe("0");
   });
-});
 
-describe("al-master-strip", () => {
-  let el: AlMasterStrip;
-  let bus: HTMLElement;
-  let mixes: unknown[];
-  let limits: unknown[];
-  let sims: unknown[];
+  describe("read-only, which is how it starts", () => {
+    it("shows the level as a meter, with no fader to take hold of", async () => {
+      expect(el.editable).toBe(false);
+      await fader().updateComplete;
+      expect(fader().hasAttribute("readonly")).toBe(true);
+      expect(fader().shadowRoot?.querySelector('[role="slider"]')).toBeFalsy();
+      expect(fader().shadowRoot?.querySelector('[role="meter"]')).toBeTruthy();
+      // The reading itself is still there, on the fader and under it.
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent?.trim()).toBe("2.0");
+    });
 
-  beforeEach(async () => {
-    document.body.innerHTML = "";
-    mixes = [];
-    limits = [];
-    sims = [];
-    bus = document.createElement("div");
-    document.body.appendChild(bus);
-    el = document.createElement("al-master-strip");
-    el.label = "Property";
-    el.mix = "sum";
-    el.maxValue = 5;
-    el.precision = 1;
-    el.lights = 4;
-    el.simEntityId = "switch.property_presence_simulation";
-    bus.appendChild(el);
-    collect(bus, "al-mix-changed", mixes);
-    collect(bus, "al-limiter-changed", limits);
-    collect(bus, "al-sim-toggled", sims);
-    await el.updateComplete;
-  });
+    it("has no mute or reset button at all", () => {
+      expect(el.shadowRoot?.querySelector(".mute")).toBeFalsy();
+      expect(el.shadowRoot?.querySelector(".reset")).toBeFalsy();
+      expect(el.shadowRoot?.querySelectorAll("button")).toHaveLength(0);
+    });
 
-  it("shows the bus name in caps and the current mix", () => {
-    expect(el.shadowRoot?.querySelector(".name")?.textContent?.trim()).toBe("Property");
-    expect(el.shadowRoot?.querySelector<HTMLSelectElement>(".mix")?.value).toBe("sum");
-  });
+    it("still selects when it is clicked", async () => {
+      await click(el, ".name");
+      expect(selects).toHaveLength(1);
+    });
 
-  it("emits the chosen mix", async () => {
-    const sel = el.shadowRoot?.querySelector<HTMLSelectElement>(".mix");
-    expect([...(sel?.options ?? [])].map((o) => o.value)).toEqual(["sum", "max", "mean"]);
-    if (sel) sel.value = "max";
-    sel?.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-    expect(mixes).toEqual([{ mix: "max" }]);
-  });
+    // Nothing should reach the fader here, but the level is the engine's: a move that got
+    // through some other way must still not be sent as an override.
+    it("asks for no override however the fader reports a move", async () => {
+      await move(4, true);
+      await move(4, false);
+      expect(levels).toEqual([]);
+      expect(fader().value).toBe(2);
+    });
 
-  it("commits the limiter ceiling on change", async () => {
-    const input = el.shadowRoot?.querySelector<HTMLInputElement>(".limiter");
-    expect(input?.value).toBe("5");
-    expect(input?.min).toBe("0.1");
-    if (input) input.value = "8";
-    input?.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-    expect(limits).toEqual([{ value: 8 }]);
-  });
+    it("drops a pending step when Edit is switched back off", async () => {
+      vi.useFakeTimers();
+      el.editable = true;
+      await el.updateComplete;
+      await move(3, false);
+      el.editable = false;
+      await el.updateComplete;
+      await vi.advanceTimersByTimeAsync(STEP_DEBOUNCE_MS * 4);
+      expect(levels).toEqual([]);
+      expect(fader().value).toBe(2);
+    });
 
-  it("accepts a fractional ceiling at the floor and above", async () => {
-    const input = el.shadowRoot?.querySelector<HTMLInputElement>(".limiter");
-    if (input) input.value = "2.5";
-    input?.dispatchEvent(new Event("change", { bubbles: true }));
-    if (input) input.value = "0.1";
-    input?.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-    expect(limits).toEqual([{ value: 2.5 }, { value: 0.1 }]);
-  });
-
-  // `min` is only advice to the browser: a typed or pasted 0 still reaches `.value`, and a
-  // ceiling of zero would divide every meter by nothing. Note jsdom sanitizes "abc" on a
-  // number input to "", so that case lands on the empty branch rather than the NaN one.
-  it.each(["0", "-3", "abc", ""])("refuses %o and puts the committed ceiling back", async (typed) => {
-    const input = el.shadowRoot?.querySelector<HTMLInputElement>(".limiter");
-    if (input) input.value = typed;
-    input?.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-    expect(limits).toEqual([]);
-    expect(input?.value).toBe("5");
-  });
-
-  it("hides the simulation switch for a bus with no lights", async () => {
-    expect(el.shadowRoot?.querySelector("ha-switch")).toBeTruthy();
-    el.lights = 0;
-    await el.updateComplete;
-    expect(el.shadowRoot?.querySelector("ha-switch")).toBeFalsy();
-  });
-
-  it("emits the simulation toggle and explains a block in the tooltip", async () => {
-    el.blockedReason = "quiet hours";
-    await el.updateComplete;
-    const sw = el.shadowRoot?.querySelector("ha-switch");
-    expect(sw?.getAttribute("title")).toBe("quiet hours");
-    (sw as unknown as { checked: boolean }).checked = true;
-    sw?.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-    expect(sims).toEqual([{ on: true }]);
-  });
-
-  // The mixer listens for keydown on the whole strip row, so a key typed into one of these
-  // controls must not escape and be read as console navigation.
-  it.each([".mix", ".limiter"])("keeps keys typed into %s inside the strip", async (sel) => {
-    const seen: string[] = [];
-    bus.addEventListener("keydown", (e) => seen.push((e as KeyboardEvent).key));
-    const node = el.shadowRoot?.querySelector(sel);
-    node?.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, composed: true }));
-    node?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }));
-    await el.updateComplete;
-    expect(seen).toEqual([]);
-  });
-
-  it("keeps its own controls out of the tab order until the strip is selected", async () => {
-    const stops = (): string[] =>
-      [...(el.shadowRoot?.querySelectorAll("select, input, ha-switch") ?? [])].map(
-        (n) => n.getAttribute("tabindex") ?? "",
-      );
-    expect(stops()).toEqual(["-1", "-1", "-1"]);
-    el.selected = true;
-    await el.updateComplete;
-    expect(stops()).toEqual(["0", "0", "0"]);
-  });
-
-  it("shows a meter only when there is live state", async () => {
-    expect(el.shadowRoot?.querySelector("al-meter")).toBeFalsy();
-    el.live = { value: 2, max: 5, gated: false };
-    await el.updateComplete;
-    expect(el.shadowRoot?.querySelector("al-meter")?.value).toBe(2);
+    it("puts the console back when Edit is switched on", async () => {
+      el.editable = true;
+      await el.updateComplete;
+      await fader().updateComplete;
+      expect(el.hasAttribute("editable")).toBe(true);
+      expect(fader().hasAttribute("readonly")).toBe(false);
+      expect(el.shadowRoot?.querySelector(".mute")).toBeTruthy();
+      expect(el.shadowRoot?.querySelector(".reset")).toBeTruthy();
+    });
   });
 });

@@ -1,6 +1,6 @@
 import type { NavAction } from "./navigation";
 import type { Horizon, Range } from "./timeseries";
-import type { Config, Mix, Path, ValidationError } from "./types";
+import type { Config, Path, ValidationError } from "./types";
 
 /** `al-change` also carries an optional key that merges rapid edits of one field into a single undo step. */
 export interface AlChangeEvent extends CustomEvent<Config> {
@@ -60,9 +60,6 @@ export interface FaderChangeDetail {
 
 export const alSelectStrip = (): CustomEvent<null> => stripEvent<null>("al-select-strip", null);
 
-/** Open or close a track's children in place; which track it is, is the event's target. */
-export const alToggleStrip = (): CustomEvent<null> => stripEvent<null>("al-toggle-strip", null);
-
 /**
  * Drag the group's level somewhere: a simulated stimulus, which cools down from there.
  * This is runtime state, not config - it never reaches the draft store.
@@ -76,13 +73,6 @@ export const alMuteToggle = (muted: boolean): CustomEvent<{ muted: boolean }> =>
 
 /** Drop everything a group is holding: every voice off, back to zero. */
 export const alReset = (): CustomEvent<null> => stripEvent<null>("al-reset", null);
-
-export const alMixChanged = (mix: Mix): CustomEvent<{ mix: Mix }> => stripEvent("al-mix-changed", { mix });
-
-export const alLimiterChanged = (value: number): CustomEvent<{ value: number }> =>
-  stripEvent("al-limiter-changed", { value });
-
-export const alSimToggled = (on: boolean): CustomEvent<{ on: boolean }> => stripEvent("al-sim-toggled", { on });
 
 /**
  * The mixer's own events. Navigation is a request, not a move: the shell owns the nav
