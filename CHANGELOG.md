@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/scottt732/activity-levels/compare/v0.4.0...v0.5.0) (2026-08-28)
+
+
+### Added
+
+* **mixer:** read-only strips with an edit switch and collapsible hierarchy bands ([80c52a4](https://github.com/scottt732/activity-levels/commit/80c52a464344981b1315ad96083c90e2385b43d2))
+
 ## [0.4.0](https://github.com/scottt732/activity-levels/compare/v0.3.0...v0.4.0) (2026-08-28)
 
 
