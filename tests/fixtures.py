@@ -114,6 +114,73 @@ def rooms_config() -> dict[str, Any]:
     }
 
 
+def kinds_config() -> dict[str, Any]:
+    """The layering the spec describes, written out: property -> structure -> floor -> area,
+    with an outside branch beside the house.
+
+    `house_config` and `rooms_config` deliberately carry no kinds at all: they are what
+    every document written before this release looks like, and they are what the migration
+    tests load. This one is what the panel writes back.
+    """
+    return {
+        "version": 1,
+        "defaults": {"envelope": "default", "min_wake_interval": 1},
+        "envelopes": [{"id": "default", "release": "30m"}],
+        "groups": [
+            {
+                "id": "property",
+                "kind": "property",
+                "name": "Property",
+                "mix": "max",
+                "children": [
+                    {
+                        "id": "house",
+                        "kind": "structure",
+                        "name": "House",
+                        "mix": "max",
+                        "children": [
+                            {
+                                "id": "downstairs",
+                                "kind": "floor",
+                                "name": "Downstairs",
+                                "floor_id": "downstairs",
+                                "mix": "max",
+                                "children": [
+                                    {
+                                        "id": "kitchen",
+                                        "kind": "area",
+                                        "name": "Kitchen",
+                                        "area_id": "kitchen",
+                                        "adjacent": [
+                                            {"id": "hall", "connection": "open"},
+                                            {"id": "back_patio", "connection": "exterior_door"},
+                                        ],
+                                        "stimuli": [{"entity": "binary_sensor.kitchen_motion"}],
+                                    },
+                                    {
+                                        "id": "hall",
+                                        "kind": "area",
+                                        "name": "Hall",
+                                        "area_id": "hall",
+                                        "stimuli": [{"entity": "binary_sensor.hall_motion"}],
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "back_patio",
+                        "kind": "outside",
+                        "name": "Back Patio",
+                        "exit": True,
+                        "stimuli": [{"entity": "binary_sensor.patio_motion"}],
+                    },
+                ],
+            }
+        ],
+    }
+
+
 def presence_config() -> dict[str, Any]:
     """`rooms_config` with presence switched on and one tracked phone."""
     config = rooms_config()

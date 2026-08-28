@@ -1,7 +1,14 @@
 import pytest
 
-from custom_components.activity_levels.schema import ConfigError, default_options, validate_config
-from tests.fixtures import house_config, rooms_config
+from custom_components.activity_levels.schema import (
+    CONFIG_SCHEMA,
+    ConfigError,
+    default_options,
+    infer_kinds,
+    validate,
+    validate_config,
+)
+from tests.fixtures import house_config, kinds_config, rooms_config
 
 
 def test_default_options_validate() -> None:
@@ -146,10 +153,10 @@ def test_adjacency_and_exits_normalize() -> None:
     cfg = validate_config(rooms_config())
     rooms = {g["id"]: g for g in cfg["groups"][0]["children"][0]["children"]}
     assert rooms["kitchen"]["adjacent"] == [
-        {"id": "dining_room", "one_way": False},
-        {"id": "back_patio", "one_way": False},
+        {"id": "dining_room", "connection": "door", "one_way": False},
+        {"id": "back_patio", "connection": "door", "one_way": False},
     ]
-    assert rooms["hall"]["adjacent"] == [{"id": "bedroom", "one_way": True}]
+    assert rooms["hall"]["adjacent"] == [{"id": "bedroom", "connection": "door", "one_way": True}]
     assert rooms["back_patio"]["exit"] is True
     assert rooms["kitchen"]["exit"] is False
     assert rooms["kitchen"]["presence"]["gain"] == 1.0
@@ -260,3 +267,369 @@ def test_a_stimulus_cannot_be_called_presence() -> None:
     with pytest.raises(ConfigError) as err:
         validate_config(config)
     assert any("duplicate stimulus 'presence'" in e["message"] for e in err.value.errors)
+
+
+def test_kinds_round_trip_and_default_to_none_before_inference() -> None:
+    cfg = validate_config(kinds_config())
+    prop = cfg["groups"][0]
+    house = prop["children"][0]
+    downstairs = house["children"][0]
+    kitchen = downstairs["children"][0]
+    assert [g["kind"] for g in (prop, house, downstairs, kitchen)] == [
+        "property",
+        "structure",
+        "floor",
+        "area",
+    ]
+    assert prop["children"][1]["kind"] == "outside"
+    assert downstairs["floor_id"] == "downstairs"
+    assert kitchen["area_id"] == "kitchen"
+    assert "area" not in kitchen  # rewritten away, never round-tripped
+
+
+def test_area_is_rewritten_to_area_id() -> None:
+    cfg = validate_config(house_config())
+    living = cfg["groups"][0]["children"][0]
+    assert living["area_id"] == "living_room"
+    assert "area" not in living
+    # both spellings, agreeing, is not an error -- it is what a half-migrated file looks like
+    both = house_config()
+    both["groups"][0]["children"][0]["area_id"] = "living_room"
+    assert validate_config(both)["groups"][0]["children"][0]["area_id"] == "living_room"
+
+
+def test_area_and_area_id_disagreeing_is_an_error() -> None:
+    cfg = house_config()
+    cfg["groups"][0]["children"][0]["area_id"] = "lounge"
+    assert "groups/0/children/0/area" in errors_of(cfg)
+
+
+@pytest.mark.parametrize(
+    ("parent", "child"),
+    [
+        ("property", "floor"),
+        ("property", "area"),
+        ("structure", "property"),
+        ("structure", "structure"),
+        ("structure", "outside"),
+        ("floor", "floor"),
+        ("floor", "structure"),
+        ("floor", "outside"),
+        ("area", "floor"),
+        ("area", "structure"),
+        ("area", "outside"),
+        ("outside", "area"),
+        ("outside", "floor"),
+        ("outside", "structure"),
+        ("outside", "property"),
+    ],
+)
+def test_every_illegal_parent_child_pair_is_reported_at_the_child_kind(parent, child) -> None:
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "root",
+                "kind": "property",
+                "children": [
+                    {
+                        "id": "parent",
+                        "kind": parent,
+                        "children": [
+                            {
+                                "id": "child",
+                                "kind": child,
+                                "stimuli": [{"entity": "binary_sensor.x"}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    if parent not in ("structure", "outside"):  # keep the parent itself legal under property
+        config["groups"][0]["children"][0]["kind"] = "structure"
+        config["groups"][0]["children"][0]["children"][0] = {
+            "id": "mid",
+            "kind": parent,
+            "children": [
+                {"id": "child", "kind": child, "stimuli": [{"entity": "binary_sensor.x"}]}
+            ],
+        }
+        assert "groups/0/children/0/children/0/children/0/kind" in errors_of(config)
+    else:
+        assert "groups/0/children/0/children/0/kind" in errors_of(config)
+
+
+def test_every_root_is_a_property() -> None:
+    cfg = kinds_config()
+    cfg["groups"][0]["kind"] = "structure"
+    assert "groups/0/kind" in errors_of(cfg)
+
+
+@pytest.mark.parametrize("kind", ["property", "structure", "floor"])
+def test_only_areas_and_outside_areas_declare_edges_and_exits(kind) -> None:
+    cfg = kinds_config()
+    house = cfg["groups"][0]["children"][0]
+    house["kind"] = kind if kind != "floor" else "structure"
+    downstairs = house["children"][0]
+    downstairs["kind"] = "floor"
+    downstairs["adjacent"] = ["kitchen"]
+    downstairs["exit"] = True
+    errs = errors_of(cfg)
+    assert "groups/0/children/0/children/0/adjacent" in errs
+    assert "groups/0/children/0/children/0/exit" in errs
+
+
+def test_an_area_may_only_lead_off_the_property_when_nothing_is_outside() -> None:
+    cfg = kinds_config()
+    cfg["groups"][0]["children"][0]["children"][0]["children"][0]["exit"] = True
+    # back_patio is an `outside` group, so the kitchen is not where you leave from
+    assert "groups/0/children/0/children/0/children/0/exit" in errors_of(cfg)
+    del cfg["groups"][0]["children"][1]  # drop the outside group entirely
+    cfg["groups"][0]["children"][0]["children"][0]["children"][0]["adjacent"] = ["hall"]
+    validate_config(cfg)  # now the kitchen is the only way out, and that is allowed
+
+
+def test_adjacency_may_only_name_areas_and_outside_areas() -> None:
+    cfg = kinds_config()
+    cfg["groups"][0]["children"][0]["children"][0]["children"][0]["adjacent"] = ["house"]
+    assert "groups/0/children/0/children/0/children/0/adjacent/0" in errors_of(cfg)
+
+
+def test_adjacency_long_form_and_connection_enum() -> None:
+    cfg = validate_config(kinds_config())
+    kitchen = cfg["groups"][0]["children"][0]["children"][0]["children"][0]
+    assert kitchen["adjacent"] == [
+        {"id": "hall", "connection": "open", "one_way": False},
+        {"id": "back_patio", "connection": "exterior_door", "one_way": False},
+    ]
+    plain = kinds_config()
+    plain["groups"][0]["children"][0]["children"][0]["children"][0]["adjacent"] = ["hall"]
+    out = validate_config(plain)["groups"][0]["children"][0]["children"][0]["children"][0]
+    assert out["adjacent"] == [{"id": "hall", "connection": "door", "one_way": False}]
+    bad = kinds_config()
+    bad["groups"][0]["children"][0]["children"][0]["children"][0]["adjacent"] = [
+        {"id": "hall", "connection": "portal"}
+    ]
+    assert "groups/0/children/0/children/0/children/0/adjacent/0/connection" in errors_of(bad)
+
+
+def test_a_document_with_no_kinds_still_loads_and_gets_them_inferred() -> None:
+    result = validate(rooms_config())
+    rooms = result.config["groups"][0]["children"][0]["children"]
+    assert result.config["groups"][0]["kind"] == "property"  # root
+    assert result.config["groups"][0]["children"][0]["kind"] == "structure"
+    assert [g["kind"] for g in rooms] == ["area"] * 5  # all have an area
+    assert result.migrated is True
+    assert "groups/0" in result.inferred and "groups/0/children/0/children/4" in result.inferred
+
+
+def test_inference_covers_every_branch() -> None:
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "estate",  # root -> property
+                "children": [
+                    {
+                        "id": "annexe",  # parent property, nothing else -> structure
+                        "children": [
+                            {
+                                "id": "loft",  # parent structure -> floor
+                                "children": [
+                                    {
+                                        "id": "study",  # parent floor -> area
+                                        "stimuli": [{"entity": "binary_sensor.a"}],
+                                        "children": [
+                                            {
+                                                "id": "nook",  # parent area -> area
+                                                "stimuli": [{"entity": "binary_sensor.b"}],
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "yard",  # parent property + declares an exit -> outside (M1)
+                        "exit": True,
+                        "children": [
+                            {
+                                "id": "shed_path",  # parent outside -> outside
+                                "stimuli": [{"entity": "binary_sensor.c"}],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "cellar",  # parent property + has an area -> still a structure
+                        "area": "cellar_area",
+                        "stimuli": [{"entity": "binary_sensor.d"}],
+                    },
+                ],
+            }
+        ],
+    }
+    resolved, inferred = infer_kinds(CONFIG_SCHEMA(config))
+    kinds = {}
+
+    def walk(group):
+        kinds[group["id"]] = group["kind"]
+        for child in group["children"]:
+            walk(child)
+
+    walk(resolved["groups"][0])
+    assert kinds == {
+        "estate": "property",
+        "annexe": "structure",
+        "loft": "floor",
+        "study": "area",
+        "nook": "area",
+        "yard": "outside",
+        "shed_path": "outside",
+        "cellar": "structure",
+    }
+    assert len(inferred) == len(kinds)
+
+
+def test_an_unresolvable_kind_is_left_null_and_reported() -> None:
+    """A declared kind that leaves no legal kind for its child is the one hard failure."""
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "root",
+                "kind": "property",
+                "children": [
+                    {
+                        "id": "outdoors",
+                        "kind": "outside",
+                        "children": [
+                            {
+                                "id": "study",
+                                # wants `area`, and outside takes only outside
+                                "area": "study_area",
+                                "kind": "area",
+                                "stimuli": [{"entity": "binary_sensor.a"}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    assert "groups/0/children/0/children/0/kind" in errors_of(config)
+
+
+def test_migrated_groups_keep_edges_and_exits_the_rules_would_now_refuse() -> None:
+    """M2: a config that works today must not stop loading because we guessed a kind."""
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "property",
+                "children": [
+                    {
+                        "id": "garage",  # infers `outside` by M1, because it declares both
+                        "adjacent": ["driveway"],
+                        "exit": True,
+                        "stimuli": [{"entity": "binary_sensor.garage_door"}],
+                    },
+                    {
+                        "id": "driveway",
+                        "exit": True,
+                        "stimuli": [{"entity": "binary_sensor.driveway_motion"}],
+                    },
+                ],
+            }
+        ],
+    }
+    result = validate(config)
+    garage = result.config["groups"][0]["children"][0]
+    assert garage["kind"] == "outside"
+    assert garage["exit"] is True
+    assert "groups/0/children/0" in result.inferred
+
+
+def test_declared_kinds_do_not_get_the_migration_amnesty() -> None:
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "property",
+                "kind": "property",
+                "children": [
+                    {
+                        "id": "house",
+                        "kind": "structure",
+                        "exit": True,
+                        "stimuli": [{"entity": "binary_sensor.front_door"}],
+                    }
+                ],
+            }
+        ],
+    }
+    assert "groups/0/children/0/exit" in errors_of(config)
+
+
+def test_the_amnesty_covers_the_rules_a_guessed_kind_would_otherwise_break() -> None:
+    """M2, at the two rules the garage case never reaches.
+
+    `kitchen` is guessed `area` because its parent is a floor, and it declares both an exit
+    (which a room may not have once the property has an outside) and an edge to `house`
+    (which is guessed a structure, and a structure is not somewhere you walk to). Both are
+    kept, because the user wrote neither kind; both become errors on the next save.
+    """
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "property",
+                "children": [
+                    {
+                        "id": "house",
+                        "children": [
+                            {
+                                "id": "downstairs",
+                                "children": [
+                                    {
+                                        "id": "kitchen",
+                                        "exit": True,
+                                        "adjacent": ["house"],
+                                        "stimuli": [{"entity": "binary_sensor.kitchen_motion"}],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "back_patio",
+                        "exit": True,
+                        "stimuli": [{"entity": "binary_sensor.patio_motion"}],
+                    },
+                ],
+            }
+        ],
+    }
+    result = validate(config)
+    kitchen_path = "groups/0/children/0/children/0/children/0"
+    kitchen = result.config["groups"][0]["children"][0]["children"][0]["children"][0]
+    assert kitchen["kind"] == "area"
+    assert result.config["groups"][0]["children"][1]["kind"] == "outside"  # so has_outside
+    assert result.config["groups"][0]["children"][0]["kind"] == "structure"  # a bad endpoint
+    assert kitchen["exit"] is True
+    assert kitchen["adjacent"] == [{"id": "house", "connection": "door", "one_way": False}]
+    assert kitchen_path in result.inferred
+
+    # spell the same document with the kinds written out, and both rules bite
+    declared = validate(config).config
+    errs = errors_of(declared)
+    assert f"{kitchen_path}/exit" in errs
+    assert f"{kitchen_path}/adjacent/0" in errs

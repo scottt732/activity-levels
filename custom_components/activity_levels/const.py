@@ -19,6 +19,13 @@ MANUFACTURER = "Activity Levels"
 MODEL = "Group"
 MODEL_HUB = "Hub"
 MODEL_PRESENCE = "Presence"
+MODEL_BY_KIND = {
+    "property": "Property",
+    "structure": "Structure",
+    "floor": "Floor",
+    "area": "Area",
+    "outside": "Outside",
+}
 HUB_NAME = "Activity Levels"
 TRIGGER_KEY = "trigger"
 PRESENCE_KEY = "presence"  # the synthetic channel's label, like TRIGGER_KEY
@@ -43,6 +50,50 @@ CONF_GROUPS = "groups"
 CONF_PATTERNS = "patterns"
 CONF_SIMULATION = "simulation"
 CONF_PRESENCE = "presence"
+
+CONF_KIND = "kind"
+CONF_AREA_ID = "area_id"
+CONF_FLOOR_ID = "floor_id"
+
+KIND_PROPERTY = "property"
+KIND_STRUCTURE = "structure"
+KIND_FLOOR = "floor"
+KIND_AREA = "area"
+KIND_OUTSIDE = "outside"
+
+KINDS = (KIND_PROPERTY, KIND_STRUCTURE, KIND_FLOOR, KIND_AREA, KIND_OUTSIDE)
+"""What a group can be, in the order the editor's picker lists them: outermost first."""
+
+NODE_KINDS = frozenset({KIND_AREA, KIND_OUTSIDE})
+"""The kinds a person can be in. Everything else mixes places; it is not one."""
+
+ALLOWED_CHILDREN: dict[str | None, frozenset[str]] = {
+    None: frozenset({KIND_PROPERTY}),  # every root is a property
+    KIND_PROPERTY: frozenset({KIND_PROPERTY, KIND_STRUCTURE, KIND_OUTSIDE}),
+    KIND_STRUCTURE: frozenset({KIND_FLOOR, KIND_AREA}),
+    KIND_FLOOR: frozenset({KIND_AREA}),
+    KIND_AREA: frozenset({KIND_AREA}),
+    KIND_OUTSIDE: frozenset({KIND_OUTSIDE}),
+}
+"""The layering, as a table. A property stacks structures and outdoor areas; a structure
+stacks floors (or, in a one-storey building, rooms straight away); a floor holds rooms; a
+room may hold a sub-room (an ensuite, an alcove); outside holds outside."""
+
+DEFAULT_CHILD_KIND = {
+    KIND_PROPERTY: KIND_STRUCTURE,
+    KIND_STRUCTURE: KIND_FLOOR,
+    KIND_FLOOR: KIND_AREA,
+    KIND_AREA: KIND_AREA,
+    KIND_OUTSIDE: KIND_OUTSIDE,
+}
+"""What a child of each kind is when the document gives no other evidence. Only the
+migration reads this; a saved document says what it means."""
+
+CONNECTIONS = ("open", "door", "stairs", "exterior_door")
+"""How two adjacent groups join. Informational in this release: validated and round-tripped,
+and nothing in the estimator weights it yet."""
+
+DEFAULT_CONNECTION = "door"
 
 SLOT_MINUTES = 15
 SLOTS_PER_DAY = 96

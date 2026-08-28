@@ -5,25 +5,39 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
+    ALLOWED_CHILDREN,
     BUILTIN_DAY_TYPES,
+    CONF_AREA_ID,
     CONF_DEFAULTS,
     CONF_ENVELOPES,
+    CONF_FLOOR_ID,
     CONF_GROUPS,
+    CONF_KIND,
     CONF_PATTERNS,
     CONF_PRESENCE,
     CONF_SIMULATION,
     CONF_VERSION,
+    CONNECTIONS,
+    DEFAULT_CHILD_KIND,
+    DEFAULT_CONNECTION,
     DEFAULT_ENVELOPE_ID,
     DEFAULT_MAX_VALUE,
     DEFAULT_MIN_WAKE_INTERVAL,
     DEFAULT_PRECISION,
     DEFAULT_SAFETY_REFRESH,
+    KIND_AREA,
+    KIND_FLOOR,
+    KIND_OUTSIDE,
+    KIND_PROPERTY,
+    KINDS,
+    NODE_KINDS,
     PRESENCE_KEY,
     TRIGGER_KEY,
 )
@@ -143,21 +157,24 @@ STIMULUS_SCHEMA = vol.Schema(
 ADJACENT_SCHEMA = vol.Schema(
     {
         vol.Required("id"): _group_id,
+        vol.Optional("connection", default=DEFAULT_CONNECTION): vol.In(CONNECTIONS),
         vol.Optional("one_way", default=False): cv.boolean,
     }
 )
 
 
 def _adjacent(value: Any) -> dict[str, Any]:
-    """`kitchen` and `{id: kitchen, one_way: true}` both name one edge.
+    """`kitchen` and `{id: kitchen, connection: stairs, one_way: true}` both name one edge.
 
-    The short form is what a door is: symmetric. The long form exists for the rare
-    thing that is not -- a laundry chute -- and stays YAML-only in v1.
+    The short form is what a door is: symmetric, and a door. The long form says otherwise --
+    an opening with no door in it, a staircase, a way outside, or the rare connection that
+    only goes one way. `connection` is carried for the UI and for a later release that may
+    weight transitions by it; nothing reads it today.
     """
     if isinstance(value, str):
         value = {"id": value}
     if not isinstance(value, dict):
-        raise vol.Invalid("must be a group id or {id, one_way}")
+        raise vol.Invalid("must be a group id or {id, connection, one_way}")
     result: dict[str, Any] = ADJACENT_SCHEMA(value)
     return result
 
@@ -263,7 +280,10 @@ def _group_schema(value: Any) -> dict[str, Any]:
         {
             vol.Required("id"): _group_id,
             vol.Optional("name", default=None): vol.Any(None, str),
+            vol.Optional(CONF_KIND, default=None): vol.Any(None, vol.In(KINDS)),
             vol.Optional("area", default=None): vol.Any(None, str),
+            vol.Optional(CONF_AREA_ID, default=None): vol.Any(None, str),
+            vol.Optional(CONF_FLOOR_ID, default=None): vol.Any(None, str),
             vol.Optional("mix", default=Mix.SUM): _ENUM["mix"],
             vol.Optional("null_handling", default=NullHandling.ZERO): _ENUM["null_handling"],
             vol.Optional("max_value", default=None): vol.Any(None, _finite(0.0, lo_exclusive=True)),
@@ -280,8 +300,14 @@ def _group_schema(value: Any) -> dict[str, Any]:
         }
     )
     result: dict[str, Any] = schema(value)
-    if result["name"] is None:
-        result["name"] = result["id"].replace("_", " ").title()
+    # `area` was the old spelling. Both are accepted so a half-edited file loads, and the
+    # normalized document only ever carries `area_id` -- the panel and the device registry
+    # then have one field to read, and a round trip cannot resurrect the old one.
+    if result["area"] is not None:
+        if result[CONF_AREA_ID] is not None and result[CONF_AREA_ID] != result["area"]:
+            raise vol.Invalid("area and area_id name different areas; keep area_id", path=["area"])
+        result[CONF_AREA_ID] = result["area"]
+    del result["area"]
     return result
 
 
@@ -328,7 +354,57 @@ def _apply_pattern_defaults(cfg: dict[str, Any]) -> None:
         patterns["day_type_precedence"] = [*calendar_ids, "holiday", "weekend", "weekday"]
 
 
-def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
+def _wanted_kinds(node: Mapping[str, Any], parent_kind: str | None) -> tuple[str, ...]:
+    """The kinds this group looks like, best first.
+
+    Evidence beats position. A group bound to a Home Assistant area is a room; one bound to
+    a floor is a floor; one that declares a doorway or a way off the property is somewhere a
+    person walks through, which is an area indoors and an outside area beside the house.
+    Only when the document says none of that does the layering decide, which is what turns a
+    bare `property > house > downstairs > kitchen` into exactly those four kinds.
+    """
+    if parent_kind is None:
+        return (KIND_PROPERTY,)
+    wants: list[str] = []
+    if node.get(CONF_AREA_ID) is not None:
+        wants.append(KIND_AREA)
+    if node.get(CONF_FLOOR_ID) is not None:
+        wants.append(KIND_FLOOR)
+    if node.get("adjacent") or node.get("exit"):
+        wants += [KIND_AREA, KIND_OUTSIDE]
+    wants.append(DEFAULT_CHILD_KIND[parent_kind])
+    return tuple(dict.fromkeys(wants))  # first occurrence wins, order kept
+
+
+def infer_kinds(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """Resolve every `kind: null` in a validated document, in place.
+
+    Returns the document and the paths of the groups whose kind was guessed -- the panel
+    shows those as "inferred kinds -- check and save", and the cross-checks give them an
+    amnesty from the rules that only make sense once somebody has confirmed the kind.
+
+    A group whose evidence leaves no kind its parent may contain is left null; the
+    cross-checks turn that into a pathed error, because there is nothing honest to write.
+    """
+    inferred: list[str] = []
+
+    def walk(node: dict[str, Any], parent_kind: str | None, path: list[Any]) -> None:
+        kind = node.get(CONF_KIND)
+        if kind is None:
+            allowed = ALLOWED_CHILDREN.get(parent_kind, frozenset())
+            kind = next((k for k in _wanted_kinds(node, parent_kind) if k in allowed), None)
+            node[CONF_KIND] = kind
+            if kind is not None:
+                inferred.append(_path(path))
+        for i, child in enumerate(node["children"]):
+            walk(child, kind, [*path, "children", i])
+
+    for i, group in enumerate(config[CONF_GROUPS]):
+        walk(group, None, [CONF_GROUPS, i])
+    return config, inferred
+
+
+def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
     envelope_ids: set[str] = set()
     for i, env in enumerate(cfg[CONF_ENVELOPES]):
@@ -363,11 +439,65 @@ def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
     seen_groups: set[str] = set()
     walked: list[tuple[list[Any], dict[str, Any]]] = []
 
-    def walk(group: dict[str, Any], path: list[Any]) -> None:
+    def _any_outside(nodes: list[dict[str, Any]]) -> bool:
+        return any(n[CONF_KIND] == KIND_OUTSIDE or _any_outside(n["children"]) for n in nodes)
+
+    has_outside = _any_outside(cfg[CONF_GROUPS])
+
+    def walk(group: dict[str, Any], path: list[Any], parent_kind: str | None) -> None:
         if group["id"] in seen_groups:
             errors.append({"path": _path([*path, "id"]), "message": "duplicate group id"})
         seen_groups.add(group["id"])
         walked.append((list(path), group))
+        kind = group[CONF_KIND]
+        allowed = ALLOWED_CHILDREN.get(parent_kind, frozenset())
+        if kind is None:
+            errors.append(
+                {
+                    "path": _path([*path, CONF_KIND]),
+                    "message": (
+                        "could not work out what this group is; set its kind "
+                        f"({', '.join(sorted(allowed))})"
+                    ),
+                }
+            )
+        elif kind not in allowed:
+            errors.append(
+                {
+                    "path": _path([*path, CONF_KIND]),
+                    "message": (
+                        f"a {parent_kind} cannot contain a {kind}"
+                        if parent_kind is not None
+                        else "every root group is a property"
+                    ),
+                }
+            )
+        if _path(path) not in inferred and kind is not None:
+            if group["adjacent"] and kind not in NODE_KINDS:
+                errors.append(
+                    {
+                        "path": _path([*path, "adjacent"]),
+                        "message": f"a {kind} is not somewhere you can walk between; "
+                        "only areas and outside areas have adjacent groups",
+                    }
+                )
+            if group["exit"]:
+                if kind not in NODE_KINDS:
+                    errors.append(
+                        {
+                            "path": _path([*path, "exit"]),
+                            "message": f"a {kind} cannot lead off the property; "
+                            "only areas and outside areas can",
+                        }
+                    )
+                elif kind == KIND_AREA and has_outside:
+                    errors.append(
+                        {
+                            "path": _path([*path, "exit"]),
+                            "message": "this property has outside areas, so leaving it "
+                            "happens from one of those, not from a room",
+                        }
+                    )
         if not group["stimuli"] and not group["children"]:
             errors.append(
                 {"path": _path(path), "message": "group needs at least one stimulus or child"}
@@ -395,7 +525,7 @@ def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
                     }
                 )
             labels.add(child["id"])
-            walk(child, [*path, "children", i])
+            walk(child, [*path, "children", i], kind)
         lights = group[CONF_SIMULATION]["lights"]
         for key in ("include", "exclude"):
             for i, entity in enumerate(lights[key]):
@@ -416,10 +546,11 @@ def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
             )
 
     for i, group in enumerate(cfg[CONF_GROUPS]):
-        walk(group, [CONF_GROUPS, i])
+        walk(group, [CONF_GROUPS, i], None)
 
     # Adjacency can only be checked once every id is known: an edge is allowed to point
     # forwards, at a room the walk has not reached yet.
+    kind_of = {group["id"]: group[CONF_KIND] for _, group in walked}
     for path, group in walked:
         seen_edges: set[str] = set()
         for j, edge in enumerate(group["adjacent"]):
@@ -428,6 +559,14 @@ def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
                 errors.append({"path": epath, "message": "a group cannot be adjacent to itself"})
             elif edge["id"] not in seen_groups:
                 errors.append({"path": epath, "message": f"unknown group '{edge['id']}'"})
+            elif kind_of.get(edge["id"]) not in NODE_KINDS and _path(path) not in inferred:
+                errors.append(
+                    {
+                        "path": epath,
+                        "message": f"'{edge['id']}' is a {kind_of[edge['id']]}, "
+                        "and only areas and outside areas can be adjacent to anything",
+                    }
+                )
             if edge["id"] in seen_edges:
                 errors.append({"path": epath, "message": "duplicate adjacent group"})
             seen_edges.add(edge["id"])
@@ -457,7 +596,24 @@ def _cross_checks(cfg: dict[str, Any]) -> list[dict[str, str]]:
     return errors
 
 
-def validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
+@dataclass(frozen=True)
+class Validated:
+    """A validated document, and what had to be guessed to get there."""
+
+    config: dict[str, Any]
+    inferred: tuple[str, ...]
+
+    @property
+    def migrated(self) -> bool:
+        """Whether this document arrived without kinds and had them filled in.
+
+        The panel shows a banner while this is true and the next save writes the kinds out,
+        which is the whole migration: one pass, visible, and confirmed by a human.
+        """
+        return bool(self.inferred)
+
+
+def validate(config: Mapping[str, Any]) -> Validated:
     """Validate and normalize; raise ConfigError with every error found."""
     try:
         cfg: dict[str, Any] = CONFIG_SCHEMA(dict(config))
@@ -466,7 +622,13 @@ def validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
     except vol.Invalid as exc:
         raise ConfigError([{"path": _path(exc.path), "message": exc.msg}]) from exc
     _apply_pattern_defaults(cfg)
-    errors = _cross_checks(cfg)
+    cfg, inferred = infer_kinds(cfg)
+    errors = _cross_checks(cfg, frozenset(inferred))
     if errors:
         raise ConfigError(errors)
-    return _stringify_enums(cfg)  # type: ignore[no-any-return]
+    return Validated(config=_stringify_enums(cfg), inferred=tuple(inferred))
+
+
+def validate_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """The document alone. Every caller that does not care how it got there uses this."""
+    return validate(config).config
