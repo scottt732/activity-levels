@@ -75,9 +75,16 @@ def ws_config_get(
     except ConfigError:
         # A document the panel has to be able to open in order to fix. Hand back exactly
         # what is stored; `config/validate` is where the errors come from.
-        connection.send_result(msg["id"], {"config": options, "inferred": []})
+        connection.send_result(msg["id"], {"config": options, "inferred": [], "warnings": []})
         return
-    connection.send_result(msg["id"], {"config": result.config, "inferred": list(result.inferred)})
+    connection.send_result(
+        msg["id"],
+        {
+            "config": result.config,
+            "inferred": list(result.inferred),
+            "warnings": list(result.warnings),
+        },
+    )
 
 
 @websocket_api.require_admin

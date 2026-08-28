@@ -1,4 +1,8 @@
+from pathlib import Path
+from typing import Any
+
 import pytest
+import yaml
 
 from custom_components.activity_levels.const import (
     ALLOWED_CHILDREN,
@@ -14,7 +18,14 @@ from custom_components.activity_levels.schema import (
     validate,
     validate_config,
 )
-from tests.fixtures import house_config, kinds_config, rooms_config
+from tests.fixtures import house_config, kinds_config, presence_config, rooms_config
+
+LEGACY_HOUSE = Path(__file__).parent / "fixtures" / "legacy_house.yaml"
+
+
+def legacy_house_config() -> dict[str, Any]:
+    """The example house as it was written before kinds existed: the real migration."""
+    return yaml.safe_load(LEGACY_HOUSE.read_text())
 
 
 def test_default_options_validate() -> None:
@@ -388,14 +399,18 @@ def test_only_areas_and_outside_areas_declare_edges_and_exits(kind) -> None:
     assert "groups/0/children/0/children/0/exit" in errs
 
 
-def test_an_area_may_only_lead_off_the_property_when_nothing_is_outside() -> None:
+def test_an_area_may_lead_off_the_property_even_beside_an_outside_area() -> None:
+    """An area with an exit is a valid topology, whatever else the property models.
+
+    A door from the kitchen to the street is a door from the kitchen to the street; the
+    rule that used to hand that exit to the nearest yard made a migrated document
+    unsaveable, so it is gone. Only the kinds nobody stands in still refuse an exit.
+    """
     cfg = kinds_config()
-    cfg["groups"][0]["children"][0]["children"][0]["children"][0]["exit"] = True
-    # back_patio is an `outside` group, so the kitchen is not where you leave from
-    assert "groups/0/children/0/children/0/children/0/exit" in errors_of(cfg)
-    del cfg["groups"][0]["children"][1]  # drop the outside group entirely
-    cfg["groups"][0]["children"][0]["children"][0]["children"][0]["adjacent"] = ["hall"]
-    validate_config(cfg)  # now the kitchen is the only way out, and that is allowed
+    kitchen = cfg["groups"][0]["children"][0]["children"][0]["children"][0]
+    kitchen["exit"] = True
+    # back_patio, an `outside` group with an exit of its own, sits right beside it
+    assert validate_config(cfg)["groups"][0]["children"][1]["exit"] is True
 
 
 def test_adjacency_may_only_name_areas_and_outside_areas() -> None:
@@ -461,12 +476,20 @@ def test_inference_covers_every_branch() -> None:
                         ],
                     },
                     {
-                        "id": "yard",  # parent property + declares an exit -> outside (M1)
+                        # a leaf under a property that declares an exit -> outside (M1);
+                        # `area` is what the evidence asks for first, and a property
+                        # cannot contain one, so the second choice wins
+                        "id": "yard",
                         "exit": True,
+                        "stimuli": [{"entity": "binary_sensor.c"}],
+                    },
+                    {
+                        "id": "grounds",  # declared, so it is not one of the guesses
+                        "kind": "outside",
                         "children": [
                             {
                                 "id": "shed_path",  # parent outside -> outside
-                                "stimuli": [{"entity": "binary_sensor.c"}],
+                                "stimuli": [{"entity": "binary_sensor.e"}],
                             }
                         ],
                     },
@@ -495,10 +518,11 @@ def test_inference_covers_every_branch() -> None:
         "study": "area",
         "nook": "area",
         "yard": "outside",
+        "grounds": "outside",
         "shed_path": "outside",
         "cellar": "structure",
     }
-    assert len(inferred) == len(kinds)
+    assert len(inferred) == len(kinds) - 1  # every kind but `grounds`, which was declared
 
 
 def test_a_declared_kind_is_checked_against_the_nesting_even_when_the_evidence_agrees() -> None:
@@ -587,12 +611,12 @@ def test_declared_kinds_do_not_get_the_migration_amnesty() -> None:
 
 
 def test_the_amnesty_covers_the_rules_a_guessed_kind_would_otherwise_break() -> None:
-    """M2, at the two rules the garage case never reaches.
+    """M2, at the rule the garage case never reaches.
 
-    `kitchen` is guessed `area` because its parent is a floor, and it declares both an exit
-    (which a room may not have once the property has an outside) and an edge to `house`
-    (which is guessed a structure, and a structure is not somewhere you walk to). Both are
-    kept, because the user wrote neither kind; both become errors on the next save.
+    `kitchen` is guessed `area` because its parent is a floor, and it declares an edge to
+    `house`, which is guessed a structure -- and a structure is not somewhere you walk to.
+    The edge is kept, because the user wrote neither kind, and becomes an error on the
+    next save. Its exit is kept too, and stays legal: an area may lead off the property.
     """
     config = {
         "version": 1,
@@ -630,17 +654,17 @@ def test_the_amnesty_covers_the_rules_a_guessed_kind_would_otherwise_break() -> 
     kitchen_path = "groups/0/children/0/children/0/children/0"
     kitchen = result.config["groups"][0]["children"][0]["children"][0]["children"][0]
     assert kitchen["kind"] == "area"
-    assert result.config["groups"][0]["children"][1]["kind"] == "outside"  # so has_outside
+    assert result.config["groups"][0]["children"][1]["kind"] == "outside"
     assert result.config["groups"][0]["children"][0]["kind"] == "structure"  # a bad endpoint
     assert kitchen["exit"] is True
     assert kitchen["adjacent"] == [{"id": "house", "connection": "door", "one_way": False}]
     assert kitchen_path in result.inferred
 
-    # spell the same document with the kinds written out, and both rules bite
+    # spell the same document with the kinds written out, and the edge rule bites
     declared = validate(config).config
     errs = errors_of(declared)
-    assert f"{kitchen_path}/exit" in errs
     assert f"{kitchen_path}/adjacent/0" in errs
+    assert f"{kitchen_path}/exit" not in errs  # an area may lead off the property
 
 
 def test_a_half_migrated_document_is_not_failed_by_a_guessed_group_at_the_far_end() -> None:
@@ -680,50 +704,161 @@ def test_a_half_migrated_document_is_not_failed_by_a_guessed_group_at_the_far_en
     assert "groups/0/children/0/children/0/adjacent/0" in errors_of(settled)
 
 
-def test_a_half_migrated_document_is_not_failed_by_a_guessed_outside_area() -> None:
-    """M2 again: the exit rule only makes sense once somebody has said something is outside.
-    `back_patio` is only outside because we guessed it, so `kitchen` keeps its exit."""
-    config = {
-        "version": 1,
-        "envelopes": [{"id": "default"}],
-        "groups": [
-            {
-                "id": "property",
-                "kind": "property",
-                "children": [
-                    {
-                        "id": "house",
-                        "kind": "structure",
-                        "children": [
-                            {
-                                "id": "kitchen",
-                                "kind": "area",
-                                "exit": True,
-                                "stimuli": [{"entity": "binary_sensor.kitchen_motion"}],
-                            }
-                        ],
-                    },
-                    {
-                        "id": "back_patio",  # undeclared; M1 reads the exit and guesses outside
-                        "exit": True,
-                        "stimuli": [{"entity": "binary_sensor.patio_motion"}],
-                    },
-                ],
-            }
-        ],
-    }
-    result = validate(config)
-    assert result.config["groups"][0]["children"][1]["kind"] == "outside"
-    assert result.inferred == ("groups/0/children/1",)
-    assert result.config["groups"][0]["children"][0]["children"][0]["exit"] is True
-
-    # confirm the guess and the room is no longer where you leave from
-    assert "groups/0/children/0/children/0/exit" in errors_of(result.config)
-
-
 def test_inference_is_total() -> None:
     """The invariant that makes a null kind impossible: whatever a parent is, the kind
     `_wanted_kinds` falls back to is one the parent may contain."""
     for kind in KINDS:
         assert DEFAULT_CHILD_KIND[kind] in ALLOWED_CHILDREN[kind]
     assert KIND_PROPERTY in ALLOWED_CHILDREN[None]
+
+
+def _group_ids(cfg: dict[str, Any]) -> list[str]:
+    """Every group id, depth first. Entity ids are built from these, so this is the list
+    that must not move when a document is migrated and saved back."""
+    ids: list[str] = []
+
+    def walk(groups: list[dict[str, Any]]) -> None:
+        for group in groups:
+            ids.append(group["id"])
+            walk(group["children"])
+
+    walk(cfg["groups"])
+    return ids
+
+
+@pytest.mark.parametrize(
+    "document",
+    [house_config, rooms_config, presence_config, kinds_config, legacy_house_config],
+    ids=["house", "rooms", "presence", "kinds", "legacy_example"],
+)
+def test_a_validated_document_validates_again_unchanged(document) -> None:
+    """The round trip that is the whole point of the migration: load, then save.
+
+    The panel writes back exactly what `config/get` handed it, so whatever the first pass
+    resolves has to survive a second pass with the kinds written out -- no guesses left,
+    no new errors, and the same groups in the same order, because entity ids come from
+    those ids and a migration that moved them would be a migration nobody could accept.
+    """
+    first = validate(document())
+    second = validate(first.config)
+    assert second.inferred == ()
+    assert _group_ids(second.config) == _group_ids(first.config)
+    assert second.config == first.config
+
+
+def test_the_legacy_example_migrates_to_the_layering_it_describes() -> None:
+    """The kinds the real pre-kinds document arrives at, spelled out.
+
+    `garage` declared a doorway and a way off the property and holds nothing, so it is
+    read as an outdoor area; `outside` and `back_yard` hold other groups, so position
+    decides and they land on the indoor layering. Both are guesses the banner asks a
+    human to confirm -- what matters here is that they are legal and stable.
+    """
+    resolved = validate(legacy_house_config()).config
+    kinds: dict[str, str] = {}
+
+    def walk(groups: list[dict[str, Any]]) -> None:
+        for group in groups:
+            kinds[group["id"]] = group["kind"]
+            walk(group["children"])
+
+    walk(resolved["groups"])
+    assert kinds["property"] == "property"
+    assert kinds["house"] == "structure"
+    assert kinds["downstairs"] == "floor"
+    assert kinds["kitchen"] == "area"
+    assert kinds["garage"] == "outside"
+    assert kinds["driveway"] == "area"
+
+
+def test_evidence_only_names_a_room_kind_for_a_group_with_nothing_inside_it() -> None:
+    """M1 stops at the leaves: a doorway on a branch does not turn the branch outdoors.
+
+    `downstairs` declares an edge, which used to read as evidence that it is somewhere a
+    person walks -- and because a property cannot contain an area, that guess came out
+    `outside` and cascaded over every room below it. A group with children is a container
+    whatever else it says, so position decides and the layering survives.
+    """
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "property",
+                "children": [
+                    {
+                        "id": "house",
+                        "children": [
+                            {
+                                "id": "downstairs",
+                                "adjacent": ["upstairs"],
+                                "children": [
+                                    {
+                                        "id": "kitchen",
+                                        "stimuli": [{"entity": "binary_sensor.kitchen_motion"}],
+                                    },
+                                    {
+                                        "id": "hall",
+                                        "adjacent": ["kitchen"],
+                                        "stimuli": [{"entity": "binary_sensor.hall_motion"}],
+                                    },
+                                ],
+                            },
+                            {
+                                "id": "upstairs",
+                                "children": [
+                                    {
+                                        "id": "landing",
+                                        "stimuli": [{"entity": "binary_sensor.landing_motion"}],
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    house = validate(config).config["groups"][0]["children"][0]
+    assert house["kind"] == "structure"
+    assert [floor["kind"] for floor in house["children"]] == ["floor", "floor"]
+    assert [room["kind"] for room in house["children"][0]["children"]] == ["area", "area"]
+
+
+def test_rooms_at_the_root_load_with_a_warning_that_says_what_was_lost() -> None:
+    """C3: every root is a property, so a root that declares doors is not a room.
+
+    The document still loads -- refusing it would strand somebody whose config worked
+    yesterday -- but its presence graph is empty, and nothing else in the panel would say
+    so. The warning is how it says so.
+    """
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "kitchen",
+                "adjacent": ["hall"],
+                "stimuli": [{"entity": "binary_sensor.kitchen_motion"}],
+            },
+            {
+                "id": "hall",
+                "exit": True,
+                "stimuli": [{"entity": "binary_sensor.hall_motion"}],
+            },
+        ],
+    }
+    result = validate(config)
+    assert [group["kind"] for group in result.config["groups"]] == ["property", "property"]
+    assert result.warnings == (
+        "groups/0: 'kitchen' declares doors but is a root group; every root is a property, "
+        "so it is not a room. Wrap your rooms in a property.",
+        "groups/1: 'hall' declares doors but is a root group; every root is a property, "
+        "so it is not a room. Wrap your rooms in a property.",
+    )
+
+
+def test_a_root_property_that_declares_no_doors_is_not_warned_about() -> None:
+    assert validate(kinds_config()).warnings == ()
+    assert validate(rooms_config()).warnings == ()
+    assert validate(legacy_house_config()).warnings == ()

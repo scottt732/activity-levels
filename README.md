@@ -142,9 +142,8 @@ the background.
 
 ### Known limitations
 
-- Reordering is done with the up/down buttons on each row; there is no drag and drop.
-- A group's `area` is applied when its device is first created, so changing it later does
-  not move an existing device.
+- A group's `area_id` is applied when its device is first created, so changing it later
+  does not move an existing device.
 - Renaming a group's `id` re-creates that group's entities under the new id; history from
   the old entities is not carried over.
 - On a cold page load the panel can report that some Home Assistant UI components did not
@@ -236,7 +235,7 @@ vacation week is learned separately from an ordinary one.
 | the master switch is on | `switch.activity_levels_presence_simulation` |
 | the group's own switch is on | `switch.<id>_presence_simulation` |
 | the group is not opted out | `simulation.enabled` in its config |
-| the group owns at least one light | its `area`, plus `simulation.lights.include`/`exclude` |
+| the group owns at least one light | its `area_id`, plus `simulation.lights.include`/`exclude` |
 | an `away_entity` is configured, and is `on` | `defaults.simulation.away_entity` |
 | the group's *real* level is exactly zero | its stimuli, ignoring `activity_levels.trigger` |
 | the group's profile is ready | `min_days` of history behind it |
@@ -313,7 +312,7 @@ Every group has a `kind`, and the kind decides what may go inside it:
 | **Structure** | A building on the property — the house, a garage, a shed. | Floors, or areas directly (a one-storey building). |
 | **Floor** | One level of a structure. Bind it to a Home Assistant floor to reuse its name. | Areas. |
 | **Area** | A room or zone people occupy. Bind it to a Home Assistant area to reuse its name and put its entities in the right place. | Other areas (an ensuite, an alcove). |
-| **Outside** | An outdoor area — a yard, a patio, the driveway. Outside areas can lead off the property. | Other outdoor areas. |
+| **Outside** | An outdoor area — a yard, a patio, the driveway. | Other outdoor areas. |
 
 Every root group is a property, and this table is exactly what the tree's *Add group*
 menu offers at each level — it will not let you nest something the layering forbids.
@@ -336,11 +335,11 @@ when it loads — the root is the property, a group bound to an area is an area,
 everything else follows the layering — and the panel says so with a banner until you
 look at them and save. Nothing is written to your configuration until you do, and no
 entity id changes either way: they come from the group's `id`, which nothing here
-touches. Two things are worth checking when the banner appears. A building that
-declared a doorway will have been guessed as an *outdoor* area, because a structure
-cannot have one — move the doorway to a room inside it and set the kind back. And a
-room that leads off a property with outdoor areas on it will have to hand that
-`exit` to the yard it opens onto.
+touches. One thing is worth checking when the banner appears: a group that declares a
+doorway or a way off the property and holds no rooms of its own is read as somewhere a
+person stands, and beside a property — which cannot contain a room — that comes out as an
+*outdoor* area. A detached garage lands there correctly; a building with rooms in it does
+not, so move the doorway to a room inside it and set the kind back.
 
 **Adjacency, on its own.** `adjacent` describes the house's floor plan, and it means
 something even before presence is turned on: it is only meaningful between groups that
@@ -353,8 +352,9 @@ recorded and shown in the panel; nothing weights a transition by it yet. Clearin
 ways" on an edge is the one-way case, which used to be YAML-only: `{id: some_room,
 one_way: true}` in place of the plain id. Separately, a room may lead off the property —
 *"People can leave the property from here, so presence can move from here to Away."* —
-which only an `area` or `outside` group may declare, and only an `area` may declare it
-when the property has no outdoor areas of its own.
+which any `area` or `outside` group may declare, and no other kind may: a front door in
+the hall and a gate on the driveway are both exits, and a property, a structure or a
+floor is not somewhere anybody stands to leave from.
 
 **Turning presence on.** Nothing above needs [Bermuda](https://github.com/agittins/bermuda).
 Presence itself does: it is off unless `presence.enabled` is set, and if it is set but
@@ -386,7 +386,7 @@ mutes the same way).
    your rooms have scanners.
 2. Enable Bermuda's per-scanner distance sensors — they ship **disabled**, and the
    integration raises a repair issue naming the ones it still finds off.
-3. Give each scanner device an area matching a room's `area`, or map it directly with
+3. Give each scanner device an area matching a room's `area_id`, or map it directly with
    `presence.scanner_areas` when that is not convenient.
 4. List your phones' `device_tracker` entities under `presence.devices`.
 5. Set `adjacent` (and `exit`, where it applies) on every room — an unreachable room is
@@ -401,7 +401,7 @@ count.
 
 Durations accept `30s`, `5m`, `2h`, `1d`, `HH:MM:SS`, or a plain number of seconds.
 
-Renaming a group's `id` creates new entities (history is not carried over); `area` is
+Renaming a group's `id` creates new entities (history is not carried over); `area_id` is
 applied only when a group's device is first created. A tracked person's entities are
 keyed off their (slugified) `presence.devices[].name`, so renaming one renames their
 entities the same way.

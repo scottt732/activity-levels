@@ -367,6 +367,13 @@ def _wanted_kinds(node: Mapping[str, Any], parent_kind: str | None) -> tuple[str
     person walks through, which is an area indoors and an outside area beside the house.
     Only when the document says none of that does the layering decide, which is what turns a
     bare `property > house > downstairs > kitchen` into exactly those four kinds.
+
+    The doorway evidence is read only on a group with nothing inside it. A branch that
+    declares an edge -- `downstairs`, with a staircase to `upstairs` -- is still a branch,
+    and reading that edge as "somewhere a person walks" used to guess `outside` for it (a
+    property cannot contain an area) and then cascade that guess over every room below,
+    because an outside area contains nothing but outside areas. A group with children is a
+    container whatever else it says about itself, so position decides.
     """
     if parent_kind is None:
         return (KIND_PROPERTY,)
@@ -379,7 +386,7 @@ def _wanted_kinds(node: Mapping[str, Any], parent_kind: str | None) -> tuple[str
         # answer. It is here so the evidence list reads as the rule, and so it keeps working
         # if the nesting table ever lets a floor sit somewhere else.
         wants.append(KIND_FLOOR)
-    if node.get("adjacent") or node.get("exit"):
+    if not node.get("children") and (node.get("adjacent") or node.get("exit")):
         wants += [KIND_AREA, KIND_OUTSIDE]
     wants.append(DEFAULT_CHILD_KIND[parent_kind])
     return tuple(dict.fromkeys(wants))  # first occurrence wins, order kept
@@ -395,6 +402,17 @@ def infer_kinds(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     Inference is total: `_wanted_kinds` always ends in `DEFAULT_CHILD_KIND[parent_kind]`,
     and `ALLOWED_CHILDREN` always permits that, so there is always a kind to write and a
     resolved document never carries a null one. `test_inference_is_total` pins the invariant.
+
+    It is also stable: whatever this writes has to validate again on the way back out,
+    because the panel saves exactly the document it was handed and a migration nobody can
+    save is no migration at all. Two rules together buy that. Doorway evidence is read only
+    on a group with nothing inside it (see `_wanted_kinds`), so a branch keeps the
+    positional kind its children expect instead of being pulled outdoors and dragging the
+    rooms below it with it. And an exit is legal on any room, indoors or out, so the
+    guessed kinds never contradict the doors the document already declared.
+    `test_a_validated_document_validates_again_unchanged` pins that over the real
+    pre-kinds example house, where it lands on `property > structure > floor > area` for
+    the building and reads a garage that declares a doorway and no rooms as an outdoor area.
     """
     inferred: list[str] = []
 
@@ -448,22 +466,6 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
     seen_groups: set[str] = set()
     walked: list[tuple[str, dict[str, Any]]] = []
 
-    def _outside_paths(nodes: list[dict[str, Any]], path: list[Any]) -> list[str]:
-        found: list[str] = []
-        for i, node in enumerate(nodes):
-            at = [*path, i]
-            if node[CONF_KIND] == KIND_OUTSIDE:
-                found.append(_path(at))
-            found += _outside_paths(node["children"], [*at, "children"])
-        return found
-
-    # "this property has outside areas" is only a fact a rule may be built on once a human
-    # has said so. If every outside area in the document is our own guess, so is the
-    # conclusion, and M2 says a guess must not stop a working document from loading.
-    declared_outside = any(
-        p not in inferred for p in _outside_paths(cfg[CONF_GROUPS], [CONF_GROUPS])
-    )
-
     def walk(group: dict[str, Any], path: list[Any], parent_kind: str | None) -> None:
         here = _path(path)
         if group["id"] in seen_groups:
@@ -491,23 +493,18 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
                         "only areas and outside areas have adjacent groups",
                     }
                 )
-            if group["exit"]:
-                if kind not in NODE_KINDS:
-                    errors.append(
-                        {
-                            "path": f"{here}/exit",
-                            "message": f"{_an(kind)} cannot lead off the property; "
-                            "only areas and outside areas can",
-                        }
-                    )
-                elif kind == KIND_AREA and declared_outside:
-                    errors.append(
-                        {
-                            "path": f"{here}/exit",
-                            "message": "this property has outside areas, so leaving it "
-                            "happens from one of those, not from a room",
-                        }
-                    )
+            # An area with an exit is a valid topology -- a kitchen with a door to the
+            # street is a kitchen with a door to the street -- so the only thing an exit
+            # is checked against is whether anybody can stand there. Handing the exit to
+            # the nearest yard, as this used to, made a document that loaded unsaveable.
+            if group["exit"] and kind not in NODE_KINDS:
+                errors.append(
+                    {
+                        "path": f"{here}/exit",
+                        "message": f"{_an(kind)} cannot lead off the property; "
+                        "only areas and outside areas can",
+                    }
+                )
         if not group["stimuli"] and not group["children"]:
             errors.append({"path": here, "message": "group needs at least one stimulus or child"})
         labels: set[str] = {TRIGGER_KEY, PRESENCE_KEY}  # both synthetic channels
@@ -610,12 +607,34 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
     return errors
 
 
+def _root_warnings(cfg: dict[str, Any]) -> list[str]:
+    """Things a document says that this schema cannot honour, and would otherwise drop.
+
+    Every root group is a property, and only areas and outside areas are rooms -- so a
+    document whose rooms sit at the root (which is how a house written to the older,
+    kind-less schema often reads) loads with its whole presence graph flattened away. It
+    still loads, because refusing it would strand somebody whose configuration worked
+    yesterday, and the doorways stay in the file so nothing is lost on disk. But nothing
+    else in the panel would say that the map is empty, so this does.
+    """
+    warnings: list[str] = []
+    for i, group in enumerate(cfg[CONF_GROUPS]):
+        if group["adjacent"] or group["exit"]:
+            warnings.append(
+                f"{_path([CONF_GROUPS, i])}: '{group['id']}' declares doors but is a root "
+                "group; every root is a property, so it is not a room. Wrap your rooms in "
+                "a property."
+            )
+    return warnings
+
+
 @dataclass(frozen=True)
 class Validated:
-    """A validated document, and what had to be guessed to get there."""
+    """A validated document, what had to be guessed to get there, and what it lost."""
 
     config: dict[str, Any]
     inferred: tuple[str, ...]
+    warnings: tuple[str, ...] = ()
 
     @property
     def migrated(self) -> bool:
@@ -640,7 +659,11 @@ def validate(config: Mapping[str, Any]) -> Validated:
     errors = _cross_checks(cfg, frozenset(inferred))
     if errors:
         raise ConfigError(errors)
-    return Validated(config=_stringify_enums(cfg), inferred=tuple(inferred))
+    return Validated(
+        config=_stringify_enums(cfg),
+        inferred=tuple(inferred),
+        warnings=tuple(_root_warnings(cfg)),
+    )
 
 
 def validate_config(config: Mapping[str, Any]) -> dict[str, Any]:

@@ -187,7 +187,13 @@ async def test_set_level_service(hass: HomeAssistant, entry: MockConfigEntry) ->
 
 
 async def test_devices_carry_the_kind_as_their_model(hass: HomeAssistant) -> None:
-    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validate_config(kinds_config()))
+    # a multi-word area, so the name and the id are different strings and the assertion
+    # below can tell which one the device registry was given
+    area = ar.async_get(hass).async_get_or_create("Living Room")
+    assert (area.id, area.name) == ("living_room", "Living Room")
+    config = kinds_config()
+    config["groups"][0]["children"][0]["children"][0]["children"][0]["area_id"] = area.id
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validate_config(config))
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -206,7 +212,9 @@ async def test_devices_carry_the_kind_as_their_model(hass: HomeAssistant) -> Non
     # a floor binds a Home Assistant floor, and Home Assistant devices live in areas,
     # so a floor suggests nothing at all
     assert dev.async_get_device(identifiers={(DOMAIN, "downstairs")}).suggested_area is None
-    assert dev.async_get_device(identifiers={(DOMAIN, "kitchen")}).suggested_area == "kitchen"
+    # `suggested_area` is a *name*, which Home Assistant looks up and creates if it has to;
+    # handing it an area id would have it invent an area called "living_room"
+    assert dev.async_get_device(identifiers={(DOMAIN, "kitchen")}).suggested_area == "Living Room"
 
 
 async def test_an_unnamed_group_takes_the_name_of_the_area_it_binds(hass: HomeAssistant) -> None:

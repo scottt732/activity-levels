@@ -231,6 +231,7 @@ async def test_config_get_returns_the_resolved_document_and_what_was_inferred(
     assert house["children"][0]["kind"] == "structure"
     # the fixture entry stores an already-validated document, so nothing was guessed here
     assert msg["result"]["inferred"] == []
+    assert msg["result"]["warnings"] == []
 
 
 async def test_config_get_reports_the_paths_it_had_to_guess(
@@ -252,3 +253,35 @@ async def test_config_get_reports_the_paths_it_had_to_guess(
     msg = await client.receive_json()
     assert msg["result"]["inferred"] == ["groups/0", "groups/0/children/0", "groups/0/children/1"]
     assert msg["result"]["config"]["groups"][0]["kind"] == "property"
+    assert msg["result"]["warnings"] == []
+
+
+async def test_config_get_reports_what_the_document_lost_on_the_way_in(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    """A document whose rooms sit at the root loads, and says what that cost it."""
+    for e in ("binary_sensor.kitchen_motion", "binary_sensor.hall_motion"):
+        hass.states.async_set(e, "off")
+    options = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "kitchen",
+                "adjacent": ["hall"],
+                "stimuli": [{"entity": "binary_sensor.kitchen_motion"}],
+            },
+            {"id": "hall", "stimuli": [{"entity": "binary_sensor.hall_motion"}]},
+        ],
+    }
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/config/get"})
+    msg = await client.receive_json()
+    assert msg["result"]["warnings"] == [
+        "groups/0: 'kitchen' declares doors but is a root group; every root is a property, "
+        "so it is not a room. Wrap your rooms in a property."
+    ]

@@ -1,0 +1,189 @@
+# The example house as it was written before group kinds existed (examples/house.yaml
+# at commit d74a2f8), frozen here so the round-trip test has a real, whole document to
+# migrate and does not depend on git history.
+version: 1
+defaults:
+  envelope: default
+  max_value: 5.0
+  precision: 1
+  unavailable: hold
+  # stack is the legacy additive behaviour: every trigger adds another `gain` on top
+  # of the level already sounding, clamped at the group's max_value.
+  retrigger: stack
+  debounce: 0s
+  safety_refresh: 60s
+  min_wake_interval: 1s
+
+envelopes:
+  # `release` is the time to fall from full scale (max_value 5.0) to zero, so every
+  # level below it empties proportionally faster at that same slope.
+  - id: default          # 30 minutes to fall from full scale to zero
+    release: 30m
+  - id: fifteen_minutes
+    release: 15m
+  - id: hour
+    release: 1h
+  - id: two_hours
+    release: 2h
+  - id: four_hours
+    release: 4h
+  - id: eight_hours
+    release: 8h
+
+# Rooms and doorways. `adjacent` is symmetric, so each doorway is written once, from
+# whichever side reads more naturally. This is inferred from the door and window sensors
+# above -- check it against your actual floor plan before relying on it, because a wrong
+# edge is worse than a missing one: it lets the room estimate walk through a wall.
+groups:
+  - id: property
+    name: Property
+    mix: max
+    children:
+      - id: house
+        name: House
+        mix: max
+        # (old binary_sensor.smoke_detector no longer exists; add a smoke/safety sensor here if you have one)
+        children:
+          - id: basement
+            name: Basement
+            mix: max
+            children:
+              - id: play_room
+                name: Play Room
+                adjacent: [laundry_room, downstairs_hallway]   # the basement stairs door
+                stimuli:
+                  - entity: binary_sensor.basement_hallway_door
+                  - entity: binary_sensor.play_room_motion
+                    envelope: hour
+                  - entity: binary_sensor.play_room_front_window
+              - id: laundry_room
+                name: Laundry Room
+                adjacent: [driveway]                            # basement exterior door
+                stimuli:
+                  - entity: binary_sensor.basement_exterior_door
+                    gain: 2.5
+                  - entity: binary_sensor.basement_motion
+                    gain: 2.5
+          - id: downstairs
+            name: Downstairs
+            mix: max
+            children:
+              - id: living_room
+                name: Living Room
+                adjacent: [dining_room, downstairs_hallway, front_yard]   # front door
+                stimuli:
+                  - entity: binary_sensor.living_room_motion
+                    envelope: two_hours
+                  - entity: binary_sensor.living_room_windows
+                  - entity: binary_sensor.front_door
+                    envelope: fifteen_minutes
+              - id: office
+                name: Office
+                adjacent: [downstairs_hallway]
+                stimuli:
+                  - entity: binary_sensor.office_motion
+                    envelope: hour
+                    gain: 1.5
+                    debounce: 15s
+                  - entity: binary_sensor.office_window
+              - id: dining_room
+                name: Dining Room
+                adjacent: [kitchen, downstairs_hallway]
+                stimuli:
+                  - entity: binary_sensor.dining_room_motion
+                    envelope: hour
+                  - entity: binary_sensor.dining_room_windows
+              - id: kitchen
+                name: Kitchen
+                adjacent: [back_patio]                          # back door
+                stimuli:
+                  # (old binary_sensor.kitchen_motion no longer exists; add a kitchen motion/occupancy sensor here)
+                  - entity: binary_sensor.kitchen_windows
+                  - entity: binary_sensor.back_door
+                    envelope: fifteen_minutes
+              - id: downstairs_hallway
+                name: Downstairs Hallway
+                adjacent: [upstairs_hallway]
+                stimuli:
+                  - entity: binary_sensor.basement_hallway_door
+          - id: upstairs
+            name: Upstairs
+            mix: max
+            children:
+              - id: guest_room
+                name: Guest Room
+                adjacent: [upstairs_hallway]
+                stimuli:
+                  - entity: binary_sensor.guest_room_motion
+                    envelope: hour
+              - id: main_bedroom
+                name: Main Bedroom
+                adjacent: [upstairs_hallway]
+                stimuli:
+                  - entity: binary_sensor.master_bedroom_door
+                    envelope: two_hours
+                  - entity: binary_sensor.master_bedroom_motion
+                    envelope: hour
+              - id: upstairs_hallway
+                name: Upstairs Hallway
+                stimuli:
+                  - entity: binary_sensor.upstairs_hallway_motion
+      - id: garage
+        name: Garage
+        adjacent: [driveway]
+        exit: true
+        stimuli:
+          - entity: binary_sensor.garage_door
+          - entity: binary_sensor.garage_motion
+          - entity: binary_sensor.garage_side_door
+      - id: outside
+        name: Outside
+        mix: max
+        children:
+          - id: front_yard
+            name: Front Yard
+            mix: max
+            adjacent: [driveway]
+            exit: true
+            stimuli:
+              - entity: binary_sensor.front_door_protect_motion
+                envelope: fifteen_minutes
+              - entity: binary_sensor.front_porch_motion
+              - entity: binary_sensor.front_yard_protect_motion
+                envelope: fifteen_minutes
+          - id: back_yard
+            name: Back Yard
+            mix: max
+            children:
+              - id: back_patio
+                name: Back Patio
+                adjacent: [driveway]
+                exit: true
+                stimuli:
+                  - entity: binary_sensor.back_patio_doorbell_protect_motion
+                    envelope: fifteen_minutes
+              - id: driveway
+                name: Driveway
+                exit: true
+                stimuli:
+                  - entity: binary_sensor.driveway_motion
+                  - entity: binary_sensor.driveway_camera_protect_motion
+                    envelope: fifteen_minutes
+
+# Room-level presence, off until you have Bermuda installed and have listed your phones.
+# Turning this on gives every room above a `presence` channel in its mix, a
+# `sensor.<room>_occupants`, and one `sensor.<name>_room` per person.
+presence:
+  enabled: false
+  devices:
+    - device: device_tracker.scotts_phone
+      name: Scott
+  envelope: hour          # somebody being here should decay like a long occupancy, not a door
+  threshold: 0.6          # how sure we have to be before the room counts as occupied
+  # stay: 0.9             # chance of not moving between updates; higher is steadier
+  # escape: 0.001         # chance of appearing somewhere unreachable; the way back from a wrong guess
+  # scale: 3.0            # metres at which a scanner stops telling you anything
+  # floor: 0.05           # likelihood of a room with no scanner of its own
+  # stuck_after: 60s      # implausible readings for this long reset the estimate
+  # scanner_areas:        # only when a scanner's area is not the room it is in
+  #   "1a2b3c4d5e6f": kitchen

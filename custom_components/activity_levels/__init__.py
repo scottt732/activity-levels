@@ -154,7 +154,11 @@ def _create_devices(hass: HomeAssistant, entry: ConfigEntry, tree: Tree) -> set[
             name=info.name if info.name_set or area is None else area.name,
             manufacturer=MANUFACTURER,
             model=MODEL_BY_KIND.get(info.kind, MODEL),
-            suggested_area=info.area_id,
+            # `suggested_area` is a *name*: Home Assistant looks it up and creates the area
+            # if it does not exist. Handing it an id would invent a second, badly named
+            # area beside the one the group is actually bound to. The id is the fallback
+            # only for the case that cannot happen -- an `area_id` naming no area at all.
+            suggested_area=area.name if area is not None else info.area_id,
             # roots hang off the hub, so the whole integration is one tree in the UI
             via_device=(DOMAIN, info.parent_id or entry.entry_id),
         )
