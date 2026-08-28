@@ -55,7 +55,7 @@ describe("envelopePoints", () => {
     expect(pts[4]!.x).toBeCloseTo(pts[3]!.x);
     expect(envelopeLabels({ attack: 0, decay: 10, sustain: 0, release: 100, impulse: false }).map((l) => l.text)).toEqual([
       "D 10s",
-      "S 0",
+      "S 0.0×",
     ]);
   });
 
@@ -68,14 +68,14 @@ describe("envelopePoints", () => {
 describe("envelopeLabels", () => {
   it("labels each non-zero segment at its midpoint", () => {
     const labels = envelopeLabels({ attack: 10, decay: 10, sustain: 0.5, release: 20, impulse: false });
-    expect(labels.map((l) => l.text)).toEqual(["A 10s", "D 10s", "S 0.5", "R 20s"]);
+    expect(labels.map((l) => l.text)).toEqual(["A 10s", "D 10s", "S 0.5×", "R 20s"]);
     expect(labels[0]!.x).toBeGreaterThan(0);
     expect(labels[3]!.x).toBeLessThan(1);
   });
 
   it("skips zero-length segments", () => {
     const labels = envelopeLabels({ attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false });
-    expect(labels.map((l) => l.text)).toEqual(["S 1", "R 30m"]);
+    expect(labels.map((l) => l.text)).toEqual(["S 1.0×", "R 30m"]);
   });
 
   it("says impulse instead of A/D/S", () => {
@@ -87,5 +87,19 @@ describe("envelopeLabels", () => {
   it("drops the release label from a zero-release impulse", () => {
     const labels = envelopeLabels({ attack: 0, decay: 0, sustain: 1, release: 0, impulse: true });
     expect(labels.map((l) => l.text)).toEqual(["impulse"]);
+  });
+});
+
+describe("a sustain above 1", () => {
+  it("scales the curve so the plateau, not the attack, is the top of the box", () => {
+    const pts = envelopePoints({ attack: 10, decay: 10, sustain: 2, release: 20, impulse: false });
+    expect(pts[1]!.y).toBeCloseTo(0.5); // the attack's peak, half of the plateau
+    expect(pts[2]!.y).toBeCloseTo(1);
+    expect(Math.max(...pts.map((p) => p.y))).toBeCloseTo(1);
+  });
+
+  it("captions it as a multiplier with one decimal", () => {
+    const labels = envelopeLabels({ attack: 0, decay: 10, sustain: 1.5, release: 20, impulse: false });
+    expect(labels.map((l) => l.text)).toContain("S 1.5×");
   });
 });

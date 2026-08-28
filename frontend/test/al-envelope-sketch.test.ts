@@ -27,7 +27,7 @@ describe("al-envelope-sketch", () => {
   it("captions each non-zero segment", async () => {
     const el = await mount({ attack: 10, decay: 0, sustain: 0.5, release: 1800, impulse: false });
     const captions = [...(el.shadowRoot?.querySelectorAll("text.caption") ?? [])].map((t) => t.textContent);
-    expect(captions).toEqual(["A 10s", "S 0.5", "R 30m"]);
+    expect(captions).toEqual(["A 10s", "S 0.5×", "R 30m"]);
   });
 
   it("drops the sustain gridline for an impulse", async () => {

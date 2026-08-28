@@ -144,7 +144,7 @@ export class AlMasterStrip extends LitElement {
     return html`
       <div class="strip">
         <div class="name" title=${this.label}>${this.label}</div>
-        <div class="muted">master</div>
+        <div class="muted">group</div>
         <div>
           <label for="mix">mix</label>
           <select

@@ -1,6 +1,6 @@
 import { LitElement, css, html, nothing, svg } from "lit";
 import { customElement, property } from "lit/decorators.js";
-import { envelopeLabels, envelopePoints } from "./sketch";
+import { envelopeLabels, envelopePoints, sustainY } from "./sketch";
 import { sharedStyles } from "./styles";
 import type { SketchEnvelope } from "./sketch";
 
@@ -82,9 +82,9 @@ export class AlEnvelopeSketch extends LitElement {
           : svg`<line
               class="grid"
               x1=${LEFT}
-              y1=${n1(sy(e.sustain))}
+              y1=${n1(sy(sustainY(e)))}
               x2=${RIGHT}
-              y2=${n1(sy(e.sustain))}
+              y2=${n1(sy(sustainY(e)))}
             ></line>`}
         <polygon class="area" points=${area}></polygon>
         <polyline class="curve" points=${curve}></polyline>

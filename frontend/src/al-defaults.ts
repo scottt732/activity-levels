@@ -5,8 +5,23 @@ import { fieldErrors } from "./errors";
 import { alChange } from "./events";
 import { setAt } from "./store";
 import { sharedStyles } from "./styles";
+import {
+  RETRIGGER_HELPER,
+  RETRIGGER_LABEL,
+  RETRIGGER_SELECTOR,
+  STACK_HELPER,
+  STACK_LABEL,
+} from "./stimulus-form";
 import type { Selector } from "./al-override-field";
-import type { Config, Defaults, HaDuration, HomeAssistant, Retrigger, Unavailable, ValidationError } from "./types";
+import type {
+  Config,
+  Defaults,
+  HaDuration,
+  HomeAssistant,
+  RetriggerWhen,
+  Unavailable,
+  ValidationError,
+} from "./types";
 
 interface FormItem {
   name: string;
@@ -18,7 +33,8 @@ const LABELS: Record<string, string> = {
   max_value: "Max value",
   precision: "Precision",
   unavailable: "When unavailable",
-  retrigger: "Retrigger",
+  retrigger: RETRIGGER_LABEL,
+  stack: STACK_LABEL,
   debounce: "Debounce",
   safety_refresh: "Safety refresh",
   min_wake_interval: "Minimum wake interval",
@@ -29,10 +45,10 @@ const HELPERS: Record<string, string> = {
   envelope: "Preset used when a stimulus names none.",
   max_value: "Limiter for groups that don't set their own.",
   precision: "Display decimals.",
-  unavailable: "What an entity going unavailable does to its note.",
-  retrigger:
-    "Stack: each trigger adds its gain on top of the current level, up to the group's limiter. Only while releasing: a trigger only restarts a fading note. Always: a trigger restarts the note even while it is held.",
-  debounce: "Minimum time between note-ons per stimulus.",
+  unavailable: "What an entity going unavailable does to its trigger.",
+  retrigger: RETRIGGER_HELPER,
+  stack: STACK_HELPER,
+  debounce: "Minimum time between triggers per stimulus.",
   safety_refresh: "Periodic recompute as a self-heal.",
   min_wake_interval: "Floor for the scheduler's timer delay.",
 };
@@ -44,6 +60,7 @@ const FORM_FIELDS: (keyof Defaults)[] = [
   "precision",
   "unavailable",
   "retrigger",
+  "stack",
   "debounce",
   "safety_refresh",
   "min_wake_interval",
@@ -59,22 +76,13 @@ const PRECISION_SELECTOR: Selector = {
     options: [0, 1, 2, 3].map((n) => ({ value: String(n), label: String(n) })),
   },
 };
-const RETRIGGER_SELECTOR: Selector = {
-  select: {
-    mode: "dropdown",
-    options: [
-      { value: "stack", label: "Stack (add on top)" },
-      { value: "only_in_release", label: "Only while releasing" },
-      { value: "always", label: "Always" },
-    ],
-  },
-};
+const STACK_SELECTOR: Selector = { boolean: {} };
 const UNAVAILABLE_SELECTOR: Selector = {
   select: {
     mode: "dropdown",
     options: [
       { value: "hold", label: "Hold the last value" },
-      { value: "note_off", label: "Release the note" },
+      { value: "note_off", label: "End the trigger" },
     ],
   },
 };
@@ -109,6 +117,7 @@ export class AlDefaults extends LitElement {
       { name: "precision", selector: PRECISION_SELECTOR },
       { name: "unavailable", selector: UNAVAILABLE_SELECTOR },
       { name: "retrigger", selector: RETRIGGER_SELECTOR },
+      { name: "stack", selector: STACK_SELECTOR },
       { name: "debounce", selector: DURATION_SELECTOR },
       { name: "safety_refresh", selector: DURATION_SELECTOR },
       { name: "min_wake_interval", selector: DURATION_SELECTOR },
@@ -127,7 +136,8 @@ export class AlDefaults extends LitElement {
       max_value: typeof v.max_value === "number" ? v.max_value : d.max_value,
       precision: Number.isFinite(precision) ? precision : d.precision,
       unavailable: (v.unavailable as Unavailable | undefined) ?? d.unavailable,
-      retrigger: (v.retrigger as Retrigger | undefined) ?? d.retrigger,
+      retrigger: (v.retrigger as RetriggerWhen | undefined) ?? d.retrigger,
+      stack: typeof v.stack === "boolean" ? v.stack : d.stack,
       debounce: durationToSeconds(v.debounce as HaDuration | undefined) ?? d.debounce,
       safety_refresh: durationToSeconds(v.safety_refresh as HaDuration | undefined) ?? d.safety_refresh,
       min_wake_interval: durationToSeconds(v.min_wake_interval as HaDuration | undefined) ?? d.min_wake_interval,
@@ -153,6 +163,7 @@ export class AlDefaults extends LitElement {
       precision: String(d.precision),
       unavailable: d.unavailable,
       retrigger: d.retrigger,
+      stack: d.stack,
       debounce: secondsToDuration(d.debounce),
       safety_refresh: secondsToDuration(d.safety_refresh),
       min_wake_interval: secondsToDuration(d.min_wake_interval),

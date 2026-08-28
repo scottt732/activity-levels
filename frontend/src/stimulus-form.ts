@@ -33,7 +33,7 @@ export const STIMULUS_HELPERS: Record<string, string> = {
   entity: "The entity whose state drives this stimulus.",
   to: "Comma-separated states that trigger the envelope, e.g. on, playing.",
   gain: "How loudly this stimulus contributes to its group.",
-  key: "Optional name for this voice; defaults to the entity id.",
+  key: "Optional name for this trigger; defaults to the entity id.",
   envelope: "Preset the overrides below start from.",
 };
 
@@ -46,15 +46,27 @@ export const STIMULUS_FORM_FIELDS: (keyof Stimulus)[] = ["entity", "gain", "key"
 /** Milliseconds stay on: the backend takes sub-second debounce, wake and A/D/R values,
  * and a selector without the field would silently drop the `milliseconds` we hand it. */
 export const DURATION_SELECTOR: Selector = { duration: { enable_millisecond: true } };
-export const SUSTAIN_SELECTOR: Selector = { number: { min: 0, max: 1, step: 0.05, mode: "slider" } };
+/** Sustain is a multiplier on the peak, so it has a floor but no ceiling: above 1 the
+ * decay climbs to a level the attack never reached. */
+export const SUSTAIN_SELECTOR: Selector = {
+  number: { min: 0, step: 0.1, mode: "box", unit_of_measurement: "×" },
+};
 export const GAIN_SELECTOR: Selector = { number: { min: 0.1, max: 10, step: 0.1, mode: "slider" } };
+export const RETRIGGER_LABEL = "Allow retrigger";
+export const RETRIGGER_HELPER = "When a new trigger is honoured while the envelope is still active.";
+export const STACK_LABEL = "Stacks";
+export const STACK_HELPER =
+  "Each honoured trigger adds its gain on top of the current level instead of restarting the rise.";
+
 export const RETRIGGER_SELECTOR: Selector = {
   select: {
     mode: "dropdown",
     options: [
-      { value: "stack", label: "Stack (add on top)" },
-      { value: "only_in_release", label: "Only while releasing" },
       { value: "always", label: "Always" },
+      { value: "after_attack", label: "After the attack" },
+      { value: "after_decay", label: "After the decay" },
+      { value: "release", label: "Only while releasing" },
+      { value: "idle", label: "Only once fully released" },
     ],
   },
 };
@@ -63,7 +75,7 @@ export const UNAVAILABLE_SELECTOR: Selector = {
     mode: "dropdown",
     options: [
       { value: "hold", label: "Hold the last value" },
-      { value: "note_off", label: "Release the note" },
+      { value: "note_off", label: "End the trigger" },
     ],
   },
 };
@@ -80,15 +92,24 @@ export interface OverrideItem {
   label: string;
   kind: OverrideKind;
   selector: Selector;
+  /** One line under the field, for the two whose names do not explain themselves. */
+  hint?: string;
 }
 
 export const OVERRIDES: OverrideItem[] = [
   { name: "attack", label: "Attack", kind: "duration", selector: DURATION_SELECTOR },
   { name: "decay", label: "Decay", kind: "duration", selector: DURATION_SELECTOR },
-  { name: "sustain", label: "Sustain", kind: "number", selector: SUSTAIN_SELECTOR },
+  { name: "sustain", label: "Sustain", kind: "multiplier", selector: SUSTAIN_SELECTOR },
   { name: "release", label: "Release", kind: "duration", selector: DURATION_SELECTOR },
   { name: "impulse", label: "Impulse", kind: "boolean", selector: BOOLEAN_SELECTOR },
-  { name: "retrigger", label: "Retrigger", kind: "select", selector: RETRIGGER_SELECTOR },
+  {
+    name: "retrigger",
+    label: RETRIGGER_LABEL,
+    kind: "select",
+    selector: RETRIGGER_SELECTOR,
+    hint: RETRIGGER_HELPER,
+  },
+  { name: "stack", label: STACK_LABEL, kind: "boolean", selector: BOOLEAN_SELECTOR, hint: STACK_HELPER },
   { name: "unavailable", label: "When unavailable", kind: "select", selector: UNAVAILABLE_SELECTOR },
   { name: "debounce", label: "Debounce", kind: "duration", selector: DURATION_SELECTOR },
 ];
@@ -104,7 +125,7 @@ export const SOURCE_DEFINITION = "What makes this stimulus fire, and what it is 
 export const OVERRIDES_DEFINITION = "Change part of the preset for this stimulus only.";
 
 /**
- * How many envelope fields this stimulus overrides. Only the eight in {@link OVERRIDES}
+ * How many envelope fields this stimulus overrides. Only the ones in {@link OVERRIDES}
  * count: `gain` and the preset itself live in the Envelope panel above, and counting them
  * would badge a stimulus that has overridden nothing.
  */
@@ -179,7 +200,7 @@ export function overrideSource(config: Config, stimulus: Stimulus, name: keyof E
 }
 
 /**
- * How long this voice stays in its current phase, measured against the payload's own
+ * How long this trigger stays in its current phase, measured against the payload's own
  * `now` so a browser clock that disagrees with the server does not skew the countdown.
  */
 export function phaseCountdown(now: number | undefined, at: number | null | undefined): string | null {

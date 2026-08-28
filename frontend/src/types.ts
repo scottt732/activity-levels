@@ -3,7 +3,8 @@ import type { Connection, Kind } from "./kinds";
 
 export type Mix = "sum" | "max" | "mean";
 export type NullHandling = "zero" | "ignore";
-export type Retrigger = "stack" | "only_in_release" | "always";
+/** When a trigger arriving on an envelope that is already sounding is honoured. */
+export type RetriggerWhen = "always" | "after_attack" | "after_decay" | "release" | "idle";
 export type Unavailable = "hold" | "note_off";
 
 export interface EnvelopeOverrides {
@@ -12,19 +13,24 @@ export interface EnvelopeOverrides {
   sustain: number | null;
   release: number | null;
   impulse: boolean | null;
-  retrigger: Retrigger | null;
+  retrigger: RetriggerWhen | null;
+  stack: boolean | null;
   unavailable: Unavailable | null;
   debounce: number | null;
 }
 
 export interface EnvelopePreset {
   id: string;
+  /** Display name. Null (or blank) falls back to the id, which is what stimuli name. */
+  label: string | null;
   attack: number;
   decay: number;
+  /** A multiplier on the peak, not a fraction of it: above 1 the decay climbs. */
   sustain: number;
   release: number;
   impulse: boolean;
-  retrigger: Retrigger | null;
+  retrigger: RetriggerWhen | null;
+  stack: boolean | null;
   unavailable: Unavailable | null;
   debounce: number | null;
 }
@@ -71,7 +77,8 @@ export interface Defaults {
   max_value: number;
   precision: number;
   unavailable: Unavailable;
-  retrigger: Retrigger;
+  retrigger: RetriggerWhen;
+  stack: boolean;
   debounce: number;
   safety_refresh: number;
   min_wake_interval: number;

@@ -79,6 +79,7 @@ export class AlPresenceOverrides extends LitElement {
           class="presence-${item.name}"
           .hass=${this.hass}
           .label=${item.label}
+          .hint=${item.hint ?? ""}
           .kind=${item.kind}
           .selector=${item.selector}
           .value=${overrides[item.name] as OverrideValue}

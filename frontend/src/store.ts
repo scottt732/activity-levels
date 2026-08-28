@@ -59,6 +59,19 @@ export function moveAt<T>(obj: T, listPath: Path, from: number, to: number): T {
   });
 }
 
+/**
+ * Reorders one flat list by dropping the item at `from` into the slot `before` names in
+ * the list *as it reads now* — which is what a pointer was over, and what an
+ * "insert above this row" keyboard move means. Lifting the item out shifts every later
+ * slot up by one, so a destination past the source is rebased here; a drop onto either
+ * side of the item's own slot is a no-op and returns the same object, so it never costs
+ * an undo step. {@link moveAt} is the raw splice, whose `to` is post-removal.
+ */
+export function reorderAt<T>(obj: T, listPath: Path, from: number, before: number): T {
+  if (before === from || before === from + 1) return obj;
+  return moveAt(obj, listPath, from, before > from ? before - 1 : before);
+}
+
 /** Consecutive `set` calls sharing a coalesce key merge into one undo step inside this window. */
 const COALESCE_MS = 1000;
 

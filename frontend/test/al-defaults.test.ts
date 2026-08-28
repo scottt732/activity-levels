@@ -12,14 +12,15 @@ const baseConfig = (): Config => ({
     max_value: 5,
     precision: 1,
     unavailable: "hold",
-    retrigger: "only_in_release",
+    retrigger: "release",
+    stack: false,
     debounce: 0,
     safety_refresh: 60,
     min_wake_interval: 1,
   },
   envelopes: [
-    { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
-    { id: "media", attack: 10, decay: 300, sustain: 0.6, release: 900, impulse: false, retrigger: null, unavailable: null, debounce: null },
+    { id: "default", label: null, attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
+    { id: "media", label: null, attack: 10, decay: 300, sustain: 0.6, release: 900, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
   ],
   groups: [newGroup("house", "structure")],
 });
@@ -74,6 +75,7 @@ describe("al-defaults", () => {
       "precision",
       "unavailable",
       "retrigger",
+      "stack",
       "debounce",
       "safety_refresh",
       "min_wake_interval",
@@ -87,26 +89,39 @@ describe("al-defaults", () => {
     expect(item.selector?.select?.options?.map((o) => o.value)).toEqual(["default", "media"]);
   });
 
-  it("offers stack first among the retrigger modes", () => {
+  it("lists the retrigger modes widest first", () => {
     const item = form().schema?.[4] as {
       name: string;
       selector?: { select?: { options?: { value: string; label: string }[] } };
     };
     expect(item.name).toBe("retrigger");
     expect(item.selector?.select?.options).toEqual([
-      { value: "stack", label: "Stack (add on top)" },
-      { value: "only_in_release", label: "Only while releasing" },
       { value: "always", label: "Always" },
+      { value: "after_attack", label: "After the attack" },
+      { value: "after_decay", label: "After the decay" },
+      { value: "release", label: "Only while releasing" },
+      { value: "idle", label: "Only once fully released" },
     ]);
   });
 
-  it("explains all three retrigger modes in the helper", () => {
-    const helper = (form() as unknown as { computeHelper?: (i: { name: string }) => string }).computeHelper?.({
-      name: "retrigger",
-    });
-    expect(helper).toContain("Stack:");
-    expect(helper).toContain("Only while releasing:");
-    expect(helper).toContain("Always:");
+  it("edits stacking as a boolean beside the retrigger mode", async () => {
+    const item = form().schema?.[5] as { name: string; selector?: Record<string, unknown> };
+    expect(item.name).toBe("stack");
+    expect(item.selector).toEqual({ boolean: {} });
+    expect(form().data?.stack).toBe(false);
+    await edit({ stack: true });
+    expect(changes.at(-1)?.defaults.stack).toBe(true);
+    expect(keys.at(-1)).toBe("defaults:stack");
+  });
+
+  it("says what each of the two halves of retriggering does", () => {
+    const helper = (form() as unknown as { computeHelper?: (i: { name: string }) => string }).computeHelper;
+    expect(helper?.({ name: "retrigger" })).toBe(
+      "When a new trigger is honoured while the envelope is still active.",
+    );
+    expect(helper?.({ name: "stack" })).toBe(
+      "Each honoured trigger adds its gain on top of the current level instead of restarting the rise.",
+    );
   });
 
   it("converts a duration back to seconds and coalesces per field", async () => {

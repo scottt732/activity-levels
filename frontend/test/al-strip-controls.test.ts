@@ -21,15 +21,16 @@ const defaults: Config["defaults"] = {
   max_value: 5,
   precision: 1,
   unavailable: "hold",
-  retrigger: "only_in_release",
+  retrigger: "release",
+  stack: false,
   debounce: 0,
   safety_refresh: 60,
   min_wake_interval: 1,
 };
 
 const envelopes: Config["envelopes"] = [
-  { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
-  { id: "slow", attack: 30, decay: 0, sustain: 1, release: 3600, impulse: false, retrigger: null, unavailable: null, debounce: null },
+  { id: "default", label: null, attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
+  { id: "slow", label: null, attack: 30, decay: 0, sustain: 1, release: 3600, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
 ];
 
 const baseConfig = (): Config => ({

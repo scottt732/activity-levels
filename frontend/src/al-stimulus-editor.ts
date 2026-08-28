@@ -139,6 +139,7 @@ export class AlStimulusEditor extends LitElement {
     return html`<al-override-field
       .hass=${this.hass}
       .label=${item.label}
+      .hint=${item.hint ?? ""}
       .kind=${item.kind}
       .selector=${item.selector}
       .value=${stimulus[item.name] as OverrideValue}

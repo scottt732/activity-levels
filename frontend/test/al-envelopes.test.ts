@@ -12,14 +12,15 @@ const baseConfig = (): Config => ({
     max_value: 5,
     precision: 1,
     unavailable: "hold",
-    retrigger: "only_in_release",
+    retrigger: "release",
+    stack: false,
     debounce: 0,
     safety_refresh: 60,
     min_wake_interval: 1,
   },
   envelopes: [
-    { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
-    { id: "media", attack: 10, decay: 300, sustain: 0.6, release: 900, impulse: false, retrigger: "always", unavailable: null, debounce: 5 },
+    { id: "default", label: null, attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
+    { id: "media", label: null, attack: 10, decay: 300, sustain: 0.6, release: 900, impulse: false, retrigger: "always", stack: null, unavailable: null, debounce: 5 },
   ],
   groups: [
     {
@@ -80,20 +81,47 @@ beforeEach(async () => {
 });
 
 describe("al-envelopes", () => {
-  it("offers stack first in the retrigger override", () => {
-    const field = el.shadowRoot?.querySelector("al-override-field") as
-      | (HTMLElement & { label?: string; selector?: { select?: { options?: { value: string }[] } } })
-      | null;
-    expect(field?.label).toBe("Retrigger");
-    expect(field?.selector?.select?.options?.map((o) => o.value)).toEqual(["stack", "only_in_release", "always"]);
+  it("splits retriggering into a when and a stacking toggle", () => {
+    const fields = [...(el.shadowRoot?.querySelectorAll("al-override-field") ?? [])] as (HTMLElement & {
+      label?: string;
+      hint?: string;
+      selector?: { select?: { options?: { value: string }[] } };
+    })[];
+    expect(fields.map((f) => f.label)).toEqual(["Allow retrigger", "Stacks", "When unavailable", "Debounce"]);
+    expect(fields[0]?.selector?.select?.options?.map((o) => o.value)).toEqual([
+      "always",
+      "after_attack",
+      "after_decay",
+      "release",
+      "idle",
+    ]);
+    expect(fields[0]?.hint).toContain("still active");
+    expect(fields[1]?.hint).toContain("on top of the current level");
   });
 
   it("lists every preset and sketches the selected one", () => {
-    const names = [...(el.shadowRoot?.querySelectorAll(".preset button.link") ?? [])].map((n) => n.textContent?.trim());
+    const names = [...(el.shadowRoot?.querySelectorAll(".preset .name") ?? [])].map((n) => n.textContent?.trim());
     expect(names).toEqual(["default", "media"]);
     const sketch = el.shadowRoot?.querySelector("al-envelope-sketch");
     expect(sketch).toBeTruthy();
     expect((sketch as HTMLElement & { envelope?: { release: number } }).envelope?.release).toBe(1800);
+  });
+
+  it("shows a preset's label over the id it is filed under", async () => {
+    await edit({ label: "Thirty Minutes" });
+    el.config = changes.at(-1)!;
+    await el.updateComplete;
+    const row = el.shadowRoot?.querySelectorAll(".preset")[0];
+    expect(row?.querySelector(".name")?.textContent?.trim()).toBe("Thirty Minutes");
+    expect(row?.querySelector(".id")?.textContent?.trim()).toBe("default");
+    expect(changes.at(-1)?.envelopes[0]?.label).toBe("Thirty Minutes");
+    expect(keys.at(-1)).toBe("envelopes/0:label");
+  });
+
+  it("stores a blank label as null rather than an empty string", async () => {
+    await edit({ label: "Named" });
+    await edit({ label: "   " });
+    expect(changes.at(-1)?.envelopes[0]?.label).toBeNull();
   });
 
   it("rewrites the defaults and every referencing stimulus when a preset id changes", async () => {
@@ -153,6 +181,17 @@ describe("al-envelopes", () => {
     confirm.mockRestore();
   });
 
+  it("points the defaults at a preset when its box is ticked", async () => {
+    const boxes = [...(el.shadowRoot?.querySelectorAll(".default input") ?? [])] as HTMLInputElement[];
+    expect(boxes.map((b) => b.checked)).toEqual([true, false]);
+    // Radio semantics: the one already in force cannot be unticked into no default at all.
+    expect(boxes[0]?.disabled).toBe(true);
+    boxes[1]?.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(changes.at(-1)?.defaults.envelope).toBe("media");
+    expect(keys.at(-1)).toBe("defaults:envelope");
+  });
+
   it("adds presets with unique ids and selects the new one", async () => {
     await click("ha-button");
     await click("ha-button");
@@ -180,5 +219,67 @@ describe("al-envelopes: id warnings", () => {
   it("warns when the id has been cleared", async () => {
     await edit({ id: "" });
     expect(warnings().join(" ")).toContain("needs an id");
+  });
+});
+
+describe("al-envelopes: reordering", () => {
+  /** A `dragover`/`drop` on row `index`, landing in its top or bottom half. */
+  const dragTo = async (index: number, half: "top" | "bottom", type = "drop"): Promise<void> => {
+    const row = el.shadowRoot?.querySelectorAll(".preset")[index] as HTMLElement;
+    row.getBoundingClientRect = () => ({ top: 0, height: 40 }) as DOMRect;
+    const ev = new Event(type, { bubbles: true, composed: true }) as DragEvent;
+    Object.defineProperty(ev, "clientY", { value: half === "top" ? 5 : 35 });
+    Object.defineProperty(ev, "dataTransfer", {
+      value: { types: ["text/plain"], getData: () => "", setData: () => undefined, dropEffect: "" },
+    });
+    row.dispatchEvent(ev);
+    await el.updateComplete;
+  };
+
+  const startDrag = async (index: number): Promise<void> => {
+    const row = el.shadowRoot?.querySelectorAll(".preset")[index] as HTMLElement;
+    const ev = new Event("dragstart", { bubbles: true, composed: true }) as DragEvent;
+    Object.defineProperty(ev, "dataTransfer", {
+      value: { types: ["text/plain"], setData: () => undefined, effectAllowed: "" },
+    });
+    row.dispatchEvent(ev);
+    await el.updateComplete;
+  };
+
+  it("moves a preset above the one it was dropped on", async () => {
+    await startDrag(1);
+    await dragTo(0, "top");
+    expect(changes.at(-1)?.envelopes.map((e) => e.id)).toEqual(["media", "default"]);
+  });
+
+  it("marks the row the drop would land on while the pointer is over it", async () => {
+    await startDrag(1);
+    await dragTo(0, "top", "dragover");
+    expect(el.shadowRoot?.querySelectorAll(".preset")[0]?.classList.contains("drop-before")).toBe(true);
+  });
+
+  it("does nothing when a preset is dropped back where it already was", async () => {
+    await startDrag(0);
+    await dragTo(0, "bottom");
+    expect(changes).toHaveLength(0);
+  });
+
+  it("ignores a drag that is not one of its own rows", async () => {
+    await dragTo(0, "top");
+    expect(changes).toHaveLength(0);
+  });
+
+  it("moves a preset with Alt+Down as well as with a pointer", async () => {
+    const button = el.shadowRoot?.querySelectorAll(".preset button.link")[0] as HTMLElement;
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", altKey: true, bubbles: true }));
+    await el.updateComplete;
+    expect(changes.at(-1)?.envelopes.map((e) => e.id)).toEqual(["media", "default"]);
+  });
+
+  it("keeps the selection on the preset it was editing", async () => {
+    await click(".preset button.link", 1);
+    await startDrag(0);
+    await dragTo(1, "bottom");
+    expect(form().data?.id).toBe("media");
   });
 });

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatInherited, formatToList, fromSelectorValue, parseToList, toSelectorValue } from "../src/convert";
+import {
+  formatInherited,
+  formatMultiplier,
+  formatToList,
+  fromSelectorValue,
+  parseToList,
+  toSelectorValue,
+} from "../src/convert";
 
 describe("stimulus state-list conversion", () => {
   it("splits, trims and drops empty entries", () => {
@@ -54,5 +61,22 @@ describe("state-list text while typing", () => {
     expect(parseToList("on,")).toEqual(["on"]);
     expect(formatToList(parseToList("on,"))).toBe("on");
     expect(formatToList(parseToList("on, "))).toBe("on");
+  });
+});
+
+describe("multiplier", () => {
+  it("always shows one decimal and the sign, so a column of them lines up", () => {
+    expect(formatMultiplier(1)).toBe("1.0×");
+    expect(formatMultiplier(0)).toBe("0.0×");
+    expect(formatMultiplier(1.04)).toBe("1.0×");
+    expect(formatMultiplier(2.5)).toBe("2.5×");
+  });
+
+  it("is a plain number across the selector boundary, and reads back as one", () => {
+    expect(toSelectorValue("multiplier", 1.5)).toBe(1.5);
+    expect(fromSelectorValue("multiplier", "2.5")).toBe(2.5);
+    expect(fromSelectorValue("multiplier", "")).toBeNull();
+    expect(formatInherited("multiplier", 1.5)).toBe("1.5×");
+    expect(formatInherited("multiplier", null)).toBe("unset");
   });
 });

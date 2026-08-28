@@ -1,8 +1,9 @@
 import { durationToSeconds, formatDuration, secondsToDuration } from "./duration";
 import type { HaDuration } from "./types";
 
-/** How an override value is edited, and therefore how it crosses the `ha-selector` boundary. */
-export type OverrideKind = "duration" | "number" | "boolean" | "select";
+/** How an override value is edited, and therefore how it crosses the `ha-selector` boundary.
+ * `multiplier` is a number that reads as one — sustain, which is a factor on the peak. */
+export type OverrideKind = "duration" | "number" | "boolean" | "select" | "multiplier";
 
 /** A stored (config-shaped) override value. */
 export type OverrideValue = number | boolean | string | null;
@@ -40,7 +41,8 @@ export function fromSelectorValue(kind: OverrideKind, raw: unknown): OverrideVal
       return durationToSeconds(raw as HaDuration);
     case "boolean":
       return raw === true || raw === "true";
-    case "number": {
+    case "number":
+    case "multiplier": {
       const n = typeof raw === "number" ? raw : Number(raw);
       return Number.isNaN(n) ? null : n;
     }
@@ -57,7 +59,15 @@ export function formatInherited(kind: OverrideKind, value: OverrideValue): strin
       return formatDuration(value as number);
     case "boolean":
       return value ? "Yes" : "No";
+    case "multiplier":
+      return formatMultiplier(value as number);
     default:
       return String(value);
   }
 }
+
+/**
+ * A factor on the peak, as the panel spells one: exactly one decimal and a trailing sign,
+ * so `1`, `1.0` and `1.04` all read as `1.0×` and a column of them lines up.
+ */
+export const formatMultiplier = (value: number): string => `${value.toFixed(1)}×`;

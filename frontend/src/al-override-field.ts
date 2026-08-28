@@ -59,6 +59,9 @@ export class AlOverrideField extends LitElement {
   @property({ attribute: false }) value: OverrideValue = null;
   @property({ attribute: false }) inherited: OverrideValue = null;
   @property({ attribute: "inherited-from" }) inheritedFrom = "defaults";
+  /** What the field means, for the ones whose label does not say it. Shown before the
+   * inherited/overridden state, which is what the helper is otherwise entirely made of. */
+  @property() hint = "";
   @property() kind: OverrideKind = "number";
   @property() error?: string;
 
@@ -104,9 +107,10 @@ export class AlOverrideField extends LitElement {
    * explicitly: an override that is not set must read as empty.
    */
   override render() {
-    const helper = this.overridden
+    const state = this.overridden
       ? "Overridden"
       : `Inherited from ${this.inheritedFrom}: ${this.describeInherited()}`;
+    const helper = this.hint === "" ? state : `${this.hint} ${state}`;
     return html`
       <div class="row">
         <ha-selector

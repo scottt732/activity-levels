@@ -193,7 +193,7 @@ export class AlStripControls extends LitElement {
 
   private renderBus(config: Config, path: Path): TemplateResult {
     const group = groupAt(config, path);
-    if (!group) return html`<ha-card><span class="muted">This bus no longer exists.</span></ha-card>`;
+    if (!group) return html`<ha-card><span class="muted">This group no longer exists.</span></ha-card>`;
     const isRoot = path.length === 2;
     const own = this.errors.filter((e) => e.path === pathKey(path));
     const fields: Record<string, string> = fieldErrors(this.errors, path);
@@ -337,7 +337,7 @@ export class AlStripControls extends LitElement {
                 class="sim-switch"
                 .checked=${sim?.state === "on"}
                 .disabled=${sim === undefined}
-                title=${sim === undefined ? "No simulation switch for this bus" : "Presence simulation"}
+                title=${sim === undefined ? "No simulation switch for this group" : "Presence simulation"}
                 @change=${(ev: Event) => this.onSim(gid, ev)}
               ></ha-switch>
               <span>Presence simulation</span>

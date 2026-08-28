@@ -33,6 +33,7 @@ export const newPresenceOverrides = (): PresenceOverrides => ({
   release: null,
   impulse: null,
   retrigger: null,
+  stack: null,
   unavailable: null,
   debounce: null,
 });
@@ -103,15 +104,25 @@ export const presenceSettings = (config: Config): PresenceSettings => ({
 
 export const newPreset = (id: string): EnvelopePreset => ({
   id,
+  label: null,
   attack: 0,
   decay: 0,
   sustain: 1,
   release: 1800,
   impulse: false,
   retrigger: null,
+  stack: null,
   unavailable: null,
   debounce: null,
 });
+
+/**
+ * What to call a preset on screen. The id is what stimuli name and what a rename has to
+ * chase through the document, so it stays visible as the secondary line; the label is
+ * free text and may be blank, in which case there is nothing to show but the id.
+ */
+export const presetLabel = (preset: EnvelopePreset): string =>
+  preset.label !== null && preset.label.trim() !== "" ? preset.label : preset.id;
 
 export const newStimulus = (entity: string): Stimulus => ({
   entity,
@@ -125,6 +136,7 @@ export const newStimulus = (entity: string): Stimulus => ({
   release: null,
   impulse: null,
   retrigger: null,
+  stack: null,
   unavailable: null,
   debounce: null,
 });
@@ -262,6 +274,7 @@ export function resolvedEnvelope(
     release: pick(s.release, p?.release, 1800),
     impulse: pick(s.impulse, p?.impulse, false),
     retrigger: pick(s.retrigger, p?.retrigger, d.retrigger),
+    stack: pick(s.stack, p?.stack, d.stack),
     unavailable: pick(s.unavailable, p?.unavailable, d.unavailable),
     debounce: pick(s.debounce, p?.debounce, d.debounce),
   };

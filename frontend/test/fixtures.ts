@@ -11,16 +11,17 @@ const defaults: Config["defaults"] = {
   max_value: 5,
   precision: 1,
   unavailable: "hold",
-  retrigger: "only_in_release",
+  retrigger: "release",
+  stack: false,
   debounce: 0,
   safety_refresh: 60,
   min_wake_interval: 1,
 };
 
 const houseEnvelopes: Config["envelopes"] = [
-  { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
-  { id: "momentary", attack: 0, decay: 0, sustain: 1, release: 600, impulse: true, retrigger: null, unavailable: null, debounce: null },
-  { id: "media", attack: 10, decay: 300, sustain: 0.6, release: 900, impulse: false, retrigger: null, unavailable: null, debounce: null },
+  { id: "default", label: null, attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
+  { id: "momentary", label: null, attack: 0, decay: 0, sustain: 1, release: 600, impulse: true, retrigger: null, stack: null, unavailable: null, debounce: null },
+  { id: "media", label: null, attack: 10, decay: 300, sustain: 0.6, release: 900, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
 ];
 
 /**
@@ -61,8 +62,8 @@ export const houseConfig = (): Config => ({
 });
 
 const roomsEnvelopes: Config["envelopes"] = [
-  { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
-  { id: "hour", attack: 0, decay: 0, sustain: 1, release: 3600, impulse: false, retrigger: null, unavailable: null, debounce: null },
+  { id: "default", label: null, attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
+  { id: "hour", label: null, attack: 0, decay: 0, sustain: 1, release: 3600, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
 ];
 
 /**
@@ -140,7 +141,7 @@ const PRESENCE_SETTINGS: PresenceSettings = {
 };
 
 const kindsEnvelopes: Config["envelopes"] = [
-  { id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null },
+  { id: "default", label: null, attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null },
 ];
 
 /** Mirrors `kinds_config`: property > structure > floor > area, with an outside area beside it. */

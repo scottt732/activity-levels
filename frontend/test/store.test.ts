@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { newGroup } from "../src/model";
-import { Draft, getAt, insertAt, legalDrop, moveAt, moveNode, removeAt, setAt } from "../src/store";
+import { Draft, getAt, insertAt, legalDrop, moveAt, moveNode, removeAt, reorderAt, setAt } from "../src/store";
 import { kindsConfig } from "./fixtures";
 import type { Config, Path } from "../src/types";
 
 const base: Config = {
   version: 1,
-  defaults: { envelope: "default", max_value: 5, precision: 1, unavailable: "hold", retrigger: "only_in_release", debounce: 0, safety_refresh: 60, min_wake_interval: 1 },
-  envelopes: [{ id: "default", attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, unavailable: null, debounce: null }],
+  defaults: { envelope: "default", max_value: 5, precision: 1, unavailable: "hold", retrigger: "release", stack: false, debounce: 0, safety_refresh: 60, min_wake_interval: 1 },
+  envelopes: [{ id: "default", label: null, attack: 0, decay: 0, sustain: 1, release: 1800, impulse: false, retrigger: null, stack: null, unavailable: null, debounce: null }],
   groups: [{ ...newGroup("house", "structure"), name: "House", children: [newGroup("kitchen", "area")] }],
 };
 
@@ -252,5 +252,28 @@ describe("moveNode", () => {
       "binary_sensor.kitchen_motion",
       "binary_sensor.hall_motion",
     ]);
+  });
+});
+
+describe("reorderAt", () => {
+  const list = { items: ["a", "b", "c", "d"] };
+
+  it("reads its destination as a slot in the list before anything moves", () => {
+    // "put a where c is now" is slot 2, which after lifting `a` out is index 1.
+    expect(reorderAt(list, ["items"], 0, 2).items).toEqual(["b", "a", "c", "d"]);
+    // Moving backwards needs no rebase: nothing before the destination has left.
+    expect(reorderAt(list, ["items"], 3, 1).items).toEqual(["a", "d", "b", "c"]);
+    expect(reorderAt(list, ["items"], 1, 4).items).toEqual(["a", "c", "d", "b"]);
+  });
+
+  it("returns the same object for a move that lands where the item already is", () => {
+    expect(reorderAt(list, ["items"], 1, 1)).toBe(list);
+    expect(reorderAt(list, ["items"], 1, 2)).toBe(list);
+  });
+
+  it("never mutates the list it was handed", () => {
+    const before = JSON.stringify(list);
+    reorderAt(list, ["items"], 0, 3);
+    expect(JSON.stringify(list)).toBe(before);
   });
 });
