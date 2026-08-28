@@ -1,6 +1,6 @@
 import type { NavAction } from "./navigation";
 import type { Horizon, Range } from "./timeseries";
-import type { Config, Mix, Path } from "./types";
+import type { Config, Mix, Path, ValidationError } from "./types";
 
 /** `al-change` also carries an optional key that merges rapid edits of one field into a single undo step. */
 export interface AlChangeEvent extends CustomEvent<Config> {
@@ -24,6 +24,21 @@ export function alChange(config: Config, coalesceKey?: string, structural?: true
   if (structural) ev.structural = true;
   return ev;
 }
+
+/**
+ * What the Code tab last made of the draft. `valid` is whether the text parsed as YAML at
+ * all; `errors` is what the backend said about the document it parsed to. They are apart
+ * because they disable Save for different reasons and only one of them has anything to
+ * list: unparseable text has no paths to attach a problem to.
+ */
+export interface CodeStatus {
+  valid: boolean;
+  errors: ValidationError[];
+}
+
+/** Reports the Code tab's verdict to the shell, which owns Save and the shared errors. */
+export const alCodeStatus = (valid: boolean, errors: ValidationError[]): CustomEvent<CodeStatus> =>
+  new CustomEvent<CodeStatus>("al-code-status", { detail: { valid, errors }, bubbles: true, composed: true });
 
 /** Builds the `al-select` event: the path the editor pane should show, or `null` for nothing. */
 export const alSelect = (path: Path | null): CustomEvent<Path | null> =>

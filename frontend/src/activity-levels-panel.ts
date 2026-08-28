@@ -19,7 +19,7 @@ import { runSave } from "./save-flow";
 import { Draft } from "./store";
 import { sharedStyles } from "./styles";
 import type { SimState } from "./al-mixer";
-import type { AlChangeEvent, TimelineRangeDetail } from "./events";
+import type { AlChangeEvent, CodeStatus, TimelineRangeDetail } from "./events";
 import type { MixerNav, NavAction } from "./navigation";
 import type { Banner } from "./save-flow";
 import type { Horizon, Range } from "./timeseries";
@@ -34,14 +34,14 @@ import type {
   ValidationError,
 } from "./types";
 
-type Tab = "mixer" | "groups" | "envelopes" | "defaults" | "patterns" | "presence";
+type Tab = "mixer" | "groups" | "envelopes" | "defaults" | "patterns" | "presence" | "code";
 
 /**
  * Every tab, always. Presence used to appear only while it was enabled, which meant the
  * only way to switch it on was to write `presence.enabled` into the options by hand — and
  * the tab is where you turn it on, so it has to be reachable before it is on.
  */
-const TABS: Tab[] = ["mixer", "groups", "envelopes", "defaults", "patterns", "presence"];
+const TABS: Tab[] = ["mixer", "groups", "envelopes", "defaults", "patterns", "presence", "code"];
 const LIVE_POLL_MS = 2000;
 const SIM_POLL_MS = 10_000;
 /** A profile only changes when it is retrained, so anything fresher than this will do. */
@@ -89,6 +89,15 @@ export class ActivityLevelsPanel extends LitElement {
   @state() private profileState: ProfileState | null = null;
   @state() private simLog: SimulationLog | null = null;
   @state() private timeline: TimelineRangeDetail = DEFAULT_TIMELINE;
+  /**
+   * The Code tab's last verdict on the draft, or null when nothing has one. It is separate
+   * from {@link errors} because it is the only thing that may *disable* Save: the shared
+   * error list also holds what a failed save said, and those stay on screen while the user
+   * fixes them in a form, where disabling Save would be a trap with no way out.
+   */
+  @state() private codeStatus: CodeStatus | null = null;
+  /** Whether `ha-yaml-editor` registered. Nothing but the Code tab needs it. */
+  @state() private yamlEditor = true;
 
   /** Which tab the roving tabindex sits on; arrow keys move it without activating. */
   @state() private tabFocus = 0;
@@ -115,8 +124,9 @@ export class ActivityLevelsPanel extends LitElement {
     super.connectedCallback();
     document.addEventListener("visibilitychange", this.onVisibilityChange);
     this.restoreTimeline();
-    const { ok, missing } = await ensureHaElements();
+    const { ok, missing, optionalMissing } = await ensureHaElements();
     this.missing = ok ? [] : missing;
+    this.yamlEditor = !optionalMissing.includes("ha-yaml-editor");
     await this.load();
     // Both awaits can outlive the panel: a disconnected element must not start timers.
     if (!this.isConnected) return;
@@ -141,6 +151,7 @@ export class ActivityLevelsPanel extends LitElement {
       this.nav = restoreNav(config);
       this.selection = this.nav.selection;
       this.errors = [];
+      this.codeStatus = null;
       this.banner = null;
     } catch (err) {
       this.banner = { kind: "error", text: `Could not load configuration: ${(err as Error).message}` };
@@ -154,8 +165,24 @@ export class ActivityLevelsPanel extends LitElement {
    */
   private onChange = (ev: AlChangeEvent): void => {
     if (ev.structural) this.errors = [];
+    // An edit from a form is a draft the Code tab has not seen, so its verdict no longer
+    // describes anything. Dropping it is what stops a document that was broken in the
+    // editor from leaving Save disabled after it has been fixed somewhere else.
+    if (this.tab !== "code") this.codeStatus = null;
     this.setConfig(ev.detail, ev.coalesceKey);
   };
+
+  /** The Code tab's verdict, which both feeds the shared error list and gates Save. */
+  private onCodeStatus = (ev: CustomEvent<CodeStatus>): void => {
+    this.codeStatus = ev.detail;
+    this.errors = ev.detail.errors;
+  };
+
+  /** Whether the Code tab is holding Save shut: unparseable text, or a live validation error. */
+  private get blocked(): boolean {
+    const status = this.codeStatus;
+    return status !== null && (!status.valid || status.errors.length > 0);
+  }
 
   private setConfig(next: Config, coalesceKey?: string): void {
     this.draft?.set(next, coalesceKey);
@@ -245,18 +272,23 @@ export class ActivityLevelsPanel extends LitElement {
     this.draft.reset(this.draft.original);
     this.syncNav();
     this.errors = [];
+    this.codeStatus = null;
     this.banner = null;
     this.requestUpdate();
   }
 
   private undo(): void {
     this.draft?.undo();
+    // Undo and Redo move the draft from the app bar, which is reachable from every tab —
+    // including the Code tab, whose verdict was about the document they just replaced.
+    this.codeStatus = null;
     this.syncNav();
     this.requestUpdate();
   }
 
   private redo(): void {
     this.draft?.redo();
+    this.codeStatus = null;
     this.syncNav();
     this.requestUpdate();
   }
@@ -478,7 +510,7 @@ export class ActivityLevelsPanel extends LitElement {
             <ha-icon icon="mdi:redo"></ha-icon>
           </ha-icon-button>
           <ha-button appearance="plain" .disabled=${!d?.dirty || this.busy} @click=${this.discard}>Discard</ha-button>
-          <ha-button .disabled=${!d?.dirty || this.busy} @click=${this.save}
+          <ha-button .disabled=${!d?.dirty || this.busy || this.blocked} @click=${this.save}
             >${d?.dirty ? "Save" : "Saved"}</ha-button
           >
         </div>
@@ -621,6 +653,15 @@ export class ActivityLevelsPanel extends LitElement {
           .simLog=${this.simLog}
           @al-rebuild=${this.onRebuild}
         ></al-patterns>`;
+      case "code":
+        return html`<al-code
+          .hass=${this.hass}
+          .config=${d.config}
+          .errors=${this.errors}
+          .available=${this.yamlEditor}
+          @al-change=${this.onChange}
+          @al-code-status=${this.onCodeStatus}
+        ></al-code>`;
       case "presence":
         return html`<al-presence
           .hass=${this.hass}

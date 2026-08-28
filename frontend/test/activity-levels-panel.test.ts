@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
-import { HA_ELEMENTS } from "../src/ha-elements";
+import { HA_ELEMENTS, HA_OPTIONAL_ELEMENTS } from "../src/ha-elements";
 import type { MixerNav } from "../src/navigation";
 import type { Config, ProfileState } from "../src/types";
 
 // Registered before the panel module loads: `ensureHaElements` then returns without
 // waiting, which is what a real Home Assistant frontend gives us.
-for (const tag of HA_ELEMENTS) {
+for (const tag of [...HA_ELEMENTS, ...HA_OPTIONAL_ELEMENTS]) {
   if (!customElements.get(tag)) customElements.define(tag, class extends HTMLElement {});
 }
 
@@ -19,10 +19,18 @@ await import("../src/al-timeline");
 await import("../src/al-strip-controls");
 await import("../src/al-patterns");
 await import("../src/al-presence");
+await import("../src/al-code");
 
-const { alChange, alLiveRefresh, alNav, alRebuild, alSelect, alSimToggle, alTimelineRange } = await import(
-  "../src/events"
-);
+const {
+  alChange,
+  alCodeStatus,
+  alLiveRefresh,
+  alNav,
+  alRebuild,
+  alSelect,
+  alSimToggle,
+  alTimelineRange,
+} = await import("../src/events");
 const { newGroup, newStimulus } = await import("../src/model");
 const { presenceConfig, roomsConfig } = await import("./fixtures");
 
@@ -189,7 +197,7 @@ beforeEach(async () => {
 });
 
 describe("activity-levels-panel tabs", () => {
-  it("is a tablist of six tabs, the Mixer selected", () => {
+  it("is a tablist of seven tabs, the Mixer selected", () => {
     expect(el.shadowRoot?.querySelector('[role="tablist"]')).toBeTruthy();
     expect(tabs().map((t) => t.textContent?.trim())).toEqual([
       "Mixer",
@@ -198,6 +206,7 @@ describe("activity-levels-panel tabs", () => {
       "Defaults",
       "Patterns",
       "Presence",
+      "Code",
     ]);
     expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual([
       "true",
@@ -206,8 +215,9 @@ describe("activity-levels-panel tabs", () => {
       "false",
       "false",
       "false",
+      "false",
     ]);
-    expect(tabs().map((t) => t.getAttribute("tabindex"))).toEqual(["0", "-1", "-1", "-1", "-1", "-1"]);
+    expect(tabs().map((t) => t.getAttribute("tabindex"))).toEqual(["0", "-1", "-1", "-1", "-1", "-1", "-1"]);
     expect(el.shadowRoot?.querySelector('[role="tabpanel"]')).toBeTruthy();
     // The default config here has no groups yet, so the Mixer tab shows the empty-state
     // card rather than a mixer with nothing to mix.
@@ -216,14 +226,14 @@ describe("activity-levels-panel tabs", () => {
 
   it("moves the roving tabindex with the arrow keys without switching tabs", async () => {
     await press("ArrowRight");
-    expect(tabs().map((t) => t.getAttribute("tabindex"))).toEqual(["-1", "0", "-1", "-1", "-1", "-1"]);
+    expect(tabs().map((t) => t.getAttribute("tabindex"))).toEqual(["-1", "0", "-1", "-1", "-1", "-1", "-1"]);
     expect(tabs()[0]?.getAttribute("aria-selected")).toBe("true");
     expect(el.shadowRoot?.activeElement).toBe(tabs()[1]);
   });
 
   it("wraps around at both ends", async () => {
     await press("ArrowLeft");
-    expect(tabs()[5]?.getAttribute("tabindex")).toBe("0");
+    expect(tabs()[6]?.getAttribute("tabindex")).toBe("0");
     await press("ArrowRight");
     expect(tabs()[0]?.getAttribute("tabindex")).toBe("0");
   });
@@ -247,6 +257,7 @@ describe("activity-levels-panel tabs", () => {
       "false",
       "false",
       "true",
+      "false",
       "false",
     ]);
     expect(tabs()[4]?.getAttribute("tabindex")).toBe("0");
@@ -704,6 +715,7 @@ describe("activity-levels-panel presence tab", () => {
       "Defaults",
       "Patterns",
       "Presence",
+      "Code",
     ]);
 
     await mount(presenceConfig());
@@ -714,6 +726,7 @@ describe("activity-levels-panel presence tab", () => {
       "Defaults",
       "Patterns",
       "Presence",
+      "Code",
     ]);
     await selectTab(5);
     expect(el.shadowRoot?.querySelector("al-presence")).toBeTruthy();
@@ -731,7 +744,7 @@ describe("activity-levels-panel presence tab", () => {
       ?.querySelector('ha-icon-button[title="Undo"]')
       ?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
     await settle();
-    expect(tabs()).toHaveLength(6);
+    expect(tabs()).toHaveLength(7);
     expect(tabs().filter((t) => t.getAttribute("tabindex") === "0")).toHaveLength(1);
     expect(el.shadowRoot?.querySelector(".tab.active")?.textContent?.trim()).toBe("Presence");
     expect(el.shadowRoot?.querySelector("al-presence")).toBeTruthy();
@@ -751,6 +764,7 @@ describe("activity-levels-panel presence tab", () => {
       "Defaults",
       "Patterns",
       "Presence",
+      "Code",
     ]);
     expect(el.shadowRoot?.querySelector(".tab.active")?.textContent?.trim()).toBe("Presence");
     const presence = el.shadowRoot?.querySelector("al-presence");
@@ -837,5 +851,103 @@ describe("activity-levels-panel inferred kinds", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("activity-levels-panel code tab", () => {
+  /**
+   * Whether Save is disabled. `.disabled` is a property binding on Home Assistant's own
+   * button, so it is read off the property rather than off an attribute that never exists.
+   */
+  const saveDisabled = (): boolean =>
+    Array.from(el.shadowRoot?.querySelectorAll<HTMLElement & { disabled?: boolean }>("ha-button") ?? []).find(
+      (b) => b.textContent?.trim() === "Save" || b.textContent?.trim() === "Saved",
+    )?.disabled === true;
+
+  const code = (): HTMLElement => el.shadowRoot!.querySelector("al-code")!;
+
+  /** What the Code tab reports after a debounced edit; the tab's own tests cover getting there. */
+  const report = async (valid: boolean, errors: { path: string; message: string }[]) => {
+    code().dispatchEvent(alCodeStatus(valid, errors));
+    await settle();
+  };
+
+  const dirty = async () => {
+    const edited = houseConfig();
+    edited.groups[0]!.name = "Home";
+    code().dispatchEvent(alChange(edited));
+    await settle();
+  };
+
+  it("renders the whole draft in the Code tab", async () => {
+    await mount(houseConfig());
+    await selectTab(6);
+    const tab = code() as HTMLElement & { config: Config; available: boolean };
+    expect(tab.config).toEqual(houseConfig());
+    expect(tab.available).toBe(true);
+  });
+
+  it("takes an edit from the editor into the draft, so the other tabs see it", async () => {
+    await mount(houseConfig());
+    await selectTab(6);
+    await dirty();
+    await selectTab(1);
+    const tree = el.shadowRoot?.querySelector("al-tree") as unknown as { config: Config };
+    expect(tree.config.groups[0]!.name).toBe("Home");
+  });
+
+  it("disables Save while the YAML does not parse, and enables it again when it does", async () => {
+    await mount(houseConfig());
+    await selectTab(6);
+    await dirty();
+    expect(saveDisabled()).toBe(false);
+    await report(false, []);
+    expect(saveDisabled()).toBe(true);
+    await report(true, []);
+    expect(saveDisabled()).toBe(false);
+  });
+
+  it("disables Save while the backend reports problems, and shares them with the other tabs", async () => {
+    await mount(houseConfig());
+    await selectTab(6);
+    await dirty();
+    const errors = [{ path: "groups/0/id", message: "duplicate group id" }];
+    await report(true, errors);
+    expect(saveDisabled()).toBe(true);
+    expect((code() as HTMLElement & { errors: unknown }).errors).toEqual(errors);
+    await selectTab(1);
+    const tree = el.shadowRoot?.querySelector("al-tree") as unknown as { errors: unknown };
+    expect(tree.errors).toEqual(errors);
+  });
+
+  it("lets an edit made somewhere else re-enable Save", async () => {
+    await mount(houseConfig());
+    await selectTab(6);
+    await dirty();
+    await report(true, [{ path: "groups/0/id", message: "duplicate group id" }]);
+    await selectTab(1);
+    expect(saveDisabled()).toBe(true);
+    // The verdict was about a document that no longer exists; the backend gets the last
+    // word on this one, on Save, rather than a stale answer locking the button shut.
+    const fixed = houseConfig();
+    fixed.groups[0]!.name = "Fixed";
+    el.shadowRoot?.querySelector("al-tree")?.dispatchEvent(alChange(fixed));
+    await settle();
+    expect(saveDisabled()).toBe(false);
+  });
+
+  it("lets Undo re-enable Save", async () => {
+    await mount(houseConfig());
+    await selectTab(6);
+    await dirty();
+    await report(false, []);
+    expect(saveDisabled()).toBe(true);
+    el.shadowRoot
+      ?.querySelector('ha-icon-button[title="Undo"]')
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await settle();
+    expect(saveDisabled()).toBe(true); // undone back to clean
+    await dirty();
+    expect(saveDisabled()).toBe(false);
   });
 });

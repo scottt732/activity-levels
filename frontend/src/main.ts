@@ -14,3 +14,4 @@ import "./al-timeline";
 import "./al-strip-controls";
 import "./al-patterns";
 import "./al-presence";
+import "./al-code";

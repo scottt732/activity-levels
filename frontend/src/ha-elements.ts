@@ -11,6 +11,14 @@ export const HA_ELEMENTS = [
   "ha-selector",
 ] as const;
 
+/**
+ * Elements the panel wants but can live without. `ha-yaml-editor` is only the Code tab,
+ * and it is further down Home Assistant's lazy-loading tree than everything above — so a
+ * frontend that never registers it should cost one tab, not the whole panel, which is
+ * what putting it in {@link HA_ELEMENTS} would have done.
+ */
+export const HA_OPTIONAL_ELEMENTS = ["ha-yaml-editor"] as const;
+
 /** How long the loader nudge gets before we stop waiting on it. */
 export const NUDGE_TIMEOUT_MS = 2500;
 
@@ -64,18 +72,51 @@ async function nudgeLoader(): Promise<void> {
 }
 
 /**
+ * `ha-yaml-editor` is not in the chunk the card-helper nudge pulls in, so it needs a nudge
+ * of its own. `ha-selector` imports each concrete selector on demand, the moment its
+ * `selector` property is set, and `ha-selector-object` is the one that imports the YAML
+ * editor — so an object selector mounted off-screen for a moment is what registers it.
+ * Runs alongside {@link nudgeLoader} and shares its budget: `ha-selector` is what that one
+ * is loading, so this simply waits for it to arrive.
+ */
+async function nudgeYamlEditor(): Promise<void> {
+  if (customElements.get("ha-yaml-editor")) return;
+  let probe: HTMLElement | undefined;
+  try {
+    await customElements.whenDefined("ha-selector");
+    probe = document.createElement("ha-selector");
+    (probe as HTMLElement & { selector?: unknown }).selector = { object: {} };
+    probe.style.display = "none";
+    document.body.appendChild(probe);
+    await customElements.whenDefined("ha-yaml-editor");
+  } catch {
+    /* best effort: the Code tab says so for itself if this did not work */
+  } finally {
+    probe?.remove();
+  }
+}
+
+/**
  * Resolves once every element we template against is registered, or once the budgets
- * run out. The nudge gets a shorter budget than the registrations that follow it, so a
+ * run out. The nudges get a shorter budget than the registrations that follow them, so a
  * frontend that never answers costs `nudgeMs + timeoutMs`, not twice the long one.
+ *
+ * `missing` is what the panel cannot run without; `optionalMissing` is what only costs a
+ * tab. They are separate so that one lazily-loaded editor cannot blank the whole page.
  */
 export async function ensureHaElements(
   timeoutMs = DEFINE_TIMEOUT_MS,
   nudgeMs = NUDGE_TIMEOUT_MS,
-): Promise<{ ok: boolean; missing: string[] }> {
-  if (HA_ELEMENTS.every((t) => customElements.get(t))) return { ok: true, missing: [] };
-  await withDeadline<void>(nudgeLoader(), nudgeMs, undefined);
+): Promise<{ ok: boolean; missing: string[]; optionalMissing: string[] }> {
+  const wanted = [...HA_ELEMENTS, ...HA_OPTIONAL_ELEMENTS];
+  if (wanted.every((t) => customElements.get(t))) return { ok: true, missing: [], optionalMissing: [] };
+  await withDeadline<void>(
+    Promise.all([nudgeLoader(), nudgeYamlEditor()]).then(() => undefined),
+    nudgeMs,
+    undefined,
+  );
   const results = await Promise.all(
-    HA_ELEMENTS.map((t) =>
+    wanted.map((t) =>
       withDeadline(
         customElements.whenDefined(t).then(() => true),
         timeoutMs,
@@ -83,6 +124,12 @@ export async function ensureHaElements(
       ),
     ),
   );
-  const missing = HA_ELEMENTS.filter((_, i) => !results[i]);
-  return { ok: missing.length === 0, missing: [...missing] };
+  const absent = wanted.filter((_, i) => !results[i]);
+  const optional: readonly string[] = HA_OPTIONAL_ELEMENTS;
+  const missing = absent.filter((t) => !optional.includes(t));
+  return {
+    ok: missing.length === 0,
+    missing,
+    optionalMissing: absent.filter((t) => optional.includes(t)),
+  };
 }
