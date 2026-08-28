@@ -13,7 +13,7 @@ from .const import DOMAIN
 from .coordinator import ActivityLevelsCoordinator
 from .patterns.profile import ProfileError
 from .runtime import RuntimeData
-from .schema import ConfigError, validate_config
+from .schema import ConfigError, validate, validate_config
 from .simulation import MAX_LOG_ROWS
 from .topology import MAX_HOPS
 from .tree import build_tree
@@ -69,7 +69,15 @@ def ws_config_get(
     if not entries:
         connection.send_error(msg["id"], "not_found", "Activity Levels is not configured")
         return
-    connection.send_result(msg["id"], {"config": dict(entries[0].options)})
+    options = dict(entries[0].options)
+    try:
+        result = validate(options)
+    except ConfigError:
+        # A document the panel has to be able to open in order to fix. Hand back exactly
+        # what is stored; `config/validate` is where the errors come from.
+        connection.send_result(msg["id"], {"config": options, "inferred": []})
+        return
+    connection.send_result(msg["id"], {"config": result.config, "inferred": list(result.inferred)})
 
 
 @websocket_api.require_admin

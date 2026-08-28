@@ -6,7 +6,7 @@ from custom_components.activity_levels.const import PRESENCE_KEY, TRIGGER_KEY
 from custom_components.activity_levels.engine import Mix, Phase, Retrigger
 from custom_components.activity_levels.schema import validate_config
 from custom_components.activity_levels.tree import build_tree, resolve_envelope
-from tests.fixtures import house_config, presence_config, rooms_config
+from tests.fixtures import house_config, kinds_config, presence_config, rooms_config
 
 
 def test_build_tree_shapes() -> None:
@@ -132,3 +132,23 @@ def test_the_presence_voice_is_in_the_mix_and_in_live_voices() -> None:
     kitchen.presence.note_on(0.0)
     assert kitchen.group.value_at(0.0) == pytest.approx(2.0)
     assert kitchen.presence in list(kitchen.group.live_voices())
+
+
+def test_group_info_carries_the_kind_and_the_registry_bindings() -> None:
+    tree = build_tree(validate_config(kinds_config()))
+    assert tree.groups["property"].kind == "property"
+    assert tree.groups["downstairs"].kind == "floor"
+    assert tree.groups["downstairs"].floor_id == "downstairs"
+    assert tree.groups["downstairs"].area_id is None
+    assert tree.groups["kitchen"].kind == "area"
+    assert tree.groups["kitchen"].area_id == "kitchen"
+    assert tree.groups["back_patio"].kind == "outside"
+
+
+def test_a_group_with_no_name_falls_back_to_its_id() -> None:
+    config = kinds_config()
+    del config["groups"][0]["children"][0]["children"][0]["children"][1]["name"]  # the hall
+    tree = build_tree(validate_config(config))
+    assert tree.groups["hall"].name == "Hall"
+    assert tree.groups["hall"].name_set is False
+    assert tree.groups["kitchen"].name_set is True

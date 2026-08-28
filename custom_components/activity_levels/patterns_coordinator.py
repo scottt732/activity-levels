@@ -42,7 +42,7 @@ from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_DEFAULTS, CONF_PATTERNS, CONF_SIMULATION, DOMAIN
+from .const import CONF_AREA_ID, CONF_DEFAULTS, CONF_PATTERNS, CONF_SIMULATION, DOMAIN
 from .coordinator import ActivityLevelsCoordinator
 from .lightlog import LightLog, resolve_group_lights
 from .patterns.daytype import DayTypeInputs, resolve_day_type
@@ -201,7 +201,7 @@ def _group_lights(hass: HomeAssistant, config: Mapping[str, Any]) -> dict[str, l
         configured = simulation.get("lights") or {}
         lights[node["id"]] = resolve_group_lights(
             hass,
-            node.get("area"),
+            node.get(CONF_AREA_ID),
             list(configured.get("include") or []),
             list(configured.get("exclude") or []),
         )

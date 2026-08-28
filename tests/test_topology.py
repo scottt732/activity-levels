@@ -8,7 +8,7 @@ from custom_components.activity_levels.topology import (
     build_topology,
     room_ids,
 )
-from tests.fixtures import house_config, rooms_config
+from tests.fixtures import house_config, kinds_config, rooms_config
 
 
 @pytest.fixture
@@ -16,11 +16,31 @@ def topo():
     return build_topology(validate_config(rooms_config()))
 
 
-def test_only_rooms_are_nodes_in_pre_order(topo) -> None:
-    # house and downstairs declare no edge and no exit: they are branches, not rooms
+def test_only_areas_and_outside_areas_are_nodes_in_pre_order(topo) -> None:
+    # house infers `property` and downstairs `structure`: neither is a place, whatever
+    # they declare. The five rooms all bind an area, so all five are nodes -- including
+    # the bedroom, which declares no edge of its own.
     assert topo.nodes == ("kitchen", "dining_room", "hall", "bedroom", "back_patio")
     assert topo.exits == frozenset({"back_patio"})
     assert topo.states == ("kitchen", "dining_room", "hall", "bedroom", "back_patio", AWAY)
+
+
+def test_a_structure_is_never_a_node_even_when_it_declares_an_edge() -> None:
+    """M2 keeps a migrated document loading; the graph still refuses the branch."""
+    config = validate_config(rooms_config())
+    downstairs = config["groups"][0]["children"][0]
+    assert downstairs["kind"] == "structure"
+    downstairs["adjacent"] = [{"id": "kitchen", "connection": "door", "one_way": False}]
+    topo = build_topology(config)
+    assert "downstairs" not in topo.nodes
+    assert "downstairs" not in topo.neighbours("kitchen")
+
+
+def test_an_area_with_no_edges_is_still_a_node() -> None:
+    topo = build_topology(validate_config(kinds_config()))
+    assert topo.nodes == ("kitchen", "hall", "back_patio")
+    assert topo.neighbours("hall") == ("kitchen",)  # symmetric, declared on the kitchen
+    assert topo.exits == frozenset({"back_patio"})
 
 
 def test_edges_are_symmetric_unless_declared_one_way(topo) -> None:

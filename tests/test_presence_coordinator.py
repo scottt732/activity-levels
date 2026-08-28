@@ -459,8 +459,9 @@ async def test_a_changed_topology_discards_the_stored_belief(
     await blank(hass, bermuda)
 
     smaller = presence_config()
-    smaller["groups"][0]["children"][0]["children"][3].pop("adjacent", None)
-    smaller["groups"][0]["children"][0]["children"][2]["adjacent"] = []
+    downstairs_children = smaller["groups"][0]["children"][0]["children"]
+    downstairs_children[2]["adjacent"] = []  # hall no longer points to the bedroom
+    del downstairs_children[3]  # an area with no edges is still a node now, so drop it outright
     hass.config_entries.async_update_entry(entry, options=validate_config(smaller))
     await hass.async_block_till_done()
     presence = entry.runtime_data.presence

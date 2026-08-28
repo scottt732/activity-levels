@@ -3,10 +3,11 @@
 No ``homeassistant`` imports: this is built from the validated configuration and, with
 :mod:`.presence.estimator`, is the only place numpy is used on the presence side.
 
-A *room* is a group that takes part in the graph -- one that declares an edge, is named
-by somebody else's edge, or is a way out of the house. Everything else in the tree
-(House, Downstairs) is a branch: it mixes rooms, it is not a place a person can be, and
-giving the filter a state for it would only invent somewhere to hide.
+A *room* is a group whose kind is ``area`` or ``outside`` -- somewhere a person can be.
+Everything else in the tree (the property, a structure, a floor) stacks rooms and is not a
+place, so giving the filter a state for it would only invent somewhere to hide. The kind is
+in the document, so this no longer has to guess from the edges: a room with no doorway
+declared yet is still a room, and a floor that somehow declares one is still not.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from .const import AWAY, CONF_GROUPS
+from .const import AWAY, CONF_AREA_ID, CONF_GROUPS, CONF_KIND, NODE_KINDS
 
 MAX_HOPS = 8
 """How long a path this answers over. A house has few; an unbounded search of a dense
@@ -210,37 +211,38 @@ def build_topology(config: Mapping[str, Any]) -> Topology:
     order: list[tuple[str, str | None]] = []
     declared: list[tuple[str, str, bool]] = []
     exits: set[str] = set()
+    rooms: list[str] = []
 
     def walk(node: Mapping[str, Any]) -> None:
         gid = node["id"]
-        order.append((gid, node.get("area")))
-        if node.get("exit"):
-            exits.add(gid)
-        for edge in node.get("adjacent") or []:
-            declared.append((gid, edge["id"], bool(edge.get("one_way"))))
+        order.append((gid, node.get(CONF_AREA_ID)))
+        if node.get(CONF_KIND) in NODE_KINDS:
+            rooms.append(gid)
+            if node.get("exit"):
+                exits.add(gid)
+            for edge in node.get("adjacent") or []:
+                declared.append((gid, edge["id"], bool(edge.get("one_way"))))
         for child in node.get("children") or []:
             walk(child)
 
     for group in config.get(CONF_GROUPS) or []:
         walk(group)
 
-    known = {gid for gid, _ in order}
+    nodes = tuple(rooms)
+    known = set(nodes)
     out: dict[str, set[str]] = {}
     for a, b, one_way in declared:
-        if a == b or a not in known or b not in known:
-            continue  # the schema rejects these; a stale id loses its edge, not the graph
+        if a == b or b not in known:
+            continue  # the schema rejects these; a stale or non-room id loses its edge
         out.setdefault(a, set()).add(b)
         if not one_way:
             out.setdefault(b, set()).add(a)
 
-    touched = set(out) | {b for reachable in out.values() for b in reachable}
-    nodes = tuple(gid for gid, _ in order if gid in touched or gid in exits)
-    rooms = set(nodes)
-    linked = {gid: frozenset(out.get(gid, set()) & rooms) for gid in nodes}
+    linked = {gid: frozenset(out.get(gid, set()) & known) for gid in nodes}
     return Topology(
         nodes=nodes,
         edges=_edges(nodes, linked),
-        exits=frozenset(exits & rooms),
+        exits=frozenset(exits),
         out=linked,
         order=tuple(order),
     )

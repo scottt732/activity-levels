@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryError, ServiceValidationError
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import slugify
@@ -23,6 +24,7 @@ from .const import (
     HUB_NAME,
     MANUFACTURER,
     MODEL,
+    MODEL_BY_KIND,
     MODEL_HUB,
     MODEL_PRESENCE,
     SERVICE_REBUILD_PROFILE,
@@ -139,14 +141,20 @@ def _create_devices(hass: HomeAssistant, entry: ConfigEntry, tree: Tree) -> set[
         manufacturer=MANUFACTURER,
         model=MODEL_HUB,
     )
+    areas = ar.async_get(hass)
     for info in tree.group_order():
+        # A floor binds a Home Assistant *floor*, and Home Assistant devices belong to
+        # areas, not floors -- so only an area-bound group suggests anything.
+        area = areas.async_get_area(info.area_id) if info.area_id else None
         registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, info.id)},
-            name=info.name,
+            # a group that was never named takes the name of the area it binds, which is
+            # the whole point of binding one: nobody should type "Kitchen" twice
+            name=info.name if info.name_set or area is None else area.name,
             manufacturer=MANUFACTURER,
-            model=MODEL,
-            suggested_area=info.area,
+            model=MODEL_BY_KIND.get(info.kind, MODEL),
+            suggested_area=info.area_id,
             # roots hang off the hub, so the whole integration is one tree in the UI
             via_device=(DOMAIN, info.parent_id or entry.entry_id),
         )

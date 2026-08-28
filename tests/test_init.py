@@ -7,6 +7,7 @@ import yaml
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import selector
@@ -15,7 +16,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.activity_levels.const import DOMAIN
 from custom_components.activity_levels.coordinator import ActivityLevelsCoordinator
 from custom_components.activity_levels.schema import validate_config
-from tests.fixtures import house_config
+from tests.fixtures import house_config, kinds_config
 
 
 @pytest.fixture
@@ -183,6 +184,61 @@ async def test_set_level_service(hass: HomeAssistant, entry: MockConfigEntry) ->
         await hass.services.async_call(
             DOMAIN, "set_level", {"group_id": "kitchen", "value": -1.0}, blocking=True
         )
+
+
+async def test_devices_carry_the_kind_as_their_model(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validate_config(kinds_config()))
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    dev = dr.async_get(hass)
+    models = {
+        gid: dev.async_get_device(identifiers={(DOMAIN, gid)}).model
+        for gid in ("property", "house", "downstairs", "kitchen", "back_patio")
+    }
+    assert models == {
+        "property": "Property",
+        "house": "Structure",
+        "downstairs": "Floor",
+        "kitchen": "Area",
+        "back_patio": "Outside",
+    }
+    # a floor binds a Home Assistant floor, and Home Assistant devices live in areas,
+    # so a floor suggests nothing at all
+    assert dev.async_get_device(identifiers={(DOMAIN, "downstairs")}).suggested_area is None
+    assert dev.async_get_device(identifiers={(DOMAIN, "kitchen")}).suggested_area == "kitchen"
+
+
+async def test_an_unnamed_group_takes_the_name_of_the_area_it_binds(hass: HomeAssistant) -> None:
+    area = ar.async_get(hass).async_get_or_create("Kitchen")
+    config = kinds_config()
+    kitchen = config["groups"][0]["children"][0]["children"][0]["children"][0]
+    kitchen["area_id"] = area.id
+    del kitchen["name"]
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validate_config(config))
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert dr.async_get(hass).async_get_device(identifiers={(DOMAIN, "kitchen")}).name == "Kitchen"
+
+
+async def test_an_old_document_still_loads_with_the_same_entity_ids(hass: HomeAssistant) -> None:
+    """The migration promise, asserted: no kinds in, no entity id moves."""
+    for e in (
+        "binary_sensor.front_door",
+        "binary_sensor.living_motion",
+        "binary_sensor.kitchen_motion",
+    ):
+        hass.states.async_set(e, "off")
+    hass.states.async_set("media_player.tv", "idle")
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validate_config(house_config()))
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    ent = er.async_get(hass)
+    assert ent.async_get("sensor.living_room_activity_level") is not None
+    assert ent.async_get("sensor.kitchen_activity_level") is not None
+    assert ent.async_get("sensor.house_activity_level") is not None
 
 
 def test_every_file_carrying_the_version_agrees() -> None:

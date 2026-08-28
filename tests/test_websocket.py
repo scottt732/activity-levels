@@ -217,3 +217,38 @@ async def test_reset_command(
     await client.send_json_auto_id({"type": "activity_levels/reset", "group_id": "nope"})
     msg = await client.receive_json()
     assert not msg["success"] and msg["error"]["code"] == "not_found"
+
+
+async def test_config_get_returns_the_resolved_document_and_what_was_inferred(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, entry: MockConfigEntry
+) -> None:
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/config/get"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    house = msg["result"]["config"]["groups"][0]
+    assert house["kind"] == "property"
+    assert house["children"][0]["kind"] == "structure"
+    # the fixture entry stores an already-validated document, so nothing was guessed here
+    assert msg["result"]["inferred"] == []
+
+
+async def test_config_get_reports_the_paths_it_had_to_guess(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    for e in (
+        "binary_sensor.front_door",
+        "binary_sensor.living_motion",
+        "binary_sensor.kitchen_motion",
+    ):
+        hass.states.async_set(e, "off")
+    hass.states.async_set("media_player.tv", "idle")
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=house_config())  # raw, no kinds
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/config/get"})
+    msg = await client.receive_json()
+    assert msg["result"]["inferred"] == ["groups/0", "groups/0/children/0", "groups/0/children/1"]
+    assert msg["result"]["config"]["groups"][0]["kind"] == "property"

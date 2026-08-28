@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from math import inf
 from typing import Any
 
-from .const import CONF_PRESENCE, PRESENCE_KEY, TRIGGER_KEY
+from .const import CONF_AREA_ID, CONF_FLOOR_ID, CONF_KIND, CONF_PRESENCE, PRESENCE_KEY, TRIGGER_KEY
 from .engine import Channel, Envelope, Group, Mix, NullHandling, Retrigger, Unavailable, Voice
 from .topology import room_ids
 
@@ -27,7 +27,10 @@ _ENVELOPE_KEYS = (
 class GroupInfo:
     id: str
     name: str
-    area: str | None
+    kind: str
+    area_id: str | None
+    floor_id: str | None
+    name_set: bool
     parent_id: str | None
     root_id: str
     precision: int
@@ -186,10 +189,17 @@ def build_tree(config: dict[str, Any]) -> Tree:
             max_value=max_value,
             precision=node["precision"] if node["precision"] is not None else defaults["precision"],
         )
+        # The schema no longer titles an unnamed group: a null name is what lets the editor
+        # pre-fill it from a Home Assistant area and the device fall back to that area's
+        # name. Everything downstream still wants a string, so the fallback lives here.
+        name_set = node["name"] is not None
         tree.groups[gid] = GroupInfo(
             id=gid,
-            name=node["name"],
-            area=node["area"],
+            name=node["name"] if name_set else gid.replace("_", " ").title(),
+            kind=node[CONF_KIND],
+            area_id=node[CONF_AREA_ID],
+            floor_id=node[CONF_FLOOR_ID],
+            name_set=name_set,
             parent_id=parent_id,
             root_id=rid,
             precision=group.precision,
