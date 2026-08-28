@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { fieldErrors, pathKey } from "./errors";
 import { alChange } from "./events";
 import { groupAt, parentGroupPath, resolvedEnvelope, stimulusAt } from "./model";
-import { loadPanelOpen, savePanelOpen } from "./panel-state";
+import { renderPanel } from "./panels";
 import { setAt } from "./store";
 import {
   ENVELOPE_DEFINITION,
@@ -116,32 +116,6 @@ export class AlStimulusEditor extends LitElement {
     this.emitChange(setAt(config, [...path, name], value), `${pathKey(path)}:${name}`);
   }
 
-  /** One panel: a header, the definition that says what it is for, and its stored state. */
-  private renderPanel(
-    id: string,
-    header: string,
-    definition: string,
-    fallback: boolean,
-    badge: unknown,
-    body: unknown,
-  ) {
-    return html`<ha-expansion-panel
-      outlined
-      left-chevron
-      data-panel=${id}
-      ?expanded=${loadPanelOpen(`stimulus:${id}`, fallback)}
-      @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
-        savePanelOpen(`stimulus:${id}`, ev.detail.expanded);
-      }}
-    >
-      <div slot="header" class="panel-header">
-        <span>${header} ${badge}</span>
-        <div class="muted">${definition}</div>
-      </div>
-      <div class="panel-body">${body}</div>
-    </ha-expansion-panel>`;
-  }
-
   /** The live-voice chips: phase, value, time left in the phase and the gate dot. */
   private renderLive(voice: VoiceLive | undefined, phaseEnds: string | null): TemplateResult | typeof nothing {
     if (!voice) return nothing;
@@ -195,12 +169,12 @@ export class AlStimulusEditor extends LitElement {
     return html`
       <ha-card header="Stimulus">
         ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
-        ${this.renderPanel(
+        ${renderPanel(
+          "stimulus",
           "source",
           "Source",
           SOURCE_DEFINITION,
           true,
-          nothing,
           html`
             <ha-form
               .hass=${this.hass}
@@ -213,12 +187,12 @@ export class AlStimulusEditor extends LitElement {
             ></ha-form>
           `,
         )}
-        ${this.renderPanel(
+        ${renderPanel(
+          "stimulus",
           "envelope",
           "Envelope",
           ENVELOPE_DEFINITION,
           true,
-          nothing,
           html`
             <ha-form
               .hass=${this.hass}
@@ -233,13 +207,14 @@ export class AlStimulusEditor extends LitElement {
             <al-envelope-sketch .envelope=${resolved}></al-envelope-sketch>
           `,
         )}
-        ${this.renderPanel(
+        ${renderPanel(
+          "stimulus",
           "overrides",
           "Override preset",
           OVERRIDES_DEFINITION,
           false,
-          overridden === 0 ? nothing : html`<span class="badge">${overridden} overridden</span>`,
           OVERRIDES.map((item) => this.renderOverride(item, stimulus, resolved, fields)),
+          overridden === 0 ? nothing : html`<span class="badge">${overridden} overridden</span>`,
         )}
       </ha-card>
     `;

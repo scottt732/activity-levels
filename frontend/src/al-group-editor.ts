@@ -3,8 +3,12 @@ import { customElement, property } from "lit/decorators.js";
 import { fieldErrors, pathKey } from "./errors";
 import { alChange, alSelect } from "./events";
 import {
+  ADJACENCY_DEFINITION,
+  GROUP_LABELS,
+  PRESENCE_DEFINITION,
   IDENTITY_FIELDS,
   MAX_VALUE_SELECTOR,
+  MIX_DEFINITION,
   MIX_FIELDS,
   PRECISION_SELECTOR,
   bindArea,
@@ -17,21 +21,15 @@ import {
   mergeGroup,
 } from "./group-form";
 import { KIND_DEFS, NODE_KINDS } from "./kinds";
-import { groupAt, hasOutside, newPresenceOverrides, parentGroupPath, presenceSettings, resolvedEnvelope } from "./model";
-import { loadPanelOpen, savePanelOpen } from "./panel-state";
-import { GAIN_SELECTOR, OVERRIDES, envelopeOptions } from "./stimulus-form";
+import { groupAt, hasOutside, parentGroupPath, presenceSettings } from "./model";
+import { renderPanel } from "./panels";
 import { removeAt, setAt } from "./store";
 import { sharedStyles } from "./styles";
-import { ADJACENCY_DEFINITION } from "./al-adjacency-table";
 import "./al-adjacency-table";
 import "./al-override-field";
-import type { OverrideValue } from "./convert";
+import "./al-presence-overrides";
 import type { TemplateResult } from "lit";
 import type { Config, Group, HomeAssistant, Path, ValidationError } from "./types";
-
-/** The Mix panel's own definition; the others are the kind's, or the table's own. */
-const MIX_DEFINITION = "How this group's stimuli and children combine into one level.";
-const PRESENCE_DEFINITION = "How loudly 'somebody is here' plays in this group's mix.";
 
 const EXIT_HELPER = "People can leave the property from here, so presence can move from here to Away.";
 
@@ -82,9 +80,19 @@ export class AlGroupEditor extends LitElement {
     const v = ev.detail?.value ?? {};
     let merged = mergeGroup(group, v);
     if ("area_id" in v && merged.area_id !== group.area_id)
-      merged = bindArea(merged, merged.area_id, merged.area_id === null ? null : this.areaName(merged.area_id));
+      merged = bindArea(
+        merged,
+        merged.area_id,
+        merged.area_id === null ? null : this.areaName(merged.area_id),
+        config,
+      );
     if ("floor_id" in v && merged.floor_id !== group.floor_id)
-      merged = bindFloor(merged, merged.floor_id, merged.floor_id === null ? null : this.floorName(merged.floor_id));
+      merged = bindFloor(
+        merged,
+        merged.floor_id,
+        merged.floor_id === null ? null : this.floorName(merged.floor_id),
+        config,
+      );
     const field = changedGroupField(merged, group);
     if (field === undefined) return;
     this.emitChange(setAt(config, path, merged), `${pathKey(path)}:${field}`);
@@ -116,17 +124,6 @@ export class AlGroupEditor extends LitElement {
     this.emitChange(setAt(config, [...path, key], value), `${pathKey(path)}:${key}`);
   }
 
-  /** One presence override, written as a whole block so a config that predates it fills in. */
-  private setPresence(group: Group, name: string, value: unknown): void {
-    const { config, path } = this;
-    if (!config || !path) return;
-    const next = setAt(config, [...path, "presence"], {
-      ...(group.presence ?? newPresenceOverrides()),
-      [name]: value,
-    });
-    this.emitChange(next, `${pathKey(path)}:presence:${name}`);
-  }
-
   private onDelete(): void {
     const { config, path } = this;
     if (!config || !path) return;
@@ -136,25 +133,6 @@ export class AlGroupEditor extends LitElement {
     this.emitChange(removeAt(config, path));
     const parent = parentGroupPath(path);
     this.emitSelect(parent.length ? parent : null);
-  }
-
-  /** One panel: a header, the definition that says what it is for, and its stored state. */
-  private renderPanel(id: string, header: string, definition: string, fallback: boolean, body: unknown) {
-    return html`<ha-expansion-panel
-      outlined
-      left-chevron
-      data-panel=${id}
-      ?expanded=${loadPanelOpen(`group:${id}`, fallback)}
-      @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
-        savePanelOpen(`group:${id}`, ev.detail.expanded);
-      }}
-    >
-      <div slot="header" class="panel-header">
-        <span>${header}</span>
-        <div class="muted">${definition}</div>
-      </div>
-      <div class="panel-body">${body}</div>
-    </ha-expansion-panel>`;
   }
 
   override render() {
@@ -172,7 +150,8 @@ export class AlGroupEditor extends LitElement {
     return html`
       <ha-card header="Group">
         ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
-        ${this.renderPanel(
+        ${renderPanel(
+          "group",
           "identity",
           "Identity",
           KIND_DEFS[group.kind].definition,
@@ -188,9 +167,10 @@ export class AlGroupEditor extends LitElement {
               @value-changed=${this.onIdentityChanged}
             ></ha-form>
             <div class="muted note">Changing the id re-creates this group's entities.</div>
+            ${this.renderStale(config, group, fields)}
           `,
         )}
-        ${this.renderPanel("mix", "Mix", MIX_DEFINITION, true, this.renderMix(config, group, isRoot, fields))}
+        ${renderPanel("group", "mix", "Mix", MIX_DEFINITION, true, this.renderMix(config, group, isRoot, fields))}
         ${this.renderAdjacency(config, group, fields)} ${this.renderPresence(config, group, path)}
         <div class="danger">
           <ha-button appearance="plain" @click=${this.onDelete}>Delete group</ha-button>
@@ -218,7 +198,7 @@ export class AlGroupEditor extends LitElement {
       ></ha-form>
       <al-override-field
         .hass=${this.hass}
-        label="Max value"
+        .label=${GROUP_LABELS.max_value}
         kind="number"
         .selector=${MAX_VALUE_SELECTOR}
         .value=${group.max_value}
@@ -229,7 +209,7 @@ export class AlGroupEditor extends LitElement {
       ></al-override-field>
       <al-override-field
         .hass=${this.hass}
-        label="Precision"
+        .label=${GROUP_LABELS.precision}
         kind="select"
         .selector=${PRECISION_SELECTOR}
         .value=${group.precision === null ? null : String(group.precision)}
@@ -249,14 +229,14 @@ export class AlGroupEditor extends LitElement {
    */
   private renderAdjacency(config: Config, group: Group, fields: Record<string, string>) {
     if (!NODE_KINDS.has(group.kind)) return nothing;
-    return this.renderPanel(
+    return renderPanel(
+      "group",
       "adjacent",
       "Adjacent groups",
       ADJACENCY_DEFINITION,
       true,
       html`
         <al-adjacency-table
-          .hass=${this.hass}
           .config=${config}
           .path=${this.path}
           .errors=${this.errors}
@@ -290,58 +270,50 @@ export class AlGroupEditor extends LitElement {
   /** The group's own presence channel, tuned like any other: only when presence is on. */
   private renderPresence(config: Config, group: Group, path: Path) {
     if (!presenceSettings(config).enabled) return nothing;
-    const overrides = group.presence ?? newPresenceOverrides();
-    const resolved = resolvedEnvelope(config, {
-      ...overrides,
-      envelope: overrides.envelope ?? presenceSettings(config).envelope,
-    });
-    const errors = fieldErrors(this.errors, [...path, "presence"]);
-    return this.renderPanel(
+    return renderPanel(
+      "group",
       "presence",
       "Presence",
       PRESENCE_DEFINITION,
       false,
-      html`
-        <ha-selector
-          class="presence-envelope"
-          .hass=${this.hass}
-          .selector=${{ select: { mode: "dropdown", options: envelopeOptions(config) } }}
-          .label=${"Envelope preset"}
-          .required=${false}
-          .value=${overrides.envelope ?? ""}
-          @value-changed=${(ev: CustomEvent<{ value: string }>) =>
-            this.setPresence(group, "envelope", ev.detail.value === "" ? null : ev.detail.value)}
-        ></ha-selector>
-        <al-override-field
-          class="presence-gain"
-          .hass=${this.hass}
-          label="Gain"
-          kind="number"
-          .selector=${GAIN_SELECTOR}
-          .value=${overrides.gain}
-          .inherited=${1}
-          .inheritedFrom=${"presence"}
-          .error=${errors.gain}
-          @value-changed=${(ev: CustomEvent<{ value: number | null }>) =>
-            this.setPresence(group, "gain", ev.detail.value ?? 1)}
-        ></al-override-field>
-        ${OVERRIDES.map(
-          (item) => html`<al-override-field
-            class="presence-${item.name}"
-            .hass=${this.hass}
-            .label=${item.label}
-            .kind=${item.kind}
-            .selector=${item.selector}
-            .value=${overrides[item.name] as OverrideValue}
-            .inherited=${resolved[item.name] as OverrideValue}
-            .inheritedFrom=${overrides.envelope ?? presenceSettings(config).envelope ?? "defaults"}
-            .error=${errors[item.name]}
-            @value-changed=${(ev: CustomEvent<{ value: OverrideValue }>) =>
-              this.setPresence(group, item.name, ev.detail.value)}
-          ></al-override-field>`,
-        )}
-      `,
+      html`<al-presence-overrides
+        .hass=${this.hass}
+        .config=${config}
+        .path=${path}
+        .errors=${this.errors}
+      ></al-presence-overrides>`,
     );
+  }
+
+  /**
+   * A group whose kind cannot walk anywhere, still carrying adjacency or a way out from
+   * before it was one. The backend refuses the document, so the panel that names the kind
+   * is where the way out of that has to be - an error with nothing to click is a dead end.
+   */
+  private renderStale(config: Config, group: Group, fields: Record<string, string>) {
+    if (NODE_KINDS.has(group.kind)) return nothing;
+    const stale = [
+      group.adjacent.length > 0 ? "adjacent groups" : null,
+      group.exit === true ? "a way off the property" : null,
+    ].filter((s): s is string => s !== null);
+    if (stale.length === 0) return nothing;
+    const message =
+      fields.adjacent ??
+      fields.exit ??
+      `${KIND_DEFS[group.kind].label} groups have no ${stale.join(" and no ")}.`;
+    return html`<div class="stale row">
+      <div class="grow error">${message}</div>
+      <ha-button appearance="plain" @click=${() => this.clearStale(config)}>Remove</ha-button>
+    </div>`;
+  }
+
+  /** Drops both in one edit, so the document goes from refused to valid in a single undo step. */
+  private clearStale(config: Config): void {
+    const path = this.path;
+    if (!path) return;
+    const next = setAt(setAt(config, [...path, "adjacent"], []), [...path, "exit"], false);
+    // Structural: the errors below are keyed by paths the emptied list renumbers.
+    this.dispatchEvent(alChange(next, undefined, true));
   }
 }
 

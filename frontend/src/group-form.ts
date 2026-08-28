@@ -1,6 +1,6 @@
 import { emptyToNull } from "./convert";
 import { KIND_DEFS, NODE_KINDS, allowedChildKinds } from "./kinds";
-import { slugify } from "./model";
+import { slugify, uniqueGroupId } from "./model";
 import type { Selector } from "./al-override-field";
 import type { Kind } from "./kinds";
 import type { FormItem } from "./stimulus-form";
@@ -28,6 +28,8 @@ export const GROUP_LABELS: Record<string, string> = {
   mix: "Mix",
   null_handling: "Idle contributors",
   gain: "Gain",
+  max_value: "Max value",
+  precision: "Precision",
 };
 
 export const GROUP_HELPERS: Record<string, string> = {
@@ -66,6 +68,13 @@ export const NULL_HANDLING_OPTIONS = [
   { value: "zero", label: "Idle counts as 0" },
   { value: "ignore", label: "Ignore idle" },
 ];
+
+/** The panel subtitles the group editor heads its sections with. See spec §2 and §4. */
+export const MIX_DEFINITION = "How this group's stimuli and children combine into one level.";
+export const ADJACENCY_DEFINITION =
+  "Adjacent groups are ones you can walk between without passing through another group in " +
+  "this configuration. Sensors don't matter here — an unobserved hallway is still a room.";
+export const PRESENCE_DEFINITION = "How loudly 'somebody is here' plays in this group's mix.";
 
 export const MAX_VALUE_SELECTOR: Selector = { number: { min: 0.1, step: 0.1, mode: "box" } };
 export const PRECISION_SELECTOR: Selector = {
@@ -201,19 +210,32 @@ export const changedGroupField = (merged: Group, group: Group): string | undefin
 export const isDefaultId = (group: Group): boolean =>
   group.id === "" || new RegExp(`^${group.kind}(_\\d+)?$`).test(group.id);
 
-function bind(group: Group, field: "area_id" | "floor_id", id: string | null, name: string | null): Group {
+/**
+ * The id comes from the registry *id*, slugged - not from the friendly name. The registry
+ * id is what Home Assistant's own entity ids are built from, so taking it keeps this
+ * group's entities recognisably the same thing as the area's; a friendly name is free text
+ * that may not survive being slugged into anything readable. `config`, when given, keeps
+ * the prefill off an id another group already answers to.
+ */
+function bind(
+  group: Group,
+  field: "area_id" | "floor_id",
+  id: string | null,
+  name: string | null,
+  config?: Config,
+): Group {
   const bound: Group = { ...group, [field]: id };
   // Clearing a binding is not an edit to the identity: the names it prefilled are the
   // user's now, and taking them away would delete work nobody asked to delete.
-  if (id === null || name === null) return bound;
-  if (isDefaultId(group)) bound.id = slugify(name);
-  if (group.name === null) bound.name = name;
+  if (id === null) return bound;
+  if (isDefaultId(group)) bound.id = config ? uniqueGroupId(config, id) : slugify(id);
+  if (group.name === null && name !== null) bound.name = name;
   return bound;
 }
 
 /** Bind a Home Assistant area, prefilling the id and the name while both are untouched. */
-export const bindArea = (group: Group, areaId: string | null, areaName: string | null): Group =>
-  bind(group, "area_id", areaId, areaName);
+export const bindArea = (group: Group, areaId: string | null, areaName: string | null, config?: Config): Group =>
+  bind(group, "area_id", areaId, areaName, config);
 
-export const bindFloor = (group: Group, floorId: string | null, floorName: string | null): Group =>
-  bind(group, "floor_id", floorId, floorName);
+export const bindFloor = (group: Group, floorId: string | null, floorName: string | null, config?: Config): Group =>
+  bind(group, "floor_id", floorId, floorName, config);

@@ -7,14 +7,11 @@ import { setAt } from "./store";
 import { sharedStyles } from "./styles";
 import type { Connection } from "./kinds";
 import type { TemplateResult } from "lit";
-import type { Adjacency, Config, Group, HomeAssistant, Path, ValidationError } from "./types";
-
-export const ADJACENCY_DEFINITION =
-  "Adjacent groups are ones you can walk between without passing through another group in " +
-  "this configuration. Sensors don't matter here — an unobserved hallway is still a room.";
+import type { Adjacency, Config, Group, Path, ValidationError } from "./types";
 
 /**
- * The Adjacent groups table. An edge is written once, on whichever side read more
+ * The Adjacent groups table; the panel that heads it carries the definition. An edge is
+ * written once, on whichever side read more
  * naturally, so this shows two kinds of row: the ones this group declares, which it can
  * edit, and the ones another group declares against it, which it can only read. Editing
  * the second kind from here would move the edge to the other end of itself.
@@ -55,16 +52,12 @@ export class AlAdjacencyTable extends LitElement {
         padding: 4px;
         max-width: 100%;
       }
-      .definition {
-        margin: 0 0 12px;
-      }
       .error {
         font-size: 0.85em;
       }
     `,
   ];
 
-  @property({ attribute: false }) hass?: HomeAssistant;
   @property({ attribute: false }) config?: Config;
   @property({ attribute: false }) path: Path | null = null;
   @property({ attribute: false }) errors: ValidationError[] = [];
@@ -123,7 +116,6 @@ export class AlAdjacencyTable extends LitElement {
     const declared = declaredOn(this.config, group.id);
     const candidates = this.candidates();
     return html`
-      <p class="muted definition">${ADJACENCY_DEFINITION}</p>
       <table>
         <thead>
           <tr>
@@ -205,7 +197,7 @@ export class AlAdjacencyTable extends LitElement {
   private renderDeclared(other: Group, edge: Adjacency): TemplateResult {
     const name = other.name ?? other.id;
     return html`<tr class="declared" data-id=${other.id}>
-      <td>${name} <span class="muted">declared on ${name}</span></td>
+      <td><span class="muted">declared on</span> ${name}</td>
       <td>${CONNECTION_LABELS[edge.connection]}</td>
       <td>${edge.one_way ? "One way" : "Both ways"}</td>
       <td></td>

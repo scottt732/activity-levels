@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "../src/al-adjacency-table";
+import { ADJACENCY_DEFINITION } from "../src/group-form";
 import { kindsConfig } from "./fixtures";
 import type { AlAdjacencyTable } from "../src/al-adjacency-table";
 import type { Config, Path } from "../src/types";
@@ -40,17 +41,16 @@ describe("al-adjacency-table", () => {
     const declared = rows("tr.declared");
     expect(declared).toHaveLength(1);
     expect(declared[0]!.textContent).toContain("declared on Kitchen");
+    // The partner is named once: the row used to print "Kitchen declared on Kitchen".
+    expect(declared[0]!.textContent!.match(/Kitchen/g)).toHaveLength(1);
     expect(declared[0]!.querySelector("select")).toBeNull();
     expect(declared[0]!.querySelector("input")).toBeNull();
   });
 
-  it("carries the definition the spec words, once, under the header", () => {
-    expect(el.shadowRoot!.querySelector(".definition")!.textContent).toContain(
-      "without passing through another group",
-    );
-    expect(el.shadowRoot!.querySelector(".definition")!.textContent).toContain(
-      "an unobserved hallway is still a room",
-    );
+  it("leaves the definition to the panel that heads it, rather than saying it twice", () => {
+    expect(ADJACENCY_DEFINITION).toContain("without passing through another group");
+    expect(ADJACENCY_DEFINITION).toContain("an unobserved hallway is still a room");
+    expect(el.shadowRoot!.textContent).not.toContain("without passing through another group");
   });
 
   it("offers only areas and outside areas that are not already listed", async () => {

@@ -448,6 +448,15 @@ describe("al-strip-controls: a group's stimuli", () => {
   });
 });
 
+/** The presence channel's fields live in the element both editors share. */
+const presenceOverrides = async (node: AlStripControls): Promise<HTMLElement> => {
+  const child = node.shadowRoot!.querySelector<HTMLElement & { updateComplete: Promise<boolean> }>(
+    "al-presence-overrides",
+  )!;
+  await child.updateComplete;
+  return child;
+};
+
 describe("al-strip-controls: presence stimulus", () => {
   const config = presenceConfig();
 
@@ -460,8 +469,9 @@ describe("al-strip-controls: presence stimulus", () => {
   it("edits the presence gain against the group's presence block", async () => {
     const el = await fixture(config, ["groups", 0, "children", 0, "children", 0]);
     const changed = listenFor<AlChangeEvent>(el, "al-change");
-    el.shadowRoot!.querySelector<HTMLElement>(".presence-gain")!
-      .dispatchEvent(new CustomEvent("value-changed", { detail: { value: 3 } }));
+    (await presenceOverrides(el)).shadowRoot!.querySelector<HTMLElement>(".presence-gain")!.dispatchEvent(
+      new CustomEvent("value-changed", { detail: { value: 3 } }),
+    );
     const next = (await changed).detail;
     expect(next.groups[0]?.children[0]?.children[0]?.presence.gain).toBe(3);
   });

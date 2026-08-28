@@ -25,18 +25,29 @@ describe("binding to Home Assistant", () => {
     expect(isDefaultId({ ...newGroup("kitchen", "area") })).toBe(false);
   });
 
-  it("prefills id and name from the area, but only while both are still defaults", () => {
-    const fresh = bindArea(newGroup("area", "area"), "kitchen_area", "Kitchen");
-    expect(fresh).toMatchObject({ area_id: "kitchen_area", id: "kitchen", name: "Kitchen" });
+  it("prefills the id from the registry id and the name from the registry name", () => {
+    // The registry id is what the entity ids downstream are made of, so it is what the
+    // group's id is taken from; the friendly name is only ever the friendly name.
+    const fresh = bindArea(newGroup("area", "area"), "larder", "The Larder");
+    expect(fresh).toMatchObject({ area_id: "larder", id: "larder", name: "The Larder" });
+  });
+
+  it("prefills only while the id and the name are both still defaults", () => {
     const named = bindArea({ ...newGroup("larder", "area"), name: "Larder" }, "kitchen_area", "Kitchen");
     expect(named).toMatchObject({ area_id: "kitchen_area", id: "larder", name: "Larder" });
     const halfway = bindArea({ ...newGroup("area", "area"), name: "Larder" }, "kitchen_area", "Kitchen");
-    expect(halfway).toMatchObject({ id: "kitchen", name: "Larder" });
+    expect(halfway).toMatchObject({ id: "kitchen_area", name: "Larder" });
+  });
+
+  it("never prefills an id another group already answers to", () => {
+    const config = kindsConfig();
+    expect(bindArea(newGroup("area", "area"), "kitchen", "Kitchen", config).id).toBe("kitchen_2");
+    expect(bindArea(newGroup("area", "area"), "larder", "The Larder", config).id).toBe("larder");
   });
 
   it("clearing the binding leaves the id and the name alone", () => {
-    const bound = bindArea(newGroup("area", "area"), "kitchen_area", "Kitchen");
-    expect(bindArea(bound, null, null)).toMatchObject({ area_id: null, id: "kitchen", name: "Kitchen" });
+    const bound = bindArea(newGroup("area", "area"), "larder", "The Larder");
+    expect(bindArea(bound, null, null)).toMatchObject({ area_id: null, id: "larder", name: "The Larder" });
   });
 
   it("binds a floor the same way", () => {

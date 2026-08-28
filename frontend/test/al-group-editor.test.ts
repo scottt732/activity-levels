@@ -104,6 +104,11 @@ describe("al-group-editor panels", () => {
     expect(panel("mix").textContent).toContain("combine into one level");
   });
 
+  it("heads the Adjacent groups panel with the definition, said once", () => {
+    expect(panel("adjacent").textContent).toContain("without passing through another group");
+    expect(panel("adjacent").textContent!.match(/an unobserved hallway is still a room/g)).toHaveLength(1);
+  });
+
   it("shows the adjacency table only for an area or an outside area", async () => {
     expect(el.shadowRoot!.querySelector("al-adjacency-table")).toBeTruthy();
     await show(HOUSE); // the house: a structure
@@ -147,6 +152,38 @@ describe("al-group-editor panels", () => {
     await show(["groups", 0, "children", 0, "children", 0]);
     expect(panel("presence").hasAttribute("expanded")).toBe(false);
     expect(panel("presence").textContent).toContain("somebody is here");
+  });
+
+  it("tunes presence through the same element the mixer strip uses", async () => {
+    el.config = presenceConfig();
+    await show(["groups", 0, "children", 0, "children", 0]);
+    const overrides = panel("presence").querySelector("al-presence-overrides") as HTMLElement & {
+      path?: Path;
+      updateComplete?: Promise<boolean>;
+    };
+    expect(overrides).toBeTruthy();
+    expect(overrides.path).toEqual(["groups", 0, "children", 0, "children", 0]);
+    await overrides.updateComplete;
+    expect(overrides.shadowRoot!.querySelector("al-envelope-sketch")).toBeTruthy();
+  });
+
+  it("offers to drop adjacency a group of this kind may not have", async () => {
+    const groups = structuredClone(config.groups);
+    const house = groups[0]!.children[0]!;
+    house.adjacent = ["kitchen"];
+    house.exit = true;
+    el.config = { ...config, groups };
+    el.errors = [{ path: "groups/0/children/0/adjacent", message: "a structure is not somewhere you can walk between" }];
+    await show(HOUSE);
+    const stale = panel("identity").querySelector<HTMLElement>(".stale")!;
+    expect(stale.textContent).toContain("not somewhere you can walk between");
+    stale
+      .querySelector<HTMLElement>("ha-button")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    const next = changes.at(-1)!.groups[0]!.children[0]!;
+    expect(next.adjacent).toEqual([]);
+    expect(next.exit).toBe(false);
   });
 
   it("remembers a panel the user closed", async () => {
@@ -206,7 +243,7 @@ describe("al-group-editor identity binding", () => {
     await el.updateComplete;
     await edit("identity", { area_id: "larder" });
     const next = changes.at(-1)!.groups[0]!.children[0]!.children[0]!.children[1]!;
-    expect(next).toMatchObject({ area_id: "larder", id: "the_larder", name: "The Larder" });
+    expect(next).toMatchObject({ area_id: "larder", id: "larder", name: "The Larder" });
   });
 
   it("leaves an id and a name the user chose alone", async () => {
