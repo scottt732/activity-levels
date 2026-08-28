@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "../src/al-stimulus-editor";
 import { newGroup, newStimulus } from "../src/model";
+import { loadPanelOpen } from "../src/panel-state";
 import type { AlStimulusEditor } from "../src/al-stimulus-editor";
-import type { Config } from "../src/types";
+import type { Config, Stimulus } from "../src/types";
 
 const baseConfig = (): Config => ({
   version: 1,
@@ -25,7 +26,17 @@ const baseConfig = (): Config => ({
 let el: AlStimulusEditor;
 let changes: Config[];
 
-/** The `data` object the editor last handed to `ha-form`. */
+const panel = (name: string): HTMLElement =>
+  el.shadowRoot!.querySelector<HTMLElement>(`ha-expansion-panel[data-panel="${name}"]`)!;
+
+/** `baseConfig()` with the one stimulus patched, e.g. with some overrides set. */
+const withStimulus = (patch: Partial<Stimulus>): Config => {
+  const config = baseConfig();
+  config.groups[0]!.stimuli[0] = { ...config.groups[0]!.stimuli[0]!, ...patch };
+  return config;
+};
+
+/** The `data` object the editor last handed to the Source panel's `ha-form`. */
 const formData = (): Record<string, unknown> => {
   const form = el.shadowRoot?.querySelector("ha-form") as (HTMLElement & { data?: Record<string, unknown> }) | null;
   expect(form, "missing ha-form").toBeTruthy();
@@ -47,6 +58,7 @@ const type = async (to: string): Promise<void> => {
 
 beforeEach(async () => {
   document.body.innerHTML = "";
+  localStorage.clear();
   changes = [];
   el = document.createElement("al-stimulus-editor");
   el.config = baseConfig();
@@ -101,5 +113,27 @@ describe("al-stimulus-editor: the 'to' field", () => {
     el.path = ["groups", 0, "stimuli", 1];
     await el.updateComplete;
     expect(formData().to).toBe("off");
+  });
+});
+
+describe("al-stimulus-editor panels", () => {
+  it("opens Source and Envelope, and leaves the overrides collapsed", async () => {
+    expect(panel("source").hasAttribute("expanded")).toBe(true);
+    expect(panel("envelope").hasAttribute("expanded")).toBe(true);
+    expect(panel("overrides").hasAttribute("expanded")).toBe(false);
+    expect(panel("envelope").textContent).toContain("rises and falls over time");
+  });
+
+  it("badges the overrides panel with how many are set, and drops the badge at zero", async () => {
+    expect(panel("overrides").querySelector(".badge")).toBeNull();
+    el.config = withStimulus({ release: 600, attack: 5 });
+    await el.updateComplete;
+    expect(panel("overrides").querySelector(".badge")!.textContent).toContain("2 overridden");
+  });
+
+  it("remembers the overrides panel once it has been opened", async () => {
+    panel("overrides").dispatchEvent(new CustomEvent("expanded-changed", { detail: { expanded: true } }));
+    await el.updateComplete;
+    expect(loadPanelOpen("stimulus:overrides", false)).toBe(true);
   });
 });

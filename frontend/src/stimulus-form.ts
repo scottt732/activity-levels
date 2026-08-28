@@ -93,6 +93,24 @@ export const OVERRIDES: OverrideItem[] = [
   { name: "debounce", label: "Debounce", kind: "duration", selector: DURATION_SELECTOR },
 ];
 
+/** What fires this stimulus. `gain` is not here: how loudly it plays is part of its shape. */
+export const SOURCE_FIELDS: StimulusField[] = ["entity", "to", "key"];
+
+/** The shape of one trigger: which preset it starts from, and how loud it is. */
+export const ENVELOPE_FIELDS: StimulusField[] = ["envelope", "gain"];
+
+export const ENVELOPE_DEFINITION = "How a single trigger rises and falls over time.";
+export const SOURCE_DEFINITION = "What makes this stimulus fire, and what it is called in the mix.";
+export const OVERRIDES_DEFINITION = "Change part of the preset for this stimulus only.";
+
+/**
+ * How many envelope fields this stimulus overrides. Only the eight in {@link OVERRIDES}
+ * count: `gain` and the preset itself live in the Envelope panel above, and counting them
+ * would badge a stimulus that has overridden nothing.
+ */
+export const overriddenCount = (stimulus: Stimulus): number =>
+  OVERRIDES.filter((item) => stimulus[item.name] !== null && stimulus[item.name] !== undefined).length;
+
 /** The preset dropdown's options: an empty value inherits `defaults.envelope`. */
 export const envelopeOptions = (config: Config): { value: string; label: string }[] => [
   { value: "", label: "(default preset)" },

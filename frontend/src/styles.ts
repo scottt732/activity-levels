@@ -225,6 +225,13 @@ export const sharedStyles = css`
   .panel-body {
     padding: 0 8px 8px;
   }
+  /* The overrides panel's "N overridden" badge: same shape as a problem count, but neutral -
+     this is not something wrong, just something changed from the preset. */
+  .panel-header .badge {
+    background: var(--secondary-background-color);
+    color: var(--secondary-text-color);
+    margin-left: 8px;
+  }
   /* Reachable by a screen reader, invisible to everyone else. */
   .visually-hidden {
     position: absolute;

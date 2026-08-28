@@ -3,11 +3,18 @@ import { customElement, property, state } from "lit/decorators.js";
 import { fieldErrors, pathKey } from "./errors";
 import { alChange } from "./events";
 import { groupAt, parentGroupPath, resolvedEnvelope, stimulusAt } from "./model";
+import { loadPanelOpen, savePanelOpen } from "./panel-state";
 import { setAt } from "./store";
 import {
+  ENVELOPE_DEFINITION,
+  ENVELOPE_FIELDS,
   OVERRIDES,
+  OVERRIDES_DEFINITION,
+  SOURCE_DEFINITION,
+  SOURCE_FIELDS,
   changedStimulusField,
   mergeStimulus,
+  overriddenCount,
   overrideSource,
   phaseCountdown,
   stimulusData,
@@ -19,12 +26,19 @@ import {
 import { sharedStyles } from "./styles";
 import "./al-envelope-sketch";
 import "./al-override-field";
-import type { StimulusField } from "./stimulus-form";
+import type { OverrideItem } from "./stimulus-form";
 import type { OverrideValue } from "./convert";
-import type { PropertyValues } from "lit";
-import type { Config, EnvelopeOverrides, HomeAssistant, LiveState, Path, ValidationError } from "./types";
-
-const FIELDS: StimulusField[] = ["entity", "to", "gain", "key", "envelope"];
+import type { PropertyValues, TemplateResult } from "lit";
+import type {
+  Config,
+  EnvelopeOverrides,
+  HomeAssistant,
+  LiveState,
+  Path,
+  Stimulus,
+  ValidationError,
+  VoiceLive,
+} from "./types";
 
 /** Editor for one stimulus: what triggers it, and its envelope overrides. */
 @customElement("al-stimulus-editor")
@@ -32,15 +46,21 @@ export class AlStimulusEditor extends LitElement {
   static styles = [
     sharedStyles,
     css`
-      h3 {
-        margin: 16px 0 8px;
-        font-size: 1em;
-      }
       .live {
         margin-top: 8px;
       }
       .chip {
         white-space: nowrap;
+      }
+      /* Base shape of a badge; the .panel-header .badge rule in the shared styles gives it
+         the neutral colour a count of overrides deserves, as opposed to a count of problems. */
+      .badge {
+        background: var(--error-color, #db4437);
+        color: var(--text-primary-color, #fff);
+        border-radius: 10px;
+        padding: 0 6px;
+        font-size: 0.75em;
+        line-height: 1.6;
       }
     `,
   ];
@@ -96,6 +116,65 @@ export class AlStimulusEditor extends LitElement {
     this.emitChange(setAt(config, [...path, name], value), `${pathKey(path)}:${name}`);
   }
 
+  /** One panel: a header, the definition that says what it is for, and its stored state. */
+  private renderPanel(
+    id: string,
+    header: string,
+    definition: string,
+    fallback: boolean,
+    badge: unknown,
+    body: unknown,
+  ) {
+    return html`<ha-expansion-panel
+      outlined
+      left-chevron
+      data-panel=${id}
+      ?expanded=${loadPanelOpen(`stimulus:${id}`, fallback)}
+      @expanded-changed=${(ev: CustomEvent<{ expanded: boolean }>) => {
+        savePanelOpen(`stimulus:${id}`, ev.detail.expanded);
+      }}
+    >
+      <div slot="header" class="panel-header">
+        <span>${header} ${badge}</span>
+        <div class="muted">${definition}</div>
+      </div>
+      <div class="panel-body">${body}</div>
+    </ha-expansion-panel>`;
+  }
+
+  /** The live-voice chips: phase, value, time left in the phase and the gate dot. */
+  private renderLive(voice: VoiceLive | undefined, phaseEnds: string | null): TemplateResult | typeof nothing {
+    if (!voice) return nothing;
+    return html`<div class="row live">
+      <span class="muted">Live</span>
+      <span class="chip phase ${voice.phase}">${voice.phase}</span>
+      <span class="chip">${voice.value.toFixed(2)}</span>
+      ${phaseEnds !== null ? html`<span class="muted chip">ends in ${phaseEnds}</span>` : nothing}
+      <span class="dot ${voice.gate ? "gated" : ""}" title=${voice.gate ? "Gate open" : "Gate closed"}></span>
+    </div>`;
+  }
+
+  /** One override field, bound to the stimulus, the resolved preset and its errors. */
+  private renderOverride(
+    item: OverrideItem,
+    stimulus: Stimulus,
+    resolved: EnvelopeOverrides,
+    fields: Record<string, string>,
+  ): TemplateResult {
+    const { config } = this;
+    return html`<al-override-field
+      .hass=${this.hass}
+      .label=${item.label}
+      .kind=${item.kind}
+      .selector=${item.selector}
+      .value=${stimulus[item.name] as OverrideValue}
+      .inherited=${resolved[item.name] as OverrideValue}
+      .inheritedFrom=${config ? overrideSource(config, stimulus, item.name) : "defaults"}
+      .error=${fields[item.name]}
+      @value-changed=${(ev: CustomEvent<{ value: OverrideValue }>) => this.setOverride(item.name, ev.detail.value)}
+    ></al-override-field>`;
+  }
+
   override render() {
     const { config, path } = this;
     if (!config || !path || path.length < 3)
@@ -111,48 +190,57 @@ export class AlStimulusEditor extends LitElement {
       (v) => v.label === (stimulus.key ?? stimulus.entity),
     );
     const phaseEnds = phaseCountdown(this.live?.now, voice?.phase_ends);
+    const overridden = overriddenCount(stimulus);
 
     return html`
       <ha-card header="Stimulus">
         ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
-        <ha-form
-          .hass=${this.hass}
-          .data=${stimulusData(stimulus, this.toText, FIELDS)}
-          .schema=${stimulusSchema(config, FIELDS)}
-          .error=${fields}
-          .computeLabel=${stimulusLabel}
-          .computeHelper=${stimulusHelper}
-          @value-changed=${this.onFormChanged}
-        ></ha-form>
-        ${voice
-          ? html`<div class="row live">
-              <span class="muted">Live</span>
-              <span class="chip phase ${voice.phase}">${voice.phase}</span>
-              <span class="chip">${voice.value.toFixed(2)}</span>
-              ${phaseEnds !== null
-                ? html`<span class="muted chip">ends in ${phaseEnds}</span>`
-                : nothing}
-              <span class="dot ${voice.gate ? "gated" : ""}" title=${voice.gate ? "Gate open" : "Gate closed"}></span>
-            </div>`
-          : nothing}
-
-        <h3>Envelope overrides</h3>
-        ${OVERRIDES.map(
-          (item) => html`<al-override-field
-            .hass=${this.hass}
-            .label=${item.label}
-            .kind=${item.kind}
-            .selector=${item.selector}
-            .value=${stimulus[item.name] as OverrideValue}
-            .inherited=${resolved[item.name] as OverrideValue}
-            .inheritedFrom=${overrideSource(config, stimulus, item.name)}
-            .error=${fields[item.name]}
-            @value-changed=${(ev: CustomEvent<{ value: OverrideValue }>) =>
-              this.setOverride(item.name, ev.detail.value)}
-          ></al-override-field>`,
+        ${this.renderPanel(
+          "source",
+          "Source",
+          SOURCE_DEFINITION,
+          true,
+          nothing,
+          html`
+            <ha-form
+              .hass=${this.hass}
+              .data=${stimulusData(stimulus, this.toText, SOURCE_FIELDS)}
+              .schema=${stimulusSchema(config, SOURCE_FIELDS)}
+              .error=${fields}
+              .computeLabel=${stimulusLabel}
+              .computeHelper=${stimulusHelper}
+              @value-changed=${this.onFormChanged}
+            ></ha-form>
+          `,
         )}
-        <h3>Envelope shape</h3>
-        <al-envelope-sketch .envelope=${resolved}></al-envelope-sketch>
+        ${this.renderPanel(
+          "envelope",
+          "Envelope",
+          ENVELOPE_DEFINITION,
+          true,
+          nothing,
+          html`
+            <ha-form
+              .hass=${this.hass}
+              .data=${stimulusData(stimulus, this.toText, ENVELOPE_FIELDS)}
+              .schema=${stimulusSchema(config, ENVELOPE_FIELDS)}
+              .error=${fields}
+              .computeLabel=${stimulusLabel}
+              .computeHelper=${stimulusHelper}
+              @value-changed=${this.onFormChanged}
+            ></ha-form>
+            ${this.renderLive(voice, phaseEnds)}
+            <al-envelope-sketch .envelope=${resolved}></al-envelope-sketch>
+          `,
+        )}
+        ${this.renderPanel(
+          "overrides",
+          "Override preset",
+          OVERRIDES_DEFINITION,
+          false,
+          overridden === 0 ? nothing : html`<span class="badge">${overridden} overridden</span>`,
+          OVERRIDES.map((item) => this.renderOverride(item, stimulus, resolved, fields)),
+        )}
       </ha-card>
     `;
   }
