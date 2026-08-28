@@ -42,7 +42,7 @@ from .const import (
     TRIGGER_KEY,
 )
 from .duration import parse_duration
-from .engine import Mix, NullHandling, Retrigger, Unavailable
+from .engine import Mix, NullHandling, RetriggerWhen, Unavailable
 
 GROUP_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 HHMM_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -112,22 +112,56 @@ def _quiet_hours(value: Any) -> list[str] | None:
 _ENUM = {
     "mix": vol.Coerce(Mix),
     "null_handling": vol.Coerce(NullHandling),
-    "retrigger": vol.Coerce(Retrigger),
+    "retrigger": vol.Coerce(RetriggerWhen),
     "unavailable": vol.Coerce(Unavailable),
 }
 
-ENVELOPE_SCHEMA = vol.Schema(
-    {
-        vol.Required("id"): _group_id,
-        vol.Optional("attack", default=0.0): parse_duration,
-        vol.Optional("decay", default=0.0): parse_duration,
-        vol.Optional("sustain", default=1.0): _finite(0.0, hi=1.0),
-        vol.Optional("release", default=1800.0): parse_duration,
-        vol.Optional("impulse", default=False): cv.boolean,
-        vol.Optional("retrigger", default=None): vol.Any(None, _ENUM["retrigger"]),
-        vol.Optional("unavailable", default=None): vol.Any(None, _ENUM["unavailable"]),
-        vol.Optional("debounce", default=None): vol.Any(None, parse_duration),
-    }
+#: What each retired ``retrigger`` spelling means once the setting is split in two.
+#: The old value said two things at once -- when a trigger counts, and what an
+#: honoured one does -- so a document written before the split is rewritten on load.
+_LEGACY_RETRIGGER: dict[str, tuple[str, bool]] = {
+    "only_in_release": (RetriggerWhen.RELEASE.value, False),
+    "always": (RetriggerWhen.ALWAYS.value, False),
+    "stack": (RetriggerWhen.ALWAYS.value, True),
+}
+
+
+def _split_retrigger(value: Any) -> Any:
+    """Rewrite a legacy ``retrigger`` into the ``retrigger``/``stack`` pair.
+
+    ``always`` is the one spelling that survived the split with a different meaning:
+    on its own it was the non-stacking "restart even a held note", and it is now just
+    the *when*. An explicit ``stack`` beside it is what tells the two apart -- the key
+    did not exist before the split, so a document that carries it is already written
+    in the new shape and is passed through untouched. That also makes the rewrite
+    idempotent, which is what a normalized document being fed back in depends on.
+    """
+    if not isinstance(value, dict):
+        return value
+    raw = value.get("retrigger")
+    if not isinstance(raw, str) or raw not in _LEGACY_RETRIGGER or value.get("stack") is not None:
+        return value
+    when, stack = _LEGACY_RETRIGGER[raw]
+    return {**value, "retrigger": when, "stack": stack}
+
+
+ENVELOPE_SCHEMA = vol.All(
+    _split_retrigger,
+    vol.Schema(
+        {
+            vol.Required("id"): _group_id,
+            vol.Optional("label", default=None): vol.Any(None, str),
+            vol.Optional("attack", default=0.0): parse_duration,
+            vol.Optional("decay", default=0.0): parse_duration,
+            vol.Optional("sustain", default=1.0): _finite(0.0),
+            vol.Optional("release", default=1800.0): parse_duration,
+            vol.Optional("impulse", default=False): cv.boolean,
+            vol.Optional("retrigger", default=None): vol.Any(None, _ENUM["retrigger"]),
+            vol.Optional("stack", default=None): vol.Any(None, cv.boolean),
+            vol.Optional("unavailable", default=None): vol.Any(None, _ENUM["unavailable"]),
+            vol.Optional("debounce", default=None): vol.Any(None, parse_duration),
+        }
+    ),
 )
 
 # Every field a stimulus may override on its preset. Named once, because a group's
@@ -135,23 +169,27 @@ ENVELOPE_SCHEMA = vol.Schema(
 _ENVELOPE_OVERRIDES: dict[Any, Any] = {
     vol.Optional("attack", default=None): vol.Any(None, parse_duration),
     vol.Optional("decay", default=None): vol.Any(None, parse_duration),
-    vol.Optional("sustain", default=None): vol.Any(None, _finite(0.0, hi=1.0)),
+    vol.Optional("sustain", default=None): vol.Any(None, _finite(0.0)),
     vol.Optional("release", default=None): vol.Any(None, parse_duration),
     vol.Optional("impulse", default=None): vol.Any(None, cv.boolean),
     vol.Optional("retrigger", default=None): vol.Any(None, _ENUM["retrigger"]),
+    vol.Optional("stack", default=None): vol.Any(None, cv.boolean),
     vol.Optional("unavailable", default=None): vol.Any(None, _ENUM["unavailable"]),
     vol.Optional("debounce", default=None): vol.Any(None, parse_duration),
 }
 
-STIMULUS_SCHEMA = vol.Schema(
-    {
-        vol.Required("entity"): cv.entity_id,
-        vol.Optional("to", default=["on"]): _to_states,
-        vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
-        vol.Optional("key", default=None): vol.Any(None, vol.All(str, vol.Length(min=1))),
-        vol.Optional("envelope", default=None): vol.Any(None, _group_id),
-        **_ENVELOPE_OVERRIDES,
-    }
+STIMULUS_SCHEMA = vol.All(
+    _split_retrigger,
+    vol.Schema(
+        {
+            vol.Required("entity"): cv.entity_id,
+            vol.Optional("to", default=["on"]): _to_states,
+            vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
+            vol.Optional("key", default=None): vol.Any(None, vol.All(str, vol.Length(min=1))),
+            vol.Optional("envelope", default=None): vol.Any(None, _group_id),
+            **_ENVELOPE_OVERRIDES,
+        }
+    ),
 )
 
 ADJACENT_SCHEMA = vol.Schema(
@@ -179,12 +217,15 @@ def _adjacent(value: Any) -> dict[str, Any]:
     return result
 
 
-GROUP_PRESENCE_SCHEMA = vol.Schema(
-    {
-        vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
-        vol.Optional("envelope", default=None): vol.Any(None, _group_id),
-        **_ENVELOPE_OVERRIDES,
-    }
+GROUP_PRESENCE_SCHEMA = vol.All(
+    _split_retrigger,
+    vol.Schema(
+        {
+            vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
+            vol.Optional("envelope", default=None): vol.Any(None, _group_id),
+            **_ENVELOPE_OVERRIDES,
+        }
+    ),
 )
 
 PRESENCE_DEVICE_SCHEMA = vol.Schema(
@@ -254,23 +295,29 @@ GROUP_SIMULATION_SCHEMA = vol.Schema(
     }
 )
 
-DEFAULTS_SCHEMA = vol.Schema(
-    {
-        vol.Optional("envelope", default=DEFAULT_ENVELOPE_ID): _group_id,
-        vol.Optional("max_value", default=DEFAULT_MAX_VALUE): _finite(0.0, lo_exclusive=True),
-        vol.Optional("precision", default=DEFAULT_PRECISION): vol.All(int, vol.Range(min=0, max=3)),
-        vol.Optional("unavailable", default=Unavailable.HOLD): _ENUM["unavailable"],
-        vol.Optional("retrigger", default=Retrigger.STACK): _ENUM["retrigger"],
-        vol.Optional("debounce", default=0.0): parse_duration,
-        vol.Optional("safety_refresh", default=DEFAULT_SAFETY_REFRESH): vol.All(
-            parse_duration, vol.Range(min=5.0, max=3600.0)
-        ),
-        vol.Optional("min_wake_interval", default=DEFAULT_MIN_WAKE_INTERVAL): vol.All(
-            parse_duration, vol.Range(min=0.1, max=60.0)
-        ),
-        vol.Optional(CONF_PATTERNS, default=dict): PATTERNS_SCHEMA,
-        vol.Optional(CONF_SIMULATION, default=dict): SIMULATION_DEFAULTS_SCHEMA,
-    }
+DEFAULTS_SCHEMA = vol.All(
+    _split_retrigger,
+    vol.Schema(
+        {
+            vol.Optional("envelope", default=DEFAULT_ENVELOPE_ID): _group_id,
+            vol.Optional("max_value", default=DEFAULT_MAX_VALUE): _finite(0.0, lo_exclusive=True),
+            vol.Optional("precision", default=DEFAULT_PRECISION): vol.All(
+                int, vol.Range(min=0, max=3)
+            ),
+            vol.Optional("unavailable", default=Unavailable.HOLD): _ENUM["unavailable"],
+            vol.Optional("retrigger", default=RetriggerWhen.ALWAYS): _ENUM["retrigger"],
+            vol.Optional("stack", default=True): cv.boolean,
+            vol.Optional("debounce", default=0.0): parse_duration,
+            vol.Optional("safety_refresh", default=DEFAULT_SAFETY_REFRESH): vol.All(
+                parse_duration, vol.Range(min=5.0, max=3600.0)
+            ),
+            vol.Optional("min_wake_interval", default=DEFAULT_MIN_WAKE_INTERVAL): vol.All(
+                parse_duration, vol.Range(min=0.1, max=60.0)
+            ),
+            vol.Optional(CONF_PATTERNS, default=dict): PATTERNS_SCHEMA,
+            vol.Optional(CONF_SIMULATION, default=dict): SIMULATION_DEFAULTS_SCHEMA,
+        }
+    ),
 )
 
 
@@ -346,7 +393,7 @@ def _stringify_enums(obj: Any) -> Any:
         return {k: _stringify_enums(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_stringify_enums(v) for v in obj]
-    if isinstance(obj, Mix | NullHandling | Retrigger | Unavailable):
+    if isinstance(obj, Mix | NullHandling | RetriggerWhen | Unavailable):
         return obj.value
     return obj
 

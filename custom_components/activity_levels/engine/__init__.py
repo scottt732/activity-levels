@@ -19,7 +19,7 @@ can afford; the engine deliberately does not pick that floor for you, because it
 policy question about sensor write rates rather than a property of the envelopes.
 """
 
-from .envelope import Envelope, Mix, NullHandling, Phase, Retrigger, Unavailable
+from .envelope import Envelope, Mix, NullHandling, Phase, RetriggerWhen, Unavailable
 from .group import Channel, Group
 from .voice import Voice
 
@@ -30,7 +30,7 @@ __all__ = [
     "Mix",
     "NullHandling",
     "Phase",
-    "Retrigger",
+    "RetriggerWhen",
     "Unavailable",
     "Voice",
 ]

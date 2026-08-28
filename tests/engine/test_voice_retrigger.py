@@ -3,7 +3,7 @@ import pytest
 from custom_components.activity_levels.engine import (
     Envelope,
     Phase,
-    Retrigger,
+    RetriggerWhen,
     Unavailable,
     Voice,
 )
@@ -15,7 +15,7 @@ def test_retrigger_during_release_restarts_attack_from_current_value() -> None:
     v = Voice(
         id="x",
         gain=2.0,
-        envelope=Envelope(attack=10.0, release=100.0, retrigger=Retrigger.ONLY_IN_RELEASE),
+        envelope=Envelope(attack=10.0, release=100.0, retrigger=RetriggerWhen.RELEASE, stack=False),
     )
     v.note_on(0.0)
     v.note_off(10.0)  # at 2.0, releasing
@@ -27,11 +27,11 @@ def test_retrigger_during_release_restarts_attack_from_current_value() -> None:
     assert v.value_at(70.0) == pytest.approx(2.0)
 
 
-def test_retrigger_only_in_release_ignores_note_on_while_gated() -> None:
+def test_retrigger_release_ignores_note_on_while_gated() -> None:
     v = Voice(
         id="x",
         gain=1.0,
-        envelope=Envelope(attack=10.0, retrigger=Retrigger.ONLY_IN_RELEASE),
+        envelope=Envelope(attack=10.0, retrigger=RetriggerWhen.RELEASE, stack=False),
     )
     v.note_on(0.0)
     assert v.note_on(5.0) is False
@@ -43,7 +43,9 @@ def test_retrigger_always_restarts_attack_while_gated() -> None:
     v = Voice(
         id="x",
         gain=2.0,
-        envelope=Envelope(attack=10.0, decay=10.0, sustain=0.5, retrigger=Retrigger.ALWAYS),
+        envelope=Envelope(
+            attack=10.0, decay=10.0, sustain=0.5, retrigger=RetriggerWhen.ALWAYS, stack=False
+        ),
     )
     v.note_on(0.0)
     v.value_at(100.0)  # sustaining at 1.0
@@ -68,7 +70,9 @@ def test_impulse_retriggers_freely_from_release() -> None:
     v = Voice(
         id="x",
         gain=2.0,
-        envelope=Envelope(release=100.0, impulse=True, retrigger=Retrigger.ONLY_IN_RELEASE),
+        envelope=Envelope(
+            release=100.0, impulse=True, retrigger=RetriggerWhen.RELEASE, stack=False
+        ),
     )
     v.note_on(0.0)
     v.value_at(90.0)
@@ -110,12 +114,13 @@ def test_gain_must_be_positive() -> None:
 # -- stack -----------------------------------------------------------------
 
 
-def test_stack_is_the_default_retrigger_mode() -> None:
-    assert Envelope().retrigger is Retrigger.STACK
+def test_stacking_always_is_the_default() -> None:
+    assert Envelope().retrigger is RetriggerWhen.ALWAYS
+    assert Envelope().stack is True
 
 
 def test_stack_from_idle_attacks_toward_gain_like_the_other_modes() -> None:
-    v = Voice(id="x", gain=2.0, envelope=Envelope(attack=10.0, retrigger=Retrigger.STACK))
+    v = Voice(id="x", gain=2.0, envelope=Envelope(attack=10.0, stack=True))
     v.note_on(0.0)
     assert v.value_at(5.0) == pytest.approx(1.0)
     assert v.value_at(10.0) == pytest.approx(2.0)
@@ -125,7 +130,7 @@ def test_stack_from_release_adds_gain_to_the_current_value() -> None:
     v = Voice(
         id="x",
         gain=2.0,
-        envelope=Envelope(attack=10.0, release=100.0, retrigger=Retrigger.STACK),
+        envelope=Envelope(attack=10.0, release=100.0, stack=True),
     )
     v.note_on(0.0)
     v.note_off(10.0)  # at 2.0, releasing
@@ -138,9 +143,9 @@ def test_stack_from_release_adds_gain_to_the_current_value() -> None:
 
 
 def test_stack_while_gated_adds_gain_on_top_of_the_held_level() -> None:
-    # Unlike only_in_release, a gated voice still stacks -- that is the legacy
+    # Unlike the `release` mode, a gated voice still stacks -- that is the legacy
     # "each trigger adds 1.0" behaviour.
-    v = Voice(id="x", gain=1.0, envelope=Envelope(retrigger=Retrigger.STACK))
+    v = Voice(id="x", gain=1.0, envelope=Envelope(stack=True))
     v.note_on(0.0)
     assert v.value_at(10.0) == pytest.approx(1.0)
     assert v.gate is True
@@ -151,7 +156,7 @@ def test_stack_while_gated_adds_gain_on_top_of_the_held_level() -> None:
 
 
 def test_stack_clamps_at_the_ceiling() -> None:
-    v = Voice(id="x", gain=2.0, envelope=Envelope(retrigger=Retrigger.STACK), ceiling=5.0)
+    v = Voice(id="x", gain=2.0, envelope=Envelope(stack=True), ceiling=5.0)
     for t in range(6):
         v.note_on(float(t))
     assert v.value_at(5.0) == pytest.approx(5.0)
@@ -166,7 +171,7 @@ def test_stack_decays_toward_sustain_times_the_reached_peak() -> None:
     v = Voice(
         id="x",
         gain=1.0,
-        envelope=Envelope(decay=10.0, sustain=0.5, release=100.0, retrigger=Retrigger.STACK),
+        envelope=Envelope(decay=10.0, sustain=0.5, release=100.0, stack=True),
     )
     v.note_on(0.0)
     assert v.value_at(10.0) == pytest.approx(0.5)
@@ -188,7 +193,7 @@ def test_impulse_with_stack_releases_from_the_stacked_value() -> None:
     v = Voice(
         id="x",
         gain=2.0,
-        envelope=Envelope(release=100.0, impulse=True, retrigger=Retrigger.STACK),
+        envelope=Envelope(release=100.0, impulse=True, stack=True),
         ceiling=5.0,
     )
     v.note_on(0.0)
@@ -206,7 +211,7 @@ def test_impulse_with_stack_clamps_at_the_ceiling() -> None:
     v = Voice(
         id="x",
         gain=4.0,
-        envelope=Envelope(release=100.0, impulse=True, retrigger=Retrigger.STACK),
+        envelope=Envelope(release=100.0, impulse=True, stack=True),
         ceiling=5.0,
     )
     v.note_on(0.0)
@@ -215,11 +220,11 @@ def test_impulse_with_stack_clamps_at_the_ceiling() -> None:
 
 
 def test_impulse_without_stack_still_jumps_to_gain() -> None:
-    for mode in (Retrigger.ONLY_IN_RELEASE, Retrigger.ALWAYS):
+    for mode in (RetriggerWhen.RELEASE, RetriggerWhen.ALWAYS):
         v = Voice(
             id="x",
             gain=2.0,
-            envelope=Envelope(release=100.0, impulse=True, retrigger=mode),
+            envelope=Envelope(release=100.0, impulse=True, retrigger=mode, stack=False),
             ceiling=5.0,
         )
         v.note_on(0.0)
@@ -228,11 +233,127 @@ def test_impulse_without_stack_still_jumps_to_gain() -> None:
 
 
 def test_stack_respects_debounce() -> None:
-    v = Voice(
-        id="x", gain=1.0, envelope=Envelope(retrigger=Retrigger.STACK, debounce=30.0), ceiling=5.0
-    )
+    v = Voice(id="x", gain=1.0, envelope=Envelope(stack=True, debounce=30.0), ceiling=5.0)
     assert v.note_on(0.0) is True
     assert v.note_on(29.9) is False
     assert v.value_at(29.9) == pytest.approx(1.0)
     assert v.note_on(30.0) is True
     assert v.value_at(30.0) == pytest.approx(2.0)
+
+
+# -- when a trigger is honoured -------------------------------------------
+
+
+def _phased(mode: RetriggerWhen) -> Voice:
+    """A voice with a phase you can stop in: 10s attack, 10s decay, then sustain."""
+    return Voice(
+        id="x",
+        gain=1.0,
+        envelope=Envelope(
+            attack=10.0, decay=10.0, sustain=0.5, release=100.0, retrigger=mode, stack=False
+        ),
+    )
+
+
+def test_after_attack_ignores_a_trigger_that_lands_in_the_attack() -> None:
+    v = _phased(RetriggerWhen.AFTER_ATTACK)
+    v.note_on(0.0)
+    assert v.phase is Phase.ATTACK
+    assert v.note_on(5.0) is False
+    assert v.last_note_on == 0.0
+    assert v.value_at(15.0) == pytest.approx(0.75)  # still decaying from the first note
+    assert v.phase is Phase.DECAY
+    assert v.note_on(15.0) is True  # the decay is fair game
+
+
+def test_after_decay_waits_for_the_sustain() -> None:
+    v = _phased(RetriggerWhen.AFTER_DECAY)
+    v.note_on(0.0)
+    assert v.note_on(5.0) is False  # attack
+    v.value_at(15.0)
+    assert v.phase is Phase.DECAY
+    assert v.note_on(15.0) is False  # decay
+    v.value_at(25.0)
+    assert v.phase is Phase.SUSTAIN
+    assert v.note_on(25.0) is True
+
+
+def test_release_mode_honours_only_a_fading_note() -> None:
+    v = _phased(RetriggerWhen.RELEASE)
+    v.note_on(0.0)
+    assert v.note_on(5.0) is False
+    v.value_at(25.0)
+    assert v.phase is Phase.SUSTAIN
+    assert v.note_on(25.0) is False
+    v.note_off(25.0)
+    assert v.phase is Phase.RELEASE
+    assert v.note_on(30.0) is True
+
+
+def test_idle_mode_waits_for_the_voice_to_finish_releasing() -> None:
+    v = _phased(RetriggerWhen.IDLE)
+    v.note_on(0.0)
+    v.value_at(25.0)
+    v.note_off(25.0)  # releasing from 0.5, at the full-scale slope: 50s to zero
+    assert v.phase is Phase.RELEASE
+    assert v.note_on(50.0) is False  # still fading
+    assert v.last_note_on == 0.0
+    assert v.value_at(75.0) == pytest.approx(0.0)
+    assert v.phase is Phase.IDLE
+    assert v.note_on(75.0) is True
+    assert v.phase is Phase.ATTACK
+
+
+def test_idle_mode_ignores_stacking_because_there_is_nothing_to_stack_on() -> None:
+    # `stack` decides what an honoured trigger does; in this mode the only honoured
+    # trigger starts from silence, so both settings give the same envelope.
+    for stack in (True, False):
+        v = Voice(
+            id="x",
+            gain=2.0,
+            envelope=Envelope(attack=10.0, retrigger=RetriggerWhen.IDLE, stack=stack),
+        )
+        v.note_on(0.0)
+        assert v.note_on(5.0) is False
+        assert v.value_at(10.0) == pytest.approx(2.0)
+
+
+def test_every_mode_honours_a_trigger_from_idle() -> None:
+    for mode in RetriggerWhen:
+        v = Voice(id="x", gain=1.0, envelope=Envelope(retrigger=mode, stack=False))
+        assert v.note_on(0.0) is True
+
+
+# -- sustain above 1 -------------------------------------------------------
+
+
+def test_sustain_above_one_makes_the_decay_climb() -> None:
+    v = Voice(
+        id="x",
+        gain=1.0,
+        envelope=Envelope(decay=10.0, sustain=1.5, release=100.0, stack=False),
+        ceiling=5.0,
+    )
+    v.note_on(0.0)
+    assert v.value_at(0.0) == pytest.approx(1.0)
+    assert v.value_at(5.0) == pytest.approx(1.25)
+    assert v.value_at(10.0) == pytest.approx(1.5)
+    assert v.phase is Phase.SUSTAIN
+
+
+def test_sustain_above_one_still_stops_at_the_ceiling() -> None:
+    v = Voice(
+        id="x",
+        gain=2.0,
+        envelope=Envelope(decay=10.0, sustain=4.0, release=100.0, stack=False),
+        ceiling=5.0,
+    )
+    v.note_on(0.0)
+    assert v.value_at(10.0) == pytest.approx(5.0)
+
+
+def test_sustain_of_exactly_one_is_still_a_plateau() -> None:
+    v = Voice(id="x", gain=2.0, envelope=Envelope(decay=10.0, sustain=1.0, stack=False))
+    v.note_on(0.0)
+    assert v.phase is Phase.SUSTAIN  # the zero-length decay is retired at once
+    assert v.value_at(10.0) == pytest.approx(2.0)

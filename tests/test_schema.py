@@ -21,6 +21,7 @@ from custom_components.activity_levels.schema import (
 from tests.fixtures import house_config, kinds_config, presence_config, rooms_config
 
 LEGACY_HOUSE = Path(__file__).parent / "fixtures" / "legacy_house.yaml"
+EXAMPLE_HOUSE = Path(__file__).parents[1] / "examples" / "house.yaml"
 
 
 def legacy_house_config() -> dict[str, Any]:
@@ -36,16 +37,77 @@ def test_default_options_validate() -> None:
     assert cfg["defaults"]["safety_refresh"] == 60.0
 
 
-def test_retrigger_defaults_to_stack_and_accepts_every_mode() -> None:
+def test_retrigger_defaults_to_stacking_always_and_accepts_every_mode() -> None:
     cfg = validate_config(house_config())
-    assert cfg["defaults"]["retrigger"] == "stack"
-    for mode in ("stack", "only_in_release", "always"):
+    assert cfg["defaults"]["retrigger"] == "always"
+    assert cfg["defaults"]["stack"] is True
+    for mode in ("always", "after_attack", "after_decay", "release", "idle"):
         picked = house_config()
         picked["defaults"]["retrigger"] = mode
+        picked["defaults"]["stack"] = False
         picked["envelopes"][0]["retrigger"] = mode
+        picked["envelopes"][0]["stack"] = True
         out = validate_config(picked)
-        assert out["defaults"]["retrigger"] == mode
+        assert out["defaults"]["retrigger"] == mode and out["defaults"]["stack"] is False
         assert out["envelopes"][0]["retrigger"] == mode
+        assert out["envelopes"][0]["stack"] is True
+
+
+@pytest.mark.parametrize(
+    ("legacy", "when", "stack"),
+    [
+        ("only_in_release", "release", False),
+        ("always", "always", False),
+        ("stack", "always", True),
+    ],
+)
+def test_legacy_retrigger_is_rewritten_into_the_split_pair(
+    legacy: str, when: str, stack: bool
+) -> None:
+    """Everywhere the setting can appear: defaults, a preset, a stimulus, a presence block."""
+    cfg = house_config()
+    cfg["defaults"]["retrigger"] = legacy
+    cfg["envelopes"][0]["retrigger"] = legacy
+    kitchen = cfg["groups"][0]["children"][1]
+    kitchen["stimuli"][0]["retrigger"] = legacy
+    kitchen["presence"] = {"retrigger": legacy}
+    out = validate_config(cfg)
+    assert (out["defaults"]["retrigger"], out["defaults"]["stack"]) == (when, stack)
+    assert (out["envelopes"][0]["retrigger"], out["envelopes"][0]["stack"]) == (when, stack)
+    stim = out["groups"][0]["children"][1]["stimuli"][0]
+    assert (stim["retrigger"], stim["stack"]) == (when, stack)
+    presence = out["groups"][0]["children"][1]["presence"]
+    assert (presence["retrigger"], presence["stack"]) == (when, stack)
+    # Idempotent: the rewritten document reads back as itself, which is what a panel
+    # round trip through validate() depends on.
+    assert validate_config(out) == out
+
+
+def test_an_explicit_stack_beside_always_is_left_alone() -> None:
+    """`always` is the one legacy spelling that is also a new one; `stack` disambiguates."""
+    cfg = house_config()
+    cfg["defaults"]["retrigger"] = "always"
+    cfg["defaults"]["stack"] = True
+    out = validate_config(cfg)
+    assert out["defaults"]["retrigger"] == "always" and out["defaults"]["stack"] is True
+
+
+def test_sustain_may_exceed_one() -> None:
+    cfg = house_config()
+    cfg["envelopes"][0]["sustain"] = 2.5
+    cfg["groups"][0]["stimuli"][0]["sustain"] = 3.0
+    out = validate_config(cfg)
+    assert out["envelopes"][0]["sustain"] == 2.5
+    assert out["groups"][0]["stimuli"][0]["sustain"] == 3.0
+
+
+def test_envelope_presets_carry_an_optional_label_and_keep_their_order() -> None:
+    cfg = house_config()
+    cfg["envelopes"][0]["label"] = "Thirty Minutes"
+    out = validate_config(cfg)
+    assert out["envelopes"][0]["label"] == "Thirty Minutes"
+    assert out["envelopes"][1]["label"] is None
+    assert [e["id"] for e in out["envelopes"]] == [e["id"] for e in cfg["envelopes"]]
 
 
 def test_house_config_normalizes() -> None:
@@ -94,7 +156,7 @@ def test_bad_group_id_and_bad_entity_and_ranges() -> None:
     cfg["groups"][0]["id"] = "House 1"
     cfg["groups"][0]["stimuli"][0]["entity"] = "front_door"
     cfg["groups"][0]["stimuli"][0]["gain"] = 0
-    cfg["envelopes"][2]["sustain"] = 1.5
+    cfg["envelopes"][2]["sustain"] = -1.5
     errs = errors_of(cfg)
     assert {
         "groups/0/id",
@@ -862,3 +924,27 @@ def test_a_root_property_that_declares_no_doors_is_not_warned_about() -> None:
     assert validate(kinds_config()).warnings == ()
     assert validate(rooms_config()).warnings == ()
     assert validate(legacy_house_config()).warnings == ()
+
+
+def test_the_shipped_example_house_validates_and_round_trips() -> None:
+    """`examples/house.yaml` is documentation people paste in; it has to actually load.
+
+    It also has to survive a round trip, because the panel saves back exactly the
+    document `validate` handed it -- an example that normalized into something the
+    schema then refused would be a config nobody could edit.
+    """
+    raw: dict[str, Any] = yaml.safe_load(EXAMPLE_HOUSE.read_text())
+    result = validate(raw)
+    assert result.inferred == () and result.warnings == ()
+    cfg = result.config
+    assert validate_config(cfg) == cfg
+    assert [(e["id"], e["label"]) for e in cfg["envelopes"]] == [
+        ("fifteen_minutes", "Fifteen Minutes"),
+        ("default", "Thirty Minutes"),
+        ("hour", "One Hour"),
+        ("two_hours", "Two Hours"),
+        ("four_hours", "Four Hours"),
+        ("eight_hours", "Eight Hours"),
+    ]
+    assert cfg["defaults"]["envelope"] == "default"
+    assert cfg["defaults"]["retrigger"] == "always" and cfg["defaults"]["stack"] is True

@@ -3,7 +3,7 @@ from math import inf
 import pytest
 
 from custom_components.activity_levels.const import PRESENCE_KEY, TRIGGER_KEY
-from custom_components.activity_levels.engine import Mix, Phase, Retrigger
+from custom_components.activity_levels.engine import Mix, Phase, RetriggerWhen
 from custom_components.activity_levels.schema import validate_config
 from custom_components.activity_levels.tree import build_tree, resolve_envelope
 from tests.fixtures import house_config, kinds_config, presence_config, rooms_config
@@ -32,10 +32,12 @@ def test_envelope_resolution_order() -> None:
     presets = {e["id"]: e for e in cfg["envelopes"]}
     stim = cfg["groups"][0]["children"][1]["stimuli"][0]  # kitchen: release override 5m
     env = resolve_envelope(cfg["defaults"], presets, stim)
-    assert env.release == 300.0 and env.attack == 0.0 and env.retrigger is Retrigger.STACK
-    stim2 = dict(stim, retrigger="always", envelope="momentary")
+    assert env.release == 300.0 and env.attack == 0.0
+    assert env.retrigger is RetriggerWhen.ALWAYS and env.stack is True
+    stim2 = dict(stim, retrigger="release", stack=False, envelope="momentary")
     env2 = resolve_envelope(cfg["defaults"], presets, stim2)
-    assert env2.impulse is True and env2.retrigger is Retrigger.ALWAYS and env2.release == 300.0
+    assert env2.impulse is True and env2.release == 300.0
+    assert env2.retrigger is RetriggerWhen.RELEASE and env2.stack is False
 
 
 def test_gains_and_trigger_voice() -> None:

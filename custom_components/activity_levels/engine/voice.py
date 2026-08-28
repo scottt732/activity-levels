@@ -7,10 +7,21 @@ from dataclasses import dataclass
 from math import inf, isfinite
 from typing import Any
 
-from .envelope import Envelope, Phase, Retrigger, Unavailable
+from .envelope import Envelope, Phase, RetriggerWhen, Unavailable
 
 _TIMED = frozenset({Phase.ATTACK, Phase.DECAY, Phase.RELEASE})
 _HELD_BY_GATE = frozenset({Phase.ATTACK, Phase.DECAY, Phase.SUSTAIN})
+
+#: The phases in which each ``retrigger`` mode honours a new trigger. IDLE is in
+#: every one of them: a voice that has finished has nothing left to protect, and a
+#: mode that refused a trigger there could never sound at all.
+_HONOURED: dict[RetriggerWhen, frozenset[Phase]] = {
+    RetriggerWhen.ALWAYS: frozenset(Phase),
+    RetriggerWhen.AFTER_ATTACK: frozenset({Phase.IDLE, Phase.DECAY, Phase.SUSTAIN, Phase.RELEASE}),
+    RetriggerWhen.AFTER_DECAY: frozenset({Phase.IDLE, Phase.SUSTAIN, Phase.RELEASE}),
+    RetriggerWhen.RELEASE: frozenset({Phase.IDLE, Phase.RELEASE}),
+    RetriggerWhen.IDLE: frozenset({Phase.IDLE}),
+}
 
 
 @dataclass
@@ -63,17 +74,20 @@ class Voice:
         """Return (target_value, duration_seconds) for the current phase."""
         e = self.envelope
         if self.phase is Phase.ATTACK:
-            if e.retrigger is Retrigger.STACK:
+            if e.stack:
                 # Stacking adds this note's gain on top of whatever is already sounding;
                 # from idle the start value is 0, so the target is plain `gain`.
                 return self._stacked_peak(self.phase_start_value), e.attack
             return self.gain, e.attack
         if self.phase is Phase.DECAY:
             # Decay is relative to the peak the attack actually reached, which for a
-            # stacked note is higher than `gain`.
-            if e.sustain >= 1.0:
+            # stacked note is higher than `gain`. A sustain of exactly 1 is a plateau
+            # with nothing to travel to; above 1 the segment is a rise rather than a
+            # fall, and the limiter caps where it lands for the same reason stacking
+            # is capped -- height above the limiter is height the group throws away.
+            if e.sustain == 1.0:
                 return self.phase_start_value, 0.0
-            return self.phase_start_value * e.sustain, e.decay
+            return min(self.phase_start_value * e.sustain, self.ceiling), e.decay
         if self.phase is Phase.RELEASE:
             if self.phase_start_value <= 0.0:
                 return 0.0, 0.0
@@ -138,16 +152,12 @@ class Voice:
         e = self.envelope
         if self.last_note_on is not None and t - self.last_note_on < e.debounce:
             return False
-        if self.gate and e.retrigger is Retrigger.ONLY_IN_RELEASE:
+        if self.phase not in _HONOURED[e.retrigger]:
             return False
         self.last_note_on = t
         if e.impulse:
             self.gate = False
-            peak = (
-                self._stacked_peak(self.value_at(t))
-                if e.retrigger is Retrigger.STACK
-                else self.gain
-            )
+            peak = self._stacked_peak(self.value_at(t)) if e.stack else self.gain
             self._enter(Phase.RELEASE, t, peak)
             self._advance(t)
             return True

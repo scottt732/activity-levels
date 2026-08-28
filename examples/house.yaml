@@ -6,27 +6,39 @@ defaults:
   max_value: 5.0
   precision: 1
   unavailable: hold
-  # stack is the legacy additive behaviour: every trigger adds another `gain` on top
-  # of the level already sounding, clamped at the group's max_value.
-  retrigger: stack
+  # When a fresh trigger counts while the envelope is still sounding: always |
+  # after_attack | after_decay | release | idle.
+  retrigger: always
+  # The legacy additive behaviour: every honoured trigger adds another `gain` on top
+  # of the level already sounding, clamped at the group's max_value. Turn it off and
+  # a trigger restarts the rise toward `gain` instead.
+  stack: true
   debounce: 0s
   safety_refresh: 60s
   min_wake_interval: 1s
 
 envelopes:
   # `release` is the time to fall from full scale (max_value 5.0) to zero, so every
-  # level below it empties proportionally faster at that same slope.
-  - id: default          # 30 minutes to fall from full scale to zero
-    release: 30m
+  # level below it empties proportionally faster at that same slope. `label` is what
+  # the panel shows; the id is what stimuli name, and stays put across a rename. The
+  # order here is the order the Envelopes tab lists them in.
   - id: fifteen_minutes
+    label: Fifteen Minutes
     release: 15m
+  - id: default          # the preset `defaults.envelope` points at
+    label: Thirty Minutes
+    release: 30m
   - id: hour
+    label: One Hour
     release: 1h
   - id: two_hours
+    label: Two Hours
     release: 2h
   - id: four_hours
+    label: Four Hours
     release: 4h
   - id: eight_hours
+    label: Eight Hours
     release: 8h
 
 # Rooms and doorways. `adjacent` is symmetric, so each doorway is written once, from

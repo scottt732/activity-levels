@@ -6,7 +6,7 @@ from custom_components.activity_levels.engine import (
     Envelope,
     Group,
     Mix,
-    Retrigger,
+    RetriggerWhen,
     Voice,
 )
 from custom_components.activity_levels.engine.group import _MIN_DT as MIN_DT
@@ -19,6 +19,9 @@ gains = st.floats(min_value=0.1, max_value=10.0, allow_nan=False, allow_infinity
 # A ceiling is always >= gain; 1.0 exercises the "no headroom at all" edge.
 headrooms = st.floats(min_value=1.0, max_value=8.0, allow_nan=False, allow_infinity=False)
 fractions = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
+# Sustain is a multiplier on the peak, not a fraction of it: above 1 the decay
+# segment climbs, and the invariants below have to hold over that half too.
+sustains = st.floats(min_value=0.0, max_value=4.0, allow_nan=False, allow_infinity=False)
 # Real deployments run at epoch scale, where a float has ~2.4e-7 s of resolution.
 # Exercise both that and the tidy 0.0 base so precision bugs cannot hide.
 time_bases = st.sampled_from([0.0, 1.7e9])
@@ -31,10 +34,11 @@ def envelopes(draw: st.DrawFn) -> Envelope:
     return Envelope(
         attack=draw(durations),
         decay=draw(durations),
-        sustain=draw(fractions),
+        sustain=draw(sustains),
         release=draw(durations),
         impulse=draw(st.booleans()),
-        retrigger=draw(st.sampled_from(list(Retrigger))),
+        retrigger=draw(st.sampled_from(list(RetriggerWhen))),
+        stack=draw(st.booleans()),
         debounce=draw(st.floats(min_value=0.0, max_value=60.0)),
     )
 
@@ -44,10 +48,11 @@ def smooth_envelopes(draw: st.DrawFn) -> Envelope:
     return Envelope(
         attack=draw(positive_durations),
         decay=draw(positive_durations),
-        sustain=draw(fractions),
+        sustain=draw(sustains),
         release=draw(positive_durations),
         impulse=draw(st.booleans()),
-        retrigger=draw(st.sampled_from(list(Retrigger))),
+        retrigger=draw(st.sampled_from(list(RetriggerWhen))),
+        stack=draw(st.booleans()),
         debounce=draw(st.floats(min_value=0.0, max_value=60.0)),
     )
 
@@ -72,8 +77,8 @@ def run(v: Voice, script: list[tuple[str, float]]) -> list[float]:
     return values
 
 
-# The ceiling is the voice's hard upper bound in every mode: `stack` is the only one
-# that can climb past `gain`, and it must never climb past the group's limiter.
+# The ceiling is the voice's hard upper bound: both of the ways a voice can climb past
+# `gain` -- stacking, and a sustain above 1 -- are capped at the group's limiter.
 @settings(max_examples=300)
 @given(envelopes(), gains, headrooms, scripts())
 def test_value_never_exceeds_the_ceiling(
@@ -83,10 +88,13 @@ def test_value_never_exceeds_the_ceiling(
     v = Voice(id="v", gain=gain, envelope=env, ceiling=ceiling)
     for value in run(v, script):
         assert -1e-9 <= value <= ceiling + 1e-9
-    if env.retrigger is not Retrigger.STACK:
+    # Uncapped and not stacking, the peak is whichever of the attack's target and the
+    # decay's target is higher -- `gain` and `sustain * gain`.
+    if not env.stack:
+        peak = max(gain, env.sustain * gain)
         w = Voice(id="w", gain=gain, envelope=env)
         for value in run(w, script):
-            assert -1e-9 <= value <= gain + 1e-9
+            assert -1e-9 <= value <= peak + 1e-9
 
 
 @settings(max_examples=300)

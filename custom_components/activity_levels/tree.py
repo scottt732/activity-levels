@@ -8,7 +8,7 @@ from math import inf
 from typing import Any
 
 from .const import CONF_AREA_ID, CONF_FLOOR_ID, CONF_KIND, CONF_PRESENCE, PRESENCE_KEY, TRIGGER_KEY
-from .engine import Channel, Envelope, Group, Mix, NullHandling, Retrigger, Unavailable, Voice
+from .engine import Channel, Envelope, Group, Mix, NullHandling, RetriggerWhen, Unavailable, Voice
 from .topology import room_ids
 
 _ENVELOPE_KEYS = (
@@ -18,6 +18,7 @@ _ENVELOPE_KEYS = (
     "release",
     "impulse",
     "retrigger",
+    "stack",
     "unavailable",
     "debounce",
 )
@@ -89,7 +90,7 @@ def resolve_envelope(
         if value is not None:
             resolved[key] = value
     if "retrigger" in resolved:
-        resolved["retrigger"] = Retrigger(resolved["retrigger"])
+        resolved["retrigger"] = RetriggerWhen(resolved["retrigger"])
     if "unavailable" in resolved:
         resolved["unavailable"] = Unavailable(resolved["unavailable"])
     return Envelope(**resolved)
