@@ -136,6 +136,7 @@ describe("getTopology / getTopologyPaths", () => {
 describe("getPresenceState", () => {
   it("requests the presence state", async () => {
     const presence: PresenceState = {
+      bermuda: true,
       enabled: true,
       devices: {},
       occupants: {},

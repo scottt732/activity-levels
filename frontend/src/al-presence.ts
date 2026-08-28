@@ -169,6 +169,16 @@ export class AlPresence extends LitElement {
         color: var(--secondary-text-color);
         font-size: 0.9em;
       }
+      .setup p {
+        margin: 0 0 12px;
+      }
+      .setup .row {
+        margin-bottom: 12px;
+      }
+      .setup ha-selector {
+        display: block;
+        margin-bottom: 12px;
+      }
     `,
   ];
 
@@ -343,6 +353,78 @@ export class AlPresence extends LitElement {
     this.dispatchEvent(alChange(setAt(config, ["presence"], merged), `presence:${field}`));
   }
 
+  /**
+   * Writes one field of the presence block into the draft, exactly as `onFormChanged` does
+   * for the full settings form. The setup card only ever touches `enabled`, but the helper
+   * is generic so it stays the one place that builds the block.
+   */
+  private setSetting<K extends keyof PresenceSettings>(key: K, value: PresenceSettings[K]): void {
+    const config = this.config;
+    if (!config) return;
+    const s = presenceSettings(config);
+    const merged: PresenceSettings = { ...s, [key]: value };
+    this.dispatchEvent(alChange(setAt(config, ["presence"], merged), `presence:${key}`));
+  }
+
+  private onDevicesChanged = (ev: CustomEvent<{ value?: unknown }>): void => {
+    ev.stopPropagation();
+    const config = this.config;
+    if (!config) return;
+    const s = presenceSettings(config);
+    const merged: PresenceSettings = { ...s, devices: this.mergeDevices(ev.detail?.value, s.devices) };
+    this.dispatchEvent(alChange(setAt(config, ["presence"], merged), "presence:devices"));
+  };
+
+  /**
+   * What the tab is before presence exists. The tab is always listed, because a feature you
+   * cannot find is a feature nobody turns on — and everything here is the Settings form
+   * afterwards, reduced to the two fields that start it.
+   */
+  private renderSetup(config: Config): TemplateResult {
+    const found = this.presence?.bermuda === true;
+    const s = presenceSettings(config);
+    return html`<ha-card class="setup" header="Room presence">
+      <p>
+        Activity Levels can work out which room each tracked device is in, from the Bluetooth
+        distances <a href="https://github.com/agittins/bermuda">Bermuda</a> reports to every
+        scanner in the house.
+      </p>
+      <p class="muted">
+        Turning it on gives each area a <em>presence</em> channel in its mix, a
+        <code>sensor.&lt;area&gt;_occupants</code>, and one <code>sensor.&lt;name&gt;_room</code>
+        per person — and it uses the adjacency you have already drawn, because the estimate
+        walks that graph rather than jumping across it.
+      </p>
+      <div class="bermuda row">
+        <ha-icon icon=${found ? "mdi:check-circle-outline" : "mdi:alert-circle-outline"}></ha-icon>
+        <span>
+          ${found
+            ? "Bermuda is installed."
+            : "Bermuda was not found. Install it first, or this will have nothing to read."}
+        </span>
+      </div>
+      <div class="enable row">
+        <ha-switch .checked=${false} @change=${() => this.setSetting("enabled", true)}></ha-switch>
+        <span>Estimate room presence</span>
+      </div>
+      <ha-selector
+        class="setup-devices"
+        .hass=${this.hass}
+        .selector=${DEVICES_SELECTOR}
+        .label=${LABELS.devices}
+        .helper=${HELPERS.devices}
+        .required=${false}
+        .value=${s.devices.map((d) => d.device)}
+        @value-changed=${this.onDevicesChanged}
+      ></ha-selector>
+      <p class="muted">
+        Bermuda ships its per-scanner distance sensors disabled. Enable them under
+        <em>Settings → Devices &amp; services → Bermuda</em> before expecting a room out of
+        this, and give each scanner device the area of the room it sits in.
+      </p>
+    </ha-card>`;
+  }
+
   private renderMap(config: Config): TemplateResult {
     return html`<ha-card header="Rooms">
       <al-graph-map
@@ -495,6 +577,7 @@ export class AlPresence extends LitElement {
   override render() {
     const config = this.config;
     if (!config) return html`<div class="page"><ha-card><span class="muted">Loading…</span></ha-card></div>`;
+    if (!presenceSettings(config).enabled) return html`<div class="page">${this.renderSetup(config)}</div>`;
     return html`<div class="page">
       ${this.renderMap(config)} ${this.renderPeople()} ${this.renderScanners()} ${this.renderSettings(config)}
     </div>`;

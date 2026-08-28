@@ -115,7 +115,7 @@ const hass = () => ({
       case "activity_levels/topology":
         return { nodes: [], edges: [], exits: [] };
       case "activity_levels/presence/state":
-        return { enabled: true, devices: {}, occupants: {}, scanners: [], unmapped: [], disabled: [] };
+        return { bermuda: true, enabled: true, devices: {}, occupants: {}, scanners: [], unmapped: [], disabled: [] };
       case "activity_levels/state":
         if (liveGate) return new Promise((resolve) => liveGate?.push(resolve));
         return { now: 1000, groups: {}, voices: {} };
@@ -185,11 +185,25 @@ beforeEach(async () => {
 });
 
 describe("activity-levels-panel tabs", () => {
-  it("is a tablist of five tabs, the Mixer selected", () => {
+  it("is a tablist of six tabs, the Mixer selected", () => {
     expect(el.shadowRoot?.querySelector('[role="tablist"]')).toBeTruthy();
-    expect(tabs().map((t) => t.textContent?.trim())).toEqual(["Mixer", "Groups", "Envelopes", "Defaults", "Patterns"]);
-    expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false", "false"]);
-    expect(tabs().map((t) => t.getAttribute("tabindex"))).toEqual(["0", "-1", "-1", "-1", "-1"]);
+    expect(tabs().map((t) => t.textContent?.trim())).toEqual([
+      "Mixer",
+      "Groups",
+      "Envelopes",
+      "Defaults",
+      "Patterns",
+      "Presence",
+    ]);
+    expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual([
+      "true",
+      "false",
+      "false",
+      "false",
+      "false",
+      "false",
+    ]);
+    expect(tabs().map((t) => t.getAttribute("tabindex"))).toEqual(["0", "-1", "-1", "-1", "-1", "-1"]);
     expect(el.shadowRoot?.querySelector('[role="tabpanel"]')).toBeTruthy();
     // The default config here has no groups yet, so the Mixer tab shows the empty-state
     // card rather than a mixer with nothing to mix.
@@ -198,14 +212,14 @@ describe("activity-levels-panel tabs", () => {
 
   it("moves the roving tabindex with the arrow keys without switching tabs", async () => {
     await press("ArrowRight");
-    expect(tabs().map((t) => t.getAttribute("tabindex"))).toEqual(["-1", "0", "-1", "-1", "-1"]);
+    expect(tabs().map((t) => t.getAttribute("tabindex"))).toEqual(["-1", "0", "-1", "-1", "-1", "-1"]);
     expect(tabs()[0]?.getAttribute("aria-selected")).toBe("true");
     expect(el.shadowRoot?.activeElement).toBe(tabs()[1]);
   });
 
   it("wraps around at both ends", async () => {
     await press("ArrowLeft");
-    expect(tabs()[4]?.getAttribute("tabindex")).toBe("0");
+    expect(tabs()[5]?.getAttribute("tabindex")).toBe("0");
     await press("ArrowRight");
     expect(tabs()[0]?.getAttribute("tabindex")).toBe("0");
   });
@@ -223,7 +237,14 @@ describe("activity-levels-panel tabs", () => {
 
   it("activates a tab on click", async () => {
     await selectTab(4);
-    expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual(["false", "false", "false", "false", "true"]);
+    expect(tabs().map((t) => t.getAttribute("aria-selected"))).toEqual([
+      "false",
+      "false",
+      "false",
+      "false",
+      "true",
+      "false",
+    ]);
     expect(tabs()[4]?.getAttribute("tabindex")).toBe("0");
     expect(el.shadowRoot?.querySelector("al-patterns")).toBeTruthy();
   });
@@ -670,14 +691,15 @@ describe("activity-levels-panel live view", () => {
 });
 
 describe("activity-levels-panel presence tab", () => {
-  it("offers the Presence tab only when presence is enabled", async () => {
-    await mount(roomsConfig());
+  it("always lists the Presence tab, whether presence is on or off", async () => {
+    await mount(houseConfig());
     expect(tabs().map((t) => t.textContent?.trim())).toEqual([
       "Mixer",
       "Groups",
       "Envelopes",
       "Defaults",
       "Patterns",
+      "Presence",
     ]);
 
     await mount(presenceConfig());
@@ -693,7 +715,7 @@ describe("activity-levels-panel presence tab", () => {
     expect(el.shadowRoot?.querySelector("al-presence")).toBeTruthy();
   });
 
-  it("leaves the Presence tab, and the tablist reachable, when an undo turns presence off", async () => {
+  it("stays on the Presence tab, with the tablist unchanged, when an undo turns presence off", async () => {
     await mount(roomsConfig());
     await selectTab(1);
     el.shadowRoot?.querySelector("al-tree")?.dispatchEvent(alChange(presenceConfig()));
@@ -705,28 +727,31 @@ describe("activity-levels-panel presence tab", () => {
       ?.querySelector('ha-icon-button[title="Undo"]')
       ?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
     await settle();
-    expect(el.shadowRoot?.querySelector("al-presence")).toBeNull();
-    expect(tabs()).toHaveLength(5);
+    expect(tabs()).toHaveLength(6);
     expect(tabs().filter((t) => t.getAttribute("tabindex") === "0")).toHaveLength(1);
-    expect(el.shadowRoot?.querySelector(".tab.active")?.textContent?.trim()).toBe("Mixer");
+    expect(el.shadowRoot?.querySelector(".tab.active")?.textContent?.trim()).toBe("Presence");
+    expect(el.shadowRoot?.querySelector("al-presence")).toBeTruthy();
   });
 
-  it("falls back off the Presence tab when presence is turned off mid-edit", async () => {
+  it("stays on the Presence tab, showing the setup card, when presence is turned off mid-edit", async () => {
     await mount(presenceConfig());
     await selectTab(5);
     const off = structuredClone(presenceConfig());
     off.presence!.enabled = false;
     el.shadowRoot?.querySelector("al-presence")?.dispatchEvent(alChange(off));
     await settle();
-    expect(el.shadowRoot?.querySelector("al-presence")).toBeNull();
     expect(tabs().map((t) => t.textContent?.trim())).toEqual([
       "Mixer",
       "Groups",
       "Envelopes",
       "Defaults",
       "Patterns",
+      "Presence",
     ]);
-    expect(el.shadowRoot?.querySelector(".tab.active")?.textContent?.trim()).toBe("Mixer");
+    expect(el.shadowRoot?.querySelector(".tab.active")?.textContent?.trim()).toBe("Presence");
+    const presence = el.shadowRoot?.querySelector("al-presence");
+    expect(presence).toBeTruthy();
+    expect(presence?.shadowRoot?.querySelector(".setup")).toBeTruthy();
   });
 });
 

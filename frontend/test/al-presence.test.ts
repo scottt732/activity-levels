@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/al-presence";
 import { PRESENCE_POLL_MS } from "../src/al-presence";
-import { presenceConfig } from "./fixtures";
+import { presenceConfig, roomsConfig } from "./fixtures";
 import type { AlPresence, FormItem } from "../src/al-presence";
 import type { AlChangeEvent } from "../src/events";
-import type { HomeAssistant, PresenceState, TopologyPayload } from "../src/types";
+import type { Config, HomeAssistant, PresenceState, TopologyPayload } from "../src/types";
 
 const TOPO: TopologyPayload = {
   nodes: ["kitchen", "dining_room", "hall", "bedroom", "back_patio"],
@@ -20,6 +20,7 @@ const TOPO: TopologyPayload = {
 const PATHS = [["kitchen", "dining_room", "hall", "bedroom"]];
 
 const presenceState = (over: Partial<PresenceState> = {}): PresenceState => ({
+  bermuda: false,
   enabled: true,
   devices: {
     Scott: {
@@ -79,12 +80,15 @@ const settle = async (): Promise<void> => {
   for (let i = 0; i < 6; i++) await el.updateComplete;
 };
 
-const tab = async (over: Partial<PresenceState> = {}): Promise<{ el: AlPresence; calls: Call[] }> => {
+const tab = async (
+  over: Partial<PresenceState> = {},
+  config: Config = presenceConfig(),
+): Promise<{ el: AlPresence; calls: Call[] }> => {
   state = presenceState(over);
   document.body.innerHTML = "";
   el = document.createElement("al-presence") as AlPresence;
   el.hass = hassStub();
-  el.config = presenceConfig();
+  el.config = config;
   el.errors = [];
   document.body.appendChild(el);
   await settle();
@@ -228,5 +232,57 @@ describe("al-presence", () => {
     expect(selectorFor("floor")).toEqual({ number: { min: 0.01, max: 1, step: 0.01, mode: "box" } });
     expect(selectorFor("escape")).toEqual({ number: { min: 0, max: 0.1, step: 0.001, mode: "box" } });
     expect(selectorFor("scale")).toEqual({ number: { min: 0.1, step: 0.1, mode: "box" } });
+  });
+});
+
+describe("the setup card", () => {
+  it("is the whole tab while presence is off", async () => {
+    const { el } = await tab({ bermuda: true, enabled: false }, roomsConfig());
+    expect(el.shadowRoot!.querySelector(".setup")).toBeTruthy();
+    expect(el.shadowRoot!.querySelector("al-graph-map")).toBeNull();
+    expect(el.shadowRoot!.querySelector('ha-card[header="People"]')).toBeNull();
+    expect(el.shadowRoot!.querySelector(".setup")!.textContent).toContain(
+      "which room each tracked device is in",
+    );
+    expect(el.shadowRoot!.querySelector(".setup")!.textContent).toContain("per-scanner distance sensors");
+  });
+
+  it("reports whether Bermuda was found", async () => {
+    let { el } = await tab({ bermuda: true, enabled: false }, roomsConfig());
+    expect(el.shadowRoot!.querySelector(".bermuda")!.textContent).toContain("Bermuda is installed");
+    ({ el } = await tab({ bermuda: false, enabled: false }, roomsConfig()));
+    expect(el.shadowRoot!.querySelector(".bermuda")!.textContent).toContain("Bermuda was not found");
+    // discouraged, not forbidden: somebody may be installing it in another tab
+    expect(el.shadowRoot!.querySelector(".enable ha-switch")!.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("switches presence on through the ordinary config change", async () => {
+    const { el } = await tab({ bermuda: true, enabled: false }, roomsConfig());
+    const changed = listenFor<AlChangeEvent>(el, "al-change");
+    el.shadowRoot!
+      .querySelector(".enable ha-switch")!
+      .dispatchEvent(new CustomEvent("change", { detail: {} }));
+    expect((await changed).detail.presence!.enabled).toBe(true);
+  });
+
+  it("writes the device picker into the draft's presence, keeping a selected device's name", async () => {
+    const config = presenceConfig();
+    const { el } = await tab({ bermuda: true, enabled: false }, { ...config, presence: { ...config.presence!, enabled: false } });
+    const changed = listenFor<AlChangeEvent>(el, "al-change");
+    el.shadowRoot!.querySelector(".setup-devices")!.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: ["device_tracker.scotts_phone", "device_tracker.erins_phone"] },
+      }),
+    );
+    expect((await changed).detail.presence!.devices).toEqual([
+      { device: "device_tracker.scotts_phone", name: "Scott" },
+      { device: "device_tracker.erins_phone", name: null },
+    ]);
+  });
+
+  it("gives way to the real tab once presence is on", async () => {
+    const { el } = await tab({ bermuda: true, enabled: true }, presenceConfig());
+    expect(el.shadowRoot!.querySelector(".setup")).toBeNull();
+    expect(el.shadowRoot!.querySelector("al-graph-map")).toBeTruthy();
   });
 });

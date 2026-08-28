@@ -13,7 +13,7 @@ import {
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { simSwitchId } from "./entities";
 import { ensureHaElements } from "./ha-elements";
-import { groupAt, groupPathFor, presenceSettings } from "./model";
+import { groupAt, groupPathFor } from "./model";
 import { expandTo, reduce, restoreNav, saveExpanded } from "./navigation";
 import { runSave } from "./save-flow";
 import { Draft } from "./store";
@@ -36,7 +36,12 @@ import type {
 
 type Tab = "mixer" | "groups" | "envelopes" | "defaults" | "patterns" | "presence";
 
-const BASE_TABS: Tab[] = ["mixer", "groups", "envelopes", "defaults", "patterns"];
+/**
+ * Every tab, always. Presence used to appear only while it was enabled, which meant the
+ * only way to switch it on was to write `presence.enabled` into the options by hand — and
+ * the tab is where you turn it on, so it has to be reachable before it is on.
+ */
+const TABS: Tab[] = ["mixer", "groups", "envelopes", "defaults", "patterns", "presence"];
 const LIVE_POLL_MS = 2000;
 const SIM_POLL_MS = 10_000;
 /** A profile only changes when it is retrained, so anything fresher than this will do. */
@@ -99,10 +104,8 @@ export class ActivityLevelsPanel extends LitElement {
    */
   private simStatesMemo: { key: unknown[]; value: Record<string, SimState> } | null = null;
 
-  /** Presence is opt-in, so its tab only exists while the draft asks for it. */
   private get tabs(): Tab[] {
-    const config = this.draft?.config;
-    return config && presenceSettings(config).enabled ? [...BASE_TABS, "presence"] : BASE_TABS;
+    return TABS;
   }
 
   private readonly onVisibilityChange = (): void => this.updatePolling();
@@ -177,11 +180,11 @@ export class ActivityLevelsPanel extends LitElement {
   }
 
   /**
-   * Keeps the shown tab in the list. An edit, a discard, an undo, a redo and a reload can
-   * all switch presence off underneath the Presence tab; leaving `tab` naming a tab that
-   * is no longer there would keep `al-presence` mounted and polling, and would leave the
-   * roving tabindex past the end of the list - which takes the whole tablist out of the
-   * keyboard order.
+   * Keeps the shown tab in the list. Every tab is listed all the time now, so `this.tab`
+   * can no longer fall outside `this.tabs` in practice - but the type only promises `Tab`,
+   * not membership in whatever `tabs` happens to be, so this stays the one place that
+   * would notice if that ever stopped being true and send the tablist back to Mixer
+   * instead of leaving the roving tabindex past the end of the list.
    */
   private syncTabs(): void {
     if (!this.tabs.includes(this.tab)) this.selectTab(0);

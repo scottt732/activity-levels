@@ -19,6 +19,7 @@ const TOPO: TopologyPayload = {
 const hassStub = (): HomeAssistant => ({ states: {} }) as unknown as HomeAssistant;
 
 const presenceState = (over: Partial<PresenceState> = {}): PresenceState => ({
+  bermuda: false,
   enabled: true,
   devices: {},
   occupants: {},

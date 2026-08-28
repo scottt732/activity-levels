@@ -205,6 +205,8 @@ export interface ScannerRow {
 
 /** `activity_levels/presence/state`. */
 export interface PresenceState {
+  /** Whether the Bermuda integration is loaded. The setup card asks before offering to turn presence on. */
+  bermuda: boolean;
   enabled: boolean;
   devices: Record<string, PresenceOutputs>;
   occupants: Record<string, string[]>;
