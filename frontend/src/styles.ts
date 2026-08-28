@@ -212,6 +212,30 @@ export const sharedStyles = css`
     font-size: 0.9em;
     min-height: 28px;
   }
+  /* An editor panel: the header carries the section's name over its one-line definition. */
+  ha-expansion-panel {
+    margin-bottom: 8px;
+  }
+  .panel-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 0;
+  }
+  .panel-body {
+    padding: 0 8px 8px;
+  }
+  /* Reachable by a screen reader, invisible to everyone else. */
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   /* Anchored under the row's action column, which is where the button that opens it is. */
   .add-menu {
     position: absolute;

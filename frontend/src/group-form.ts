@@ -1,6 +1,8 @@
 import { emptyToNull } from "./convert";
-import { adjacencyId, isOneWay } from "./model";
+import { KIND_DEFS, NODE_KINDS, allowedChildKinds } from "./kinds";
+import { slugify } from "./model";
 import type { Selector } from "./al-override-field";
+import type { Kind } from "./kinds";
 import type { FormItem } from "./stimulus-form";
 import type { Config, Group, Mix, NullHandling } from "./types";
 
@@ -11,29 +13,32 @@ import type { Config, Group, Mix, NullHandling } from "./types";
  */
 
 /** The fields either editor can show, in the order the schema lists them. */
-export type GroupField = "id" | "name" | "area_id" | "mix" | "null_handling" | "gain" | "adjacent" | "exit";
+export type GroupField = "id" | "name" | "kind" | "floor_id" | "area_id" | "mix" | "null_handling" | "gain";
+
+/** Identity, in the order the panel reads: what it is, what it binds, then what it is called. */
+export const IDENTITY_FIELDS: GroupField[] = ["kind", "floor_id", "area_id", "id", "name"];
+export const MIX_FIELDS: GroupField[] = ["mix", "null_handling", "gain"];
 
 export const GROUP_LABELS: Record<string, string> = {
   id: "ID",
   name: "Name",
-  area_id: "Area",
+  kind: "Kind",
+  floor_id: "Home Assistant floor",
+  area_id: "Home Assistant area",
   mix: "Mix",
   null_handling: "Idle contributors",
   gain: "Gain",
-  adjacent: "Adjacent rooms",
-  exit: "Way out of the house",
 };
 
 export const GROUP_HELPERS: Record<string, string> = {
-  id: "Identifies the group and its entities.",
-  name: "Friendly name; falls back to the id.",
-  area_id: "Area the group's entities are assigned to.",
+  id: "Identifies the group and its entities. Changing it re-creates them.",
+  name: "Friendly name; falls back to the area's name, then to the id.",
+  kind: "What this is on the property. It decides what can go inside it.",
+  floor_id: "Bind this to a Home Assistant floor to reuse its name.",
+  area_id: "Bind this to a Home Assistant area to reuse its name and put its entities in the right place.",
   mix: "How stimuli and child groups combine into this group's value.",
   null_handling: "Whether idle contributors count as zero or drop out of the mean.",
   gain: "Scales this group's contribution to its parent.",
-  adjacent:
-    "Rooms you can walk to from here. Symmetric: naming one from either side is enough. One-way connections are shown with an arrow and edited in YAML.",
-  exit: "People can leave the house from this room, so presence can move from here to Away.",
 };
 
 export const groupLabel = (item: FormItem): string => GROUP_LABELS[item.name] ?? item.name;
@@ -43,12 +48,12 @@ export const groupHelper = (item: FormItem): string => GROUP_HELPERS[item.name] 
 export const GROUP_FORM_FIELDS: (keyof Group)[] = [
   "id",
   "name",
+  "kind",
+  "floor_id",
   "area_id",
   "mix",
   "null_handling",
   "gain",
-  "adjacent",
-  "exit",
 ];
 
 export const MIX_OPTIONS = [
@@ -71,60 +76,67 @@ export const PRECISION_SELECTOR: Selector = {
 };
 export const GROUP_GAIN_SELECTOR: Selector = { number: { min: 0.1, max: 10, step: 0.1, mode: "slider" } };
 
-const EXIT_SELECTOR: Selector = { boolean: {} };
+/** Only a floor binds a floor, and only a place people are in binds an area. */
+const applies = (name: GroupField, group: Group, isRoot: boolean): boolean => {
+  switch (name) {
+    case "null_handling":
+      return group.mix === "mean";
+    case "gain":
+      return !isRoot;
+    case "floor_id":
+      return group.kind === "floor";
+    case "area_id":
+      return NODE_KINDS.has(group.kind);
+    default:
+      return true;
+  }
+};
 
 /**
- * Every other group, in tree order: what a room can be adjacent to. A one-way edge out of
- * `group` is badged with a trailing arrow - edited in YAML only, per spec, but the picker
- * still has to say which of the selected rooms are one-way.
+ * The kinds this picker offers: what the parent may contain, plus whatever this group
+ * already is. A document that is already wrong has to stay readable — a picker that
+ * cannot show the current value reads as though the value were something else.
  */
-function adjacentSelector(config: Config, group: Group): Selector {
-  const oneWay = new Set((group.adjacent ?? []).filter(isOneWay).map(adjacencyId));
-  const options: { value: string; label: string }[] = [];
-  const walk = (g: Group): void => {
-    if (g.id !== group.id) {
-      const name = g.name ?? g.id;
-      options.push({ value: g.id, label: oneWay.has(g.id) ? `${name} \u2192` : name });
-    }
-    g.children.forEach(walk);
+const kindSelector = (group: Group, parentKind: Kind | null): Selector => {
+  const options = [...allowedChildKinds(parentKind)];
+  if (!options.includes(group.kind)) options.push(group.kind);
+  return {
+    select: {
+      mode: "dropdown",
+      options: options.map((kind) => ({ value: kind, label: KIND_DEFS[kind].label })),
+    },
   };
-  config.groups.forEach(walk);
-  return { select: { multiple: true, mode: "dropdown", sort: false, options } };
-}
+};
 
-/** Idle handling only means something for a mean; a root group scales into nothing. */
-const applies = (name: GroupField, group: Group, isRoot: boolean): boolean =>
-  name === "null_handling" ? group.mix === "mean" : name === "gain" ? !isRoot : true;
-
+/**
+ * `config` is accepted for symmetry with `groupData` (every caller has one to hand and
+ * passes the same arguments to both), but the schema is decided by the group and by what
+ * its parent may contain, which the caller passes as `parentKind`.
+ */
 export function groupSchema(
   group: Group,
   isRoot: boolean,
   fields: readonly GroupField[],
   config?: Config,
+  parentKind: Kind | null = null,
 ): FormItem[] {
   const selectors: Record<GroupField, Selector> = {
     id: { text: {} },
     name: { text: {} },
+    kind: kindSelector(group, parentKind),
+    floor_id: { floor: {} },
     area_id: { area: {} },
     mix: { select: { mode: "dropdown", options: MIX_OPTIONS } },
     null_handling: { select: { mode: "dropdown", options: NULL_HANDLING_OPTIONS } },
     gain: GROUP_GAIN_SELECTOR,
-    adjacent: config ? adjacentSelector(config, group) : { select: { multiple: true, options: [] } },
-    exit: EXIT_SELECTOR,
   };
   return fields.filter((name) => applies(name, group, isRoot)).map((name) => ({ name, selector: selectors[name] }));
 }
 
 /**
- * An unset area is left out entirely rather than sent as an empty string: `ha-selector`'s
- * area picker reads `""` as a chosen area that no longer exists.
- *
- * `adjacent` is spelled out as plain ids, unfiltered: a dangling id left behind by deleting
- * another group must survive the round trip through `ha-form` so the backend's own
- * `unknown group` validation catches it on Save, rather than this vanishing it from under
- * the user with no error ever shown. The picker's own option list (`adjacentSelector`) is
- * where filtering to real groups belongs - that only affects what can be newly chosen, not
- * what is already stored.
+ * An unset registry binding is left out entirely rather than sent as an empty string:
+ * `ha-selector`'s area and floor pickers read `""` as a chosen registry entry that no
+ * longer exists.
  *
  * `config` is accepted for symmetry with `groupSchema` (every caller has one to hand and
  * passes the same arguments to both), but is not needed here.
@@ -136,51 +148,72 @@ export function groupData(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- see doc comment above
   config?: Config,
 ): Record<string, unknown> {
-  const adjacent = (group.adjacent ?? []).map(adjacencyId);
   const all: Record<GroupField, unknown> = {
     id: group.id,
     name: group.name ?? "",
+    kind: group.kind,
+    floor_id: group.floor_id,
     area_id: group.area_id,
     mix: group.mix,
     null_handling: group.null_handling,
     gain: group.gain,
-    adjacent,
-    exit: group.exit === true,
   };
   return Object.fromEntries(
     fields
-      .filter((name) => applies(name, group, isRoot) && !(name === "area_id" && group.area_id === null))
+      .filter(
+        (name) =>
+          applies(name, group, isRoot) &&
+          !(name === "area_id" && group.area_id === null) &&
+          !(name === "floor_id" && group.floor_id === null),
+      )
       .map((name) => [name, all[name]]),
   );
 }
 
 /**
- * Folds an `ha-form` payload back into the group. Fields the form does not show are kept.
- * The adjacency picker only ever produces ids, so a one-way edge that is still selected
- * keeps the object it had - dropping to a plain id would silently make a laundry chute a
- * doorway.
+ * Folds an `ha-form` payload back into the group. Fields the form does not show are kept -
+ * `adjacent` and `exit` among them: the Adjacent groups table owns those, and a form that
+ * merged them would flatten a one-way laundry chute into a doorway on the next keystroke.
  */
 export function mergeGroup(group: Group, v: Record<string, unknown>): Group {
   const merged: Group = { ...group };
   if ("id" in v) merged.id = String(v.id ?? "");
   if ("name" in v) merged.name = emptyToNull(v.name as string | null | undefined);
+  if ("kind" in v && typeof v.kind === "string") merged.kind = v.kind as Kind;
+  if ("floor_id" in v) merged.floor_id = emptyToNull(v.floor_id as string | null | undefined);
   if ("area_id" in v) merged.area_id = emptyToNull(v.area_id as string | null | undefined);
   if ("mix" in v) merged.mix = (v.mix as Mix | undefined) ?? group.mix;
   if ("null_handling" in v) merged.null_handling = (v.null_handling as NullHandling | undefined) ?? group.null_handling;
   if ("gain" in v) merged.gain = typeof v.gain === "number" ? v.gain : group.gain;
-  if ("adjacent" in v) {
-    const chosen = Array.isArray(v.adjacent) ? (v.adjacent as string[]).map(String) : [];
-    const existing = new Map((group.adjacent ?? []).map((a) => [adjacencyId(a), a]));
-    merged.adjacent = chosen.map((id) => existing.get(id) ?? id);
-  }
-  if ("exit" in v) merged.exit = v.exit === true;
   return merged;
 }
 
-/** The single field this edit touched. Adjacency is a list, so it is compared as one. */
-export const changedGroupField = (merged: Group, group: Group): string | undefined => {
-  const before = (group.adjacent ?? []).map(adjacencyId).join(",");
-  const after = (merged.adjacent ?? []).map(adjacencyId).join(",");
-  if (before !== after) return "adjacent";
-  return GROUP_FORM_FIELDS.filter((k) => k !== "adjacent").find((k) => merged[k] !== group[k]);
-};
+/** The single field this edit touched, which names the undo step it coalesces into. */
+export const changedGroupField = (merged: Group, group: Group): string | undefined =>
+  GROUP_FORM_FIELDS.find((k) => merged[k] !== group[k]);
+
+/**
+ * Whether the id is still the one the tree made up. "Add group" has to produce something
+ * that validates, so a new group gets its kind as its id (`area`, `area_2`); that is the
+ * marker for "nobody has named this yet", and picking an area is then allowed to replace
+ * it. The moment the user types anything else, the id is theirs and nothing rewrites it.
+ */
+export const isDefaultId = (group: Group): boolean =>
+  group.id === "" || new RegExp(`^${group.kind}(_\\d+)?$`).test(group.id);
+
+function bind(group: Group, field: "area_id" | "floor_id", id: string | null, name: string | null): Group {
+  const bound: Group = { ...group, [field]: id };
+  // Clearing a binding is not an edit to the identity: the names it prefilled are the
+  // user's now, and taking them away would delete work nobody asked to delete.
+  if (id === null || name === null) return bound;
+  if (isDefaultId(group)) bound.id = slugify(name);
+  if (group.name === null) bound.name = name;
+  return bound;
+}
+
+/** Bind a Home Assistant area, prefilling the id and the name while both are untouched. */
+export const bindArea = (group: Group, areaId: string | null, areaName: string | null): Group =>
+  bind(group, "area_id", areaId, areaName);
+
+export const bindFloor = (group: Group, floorId: string | null, floorName: string | null): Group =>
+  bind(group, "floor_id", floorId, floorName);

@@ -2,7 +2,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { anomalySensorId, expectedSensorId, simSwitchId } from "./entities";
-import { fieldErrors, listFieldError, pathKey, subtreeErrorCount } from "./errors";
+import { fieldErrors, pathKey, subtreeErrorCount } from "./errors";
 import { alChange, alRebuild, alSimToggle } from "./events";
 import {
   MAX_VALUE_SELECTOR,
@@ -70,8 +70,12 @@ import type {
  */
 const CHANNEL_FIELDS: StimulusField[] = ["envelope", "gain", "to", "key"];
 
-/** The bus's tuning fields; `id` and `area` re-create entities, so they stay in the editor too. */
-const BUS_FIELDS: GroupField[] = ["name", "mix", "null_handling", "gain", "adjacent", "exit"];
+/**
+ * The bus's tuning fields. Identity stays in the Groups editor, where re-creating entities
+ * is an explicit act, and so does the shape of the property: adjacency and the way out are
+ * not something to edit from a mixer strip.
+ */
+const BUS_FIELDS: GroupField[] = ["name", "mix", "null_handling", "gain"];
 
 /** How many simulation actions the status card shows before it stops being a summary. */
 const LOG_ROWS = 5;
@@ -306,9 +310,7 @@ export class AlStripControls extends LitElement {
     if (!group) return html`<ha-card><span class="muted">This bus no longer exists.</span></ha-card>`;
     const isRoot = path.length === 2;
     const own = this.errors.filter((e) => e.path === pathKey(path));
-    const fields: Record<string, string> = { ...fieldErrors(this.errors, path) };
-    const adjacentError = listFieldError(this.errors, path, "adjacent");
-    if (adjacentError !== undefined) fields.adjacent = adjacentError;
+    const fields: Record<string, string> = fieldErrors(this.errors, path);
 
     return html`
       <ha-card header=${group.name ?? group.id}>

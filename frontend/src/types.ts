@@ -219,6 +219,8 @@ export interface HassEntity { entity_id: string; state: string; attributes: Reco
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
   areas: Record<string, { area_id: string; name: string }>;
+  /** Optional: an older frontend has no floor registry, and a home need not use one. */
+  floors?: Record<string, { floor_id: string; name: string }>;
   entities: Record<string, { entity_id: string; name?: string; area_id?: string | null }>;
   user?: { is_admin: boolean; name: string };
   language: string;

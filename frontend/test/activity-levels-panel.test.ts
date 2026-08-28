@@ -76,6 +76,8 @@ const profileState = (): ProfileState => ({
 let validateResult: { ok: boolean; errors: { path: string; message: string }[] } = { ok: true, errors: [] };
 /** What `config/get` answers next; reset per test. */
 let current: Config = config();
+/** Which groups `config/get` says it had to guess a kind for; reset per test. */
+let inferredIds: string[] = [];
 /** What `profile/rebuild` answers next. */
 let rebuilt = true;
 /** Set to make `profile/rebuild` fail. */
@@ -98,8 +100,9 @@ const hass = () => ({
   callWS: vi.fn(async (msg: { type: string }) => {
     switch (msg.type) {
       case "activity_levels/config/get":
-        return { config: current };
+        return { config: current, inferred: inferredIds };
       case "activity_levels/config/validate":
+      case "activity_levels/config/save":
         return validateResult;
       case "activity_levels/profile/get":
         return profileState();
@@ -172,6 +175,7 @@ const press = async (key: string): Promise<void> => {
 
 beforeEach(async () => {
   validateResult = { ok: true, errors: [] };
+  inferredIds = [];
   rebuilt = true;
   rebuildError = null;
   serviceError = null;
@@ -723,5 +727,69 @@ describe("activity-levels-panel presence tab", () => {
       "Patterns",
     ]);
     expect(el.shadowRoot?.querySelector(".tab.active")?.textContent?.trim()).toBe("Mixer");
+  });
+});
+
+describe("activity-levels-panel inferred kinds", () => {
+  const warning = (): HTMLElement | null =>
+    el.shadowRoot?.querySelector<HTMLElement>('ha-alert[alert-type="warning"]') ?? null;
+
+  it("says so, once, when the loader had to guess the kinds", async () => {
+    inferredIds = ["groups/0", "groups/0/children/0"];
+    await mount(houseConfig());
+    const banner = warning()!;
+    expect(banner).toBeTruthy();
+    expect(banner.textContent).toContain("inferred");
+    expect(banner.textContent).toContain("2 groups");
+    expect(el.shadowRoot?.querySelector(".inferred-fix")).toBeTruthy();
+  });
+
+  it("counts one group as one group", async () => {
+    inferredIds = ["groups/0"];
+    await mount(houseConfig());
+    expect(warning()?.textContent).toContain("1 group has");
+  });
+
+  it("says nothing when every kind came from the document", async () => {
+    await mount(houseConfig());
+    expect(warning()).toBeNull();
+  });
+
+  it("shows the first guess: the Groups tab, with that group selected", async () => {
+    inferredIds = ["groups/0/children/0"];
+    await mount(houseConfig());
+    el.shadowRoot?.querySelector<HTMLElement>(".inferred-fix")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, composed: true }),
+    );
+    await settle();
+    expect(tabs()[1]?.getAttribute("aria-selected")).toBe("true");
+    const tree = el.shadowRoot?.querySelector("al-tree") as unknown as { selection: unknown };
+    expect(tree.selection).toEqual(["groups", 0, "children", 0]);
+  });
+
+  it("clears the notice once the guesses have been saved", async () => {
+    inferredIds = ["groups/0"];
+    await mount(houseConfig());
+    expect(warning()).toBeTruthy();
+    // The save writes the kinds, so the reload that follows it reads a document with
+    // nothing left to guess - which is the moment the notice has done its job.
+    const edited = houseConfig();
+    edited.groups[0]!.name = "Home";
+    el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(alChange(edited));
+    await settle();
+    inferredIds = [];
+    const save = Array.from(el.shadowRoot?.querySelectorAll("ha-button") ?? []).find(
+      (b) => b.textContent?.trim() === "Save",
+    );
+
+    vi.useFakeTimers();
+    try {
+      save?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+      await vi.advanceTimersByTimeAsync(2000);
+      for (let k = 0; k < 5; k++) await el.updateComplete;
+      expect(warning()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

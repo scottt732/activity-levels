@@ -477,7 +477,7 @@ export class ActivityLevelsPanel extends LitElement {
             >${d?.dirty ? "Save" : "Saved"}</ha-button
           >
         </div>
-        ${this.renderBanner()}
+        ${this.renderBanner()} ${this.renderInferred()}
         <div class="tabs" role="tablist" aria-label="Sections" @keydown=${this.onTabsKeydown}>
           ${this.tabs.map(
             (t, i) => html`<button
@@ -536,6 +536,29 @@ export class ActivityLevelsPanel extends LitElement {
       }}
       >${banner.text}</ha-alert
     >`;
+  }
+
+  /**
+   * The one-time migration notice. A document written before kinds existed loads with them
+   * guessed; nothing is written back until a human agrees, so this stays up until the next
+   * Save — which is the moment the guesses become the document.
+   */
+  private renderInferred() {
+    const count = this.inferred.length;
+    if (count === 0) return nothing;
+    return html`<ha-alert alert-type="warning">
+      ${count} ${count === 1 ? "group has" : "groups have"} an inferred kind — check them and save. Until you
+      do, the kinds above are a guess and nothing has been written.
+      <ha-button
+        class="inferred-fix"
+        slot="action"
+        @click=${() => {
+          this.selectTab(this.tabs.indexOf("groups"));
+          this.select(this.inferred[0]!.split("/").map((s) => (/^\d+$/.test(s) ? Number(s) : s)));
+        }}
+        >Show me</ha-button
+      >
+    </ha-alert>`;
   }
 
   private renderTab(d: Draft) {
