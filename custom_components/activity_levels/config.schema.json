@@ -1,0 +1,1078 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Activity Levels configuration",
+  "description": "The options document for the Activity Levels Home Assistant integration. Paste this schema's URL into your editor with '# yaml-language-server: $schema=/activity_levels_panel/config.schema.json'.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [
+        1
+      ],
+      "description": "Document version. Only 1 exists."
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "envelope": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "A group id: lowercase letters, digits and underscores, starting with a letter.",
+          "default": "default"
+        },
+        "max_value": {
+          "type": "number",
+          "exclusiveMinimum": 0.0,
+          "default": 5.0
+        },
+        "precision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "default": 1
+        },
+        "unavailable": {
+          "enum": [
+            "hold",
+            "note_off"
+          ],
+          "default": "hold"
+        },
+        "retrigger": {
+          "enum": [
+            "always",
+            "after_attack",
+            "after_decay",
+            "release",
+            "idle"
+          ],
+          "default": "always"
+        },
+        "stack": {
+          "type": "boolean",
+          "default": true
+        },
+        "debounce": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+            }
+          ],
+          "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'.",
+          "default": 0.0
+        },
+        "safety_refresh": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+            }
+          ],
+          "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'. Between 5.0 and 3600.0 seconds.",
+          "default": 60.0
+        },
+        "min_wake_interval": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+            }
+          ],
+          "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'. Between 0.1 and 60.0 seconds.",
+          "default": 1.0
+        },
+        "patterns": {
+          "type": "object",
+          "properties": {
+            "rebuild_time": {
+              "type": "string",
+              "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+              "description": "A time of day, 'HH:MM' on a 24-hour clock.",
+              "default": "03:00"
+            },
+            "history_days": {
+              "type": "integer",
+              "minimum": 30,
+              "maximum": 730,
+              "default": 180
+            },
+            "min_days": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 90,
+              "default": 14
+            },
+            "calendars": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+                  },
+                  "entity": {
+                    "type": "string",
+                    "pattern": "^calendar\\.[a-z0-9_]+$"
+                  }
+                },
+                "required": [
+                  "id",
+                  "entity"
+                ],
+                "additionalProperties": false
+              },
+              "default": []
+            },
+            "day_type_precedence": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                }
+              ],
+              "default": null
+            },
+            "workday_entity": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"
+                }
+              ],
+              "default": null
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "simulation": {
+          "type": "object",
+          "properties": {
+            "away_entity": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"
+                }
+              ],
+              "default": null
+            },
+            "quiet_hours": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              ],
+              "description": "A [start, end] pair of 'HH:MM' times, or null to disable.",
+              "default": [
+                "01:00",
+                "05:30"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        }
+      },
+      "additionalProperties": false,
+      "default": {},
+      "description": "Settings every group inherits unless it says otherwise, plus the pattern-learning and presence-simulation options, which are configured only here."
+    },
+    "envelopes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": null
+          },
+          "attack": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+              }
+            ],
+            "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'.",
+            "default": 0.0
+          },
+          "decay": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+              }
+            ],
+            "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'.",
+            "default": 0.0
+          },
+          "sustain": {
+            "type": "number",
+            "minimum": 0.0,
+            "default": 1.0
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0
+              },
+              {
+                "type": "string",
+                "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+              }
+            ],
+            "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'.",
+            "default": 1800.0
+          },
+          "impulse": {
+            "type": "boolean",
+            "default": false
+          },
+          "retrigger": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "enum": [
+                  "always",
+                  "after_attack",
+                  "after_decay",
+                  "release",
+                  "idle"
+                ]
+              }
+            ],
+            "default": null
+          },
+          "stack": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "boolean"
+              }
+            ],
+            "default": null
+          },
+          "unavailable": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "enum": [
+                  "hold",
+                  "note_off"
+                ]
+              }
+            ],
+            "default": null
+          },
+          "debounce": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                  }
+                ],
+                "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'."
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "default": [],
+      "description": "Named ADSR presets. A stimulus names one by id and may override any of its fields inline; `defaults.envelope` names the one used when a stimulus names none."
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/group"
+      },
+      "default": [],
+      "description": "The tree of places. Every root group is a property; a property holds structures and outdoor areas, a structure holds floors, a floor holds areas, and an outdoor area holds outdoor areas."
+    },
+    "presence": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "devices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "device": {
+                "type": "string",
+                "pattern": "^device_tracker\\.[a-z0-9_]+$"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "device"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "envelope": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+            }
+          ],
+          "default": null
+        },
+        "threshold": {
+          "type": "number",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.6
+        },
+        "stay": {
+          "type": "number",
+          "exclusiveMinimum": 0.0,
+          "exclusiveMaximum": 1.0,
+          "default": 0.9
+        },
+        "escape": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 0.1,
+          "default": 0.001
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0.0,
+          "default": 3.0
+        },
+        "floor": {
+          "type": "number",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.05
+        },
+        "stuck_after": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+            }
+          ],
+          "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'. At least 1.0 seconds.",
+          "default": 60.0
+        },
+        "scanner_areas": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": false,
+      "default": {},
+      "description": "Room-level presence from Bermuda device trackers. Absent, or `enabled: false`, turns the whole feature off."
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "group": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "property",
+                "structure",
+                "floor",
+                "area",
+                "outside"
+              ]
+            }
+          ],
+          "default": null
+        },
+        "area": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": null
+        },
+        "area_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": null
+        },
+        "floor_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": null
+        },
+        "mix": {
+          "enum": [
+            "sum",
+            "max",
+            "mean"
+          ],
+          "default": "sum"
+        },
+        "null_handling": {
+          "enum": [
+            "zero",
+            "ignore"
+          ],
+          "default": "zero"
+        },
+        "max_value": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number",
+              "exclusiveMinimum": 0.0
+            }
+          ],
+          "default": null
+        },
+        "precision": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            }
+          ],
+          "default": null
+        },
+        "gain": {
+          "type": "number",
+          "exclusiveMinimum": 0.0,
+          "default": 1.0
+        },
+        "stimuli": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"
+              },
+              "to": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  }
+                ],
+                "description": "One state, or a list of states, that counts as a trigger.",
+                "default": [
+                  "on"
+                ]
+              },
+              "gain": {
+                "type": "number",
+                "exclusiveMinimum": 0.0,
+                "default": 1.0
+              },
+              "key": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                ],
+                "default": null
+              },
+              "envelope": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+                  }
+                ],
+                "default": null
+              },
+              "attack": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                      }
+                    ],
+                    "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'."
+                  }
+                ],
+                "default": null
+              },
+              "decay": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                      }
+                    ],
+                    "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'."
+                  }
+                ],
+                "default": null
+              },
+              "sustain": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "number",
+                    "minimum": 0.0
+                  }
+                ],
+                "default": null
+              },
+              "release": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                      }
+                    ],
+                    "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'."
+                  }
+                ],
+                "default": null
+              },
+              "impulse": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ],
+                "default": null
+              },
+              "retrigger": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "enum": [
+                      "always",
+                      "after_attack",
+                      "after_decay",
+                      "release",
+                      "idle"
+                    ]
+                  }
+                ],
+                "default": null
+              },
+              "stack": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ],
+                "default": null
+              },
+              "unavailable": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "enum": [
+                      "hold",
+                      "note_off"
+                    ]
+                  }
+                ],
+                "default": null
+              },
+              "debounce": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                      }
+                    ],
+                    "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'."
+                  }
+                ],
+                "default": null
+              }
+            },
+            "required": [
+              "entity"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/group"
+          },
+          "default": []
+        },
+        "simulation": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "lights": {
+              "type": "object",
+              "properties": {
+                "include": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"
+                  },
+                  "default": []
+                },
+                "exclude": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"
+                  },
+                  "default": []
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "adjacent": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]*$",
+                    "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+                  },
+                  "connection": {
+                    "enum": [
+                      "open",
+                      "door",
+                      "stairs",
+                      "exterior_door"
+                    ],
+                    "default": "door"
+                  },
+                  "one_way": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "description": "A group id, or {id, connection, one_way}."
+          },
+          "default": []
+        },
+        "exit": {
+          "type": "boolean",
+          "default": false
+        },
+        "presence": {
+          "type": "object",
+          "properties": {
+            "gain": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "default": 1.0
+            },
+            "envelope": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$",
+                  "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+                }
+              ],
+              "default": null
+            },
+            "attack": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                    }
+                  ],
+                  "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'."
+                }
+              ],
+              "default": null
+            },
+            "decay": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                    }
+                  ],
+                  "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'."
+                }
+              ],
+              "default": null
+            },
+            "sustain": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number",
+                  "minimum": 0.0
+                }
+              ],
+              "default": null
+            },
+            "release": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                    }
+                  ],
+                  "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'."
+                }
+              ],
+              "default": null
+            },
+            "impulse": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "boolean"
+                }
+              ],
+              "default": null
+            },
+            "retrigger": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "enum": [
+                    "always",
+                    "after_attack",
+                    "after_decay",
+                    "release",
+                    "idle"
+                  ]
+                }
+              ],
+              "default": null
+            },
+            "stack": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "boolean"
+                }
+              ],
+              "default": null
+            },
+            "unavailable": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "enum": [
+                    "hold",
+                    "note_off"
+                  ]
+                }
+              ],
+              "default": null
+            },
+            "debounce": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                    }
+                  ],
+                  "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'."
+                }
+              ],
+              "default": null
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "description": "One place, or one container of places. `id` names its entities and never changes meaning; `kind` says what it is on the property and decides what may go inside it."
+    }
+  }
+}

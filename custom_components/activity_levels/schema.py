@@ -56,25 +56,41 @@ class ConfigError(Exception):
         self.errors = errors
 
 
-def _finite(
-    lo: float | None = None,
-    lo_exclusive: bool = False,
-    hi: float | None = None,
-    hi_exclusive: bool = False,
-) -> Any:
-    def check(value: Any) -> float:
+@dataclass(frozen=True)
+class _Finite:
+    """A finite number in an optionally half-open range -- and a record of that range.
+
+    It was a closure until `schema_json` needed the bounds back. A closure keeps them
+    where nothing but the check itself can read them, so the exported JSON Schema had
+    to either repeat every limit by hand or publish none of them. Holding them as
+    fields costs nothing at validation time and makes the schema walk exact.
+    """
+
+    lo: float | None = None
+    lo_exclusive: bool = False
+    hi: float | None = None
+    hi_exclusive: bool = False
+
+    def __call__(self, value: Any) -> float:
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise vol.Invalid("must be a number")
         f = float(value)
         if not math.isfinite(f):
             raise vol.Invalid("must be finite")
-        if lo is not None and (f <= lo if lo_exclusive else f < lo):
-            raise vol.Invalid(f"must be {'>' if lo_exclusive else '>='} {lo}")
-        if hi is not None and (f >= hi if hi_exclusive else f > hi):
-            raise vol.Invalid(f"must be {'<' if hi_exclusive else '<='} {hi}")
+        if self.lo is not None and (f <= self.lo if self.lo_exclusive else f < self.lo):
+            raise vol.Invalid(f"must be {'>' if self.lo_exclusive else '>='} {self.lo}")
+        if self.hi is not None and (f >= self.hi if self.hi_exclusive else f > self.hi):
+            raise vol.Invalid(f"must be {'<' if self.hi_exclusive else '<='} {self.hi}")
         return f
 
-    return check
+
+def _finite(
+    lo: float | None = None,
+    lo_exclusive: bool = False,
+    hi: float | None = None,
+    hi_exclusive: bool = False,
+) -> _Finite:
+    return _Finite(lo, lo_exclusive, hi, hi_exclusive)
 
 
 def _group_id(value: Any) -> str:
@@ -322,31 +338,15 @@ DEFAULTS_SCHEMA = vol.All(
 
 
 def _group_schema(value: Any) -> dict[str, Any]:
-    """Recursive group schema (voluptuous cannot reference itself directly)."""
-    schema = vol.Schema(
-        {
-            vol.Required("id"): _group_id,
-            vol.Optional("name", default=None): vol.Any(None, str),
-            vol.Optional(CONF_KIND, default=None): vol.Any(None, vol.In(KINDS)),
-            vol.Optional("area", default=None): vol.Any(None, str),
-            vol.Optional(CONF_AREA_ID, default=None): vol.Any(None, str),
-            vol.Optional(CONF_FLOOR_ID, default=None): vol.Any(None, str),
-            vol.Optional("mix", default=Mix.SUM): _ENUM["mix"],
-            vol.Optional("null_handling", default=NullHandling.ZERO): _ENUM["null_handling"],
-            vol.Optional("max_value", default=None): vol.Any(None, _finite(0.0, lo_exclusive=True)),
-            vol.Optional("precision", default=None): vol.Any(
-                None, vol.All(int, vol.Range(min=0, max=3))
-            ),
-            vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
-            vol.Optional("stimuli", default=list): [STIMULUS_SCHEMA],
-            vol.Optional("children", default=list): [_group_schema],
-            vol.Optional(CONF_SIMULATION, default=dict): GROUP_SIMULATION_SCHEMA,
-            vol.Optional("adjacent", default=list): [_adjacent],
-            vol.Optional("exit", default=False): cv.boolean,
-            vol.Optional(CONF_PRESENCE, default=dict): GROUP_PRESENCE_SCHEMA,
-        }
-    )
-    result: dict[str, Any] = schema(value)
+    """Recursive group schema (voluptuous cannot reference itself directly).
+
+    The keys live in `GROUP_SCHEMA` below rather than in here, because this function is
+    the only thing `groups` and `children` can name and so it is also the only handle
+    anything walking the schema -- `schema_json` -- would otherwise have on a group. It
+    is defined after this one so that `children` can name this function; Python looks the
+    name up when the group is validated, by which time both exist.
+    """
+    result: dict[str, Any] = GROUP_SCHEMA(value)
     # `area` was the old spelling. Both are accepted so a half-edited file loads, and the
     # normalized document only ever carries `area_id` -- the panel and the device registry
     # then have one field to read, and a round trip cannot resurrect the old one.
@@ -356,6 +356,31 @@ def _group_schema(value: Any) -> dict[str, Any]:
         result[CONF_AREA_ID] = result["area"]
     del result["area"]
     return result
+
+
+GROUP_SCHEMA = vol.Schema(
+    {
+        vol.Required("id"): _group_id,
+        vol.Optional("name", default=None): vol.Any(None, str),
+        vol.Optional(CONF_KIND, default=None): vol.Any(None, vol.In(KINDS)),
+        vol.Optional("area", default=None): vol.Any(None, str),
+        vol.Optional(CONF_AREA_ID, default=None): vol.Any(None, str),
+        vol.Optional(CONF_FLOOR_ID, default=None): vol.Any(None, str),
+        vol.Optional("mix", default=Mix.SUM): _ENUM["mix"],
+        vol.Optional("null_handling", default=NullHandling.ZERO): _ENUM["null_handling"],
+        vol.Optional("max_value", default=None): vol.Any(None, _finite(0.0, lo_exclusive=True)),
+        vol.Optional("precision", default=None): vol.Any(
+            None, vol.All(int, vol.Range(min=0, max=3))
+        ),
+        vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
+        vol.Optional("stimuli", default=list): [STIMULUS_SCHEMA],
+        vol.Optional("children", default=list): [_group_schema],
+        vol.Optional(CONF_SIMULATION, default=dict): GROUP_SIMULATION_SCHEMA,
+        vol.Optional("adjacent", default=list): [_adjacent],
+        vol.Optional("exit", default=False): cv.boolean,
+        vol.Optional(CONF_PRESENCE, default=dict): GROUP_PRESENCE_SCHEMA,
+    }
+)
 
 
 CONFIG_SCHEMA = vol.Schema(

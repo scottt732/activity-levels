@@ -19,6 +19,8 @@ from .const import (
     PANEL_ICON,
     PANEL_TITLE,
     PANEL_URL_PATH,
+    SCHEMA_NAME,
+    SCHEMA_URL,
     STATIC_URL,
 )
 
@@ -26,6 +28,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _STATIC_REGISTERED = f"{DOMAIN}_static_registered"
 _FRONTEND_DIR = Path(__file__).parent / "frontend"
+_SCHEMA_FILE = Path(__file__).parent / SCHEMA_NAME
 
 
 def _bundle_hash() -> str | None:
@@ -40,7 +43,16 @@ async def async_register_panel(hass: HomeAssistant) -> None:
     """Register the static path and sidebar panel, once per HA run."""
     if not hass.data.get(_STATIC_REGISTERED):
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(STATIC_URL, str(_FRONTEND_DIR), cache_headers=True)]
+            [
+                # The schema first, and deliberately: the directory below it is served by
+                # a prefix resource that would match this URL and answer 404, because the
+                # file lives beside the integration rather than inside the bundle folder.
+                # Routes resolve in registration order, so the exact match has to be added
+                # before the prefix. It is also uncached -- a schema an editor pinned for a
+                # year would outlive the integration that describes it.
+                StaticPathConfig(SCHEMA_URL, str(_SCHEMA_FILE), cache_headers=False),
+                StaticPathConfig(STATIC_URL, str(_FRONTEND_DIR), cache_headers=True),
+            ]
         )
         hass.data[_STATIC_REGISTERED] = True
     if PANEL_URL_PATH in hass.data.get(frontend.DATA_PANELS, {}):

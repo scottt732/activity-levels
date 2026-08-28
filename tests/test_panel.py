@@ -1,3 +1,4 @@
+import json
 import logging
 from http import HTTPStatus
 from pathlib import Path
@@ -42,6 +43,22 @@ async def test_bundle_is_served(
     assert resp.status == HTTPStatus.OK
     body = await resp.text()
     assert "activity-levels-panel" in body
+
+
+async def test_config_schema_is_served(
+    hass: HomeAssistant, hass_client: ClientSessionGenerator, entry: MockConfigEntry
+) -> None:
+    """The URL an editor's `$schema` comment points at.
+
+    It shares a prefix with the bundle directory, which is served by a prefix resource
+    that would answer 404 for it, so this also pins the registration order.
+    """
+    client = await hass_client()
+    resp = await client.get("/activity_levels_panel/config.schema.json")
+    assert resp.status == HTTPStatus.OK
+    document = json.loads(await resp.text())
+    assert document["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+    assert "groups" in document["properties"]
 
 
 async def test_reload_keeps_panel_without_panels_updated(

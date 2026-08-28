@@ -146,6 +146,38 @@ Mixer tab is open; the **Live** switch on the other tabs does the same for the t
 the stimulus editor, and pauses while a save is in flight and while the browser tab is in
 the background.
 
+### Editing as YAML
+
+The **Code** tab is the whole configuration as one YAML document, in Home Assistant's own
+code editor. It is not a separate copy: it opens on the draft the other tabs are editing,
+and every parseable edit flows straight back into that draft, so **Undo**, **Redo**,
+**Discard** and **Save** work exactly as they do everywhere else, and switching to
+**Groups** or **Envelopes** shows what you just typed. Save applies it the same way as
+any other edit — validate, write, reload.
+
+Every change is validated against the running integration as you type. Problems are
+listed under the editor as `path — message`; clicking one jumps the cursor to that line
+where the path can be found in the text. While anything is listed — or while the YAML
+does not parse at all, in which case the parser's own complaint is what you get — **Save**
+is disabled, because the document would be refused anyway.
+
+To edit the same document in an editor outside Home Assistant, the integration publishes
+a [JSON Schema](https://json-schema.org) for it at `/activity_levels_panel/config.schema.json`.
+Point the YAML language server at it with a comment on the first line of your file:
+
+```yaml
+# yaml-language-server: $schema=http://homeassistant.local:8123/activity_levels_panel/config.schema.json
+version: 1
+```
+
+That gives completion, hover documentation and inline errors in VS Code (with the
+[YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml))
+and in anything else that speaks the same protocol. The schema is generated from the same
+voluptuous definition the integration validates with, so it is never a second opinion —
+though it is deliberately the more permissive of the two, because the rules that need to
+see the whole document (a doorway pointing at a group that exists, an envelope somebody
+actually defined) are checked on Save rather than in your editor.
+
 ### Known limitations
 
 - A group's `area_id` is applied when its device is first created, so changing it later
@@ -406,6 +438,9 @@ count.
 ## Configuration reference
 
 Durations accept `30s`, `5m`, `2h`, `1d`, `HH:MM:SS`, or a plain number of seconds.
+
+Everything below is also published as a JSON Schema, which your editor can check this
+document against as you type — see [Editing as YAML](#editing-as-yaml).
 
 Renaming a group's `id` creates new entities (history is not carried over); `area_id` is
 applied only when a group's device is first created. A tracked person's entities are

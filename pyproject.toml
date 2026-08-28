@@ -19,6 +19,10 @@ dev = [
   "pytest-homeassistant-custom-component==0.13.357",
   "home-assistant-frontend==20260729.7",
   "pytest-cov>=7.1.0",
+  # Only the schema-export test uses it: it checks that config.schema.json really is a
+  # draft 2020-12 schema and that examples/house.yaml validates against it. Home
+  # Assistant does not ship it, and nothing at runtime imports it.
+  "jsonschema>=4.23",
 ]
 
 [tool.pytest.ini_options]
