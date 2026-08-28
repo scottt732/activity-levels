@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import "../src/al-strip-controls";
 import { newGroup, newStimulus } from "../src/model";
 import { presenceConfig, roomsConfig } from "./fixtures";
+import type { AlStimulusEditor } from "../src/al-stimulus-editor";
 import type { AlStripControls } from "../src/al-strip-controls";
 import type { AlChangeEvent } from "../src/events";
 import type {
@@ -188,49 +189,63 @@ describe("al-strip-controls with nothing selected", () => {
   });
 });
 
+/**
+ * A channel is a stimulus, so `al-strip-controls` hands it to the same `al-stimulus-editor`
+ * the Groups tab uses rather than a flat form of its own — its fields, override count and
+ * panel behaviour are that element's own tests to cover; this file only has to prove the
+ * mixer wires it up.
+ */
 describe("al-strip-controls: a channel", () => {
   beforeEach(async () => {
     await show(["groups", 0, "stimuli", 0]);
   });
 
-  it("offers the envelope presets plus the inherited default", () => {
-    const envelope = form().schema?.find((f) => f.name === "envelope");
-    const options = (envelope?.selector as { select?: { options?: { value: string }[] } } | undefined)?.select?.options;
-    expect(options?.map((o) => o.value)).toEqual(["", "default", "slow"]);
+  const editor = (): AlStimulusEditor =>
+    el.shadowRoot!.querySelector<AlStimulusEditor>("al-stimulus-editor")!;
+
+  const panel = (name: string): HTMLElement | null | undefined =>
+    editor().shadowRoot?.querySelector<HTMLElement>(`ha-expansion-panel[data-panel="${name}"]`);
+
+  it("hands the channel to the shared stimulus editor, not a flat form of its own", () => {
+    expect(el.shadowRoot?.querySelector("ha-form")).toBeNull();
+    expect(editor()).toBeTruthy();
+    expect(panel("source")).toBeTruthy();
+    expect(panel("envelope")).toBeTruthy();
+    expect(panel("overrides")).toBeTruthy();
   });
 
-  it("edits the tuning fields, leaving the entity to the Groups editor", () => {
-    expect(form().schema?.map((f) => f.name)).toEqual(["envelope", "gain", "to", "key"]);
+  it("passes the editor the same props the Groups tab does", () => {
+    expect(editor().path).toEqual(["groups", 0, "stimuli", 0]);
+    expect(editor().config).toBe(el.config);
+    expect(editor().errors).toBe(el.errors);
   });
 
-  it("shows one override row per envelope parameter", () => {
-    expect(el.shadowRoot?.querySelectorAll("al-override-field")).toHaveLength(8);
-    expect(el.shadowRoot?.querySelector("al-envelope-sketch")).toBeTruthy();
+  it("badges the overrides panel the same way every surface does", async () => {
+    const config = baseConfig();
+    config.groups[0]!.stimuli[0] = { ...config.groups[0]!.stimuli[0]!, release: 600, attack: 5 };
+    el.config = config;
+    await el.updateComplete;
+    expect(panel("overrides")?.querySelector(".badge")?.textContent).toContain("2 overridden");
   });
 
-  it("writes a fader move back with a per-field coalesce key", async () => {
-    await edit({ gain: 2.5 });
+  it("routes an edit made in the shared editor back out with its coalesce key", async () => {
+    const gainForm = panel("envelope")?.querySelector("ha-form") as
+      | (HTMLElement & { data?: Record<string, unknown> })
+      | undefined;
+    expect(gainForm, "missing the Envelope panel's ha-form").toBeTruthy();
+    gainForm!.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: { ...gainForm!.data, gain: 2.5 } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
     expect(changes.at(-1)?.detail.groups[0]?.stimuli[0]?.gain).toBe(2.5);
     expect(changes.at(-1)?.coalesceKey).toBe("groups/0/stimuli/0:gain");
   });
 
-  it("keeps a trailing separator on screen so a second state can be typed", async () => {
-    await edit({ to: "on," });
-    expect(changes).toHaveLength(0);
-    expect(form().data?.to).toBe("on,");
-    await edit({ to: "on, playing" });
-    expect(form().data?.to).toBe("on, playing");
-    expect(changes.at(-1)?.detail.groups[0]?.stimuli[0]?.to).toEqual(["on", "playing"]);
-  });
-
-  it("drops the raw text when the selection moves", async () => {
-    await edit({ to: "on," });
-    await show(["groups", 0]);
-    await show(["groups", 0, "stimuli", 0]);
-    expect(form().data?.to).toBe("on");
-  });
-
-  it("reports the voice's phase and how long is left of it", async () => {
+  it("reports the voice's phase and how long is left of it, through the editor's own live chips", async () => {
     el.live = {
       now: 1000,
       groups: {},
@@ -250,8 +265,9 @@ describe("al-strip-controls: a channel", () => {
       },
     };
     await el.updateComplete;
-    expect(text(".live")).toContain("release");
-    expect(text(".live")).toContain("ends in 1m");
+    const live = editor().shadowRoot?.querySelector(".live")?.textContent ?? "";
+    expect(live).toContain("release");
+    expect(live).toContain("ends in 1m");
   });
 });
 

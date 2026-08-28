@@ -103,7 +103,7 @@ export class AlStimulusEditor extends LitElement {
     const stimulus = stimulusAt(config, path);
     if (!stimulus) return;
     const v = ev.detail?.value ?? {};
-    this.toText = String(v.to ?? "");
+    if ("to" in v) this.toText = String(v.to ?? "");
     const merged = mergeStimulus(stimulus, v);
     const field = changedStimulusField(merged, stimulus);
     if (field === undefined) return;

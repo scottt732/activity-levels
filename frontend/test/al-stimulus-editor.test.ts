@@ -90,6 +90,22 @@ describe("al-stimulus-editor: the 'to' field", () => {
     expect(formData().to).toBe("on, ");
   });
 
+  it("survives an edit in the Envelope panel, which shares the same handler but not the field", async () => {
+    await type("on,");
+    const envelopeForm = el.shadowRoot!.querySelectorAll("ha-form")[1] as HTMLElement & {
+      data?: Record<string, unknown>;
+    };
+    envelopeForm.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: { ...envelopeForm.data, gain: 2 } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    expect(formData().to).toBe("on,");
+  });
+
   it("writes only the parsed list into the config", async () => {
     await type("on, playing,");
     expect(formData().to).toBe("on, playing,");

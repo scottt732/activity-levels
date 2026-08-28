@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { customElement, property } from "lit/decorators.js";
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { anomalySensorId, expectedSensorId, simSwitchId } from "./entities";
 import { fieldErrors, pathKey, subtreeErrorCount } from "./errors";
@@ -15,42 +15,17 @@ import {
   groupSchema,
   mergeGroup,
 } from "./group-form";
-import {
-  PRESENCE_KEY,
-  effectivePrecision,
-  formatLevel,
-  groupAt,
-  parentGroupPath,
-  presenceSettings,
-  resolvedEnvelope,
-  roomIds,
-  stimulusAt,
-} from "./model";
+import { PRESENCE_KEY, effectivePrecision, formatLevel, groupAt, presenceSettings, roomIds } from "./model";
 import { setAt } from "./store";
-import {
-  OVERRIDES,
-  changedStimulusField,
-  mergeStimulus,
-  overrideSource,
-  phaseCountdown,
-  stimulusData,
-  stimulusHelper,
-  stimulusLabel,
-  stimulusSchema,
-  toTextMatches,
-} from "./stimulus-form";
 import { sharedStyles } from "./styles";
 import "./al-envelope-sketch";
 import "./al-override-field";
 import "./al-presence-overrides";
 import "./al-stimulus-editor";
 import type { GroupField } from "./group-form";
-import type { StimulusField } from "./stimulus-form";
-import type { OverrideValue } from "./convert";
-import type { PropertyValues, TemplateResult } from "lit";
+import type { TemplateResult } from "lit";
 import type {
   Config,
-  EnvelopeOverrides,
   Group,
   HassEntity,
   HomeAssistant,
@@ -62,12 +37,6 @@ import type {
   Stimulus,
   ValidationError,
 } from "./types";
-
-/**
- * The channel's tuning fields. `entity` is deliberately absent: repointing a stimulus at
- * another entity is structural, and structure stays in the Groups editor.
- */
-const CHANNEL_FIELDS: StimulusField[] = ["envelope", "gain", "to", "key"];
 
 /**
  * The bus's tuning fields. Identity stays in the Groups editor, where re-creating entities
@@ -109,9 +78,6 @@ export class AlStripControls extends LitElement {
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 16px 24px;
         align-items: start;
-      }
-      .live {
-        margin-top: 8px;
       }
       .chip {
         white-space: nowrap;
@@ -178,26 +144,6 @@ export class AlStripControls extends LitElement {
   @property({ attribute: false }) profileState: ProfileState | null = null;
   @property({ attribute: false }) simLog: SimulationLog | null = null;
 
-  /**
-   * Raw text of the "Active states" field while it is being edited: the parsed list is
-   * lossy mid-word, so re-rendering it on every keystroke would eat the separator that
-   * makes a second state typeable. `null` means "not being edited".
-   */
-  @state() private toText: string | null = null;
-
-  /** Drop the raw text when the selection moves, or when the config changed from elsewhere. */
-  protected override willUpdate(changed: PropertyValues<this>): void {
-    if (changed.has("path")) {
-      this.toText = null;
-      return;
-    }
-    if (this.toText === null || !changed.has("config")) return;
-    const { config, path } = this;
-    const stimulus = config && path ? stimulusAt(config, path) : undefined;
-    if (!stimulus) return;
-    if (!toTextMatches(stimulus.to, this.toText)) this.toText = null;
-  }
-
   private emitChange(next: Config, coalesceKey: string): void {
     this.dispatchEvent(alChange(next, coalesceKey));
   }
@@ -207,20 +153,6 @@ export class AlStripControls extends LitElement {
     const { config, path } = this;
     if (!config || !path) return;
     this.emitChange(setAt(config, [...path, name], value), `${pathKey(path)}:${name}`);
-  }
-
-  private onChannelForm(ev: CustomEvent<{ value?: Record<string, unknown> }>): void {
-    ev.stopPropagation();
-    const { config, path } = this;
-    if (!config || !path) return;
-    const stimulus = stimulusAt(config, path);
-    if (!stimulus) return;
-    const v = ev.detail?.value ?? {};
-    this.toText = String(v.to ?? "");
-    const merged = mergeStimulus(stimulus, v);
-    const field = changedStimulusField(merged, stimulus);
-    if (field === undefined) return;
-    this.emitChange(setAt(config, path, merged), `${pathKey(path)}:${field}`);
   }
 
   private onBusForm(ev: CustomEvent<{ value?: Record<string, unknown> }>): void {
@@ -244,64 +176,19 @@ export class AlStripControls extends LitElement {
     this.dispatchEvent(alRebuild());
   }
 
+  /**
+   * A channel is a stimulus, so it gets the same editor the Groups tab uses: Source,
+   * Envelope and a collapsed Override preset, not a flat form of its own that would drift
+   * from that one's fields, its badge and its panel state the moment either changed.
+   */
   private renderChannel(config: Config, path: Path): TemplateResult {
-    const stimulus = stimulusAt(config, path);
-    if (!stimulus) return html`<ha-card><span class="muted">This channel no longer exists.</span></ha-card>`;
-    const fields = fieldErrors(this.errors, path);
-    const own = this.errors.filter((e) => e.path === pathKey(path));
-    const resolved = resolvedEnvelope(config, stimulus);
-
-    return html`
-      <ha-card header=${stimulus.key ?? stimulus.entity}>
-        ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
-        <div class="cols">
-          <div class="col">
-            <ha-form
-              .hass=${this.hass}
-              .data=${stimulusData(stimulus, this.toText, CHANNEL_FIELDS)}
-              .schema=${stimulusSchema(config, CHANNEL_FIELDS)}
-              .error=${fields}
-              .computeLabel=${stimulusLabel}
-              .computeHelper=${stimulusHelper}
-              @value-changed=${this.onChannelForm}
-            ></ha-form>
-            ${this.renderVoice(config, path, stimulus)}
-          </div>
-          <div class="col">
-            ${OVERRIDES.map(
-              (item) => html`<al-override-field
-                .hass=${this.hass}
-                .label=${item.label}
-                .kind=${item.kind}
-                .selector=${item.selector}
-                .value=${stimulus[item.name] as OverrideValue}
-                .inherited=${resolved[item.name] as OverrideValue}
-                .inheritedFrom=${overrideSource(config, stimulus, item.name)}
-                .error=${fields[item.name]}
-                @value-changed=${(ev: CustomEvent<{ value: OverrideValue }>) =>
-                  this.setField(item.name as keyof EnvelopeOverrides, ev.detail.value)}
-              ></al-override-field>`,
-            )}
-            <al-envelope-sketch .envelope=${resolved}></al-envelope-sketch>
-          </div>
-        </div>
-      </ha-card>
-    `;
-  }
-
-  /** The voice this channel is driving right now, matched the way the engine labels it. */
-  private renderVoice(config: Config, path: Path, stimulus: Stimulus): TemplateResult | typeof nothing {
-    const group = groupAt(config, parentGroupPath(path));
-    const voice = this.live?.voices[group?.id ?? ""]?.find((v) => v.label === (stimulus.key ?? stimulus.entity));
-    if (!voice) return nothing;
-    const ends = phaseCountdown(this.live?.now, voice.phase_ends);
-    return html`<div class="row live">
-      <span class="muted">Live</span>
-      <span class="chip phase ${voice.phase}">${voice.phase}</span>
-      <span class="chip value">${voice.value.toFixed(2)}</span>
-      ${ends !== null ? html`<span class="muted chip">ends in ${ends}</span>` : nothing}
-      <span class="dot ${voice.gate ? "gated" : ""}" title=${voice.gate ? "Gate open" : "Gate closed"}></span>
-    </div>`;
+    return html`<al-stimulus-editor
+      .hass=${this.hass}
+      .config=${config}
+      .path=${path}
+      .errors=${this.errors}
+      .live=${this.live}
+    ></al-stimulus-editor>`;
   }
 
   private renderBus(config: Config, path: Path): TemplateResult {
