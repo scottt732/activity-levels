@@ -336,6 +336,11 @@ def _path(parts: list[Any]) -> str:
     return "/".join(str(p) for p in parts)
 
 
+def _an(kind: str) -> str:
+    """`a floor`, `an area`. The kinds are a closed set, so the vowel test cannot be wrong."""
+    return f"{'an' if kind[0] in 'aeiou' else 'a'} {kind}"
+
+
 def _stringify_enums(obj: Any) -> Any:
     if isinstance(obj, dict):
         return {k: _stringify_enums(v) for k, v in obj.items()}
@@ -369,6 +374,10 @@ def _wanted_kinds(node: Mapping[str, Any], parent_kind: str | None) -> tuple[str
     if node.get(CONF_AREA_ID) is not None:
         wants.append(KIND_AREA)
     if node.get(CONF_FLOOR_ID) is not None:
+        # Inert today, and deliberately kept: `floor` is only ever legal under a structure,
+        # which is also what a structure's children default to, so this never changes the
+        # answer. It is here so the evidence list reads as the rule, and so it keeps working
+        # if the nesting table ever lets a floor sit somewhere else.
         wants.append(KIND_FLOOR)
     if node.get("adjacent") or node.get("exit"):
         wants += [KIND_AREA, KIND_OUTSIDE]
@@ -383,19 +392,19 @@ def infer_kinds(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
     shows those as "inferred kinds -- check and save", and the cross-checks give them an
     amnesty from the rules that only make sense once somebody has confirmed the kind.
 
-    A group whose evidence leaves no kind its parent may contain is left null; the
-    cross-checks turn that into a pathed error, because there is nothing honest to write.
+    Inference is total: `_wanted_kinds` always ends in `DEFAULT_CHILD_KIND[parent_kind]`,
+    and `ALLOWED_CHILDREN` always permits that, so there is always a kind to write and a
+    resolved document never carries a null one. `test_inference_is_total` pins the invariant.
     """
     inferred: list[str] = []
 
     def walk(node: dict[str, Any], parent_kind: str | None, path: list[Any]) -> None:
         kind = node.get(CONF_KIND)
         if kind is None:
-            allowed = ALLOWED_CHILDREN.get(parent_kind, frozenset())
-            kind = next((k for k in _wanted_kinds(node, parent_kind) if k in allowed), None)
+            allowed = ALLOWED_CHILDREN[parent_kind]
+            kind = next(k for k in _wanted_kinds(node, parent_kind) if k in allowed)
             node[CONF_KIND] = kind
-            if kind is not None:
-                inferred.append(_path(path))
+            inferred.append(_path(path))
         for i, child in enumerate(node["children"]):
             walk(child, kind, [*path, "children", i])
 
@@ -437,47 +446,48 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
         )
 
     seen_groups: set[str] = set()
-    walked: list[tuple[list[Any], dict[str, Any]]] = []
+    walked: list[tuple[str, dict[str, Any]]] = []
 
-    def _any_outside(nodes: list[dict[str, Any]]) -> bool:
-        return any(n[CONF_KIND] == KIND_OUTSIDE or _any_outside(n["children"]) for n in nodes)
+    def _outside_paths(nodes: list[dict[str, Any]], path: list[Any]) -> list[str]:
+        found: list[str] = []
+        for i, node in enumerate(nodes):
+            at = [*path, i]
+            if node[CONF_KIND] == KIND_OUTSIDE:
+                found.append(_path(at))
+            found += _outside_paths(node["children"], [*at, "children"])
+        return found
 
-    has_outside = _any_outside(cfg[CONF_GROUPS])
+    # "this property has outside areas" is only a fact a rule may be built on once a human
+    # has said so. If every outside area in the document is our own guess, so is the
+    # conclusion, and M2 says a guess must not stop a working document from loading.
+    declared_outside = any(
+        p not in inferred for p in _outside_paths(cfg[CONF_GROUPS], [CONF_GROUPS])
+    )
 
     def walk(group: dict[str, Any], path: list[Any], parent_kind: str | None) -> None:
+        here = _path(path)
         if group["id"] in seen_groups:
-            errors.append({"path": _path([*path, "id"]), "message": "duplicate group id"})
+            errors.append({"path": f"{here}/id", "message": "duplicate group id"})
         seen_groups.add(group["id"])
-        walked.append((list(path), group))
+        walked.append((here, group))
         kind = group[CONF_KIND]
-        allowed = ALLOWED_CHILDREN.get(parent_kind, frozenset())
-        if kind is None:
+        if kind not in ALLOWED_CHILDREN[parent_kind]:
             errors.append(
                 {
-                    "path": _path([*path, CONF_KIND]),
+                    "path": f"{here}/{CONF_KIND}",
                     "message": (
-                        "could not work out what this group is; set its kind "
-                        f"({', '.join(sorted(allowed))})"
-                    ),
-                }
-            )
-        elif kind not in allowed:
-            errors.append(
-                {
-                    "path": _path([*path, CONF_KIND]),
-                    "message": (
-                        f"a {parent_kind} cannot contain a {kind}"
+                        f"{_an(parent_kind)} cannot contain {_an(kind)}"
                         if parent_kind is not None
                         else "every root group is a property"
                     ),
                 }
             )
-        if _path(path) not in inferred and kind is not None:
+        if here not in inferred:
             if group["adjacent"] and kind not in NODE_KINDS:
                 errors.append(
                     {
-                        "path": _path([*path, "adjacent"]),
-                        "message": f"a {kind} is not somewhere you can walk between; "
+                        "path": f"{here}/adjacent",
+                        "message": f"{_an(kind)} is not somewhere you can walk between; "
                         "only areas and outside areas have adjacent groups",
                     }
                 )
@@ -485,33 +495,31 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
                 if kind not in NODE_KINDS:
                     errors.append(
                         {
-                            "path": _path([*path, "exit"]),
-                            "message": f"a {kind} cannot lead off the property; "
+                            "path": f"{here}/exit",
+                            "message": f"{_an(kind)} cannot lead off the property; "
                             "only areas and outside areas can",
                         }
                     )
-                elif kind == KIND_AREA and has_outside:
+                elif kind == KIND_AREA and declared_outside:
                     errors.append(
                         {
-                            "path": _path([*path, "exit"]),
+                            "path": f"{here}/exit",
                             "message": "this property has outside areas, so leaving it "
                             "happens from one of those, not from a room",
                         }
                     )
         if not group["stimuli"] and not group["children"]:
-            errors.append(
-                {"path": _path(path), "message": "group needs at least one stimulus or child"}
-            )
+            errors.append({"path": here, "message": "group needs at least one stimulus or child"})
         labels: set[str] = {TRIGGER_KEY, PRESENCE_KEY}  # both synthetic channels
         for i, stim in enumerate(group["stimuli"]):
-            spath = [*path, "stimuli", i]
+            spath = f"{here}/stimuli/{i}"
             if stim["envelope"] is not None and stim["envelope"] not in envelope_ids:
-                errors.append({"path": _path([*spath, "envelope"]), "message": "unknown envelope"})
+                errors.append({"path": f"{spath}/envelope", "message": "unknown envelope"})
             label = stim["key"] or stim["entity"]
             if label in labels:
                 errors.append(
                     {
-                        "path": _path(spath),
+                        "path": spath,
                         "message": f"duplicate stimulus '{label}'; set a unique key",
                     }
                 )
@@ -520,7 +528,7 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
             if child["id"] in labels:
                 errors.append(
                     {
-                        "path": _path([*path, "children", i, "id"]),
+                        "path": f"{here}/children/{i}/id",
                         "message": "clashes with a stimulus key",
                     }
                 )
@@ -532,7 +540,7 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
                 if not entity.startswith("light."):
                     errors.append(
                         {
-                            "path": _path([*path, CONF_SIMULATION, "lights", key, i]),
+                            "path": f"{here}/{CONF_SIMULATION}/lights/{key}/{i}",
                             "message": "must be a light entity",
                         }
                     )
@@ -540,7 +548,7 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
         if presence["envelope"] is not None and presence["envelope"] not in envelope_ids:
             errors.append(
                 {
-                    "path": _path([*path, CONF_PRESENCE, "envelope"]),
+                    "path": f"{here}/{CONF_PRESENCE}/envelope",
                     "message": "unknown envelope",
                 }
             )
@@ -551,19 +559,25 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
     # Adjacency can only be checked once every id is known: an edge is allowed to point
     # forwards, at a room the walk has not reached yet.
     kind_of = {group["id"]: group[CONF_KIND] for _, group in walked}
-    for path, group in walked:
+    path_of = {group["id"]: at for at, group in walked}
+    for at, group in walked:
         seen_edges: set[str] = set()
         for j, edge in enumerate(group["adjacent"]):
-            epath = _path([*path, "adjacent", j])
+            epath = f"{at}/adjacent/{j}"
             if edge["id"] == group["id"]:
                 errors.append({"path": epath, "message": "a group cannot be adjacent to itself"})
             elif edge["id"] not in seen_groups:
                 errors.append({"path": epath, "message": f"unknown group '{edge['id']}'"})
-            elif kind_of.get(edge["id"]) not in NODE_KINDS and _path(path) not in inferred:
+            elif kind_of[edge["id"]] not in NODE_KINDS and inferred.isdisjoint(
+                # This rule is about the far end's kind as much as this one's, so a guess at
+                # either end earns the amnesty (M2). Half a migrated document is still a
+                # migrated document.
+                (at, path_of[edge["id"]])
+            ):
                 errors.append(
                     {
                         "path": epath,
-                        "message": f"'{edge['id']}' is a {kind_of[edge['id']]}, "
+                        "message": f"'{edge['id']}' is {_an(kind_of[edge['id']])}, "
                         "and only areas and outside areas can be adjacent to anything",
                     }
                 )

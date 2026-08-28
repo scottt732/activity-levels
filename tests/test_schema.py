@@ -1,5 +1,11 @@
 import pytest
 
+from custom_components.activity_levels.const import (
+    ALLOWED_CHILDREN,
+    DEFAULT_CHILD_KIND,
+    KIND_PROPERTY,
+    KINDS,
+)
 from custom_components.activity_levels.schema import (
     CONFIG_SCHEMA,
     ConfigError,
@@ -495,8 +501,10 @@ def test_inference_covers_every_branch() -> None:
     assert len(inferred) == len(kinds)
 
 
-def test_an_unresolvable_kind_is_left_null_and_reported() -> None:
-    """A declared kind that leaves no legal kind for its child is the one hard failure."""
+def test_a_declared_kind_is_checked_against_the_nesting_even_when_the_evidence_agrees() -> None:
+    """`study` has an area bound to it, which is exactly the evidence inference reads as
+    `area` -- but the user declared the kind, and `outside` holds nothing but `outside`.
+    Evidence never overrides the nesting table for a kind somebody wrote down."""
     config = {
         "version": 1,
         "envelopes": [{"id": "default"}],
@@ -633,3 +641,89 @@ def test_the_amnesty_covers_the_rules_a_guessed_kind_would_otherwise_break() -> 
     errs = errors_of(declared)
     assert f"{kitchen_path}/exit" in errs
     assert f"{kitchen_path}/adjacent/0" in errs
+
+
+def test_a_half_migrated_document_is_not_failed_by_a_guessed_group_at_the_far_end() -> None:
+    """M2 across two groups: the user declared `kitchen`, so `kitchen` is not under amnesty,
+    but the group its edge lands on was guessed. The rule is about `house`'s kind, and
+    nobody has confirmed that, so the document still loads."""
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "property",
+                "kind": "property",
+                "children": [
+                    {
+                        "id": "house",  # left undeclared -> guessed `structure`
+                        "children": [
+                            {
+                                "id": "kitchen",
+                                "kind": "area",  # the user wrote this one out
+                                "adjacent": ["house"],
+                                "stimuli": [{"entity": "binary_sensor.kitchen_motion"}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    result = validate(config)
+    assert result.config["groups"][0]["children"][0]["kind"] == "structure"
+    assert "groups/0/children/0" in result.inferred
+    assert "groups/0/children/0/children/0" not in result.inferred  # declared, no amnesty
+
+    # write the guess out, as the next save does, and the rule bites
+    settled = result.config
+    assert "groups/0/children/0/children/0/adjacent/0" in errors_of(settled)
+
+
+def test_a_half_migrated_document_is_not_failed_by_a_guessed_outside_area() -> None:
+    """M2 again: the exit rule only makes sense once somebody has said something is outside.
+    `back_patio` is only outside because we guessed it, so `kitchen` keeps its exit."""
+    config = {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "property",
+                "kind": "property",
+                "children": [
+                    {
+                        "id": "house",
+                        "kind": "structure",
+                        "children": [
+                            {
+                                "id": "kitchen",
+                                "kind": "area",
+                                "exit": True,
+                                "stimuli": [{"entity": "binary_sensor.kitchen_motion"}],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "back_patio",  # undeclared; M1 reads the exit and guesses outside
+                        "exit": True,
+                        "stimuli": [{"entity": "binary_sensor.patio_motion"}],
+                    },
+                ],
+            }
+        ],
+    }
+    result = validate(config)
+    assert result.config["groups"][0]["children"][1]["kind"] == "outside"
+    assert result.inferred == ("groups/0/children/1",)
+    assert result.config["groups"][0]["children"][0]["children"][0]["exit"] is True
+
+    # confirm the guess and the room is no longer where you leave from
+    assert "groups/0/children/0/children/0/exit" in errors_of(result.config)
+
+
+def test_inference_is_total() -> None:
+    """The invariant that makes a null kind impossible: whatever a parent is, the kind
+    `_wanted_kinds` falls back to is one the parent may contain."""
+    for kind in KINDS:
+        assert DEFAULT_CHILD_KIND[kind] in ALLOWED_CHILDREN[kind]
+    assert KIND_PROPERTY in ALLOWED_CHILDREN[None]
