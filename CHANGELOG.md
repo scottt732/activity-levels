@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/scottt732/activity-levels/compare/v0.5.0...v0.5.1) (2026-08-30)
+
+
+### Fixed
+
+* **coordinator:** read Bermuda's real entity contract ([#9](https://github.com/scottt732/activity-levels/issues/9)) ([8cdb3c5](https://github.com/scottt732/activity-levels/commit/8cdb3c52c748ae2075c24219a7e5324126622b35))
+
 ## [0.5.0](https://github.com/scottt732/activity-levels/compare/v0.4.0...v0.5.0) (2026-08-28)
 
 
