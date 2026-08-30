@@ -117,6 +117,20 @@ async def test_discovery_finds_the_scanners_and_the_distance_sensors(
     assert all("_area" not in entity_id for entity_id in track.sensors)
 
 
+async def test_an_unnamed_device_is_called_after_its_device_not_its_tracker(
+    hass: HomeAssistant,
+) -> None:
+    """Bermuda calls every tracker "Bermuda Tracker", so the device is the only name."""
+    fake_bermuda(hass)
+    config = presence_config()
+    config["presence"]["devices"] = [{"device": "device_tracker.scotts_phone", "name": None}]
+    entry = await add_entry(hass, config)
+    presence = entry.runtime_data.presence
+
+    assert presence is not None and presence.ready
+    assert set(presence.devices) == {"Scott's Phone"}
+
+
 async def test_scanner_areas_override_the_area_mapping(hass: HomeAssistant) -> None:
     bermuda = fake_bermuda(hass, unmapped=("hall",))
     config = presence_config()

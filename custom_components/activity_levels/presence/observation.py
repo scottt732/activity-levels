@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 BERMUDA_DOMAIN = "bermuda"
-DISTANCE_SUFFIX = "_distance"
+RANGE_SUFFIX = "_range"
 UNREACHABLE = 999.0
 """Bermuda's "no idea": a reading at or past this is not a reading at all."""
 
@@ -33,18 +33,26 @@ class Observation:
     home: bool = True
 
 
-def scanner_key(unique_id: str) -> str | None:
+def scanner_key(unique_id: str, device_unique_id: str) -> str | None:
     """The scanner a Bermuda per-scanner distance sensor measures against.
 
-    Those sensors are keyed ``<device address>_<scanner address>_distance``. Anything
-    else the device owns -- its area, its nearest-scanner summary -- is not a
-    per-scanner reading and gets ``None``, which is how the coordinator filters them out.
+    Bermuda keys those ``<device unique id>_<scanner address>_range``, and hangs a whole
+    shelf of other entities off the same device whose ids begin the same way: the
+    device's own closest-range ``_range``, an unfiltered ``_range_raw`` twin of every
+    per-scanner reading, an area, a floor, a nearest scanner. The device's own unique id
+    is what tells them apart -- strip it off the front, strip the suffix off the back,
+    and what is left is the scanner, or nothing at all. Everything else gets ``None``,
+    which is how the coordinator filters them out.
+
+    Note the scanner address here is Bermuda's ``address_wifi_mac or address``: for a
+    Wi-Fi proxy that is the network MAC, not the Bluetooth one, which is why placing a
+    scanner has to try both kinds of registry connection.
     """
-    if not unique_id.endswith(DISTANCE_SUFFIX):
+    prefix = f"{device_unique_id}_"
+    if not unique_id.startswith(prefix) or not unique_id.endswith(RANGE_SUFFIX):
         return None
-    stem = unique_id[: -len(DISTANCE_SUFFIX)]
-    _, separator, scanner = stem.rpartition("_")
-    return scanner if separator and scanner else None
+    scanner = unique_id[len(prefix) : -len(RANGE_SUFFIX)]
+    return scanner or None
 
 
 def parse_distance(state: str | None) -> float | None:
