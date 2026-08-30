@@ -51,9 +51,17 @@ def at(room: str, t: float, *, far: float = 8.0, near: float = 0.5, home: bool =
 
 
 def test_scanner_key_and_parse_distance() -> None:
-    assert scanner_key("aa:bb:cc_11:22:33_distance") == "11:22:33"
-    assert scanner_key("aa:bb:cc_area") is None
-    assert scanner_key("distance") is None
+    phone = "aa:bb:cc"
+    assert scanner_key("aa:bb:cc_11:22:33_range", phone) == "11:22:33"
+    assert scanner_key("aa:bb:cc_area", phone) is None
+    assert scanner_key("aa:bb:cc_floor", phone) is None
+    # the device's own closest-range sensor: the suffix matches, the scanner is missing
+    assert scanner_key("aa:bb:cc_range", phone) is None
+    # the unfiltered twin, which would otherwise count every distance twice
+    assert scanner_key("aa:bb:cc_11:22:33_range_raw", phone) is None
+    # somebody else's phone, seen through the same scanner
+    assert scanner_key("dd:ee:ff_11:22:33_range", phone) is None
+    assert scanner_key("range", phone) is None
     assert parse_distance("2.5") == 2.5
     assert parse_distance("999") is None  # Bermuda's "no idea"
     assert parse_distance("1000") is None

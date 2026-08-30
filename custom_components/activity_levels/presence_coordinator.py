@@ -260,13 +260,13 @@ class PresenceCoordinator:
                 wrong.append(f"{spec['device']} ({reason})")
                 _LOGGER.warning("Ignoring tracked device %s: %s", spec["device"], reason)
                 continue
-            name = spec["name"] or entry.name or entry.original_name or entry.entity_id
+            name = spec["name"] or self._tracked_name(devices, entry)
             track = TrackedDevice(name=name, tracker=entry.entity_id, device_id=entry.device_id)
             if entry.device_id is not None:
                 for member in er.async_entries_for_device(
                     entities, entry.device_id, include_disabled_entities=True
                 ):
-                    key = scanner_key(member.unique_id)
+                    key = scanner_key(member.unique_id, entry.unique_id)
                     if key is None or member.domain != "sensor":
                         continue  # the device's area sensor and friends are not readings
                     if member.disabled:
@@ -313,6 +313,24 @@ class PresenceCoordinator:
             scanners=", ".join(self.scanners[key].name for key in self.unmapped),
         )
 
+    def _tracked_name(self, devices: dr.DeviceRegistry, entry: er.RegistryEntry) -> str:
+        """What to call the person behind one Bermuda tracker.
+
+        Bermuda names every one of its ``device_tracker`` entities "Bermuda Tracker" and
+        leans on ``has_entity_name`` to put the device in front of it, so the entity's
+        own name identifies nobody -- it is the device, "Scott's iPhone", that says whose
+        phone this is. Reading the entity name would therefore hand every tracked device
+        the same name, and ``self.devices`` is keyed by name, so the second phone would
+        silently displace the first. A name the user typed into Home Assistant still
+        wins, because that is a deliberate answer to this very question.
+        """
+        if entry.name:
+            return entry.name
+        device = devices.async_get(entry.device_id) if entry.device_id is not None else None
+        if device is not None and (name := device.name_by_user or device.name):
+            return name
+        return entry.original_name or entry.entity_id
+
     def _register_scanner(self, devices: dr.DeviceRegistry, key: str) -> None:
         """Find the HA device behind a scanner address, or record it unplaceable."""
         if key in self.scanners:
@@ -320,8 +338,17 @@ class PresenceCoordinator:
         device = devices.async_get_device(identifiers={(BERMUDA_DOMAIN, key)})
         if device is None:
             # a proxy some other integration registered -- an ESPHome node, say -- is
-            # still the scanner Bermuda is naming, and its area is the one that counts
-            device = devices.async_get_device(connections={(dr.CONNECTION_BLUETOOTH, key)})
+            # still the scanner Bermuda is naming, and its area is the one that counts.
+            # Which MAC the key holds depends on the proxy, and the two connection kinds
+            # are spelled differently: Home Assistant normalizes a network MAC for us,
+            # while a Bluetooth one has to match the upper case Bermuda stores it in.
+            for connection in (
+                (dr.CONNECTION_NETWORK_MAC, key),
+                (dr.CONNECTION_BLUETOOTH, key.upper()),
+            ):
+                device = devices.async_get_device(connections={connection})
+                if device is not None:
+                    break
         if device is None:
             self.scanners[key] = Scanner(key=key, device_id="", name=key, area_id=None)
             return

@@ -199,10 +199,13 @@ def presence_config() -> dict[str, Any]:
 class FakeBermuda:
     """What a fake Bermuda install looks like from the registries.
 
-    Bermuda gives each tracked device one ``device_tracker`` plus a ``sensor`` per
-    scanner, keyed ``<device address>_<scanner address>_distance``, and registers each
-    scanner as a device of its own carrying its Bluetooth address as an identifier. That
-    is the whole contract we consume, so it is the whole thing this fake reproduces.
+    Bermuda gives each tracked device one ``device_tracker`` -- named "Bermuda Tracker",
+    the same on every device, with ``has_entity_name`` putting the device in front of it
+    -- plus a ``sensor`` per scanner keyed ``<device unique id>_<scanner address>_range``.
+    Around those sit near misses that discovery has to reject: an unfiltered
+    ``_range_raw`` twin of every reading, the device's own closest-range ``_range``, and
+    its area. Each scanner is a device of its own carrying its address as an identifier.
+    That is the whole contract we consume, so it is the whole thing this fake reproduces.
     """
 
     entry: MockConfigEntry
@@ -242,21 +245,24 @@ def fake_bermuda(
     tracker = entities.async_get_or_create(
         "device_tracker",
         "bermuda",
-        f"{PHONE_ADDRESS}_tracker",
+        PHONE_ADDRESS,
         config_entry=entry,
         device_id=phone.id,
-        original_name="Scott's Phone",
+        original_name="Bermuda Tracker",
+        has_entity_name=True,
         suggested_object_id="scotts_phone",
     )
-    # a device-level entity that is not a per-scanner reading; discovery must ignore it
-    entities.async_get_or_create(
-        "sensor",
-        "bermuda",
-        f"{PHONE_ADDRESS}_area",
-        config_entry=entry,
-        device_id=phone.id,
-        suggested_object_id="scotts_phone_area",
-    )
+    # device-level entities that are not per-scanner readings; discovery must ignore
+    # both, and the second only differs from a reading by having no scanner in the middle
+    for suffix in ("_area", "_range"):
+        entities.async_get_or_create(
+            "sensor",
+            "bermuda",
+            f"{PHONE_ADDRESS}{suffix}",
+            config_entry=entry,
+            device_id=phone.id,
+            suggested_object_id=f"scotts_phone{suffix}",
+        )
 
     sensors: dict[str, str] = {}
     scanner_devices: dict[str, str] = {}
@@ -276,12 +282,23 @@ def fake_bermuda(
         sensor = entities.async_get_or_create(
             "sensor",
             "bermuda",
-            f"{PHONE_ADDRESS}_{address}_distance",
+            f"{PHONE_ADDRESS}_{address}_range",
             config_entry=entry,
             device_id=phone.id,
             original_device_class="distance",
             suggested_object_id=f"scotts_phone_distance_to_{room}",
             disabled_by=er.RegistryEntryDisabler.INTEGRATION if room in disabled else None,
+        )
+        # the unfiltered twin Bermuda ships beside every reading: same scanner, same
+        # units, and taking it too would count every distance a second time
+        entities.async_get_or_create(
+            "sensor",
+            "bermuda",
+            f"{PHONE_ADDRESS}_{address}_range_raw",
+            config_entry=entry,
+            device_id=phone.id,
+            original_device_class="distance",
+            suggested_object_id=f"scotts_phone_unfiltered_distance_to_{room}",
         )
         sensors[room] = sensor.entity_id
 
