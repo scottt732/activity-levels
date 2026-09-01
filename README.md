@@ -30,6 +30,16 @@ child triggers and child groups using `sum`, `max`, or `mean`, then applies a li
 nest, so a `living_room` group rolls up into a `house` group, and the same mixed value
 is recomputed recursively at every level whenever a leaf trigger changes.
 
+A stimulus reads its entity in one of two **modes**. The default, `sustained`, is the one
+described above: the trigger holds for as long as the entity stays in its `to` states,
+which is what a light, a media player or a door you care about standing open wants. A
+`momentary` stimulus instead treats each *crossing* of those states as one event, the way
+a motion sensor reports a footstep — an interior door, read as "somebody walked through
+here" rather than "a door is open". Its `edges` say which crossings count: `enter`,
+`leave`, or both. A momentary trigger is always an impulse — the state change is the whole
+event, so there is nothing to hold the envelope open and it jumps to its peak and releases
+from there, which also means its attack and decay never run.
+
 Two settings say what a *second* trigger does to an envelope that is still sounding.
 **Allow retrigger** decides whether it counts at all: `always`, `after_attack`,
 `after_decay`, `release` (only a note that is already fading) or `idle` (only once the
@@ -519,7 +529,9 @@ groups:
     precision: 1             # optional; inherits defaults
     stimuli:
       - entity: binary_sensor.front_door
-        to: "on"             # trigger state(s); string or list
+        to: "on"             # active state(s); string or list
+        mode: sustained      # sustained (hold while active) | momentary (fire on each crossing)
+        edges: [enter, leave] # momentary only: which crossings fire; at least one
         gain: 1.0            # peak level one trigger of this stimulus reaches
         envelope: default    # preset; any envelope field may be overridden inline
         key: null            # required only when the same entity appears twice in a group
