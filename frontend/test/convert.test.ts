@@ -1,25 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  formatInherited,
-  formatMultiplier,
-  formatToList,
-  fromSelectorValue,
-  parseToList,
-  toSelectorValue,
-} from "../src/convert";
-
-describe("stimulus state-list conversion", () => {
-  it("splits, trims and drops empty entries", () => {
-    expect(parseToList(" on , playing ,, ")).toEqual(["on", "playing"]);
-    expect(parseToList("")).toEqual([]);
-    expect(parseToList("   ")).toEqual([]);
-  });
-  it("joins for display and round-trips", () => {
-    expect(formatToList(["on", "playing"])).toBe("on, playing");
-    expect(formatToList(null)).toBe("");
-    expect(parseToList(formatToList(["on", "paused"]))).toEqual(["on", "paused"]);
-  });
-});
+import { formatInherited, formatMultiplier, fromSelectorValue, toSelectorValue } from "../src/convert";
 
 describe("override field conversion", () => {
   it("converts durations to and from seconds", () => {
@@ -47,20 +27,6 @@ describe("override field conversion", () => {
     expect(formatInherited("boolean", false)).toBe("No");
     expect(formatInherited("number", 5)).toBe("5");
     expect(formatInherited("select", "hold")).toBe("hold");
-  });
-});
-
-describe("state-list text while typing", () => {
-  it("round-trips a finished multi-state list", () => {
-    expect(parseToList("on, playing")).toEqual(["on", "playing"]);
-    expect(formatToList(parseToList("on, playing"))).toBe("on, playing");
-  });
-  it("loses trailing separators on the way back, which is why raw text must be kept", () => {
-    expect(parseToList("on, playing,")).toEqual(["on", "playing"]);
-    expect(formatToList(parseToList("on, playing,"))).toBe("on, playing");
-    expect(parseToList("on,")).toEqual(["on"]);
-    expect(formatToList(parseToList("on,"))).toBe("on");
-    expect(formatToList(parseToList("on, "))).toBe("on");
   });
 });
 

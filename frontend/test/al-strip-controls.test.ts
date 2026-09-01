@@ -432,9 +432,22 @@ describe("al-strip-controls: a group's stimuli", () => {
     expect(editor.config).toBe(el.config);
   });
 
-  it("heads each one with the entity's friendly name and its current state", () => {
+  it("heads each one with the entity's friendly name, its icon and its formatted state", () => {
     expect(text(".stimulus-head .name")).toBe("Front Door");
-    expect(text(".stimulus-head .chip")).toBe("on");
+    expect(text(".stimulus-head .chip")).toBe("On");
+    expect(el.shadowRoot!.querySelector(".stimulus-head ha-state-icon")).not.toBeNull();
+  });
+
+  it("falls back to the generic bolt when the entity is not there", async () => {
+    const config = baseConfig();
+    el.config = {
+      ...config,
+      groups: [{ ...config.groups[0]!, stimuli: [newStimulus("binary_sensor.nope")] }],
+    };
+    await el.updateComplete;
+    const head = el.shadowRoot!.querySelector(".stimulus-head")!;
+    expect(head.querySelector("ha-state-icon")).toBeNull();
+    expect(head.querySelector('ha-icon[icon="mdi:flash"]')).not.toBeNull();
   });
 
   it("prefers the stimulus key when it has one", async () => {

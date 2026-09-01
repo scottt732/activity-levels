@@ -64,6 +64,13 @@ export class AlOverrideField extends LitElement {
   @property() hint = "";
   @property() kind: OverrideKind = "number";
   @property() error?: string;
+  /**
+   * Pinned by something above this field rather than free for the stimulus to set -- a
+   * momentary trigger's attack, decay and impulse. Shown rather than hidden, because a
+   * field that vanished would leave a reader wondering where the attack went, while a
+   * pinned one with its reason under it teaches the coupling.
+   */
+  @property({ type: Boolean }) disabled = false;
 
   private get overridden(): boolean {
     return this.value !== null && this.value !== undefined;
@@ -119,6 +126,7 @@ export class AlOverrideField extends LitElement {
           .selector=${this.kind === "boolean" ? BOOLEAN_SELECTOR : this.selector}
           .label=${this.label}
           .required=${false}
+          .disabled=${this.disabled}
           .value=${toSelectorValue(this.kind, this.value)}
           .helper=${helper}
           @value-changed=${this.onValueChanged}
@@ -126,7 +134,7 @@ export class AlOverrideField extends LitElement {
         <ha-icon-button
           label="Reset to inherited"
           title="Reset to inherited"
-          .disabled=${!this.overridden}
+          .disabled=${this.disabled || !this.overridden}
           @click=${this.onReset}
         >
           <ha-icon icon="mdi:backup-restore"></ha-icon>

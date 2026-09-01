@@ -75,10 +75,15 @@ export function stateLabel(
       : null,
     `component.${domain}.entity_component._.state.${state}`,
   ];
-  for (const key of keys) {
-    if (key === null) continue;
-    const label = hass?.localize(key);
-    if (typeof label === "string" && label !== "") return label;
+  // `localize` is guarded rather than called: a partially-built `hass` reaches the panel
+  // in tests and, briefly, during a frontend reload, and a label is never worth a throw
+  // that takes the whole row down with it.
+  if (typeof hass?.localize === "function") {
+    for (const key of keys) {
+      if (key === null) continue;
+      const label = hass.localize(key);
+      if (typeof label === "string" && label !== "") return label;
+    }
   }
   return humanize(state);
 }

@@ -1,10 +1,17 @@
 import { BOOLEAN_SELECTOR } from "./al-override-field";
-import { emptyToNull, formatToList, parseToList } from "./convert";
+import { emptyToNull } from "./convert";
 import { formatDuration } from "./duration";
+import { edgeLabels, stateOptions } from "./entity-states";
 import { presetById } from "./model";
 import type { Selector } from "./al-override-field";
 import type { OverrideKind } from "./convert";
-import type { Config, EnvelopeOverrides, Stimulus } from "./types";
+import type {
+  Config,
+  EnvelopeOverrides,
+  HomeAssistant,
+  Stimulus,
+  StimulusEdge,
+} from "./types";
 
 /**
  * The schema, data and merge rules for editing one stimulus, kept out of any component so
@@ -19,11 +26,13 @@ export interface FormItem {
 }
 
 /** The fields either editor can show, in the order the schema lists them. */
-export type StimulusField = "entity" | "to" | "gain" | "key" | "envelope";
+export type StimulusField = "entity" | "mode" | "to" | "edges" | "gain" | "key" | "envelope";
 
 export const STIMULUS_LABELS: Record<string, string> = {
   entity: "Entity",
+  mode: "Mode",
   to: "Active states",
+  edges: "Fire on",
   gain: "Gain",
   key: "Label",
   envelope: "Envelope preset",
@@ -31,7 +40,9 @@ export const STIMULUS_LABELS: Record<string, string> = {
 
 export const STIMULUS_HELPERS: Record<string, string> = {
   entity: "The entity whose state drives this stimulus.",
-  to: "Comma-separated states that trigger the envelope, e.g. on, playing.",
+  mode: "Sustained holds a note while the entity is in its active states. Momentary treats each crossing as one event.",
+  to: "Which states of this entity count as active.",
+  edges: "Which crossings fire a trigger. At least one.",
   gain: "How loudly this stimulus contributes to its group.",
   key: "Optional name for this trigger; defaults to the entity id.",
   envelope: "Preset the overrides below start from.",
@@ -41,7 +52,7 @@ export const stimulusLabel = (item: FormItem): string => STIMULUS_LABELS[item.na
 export const stimulusHelper = (item: FormItem): string => STIMULUS_HELPERS[item.name] ?? "";
 
 /** Fields the top form owns, checked in order to name the coalescing key. */
-export const STIMULUS_FORM_FIELDS: (keyof Stimulus)[] = ["entity", "gain", "key", "envelope"];
+export const STIMULUS_FORM_FIELDS: (keyof Stimulus)[] = ["entity", "mode", "gain", "key", "envelope"];
 
 /** Milliseconds stay on: the backend takes sub-second debounce, wake and A/D/R values,
  * and a selector without the field would silently drop the `milliseconds` we hand it. */
@@ -70,6 +81,32 @@ export const RETRIGGER_SELECTOR: Selector = {
     ],
   },
 };
+export const MODE_SELECTOR: Selector = {
+  select: {
+    mode: "list",
+    options: [
+      { value: "sustained", label: "Sustained — hold while it is active" },
+      { value: "momentary", label: "Momentary — fire on each change" },
+    ],
+  },
+};
+
+/**
+ * The overrides a momentary trigger cannot use. It is built as an impulse, which enters
+ * its release immediately, so the two rising segments never run and the impulse flag
+ * itself is not the stimulus's to give away.
+ */
+export const MOMENTARY_PINNED: readonly (keyof EnvelopeOverrides)[] = ["attack", "decay", "impulse"];
+
+export const MOMENTARY_PINNED_HINT =
+  "A momentary trigger is always an impulse: the state change is the whole event, so there " +
+  "is nothing to hold the envelope open — it jumps to its peak and releases. Attack and " +
+  "decay never run.";
+
+/** Whether this override is pinned by the mode rather than free for the stimulus to set. */
+export const overrideDisabled = (stimulus: Stimulus, name: keyof EnvelopeOverrides): boolean =>
+  stimulus.mode === "momentary" && MOMENTARY_PINNED.includes(name);
+
 export const UNAVAILABLE_SELECTOR: Selector = {
   select: {
     mode: "dropdown",
@@ -115,7 +152,16 @@ export const OVERRIDES: OverrideItem[] = [
 ];
 
 /** What fires this stimulus. `gain` is not here: how loudly it plays is part of its shape. */
-export const SOURCE_FIELDS: StimulusField[] = ["entity", "to", "key"];
+export const SOURCE_FIELDS: StimulusField[] = ["entity", "mode", "to", "edges", "key"];
+
+/**
+ * The Source fields this stimulus actually shows. A sustained trigger has no crossings to
+ * choose between, so offering the checkboxes would be asking a question with no consequence
+ * — but the key stays in the document either way, because the mode radio flips back and
+ * forth and a document that will not save because of a hidden field is worse than a spare one.
+ */
+export const visibleSourceFields = (stimulus: Stimulus): StimulusField[] =>
+  SOURCE_FIELDS.filter((name) => name !== "edges" || stimulus.mode === "momentary");
 
 /** The shape of one trigger: which preset it starts from, and how loud it is. */
 export const ENVELOPE_FIELDS: StimulusField[] = ["envelope", "gain"];
@@ -138,10 +184,41 @@ export const envelopeOptions = (config: Config): { value: string; label: string 
   ...config.envelopes.map((e) => ({ value: e.id, label: e.id })),
 ];
 
-export function stimulusSchema(config: Config, fields: readonly StimulusField[]): FormItem[] {
+/**
+ * The form schema. It takes the stimulus and `hass` as well as the config, because two of
+ * the selectors are built from the entity itself: the active states it can be in, and the
+ * names its two edges get.
+ */
+export function stimulusSchema(
+  config: Config,
+  stimulus: Stimulus,
+  hass: HomeAssistant | undefined,
+  fields: readonly StimulusField[],
+): FormItem[] {
+  const edges = edgeLabels(hass, stimulus.entity, stimulus.to);
   const selectors: Record<StimulusField, Selector> = {
     entity: { entity: {} },
-    to: { text: {} },
+    mode: MODE_SELECTOR,
+    to: {
+      select: {
+        mode: "dropdown",
+        multiple: true,
+        // The table behind `stateOptions` cannot know every domain, so an exotic entity
+        // can still be typed at. The field just stops *asking* to be typed at.
+        custom_value: true,
+        options: stateOptions(hass, stimulus.entity, stimulus.to),
+      },
+    },
+    edges: {
+      select: {
+        mode: "list",
+        multiple: true,
+        options: [
+          { value: "enter", label: edges.enter },
+          { value: "leave", label: edges.leave },
+        ],
+      },
+    },
     gain: GAIN_SELECTOR,
     key: { text: {} },
     envelope: { select: { mode: "dropdown", options: envelopeOptions(config) } },
@@ -149,15 +226,15 @@ export function stimulusSchema(config: Config, fields: readonly StimulusField[])
   return fields.map((name) => ({ name, selector: selectors[name] }));
 }
 
-/** `toText` is the raw text of the "Active states" field while it is being edited. */
 export function stimulusData(
   stimulus: Stimulus,
-  toText: string | null,
   fields: readonly StimulusField[],
 ): Record<string, unknown> {
   const all: Record<StimulusField, unknown> = {
     entity: stimulus.entity,
-    to: toText ?? formatToList(stimulus.to),
+    mode: stimulus.mode,
+    to: stimulus.to,
+    edges: stimulus.edges,
     gain: stimulus.gain,
     key: stimulus.key ?? "",
     envelope: stimulus.envelope ?? "",
@@ -165,30 +242,37 @@ export function stimulusData(
   return Object.fromEntries(fields.map((name) => [name, all[name]]));
 }
 
+const asList = (raw: unknown): string[] =>
+  Array.isArray(raw) ? raw.filter((s): s is string => typeof s === "string" && s !== "") : [];
+
 /** Folds an `ha-form` payload back into the stimulus. Fields the form does not show are kept. */
 export function mergeStimulus(stimulus: Stimulus, v: Record<string, unknown>): Stimulus {
   const merged: Stimulus = { ...stimulus };
   if ("entity" in v) merged.entity = String(v.entity ?? "");
-  if ("to" in v) merged.to = parseToList(String(v.to ?? ""));
+  if ("mode" in v && (v.mode === "sustained" || v.mode === "momentary")) merged.mode = v.mode;
+  if ("to" in v) merged.to = asList(v.to);
+  if ("edges" in v) {
+    // Unchecking the last edge is declined rather than stored: a momentary stimulus with
+    // no edges can never fire, and the backend refuses it anyway, so the form does not
+    // build the document that would come back rejected.
+    const edges = asList(v.edges).filter((e): e is StimulusEdge => e === "enter" || e === "leave");
+    if (edges.length > 0) merged.edges = edges;
+  }
   if ("gain" in v) merged.gain = typeof v.gain === "number" ? v.gain : stimulus.gain;
   if ("key" in v) merged.key = emptyToNull(v.key as string | null | undefined);
   if ("envelope" in v) merged.envelope = emptyToNull(v.envelope as string | null | undefined);
   return merged;
 }
 
+const sameList = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((value, i) => value === b[i]);
+
 /** The single field this edit touched, which names the coalescing key; `undefined` if none did. */
 export function changedStimulusField(merged: Stimulus, stimulus: Stimulus): string | undefined {
-  if (formatToList(merged.to) !== formatToList(stimulus.to)) return "to";
+  if (!sameList(merged.to, stimulus.to)) return "to";
+  if (!sameList(merged.edges, stimulus.edges)) return "edges";
   return STIMULUS_FORM_FIELDS.find((k) => merged[k] !== stimulus[k]);
 }
-
-/**
- * True while the raw text still spells the stored list. `formatToList` is lossy mid-word -
- * a trailing separator in `on, playing,` parses back to `on, playing` - so an editor keeps
- * its raw text until the config underneath says something else.
- */
-export const toTextMatches = (to: readonly string[], text: string): boolean =>
-  formatToList(to) === formatToList(parseToList(text));
 
 /** Where the effective value comes from when the stimulus does not override it. */
 export function overrideSource(config: Config, stimulus: Stimulus, name: keyof EnvelopeOverrides): string {

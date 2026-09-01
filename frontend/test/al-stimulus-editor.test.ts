@@ -44,18 +44,26 @@ const formData = (): Record<string, unknown> => {
   return form?.data ?? {};
 };
 
-/** Simulate a keystroke in the "Active states" field. */
-const type = async (to: string): Promise<void> => {
+/** Hand the Source form a new value, the way `ha-form` does. */
+const edit = async (patch: Record<string, unknown>): Promise<void> => {
   const form = el.shadowRoot?.querySelector("ha-form");
   form?.dispatchEvent(
     new CustomEvent("value-changed", {
-      detail: { value: { ...formData(), to } },
+      detail: { value: { ...formData(), ...patch } },
       bubbles: true,
       composed: true,
     }),
   );
   await el.updateComplete;
 };
+
+/** The override fields the editor is currently rendering, by their label. */
+const overrides = (): Map<string, HTMLElement & { disabled?: boolean; hint?: string }> =>
+  new Map(
+    [...el.shadowRoot!.querySelectorAll<HTMLElement & { label?: string }>("al-override-field")].map(
+      (f) => [f.label ?? "", f],
+    ),
+  );
 
 beforeEach(async () => {
   document.body.innerHTML = "";
@@ -75,61 +83,60 @@ beforeEach(async () => {
 });
 
 describe("al-stimulus-editor: the 'to' field", () => {
-  it("keeps a trailing separator on screen so a second state can be typed", async () => {
-    await type("on,");
-    expect(changes).toHaveLength(0);
-    expect(formData().to).toBe("on,");
-    await type("on, playing");
-    expect(formData().to).toBe("on, playing");
-    expect(changes.at(-1)?.groups[0]?.stimuli[0]?.to).toEqual(["on", "playing"]);
+  it("hands the form the stored list, not text", () => {
+    expect(formData().to).toEqual(["on"]);
   });
 
-  it("survives an unrelated re-render mid-word", async () => {
-    await type("on, ");
-    el.requestUpdate();
-    await el.updateComplete;
-    expect(formData().to).toBe("on, ");
-  });
-
-  it("survives an edit in the Envelope panel, which shares the same handler but not the field", async () => {
-    await type("on,");
-    const envelopeForm = el.shadowRoot!.querySelectorAll("ha-form")[1] as HTMLElement & {
-      data?: Record<string, unknown>;
-    };
-    envelopeForm.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value: { ...envelopeForm.data, gain: 2 } },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await el.updateComplete;
-    expect(formData().to).toBe("on,");
-  });
-
-  it("writes only the parsed list into the config", async () => {
-    await type("on, playing,");
-    expect(formData().to).toBe("on, playing,");
+  it("writes the picked states straight through", async () => {
+    await edit({ to: ["on", "playing"] });
     expect(changes.at(-1)?.groups[0]?.stimuli[0]?.to).toEqual(["on", "playing"]);
   });
 
   it("refreshes when the config changes underneath it, as undo does", async () => {
-    await type("on, playing");
-    const undone = baseConfig();
-    el.config = undone;
+    await edit({ to: ["on", "playing"] });
+    el.config = baseConfig();
     await el.updateComplete;
-    expect(formData().to).toBe("on");
+    expect(formData().to).toEqual(["on"]);
   });
 
-  it("resets when the selection moves to another stimulus", async () => {
-    await type("on, play");
+  it("follows the selection to another stimulus", async () => {
     const next = baseConfig();
     next.groups[0]!.stimuli.push(newStimulus("binary_sensor.door"));
     next.groups[0]!.stimuli[1]!.to = ["off"];
     el.config = next;
     el.path = ["groups", 0, "stimuli", 1];
     await el.updateComplete;
-    expect(formData().to).toBe("off");
+    expect(formData().to).toEqual(["off"]);
+  });
+});
+
+describe("al-stimulus-editor: mode", () => {
+  it("shows the edge checkboxes only in momentary mode", async () => {
+    expect(formData().edges).toBeUndefined();
+    await edit({ mode: "momentary" });
+    expect(formData().edges).toEqual(["enter", "leave"]);
+    expect(changes.at(-1)?.groups[0]?.stimuli[0]?.mode).toBe("momentary");
+  });
+
+  it("declines to uncheck the last edge", async () => {
+    await edit({ mode: "momentary" });
+    await edit({ edges: ["enter"] });
+    expect(changes.at(-1)?.groups[0]?.stimuli[0]?.edges).toEqual(["enter"]);
+    const before = changes.length;
+    await edit({ edges: [] });
+    expect(changes).toHaveLength(before); // nothing changed, so nothing was emitted
+  });
+
+  it("pins and explains the overrides a momentary trigger cannot use", async () => {
+    expect(overrides().get("Attack")?.disabled).toBe(false);
+    el.config = withStimulus({ mode: "momentary" });
+    await el.updateComplete;
+    const fields = overrides();
+    expect(fields.get("Attack")?.disabled).toBe(true);
+    expect(fields.get("Decay")?.disabled).toBe(true);
+    expect(fields.get("Impulse")?.disabled).toBe(true);
+    expect(fields.get("Release")?.disabled).toBe(false);
+    expect(fields.get("Attack")?.hint).toContain("always an impulse");
   });
 });
 

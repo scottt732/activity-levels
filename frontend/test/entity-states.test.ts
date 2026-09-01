@@ -38,6 +38,15 @@ describe("stateLabel", () => {
   it("survives a missing hass", () => {
     expect(stateLabel(undefined, "binary_sensor.door", "on")).toBe("On");
   });
+
+  it("survives a hass with no localize, which is what a half-built one looks like", () => {
+    const bare = { states: {} } as unknown as HomeAssistant;
+    expect(stateLabel(bare, "binary_sensor.door", "on")).toBe("On");
+    expect(stateOptions(bare, "binary_sensor.door", [])).toEqual([
+      { value: "on", label: "On" },
+      { value: "off", label: "Off" },
+    ]);
+  });
 });
 
 describe("stateOptions", () => {

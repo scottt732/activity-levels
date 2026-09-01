@@ -4,7 +4,7 @@ import { newGroup, newStimulus } from "../src/model";
 import { kindsConfig } from "./fixtures";
 import type { AlTree } from "../src/al-tree";
 import type { AlChangeEvent } from "../src/events";
-import type { Config, LiveState, Path } from "../src/types";
+import type { Config, HomeAssistant, LiveState, Path } from "../src/types";
 
 const baseConfig = (): Config => ({
   version: 1,
@@ -492,6 +492,42 @@ describe("al-tree live view", () => {
     expect(chip?.className).toContain("release");
     expect(chip?.textContent?.trim()).toBe("release");
     expect(chip?.getAttribute("title")).toBe("Phase: release, ends in 30.5s");
+  });
+});
+
+describe("al-tree stimulus rows", () => {
+  const hass = {
+    states: {
+      "binary_sensor.motion": {
+        entity_id: "binary_sensor.motion",
+        state: "on",
+        attributes: { device_class: "motion", friendly_name: "Hall Motion" },
+        last_changed: "",
+      },
+    },
+    localize: (key: string) =>
+      key === "component.binary_sensor.entity_component.motion.state.on" ? "Detected" : "",
+  } as unknown as HomeAssistant;
+
+  beforeEach(async () => {
+    await expand("groups/0");
+  });
+
+  it("wears the entity's own icon and spells its state the way HA does", async () => {
+    el.hass = hass;
+    await el.updateComplete;
+    const row = rowFor("groups/0/stimuli/0");
+    expect(row.querySelector("ha-state-icon")).not.toBeNull();
+    expect(row.querySelector('ha-icon[icon="mdi:flash"]')).toBeNull();
+    expect(row.querySelector(".chip")?.textContent?.trim()).toBe("Detected");
+  });
+
+  it("falls back to the generic bolt when the entity is not there", async () => {
+    el.hass = { states: {}, localize: () => "" } as unknown as HomeAssistant;
+    await el.updateComplete;
+    const row = rowFor("groups/0/stimuli/0");
+    expect(row.querySelector("ha-state-icon")).toBeNull();
+    expect(row.querySelector('ha-icon[icon="mdi:flash"]')).not.toBeNull();
   });
 });
 
