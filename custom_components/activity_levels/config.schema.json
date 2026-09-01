@@ -620,6 +620,27 @@
                   "on"
                 ]
               },
+              "mode": {
+                "enum": [
+                  "sustained",
+                  "momentary"
+                ],
+                "default": "sustained"
+              },
+              "edges": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "enter",
+                    "leave"
+                  ]
+                },
+                "minItems": 1,
+                "default": [
+                  "enter",
+                  "leave"
+                ]
+              },
               "gain": {
                 "type": "number",
                 "exclusiveMinimum": 0.0,

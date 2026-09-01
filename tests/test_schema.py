@@ -948,3 +948,78 @@ def test_the_shipped_example_house_validates_and_round_trips() -> None:
     ]
     assert cfg["defaults"]["envelope"] == "default"
     assert cfg["defaults"]["retrigger"] == "always" and cfg["defaults"]["stack"] is True
+
+
+def _one_stimulus(extra: dict[str, Any]) -> dict[str, Any]:
+    """A minimal valid document whose single stimulus carries `extra`."""
+    return {
+        "version": 1,
+        "envelopes": [{"id": "default"}],
+        "groups": [
+            {
+                "id": "house",
+                "kind": "property",
+                "children": [
+                    {
+                        "id": "yard",
+                        "kind": "outside",
+                        "stimuli": [{"entity": "binary_sensor.door", **extra}],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _only_stimulus(cfg: dict[str, Any]) -> dict[str, Any]:
+    stim: dict[str, Any] = cfg["groups"][0]["children"][0]["stimuli"][0]
+    return stim
+
+
+def test_stimulus_mode_defaults_to_sustained_with_both_edges() -> None:
+    stim = _only_stimulus(validate_config(_one_stimulus({})))
+    assert stim["mode"] == "sustained"
+    assert stim["edges"] == ["enter", "leave"]
+
+
+def test_stimulus_accepts_momentary_with_one_edge() -> None:
+    stim = _only_stimulus(validate_config(_one_stimulus({"mode": "momentary", "edges": ["enter"]})))
+    assert stim["mode"] == "momentary"
+    assert stim["edges"] == ["enter"]
+
+
+def test_stimulus_rejects_an_unknown_mode() -> None:
+    with pytest.raises(ConfigError) as exc:
+        validate_config(_one_stimulus({"mode": "latching"}))
+    assert any("mode" in e["path"] for e in exc.value.errors)
+
+
+def test_stimulus_rejects_an_empty_edge_list() -> None:
+    with pytest.raises(ConfigError) as exc:
+        validate_config(_one_stimulus({"mode": "momentary", "edges": []}))
+    assert any("edges" in e["path"] for e in exc.value.errors)
+
+
+def test_stimulus_rejects_an_unknown_edge() -> None:
+    with pytest.raises(ConfigError) as exc:
+        validate_config(_one_stimulus({"mode": "momentary", "edges": ["sideways"]}))
+    assert any("edges" in e["path"] for e in exc.value.errors)
+
+
+def test_edges_are_inert_under_sustained() -> None:
+    """Kept rather than rejected: the panel's mode radio flips back and forth, and a
+    document that will not save because of a field the form is not showing is a bad trade
+    for a rule nothing depends on."""
+    stim = _only_stimulus(validate_config(_one_stimulus({"mode": "sustained", "edges": ["leave"]})))
+    assert stim["edges"] == ["leave"]
+
+
+def test_each_stimulus_gets_its_own_edge_list() -> None:
+    """voluptuous hands every stimulus the same default object unless the default is a
+    callable, and a shared mutable list is a bug waiting for the first caller that sorts
+    or appends in place."""
+    cfg = validate_config(house_config())
+    lists = [s["edges"] for g in cfg["groups"] for s in g["stimuli"]]
+    lists += [s["edges"] for g in cfg["groups"] for c in g["children"] for s in c["stimuli"]]
+    assert len(lists) > 1
+    assert all(x is not lists[0] for x in lists[1:])
