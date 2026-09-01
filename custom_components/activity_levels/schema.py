@@ -32,11 +32,16 @@ from .const import (
     DEFAULT_MIN_WAKE_INTERVAL,
     DEFAULT_PRECISION,
     DEFAULT_SAFETY_REFRESH,
+    EDGE_ENTER,
+    EDGE_LEAVE,
+    EDGES,
     KIND_AREA,
     KIND_FLOOR,
     KIND_OUTSIDE,
     KIND_PROPERTY,
     KINDS,
+    MODE_SUSTAINED,
+    MODES,
     NODE_KINDS,
     PRESENCE_KEY,
     TRIGGER_KEY,
@@ -200,6 +205,13 @@ STIMULUS_SCHEMA = vol.All(
         {
             vol.Required("entity"): cv.entity_id,
             vol.Optional("to", default=["on"]): _to_states,
+            vol.Optional("mode", default=MODE_SUSTAINED): vol.In(MODES),
+            # A callable default, because voluptuous hands every stimulus the *same*
+            # default object: a shared mutable list is a bug waiting for the first caller
+            # that sorts or appends in place.
+            vol.Optional("edges", default=lambda: [EDGE_ENTER, EDGE_LEAVE]): vol.All(
+                [vol.In(EDGES)], vol.Length(min=1)
+            ),
             vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
             vol.Optional("key", default=None): vol.Any(None, vol.All(str, vol.Length(min=1))),
             vol.Optional("envelope", default=None): vol.Any(None, _group_id),

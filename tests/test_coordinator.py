@@ -6,13 +6,15 @@ from typing import Any
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.activity_levels.const import PRESENCE_KEY, TRIGGER_KEY
 from custom_components.activity_levels.coordinator import ActivityLevelsCoordinator
+from custom_components.activity_levels.engine import Envelope, Voice
 from custom_components.activity_levels.schema import validate_config
-from custom_components.activity_levels.tree import build_tree
+from custom_components.activity_levels.tree import VoiceRef, build_tree
 from tests.fixtures import house_config, presence_config
 
 
@@ -448,3 +450,122 @@ async def test_presence_shows_up_in_voice_states(hass: HomeAssistant) -> None:
     assert presence["entity"] is None and presence["gate"] is True
     assert [v["label"] for v in coordinator.voice_states()["downstairs"]] == [TRIGGER_KEY]
     await coordinator.async_stop()
+
+
+def _door_config(mode: str, edges: list[str] | None = None) -> dict[str, Any]:
+    """A hallway whose only stimulus is one door, read in the given mode."""
+    stimulus: dict[str, Any] = {"entity": "binary_sensor.hall_door", "mode": mode}
+    if edges is not None:
+        stimulus["edges"] = edges
+    return {
+        "version": 1,
+        "defaults": {"envelope": "default", "min_wake_interval": 1},
+        "envelopes": [{"id": "default", "release": "10m"}],
+        "groups": [
+            {
+                "id": "house",
+                "kind": "property",
+                "children": [
+                    {
+                        "id": "downstairs",
+                        "kind": "structure",
+                        "children": [{"id": "hall", "kind": "area", "stimuli": [stimulus]}],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+async def _door(
+    hass: HomeAssistant, mode: str, edges: list[str] | None = None, initial: str = "off"
+) -> ActivityLevelsCoordinator:
+    hass.states.async_set("binary_sensor.hall_door", initial)
+    await hass.async_block_till_done()
+    return await _started(hass, _door_config(mode, edges))
+
+
+async def test_momentary_fires_on_both_edges(hass: HomeAssistant) -> None:
+    """Opening and closing are each one event. The second stacks on the first, because
+    the door is still cooling down when it shuts."""
+    coordinator = await _door(hass, "momentary")
+    hass.states.async_set("binary_sensor.hall_door", "on")
+    await hass.async_block_till_done()
+    assert coordinator.data["hall"].value == pytest.approx(1.0)
+    assert coordinator.data["hall"].gated is False  # an impulse holds nothing open
+    hass.states.async_set("binary_sensor.hall_door", "off")
+    await hass.async_block_till_done()
+    assert coordinator.data["hall"].value == pytest.approx(2.0)
+    await coordinator.async_stop()
+
+
+async def test_momentary_enter_only_ignores_the_closing_edge(hass: HomeAssistant) -> None:
+    coordinator = await _door(hass, "momentary", ["enter"])
+    hass.states.async_set("binary_sensor.hall_door", "on")
+    await hass.async_block_till_done()
+    assert coordinator.data["hall"].value == pytest.approx(1.0)
+    hass.states.async_set("binary_sensor.hall_door", "off")
+    await hass.async_block_till_done()
+    assert coordinator.data["hall"].value == pytest.approx(1.0)
+    await coordinator.async_stop()
+
+
+async def test_momentary_leave_only_ignores_the_opening_edge(hass: HomeAssistant) -> None:
+    coordinator = await _door(hass, "momentary", ["leave"])
+    hass.states.async_set("binary_sensor.hall_door", "on")
+    await hass.async_block_till_done()
+    assert coordinator.data["hall"].value == 0.0
+    hass.states.async_set("binary_sensor.hall_door", "off")
+    await hass.async_block_till_done()
+    assert coordinator.data["hall"].value == pytest.approx(1.0)
+    await coordinator.async_stop()
+
+
+async def test_momentary_falls_back_to_zero_on_its_own(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The point of forcing the impulse: nothing ever plays note_off for a momentary
+    stimulus, so a voice that could gate would stay up until something reset it."""
+    coordinator = await _door(hass, "momentary")
+    hass.states.async_set("binary_sensor.hall_door", "on")
+    await hass.async_block_till_done()
+    # release 10m falls from full scale (max_value 5.0); this voice stands at 1.0, a fifth
+    # of the way up, so it has a fifth of that to fall.
+    await advance(hass, freezer, 130.0)
+    assert coordinator.data["hall"].value == 0.0
+    assert coordinator.data["hall"].active is False
+    await coordinator.async_stop()
+
+
+async def test_momentary_is_left_alone_at_startup(hass: HomeAssistant) -> None:
+    """A door that was already open when Home Assistant restarted is not an event. The
+    reconcile gets this for free -- it refuses to note_on an impulse -- and without it
+    every momentary door in the house would fire once on every restart."""
+    coordinator = await _door(hass, "momentary", initial="on")
+    assert coordinator.data["hall"].value == 0.0
+    sustained = await _door(hass, "sustained", initial="on")
+    assert sustained.data["hall"].value == pytest.approx(1.0)
+    await coordinator.async_stop()
+    await sustained.async_stop()
+
+
+async def test_momentary_reports_no_change_when_the_entity_goes_unavailable() -> None:
+    """An impulse voice has no gate to release, so the note_off behind `unavailable` is a
+    no-op. Saying so is what stops a vanished door republishing a group that cannot move."""
+    voice = Voice(
+        id="binary_sensor.hall_door",
+        gain=1.0,
+        envelope=Envelope(release=600.0, impulse=True),
+        ceiling=5.0,
+    )
+    ref = VoiceRef(
+        "binary_sensor.hall_door",
+        frozenset({"on"}),
+        voice,
+        "hall",
+        "binary_sensor.hall_door",
+        "momentary",
+        frozenset({"enter", "leave"}),
+    )
+    assert ActivityLevelsCoordinator._apply_transition(ref, "on", STATE_UNAVAILABLE, 1.0) is False
+    assert ActivityLevelsCoordinator._apply_transition(ref, "on", None, 1.0) is False

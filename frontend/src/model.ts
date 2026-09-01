@@ -127,6 +127,8 @@ export const presetLabel = (preset: EnvelopePreset): string =>
 export const newStimulus = (entity: string): Stimulus => ({
   entity,
   to: ["on"],
+  mode: "sustained",
+  edges: ["enter", "leave"],
   gain: 1,
   key: null,
   envelope: null,

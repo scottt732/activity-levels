@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { formatDuration } from "./duration";
+import { entityStateText } from "./entity-states";
 import { pathKey, subtreeErrorCount } from "./errors";
 import { alChange, alSelect } from "./events";
 import { KIND_DEFS, allowedChildKinds } from "./kinds";
@@ -524,9 +525,7 @@ export class AlTree extends LitElement {
             <ha-icon icon=${row.expanded ? "mdi:chevron-down" : "mdi:chevron-right"}></ha-icon>
           </ha-icon-button>`
         : html`<span class="caret"></span>`}
-      <ha-icon
-        icon=${row.kind === "group" && row.group ? KIND_DEFS[row.group.kind].icon : STIMULUS_ICON}
-      ></ha-icon>
+      ${this.renderIcon(row)}
       <button
         type="button"
         class="label"
@@ -543,6 +542,20 @@ export class AlTree extends LitElement {
     </div>`;
   }
 
+  /**
+   * The row's icon. A stimulus wears its entity's own, the way the more-info dialog
+   * draws it -- device class and current state included, so an open door and a shut one
+   * are different glyphs. `ha-state-icon` is optional, so a frontend that never
+   * registered it falls back to the generic bolt rather than to nothing.
+   */
+  private renderIcon(row: Row): TemplateResult {
+    if (row.kind === "group" && row.group)
+      return html`<ha-icon icon=${KIND_DEFS[row.group.kind].icon}></ha-icon>`;
+    const stateObj = row.stimulus ? this.hass?.states[row.stimulus.entity] : undefined;
+    if (!stateObj) return html`<ha-icon icon=${STIMULUS_ICON}></ha-icon>`;
+    return html`<ha-state-icon .hass=${this.hass} .stateObj=${stateObj}></ha-state-icon>`;
+  }
+
   /** The live and validation read-out a row carries: a badge, and whatever the frame knows. */
   private renderRowStatus(config: Config, row: Row): TemplateResult {
     const count = subtreeErrorCount(this.errors, row.path);
@@ -551,13 +564,13 @@ export class AlTree extends LitElement {
       : nothing;
     if (row.kind === "stimulus") {
       const stimulus = row.stimulus;
-      const entity = stimulus === undefined ? undefined : this.hass?.states[stimulus.entity];
+      const state = stimulus === undefined ? null : entityStateText(this.hass, stimulus.entity);
       const group = getAt<Group>(config, parentGroupPath(row.path));
       const voice =
         group === undefined
           ? undefined
           : this.live?.voices[group.id]?.find((v) => v.label === (stimulus?.key ?? stimulus?.entity));
-      return html`${badge}${entity ? html`<span class="muted chip">${entity.state}</span>` : nothing}
+      return html`${badge}${state === null ? nothing : html`<span class="muted chip">${state}</span>`}
       ${voice
         ? html`<span class="chip phase ${voice.phase}" title=${this.voiceTitle(voice)}>${voice.phase}</span>
             <span class="muted chip">${voice.value.toFixed(2)}</span>`

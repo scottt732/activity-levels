@@ -95,6 +95,23 @@ and nothing in the estimator weights it yet."""
 
 DEFAULT_CONNECTION = "door"
 
+MODE_SUSTAINED = "sustained"
+MODE_MOMENTARY = "momentary"
+
+MODES = (MODE_SUSTAINED, MODE_MOMENTARY)
+"""How a stimulus reads its entity. `sustained` holds a note for as long as the entity sits
+in its active states, which is what a light or a media player wants. `momentary` treats each
+crossing as an event and lets go again -- an interior door, read as "somebody walked through
+here" rather than "a door is open"."""
+
+EDGE_ENTER = "enter"
+EDGE_LEAVE = "leave"
+
+EDGES = (EDGE_ENTER, EDGE_LEAVE)
+"""Which crossings of the active states a momentary stimulus fires on. `enter` is a
+transition into them, `leave` a transition out. An exterior door that only matters when it
+opens is `[enter]`; a door read as a footstep is both."""
+
 SLOT_MINUTES = 15
 SLOTS_PER_DAY = 96
 

@@ -17,7 +17,7 @@ export const HA_ELEMENTS = [
  * frontend that never registers it should cost one tab, not the whole panel, which is
  * what putting it in {@link HA_ELEMENTS} would have done.
  */
-export const HA_OPTIONAL_ELEMENTS = ["ha-yaml-editor"] as const;
+export const HA_OPTIONAL_ELEMENTS = ["ha-yaml-editor", "ha-state-icon"] as const;
 
 /** How long the loader nudge gets before we stop waiting on it. */
 export const NUDGE_TIMEOUT_MS = 2500;

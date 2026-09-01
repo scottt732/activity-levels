@@ -8,15 +8,6 @@ export type OverrideKind = "duration" | "number" | "boolean" | "select" | "multi
 /** A stored (config-shaped) override value. */
 export type OverrideValue = number | boolean | string | null;
 
-/** `"on, playing"` -> `["on", "playing"]`; blanks are dropped rather than silently defaulted. */
-export const parseToList = (text: string): string[] =>
-  text
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-
-export const formatToList = (to: readonly string[] | null | undefined): string => (to ?? []).join(", ");
-
 export const emptyToNull = (value: string | null | undefined): string | null =>
   value === undefined || value === null || value === "" ? null : value;
 

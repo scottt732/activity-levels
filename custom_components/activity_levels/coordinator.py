@@ -16,7 +16,15 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import PRESENCE_KEY, STORAGE_VERSION, TRIGGER_KEY, storage_key
+from .const import (
+    EDGE_ENTER,
+    EDGE_LEAVE,
+    MODE_MOMENTARY,
+    PRESENCE_KEY,
+    STORAGE_VERSION,
+    TRIGGER_KEY,
+    storage_key,
+)
 from .engine import Channel, Group, Phase, Voice
 from .tree import Tree, VoiceRef
 
@@ -136,11 +144,25 @@ class ActivityLevelsCoordinator:
     ) -> bool:
         """Map one HA state change onto the voice. Return True if anything moved."""
         voice = ref.voice
+        momentary = ref.mode == MODE_MOMENTARY
         if new_state is None or new_state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            if momentary:
+                # A momentary voice is an impulse, so it holds no gate and `unavailable`
+                # has nothing to release. Saying so is what stops a vanished door
+                # republishing a group that cannot have moved.
+                return False
             voice.unavailable(t)
             return True
         new_in = new_state in ref.to
         old_in = old_state is not None and old_state in ref.to
+        if momentary:
+            # Each crossing the stimulus asked for is one event. There is no note_off to
+            # play: the voice was built as an impulse, so it is already on its way down.
+            if new_in and not old_in and EDGE_ENTER in ref.edges:
+                return voice.note_on(t)
+            if old_in and not new_in and EDGE_LEAVE in ref.edges:
+                return voice.note_on(t)
+            return False
         if new_in and not old_in:
             return voice.note_on(t)
         if not new_in and (old_in or voice.gate):

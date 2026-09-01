@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { anomalySensorId, expectedSensorId, simSwitchId } from "./entities";
+import { entityStateText } from "./entity-states";
 import { fieldErrors, pathKey, subtreeErrorCount } from "./errors";
 import { alChange, alRebuild, alSimToggle } from "./events";
 import {
@@ -294,10 +295,14 @@ export class AlStripControls extends LitElement {
     return html`
       <ha-expansion-panel outlined left-chevron>
         <div slot="header" class="stimulus-head">
-          <ha-icon icon="mdi:flash"></ha-icon>
+          ${entity
+            ? html`<ha-state-icon .hass=${this.hass} .stateObj=${entity}></ha-state-icon>`
+            : html`<ha-icon icon="mdi:flash"></ha-icon>`}
           <span class="name">${stimulus.key ?? name}</span>
           ${count ? html`<span class="badge" title="${count} problem(s)">${count}</span>` : nothing}
-          ${entity ? html`<span class="muted chip">${entity.state}</span>` : nothing}
+          ${entity
+            ? html`<span class="muted chip">${entityStateText(this.hass, stimulus.entity)}</span>`
+            : nothing}
         </div>
         <al-stimulus-editor
           .hass=${this.hass}

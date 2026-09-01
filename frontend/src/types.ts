@@ -35,9 +35,18 @@ export interface EnvelopePreset {
   debounce: number | null;
 }
 
+/** How a stimulus reads its entity: hold a note while it is active, or fire on each crossing. */
+export type StimulusMode = "sustained" | "momentary";
+
+/** Which crossings of the active states a momentary stimulus fires on. */
+export type StimulusEdge = "enter" | "leave";
+
 export interface Stimulus extends EnvelopeOverrides {
   entity: string;
   to: string[];
+  mode: StimulusMode;
+  /** Momentary only, but carried in both modes: the mode radio flips back and forth. */
+  edges: StimulusEdge[];
   gain: number;
   key: string | null;
   envelope: string | null;
@@ -234,6 +243,8 @@ export interface HomeAssistant {
   user?: { is_admin: boolean; name: string };
   language: string;
   localize: (key: string, ...args: unknown[]) => string;
+  /** Optional: an older frontend has no state formatter, so callers fall back to `localize`. */
+  formatEntityState?: (stateObj: HassEntity) => string;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
   callService(domain: string, service: string, data?: Record<string, unknown>): Promise<void>;
 }
