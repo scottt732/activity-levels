@@ -154,3 +154,48 @@ def test_a_group_with_no_name_falls_back_to_its_id() -> None:
     assert tree.groups["hall"].name == "Hall"
     assert tree.groups["hall"].name_set is False
     assert tree.groups["kitchen"].name_set is True
+
+
+def test_a_momentary_stimulus_is_built_as_an_impulse_whatever_the_preset_says() -> None:
+    """A momentary source only ever plays note_on, and note_on on a sustaining envelope
+    opens a gate nothing will ever close. Forcing impulse at build time is what makes that
+    configuration unreachable rather than merely discouraged -- and it is also what lets
+    the startup reconcile skip these voices, since it already refuses to note_on an
+    impulse and only ever notes off a voice that is gated."""
+    tree = build_tree(
+        validate_config(
+            {
+                "version": 1,
+                "envelopes": [{"id": "default", "release": "30m", "impulse": False}],
+                "groups": [
+                    {
+                        "id": "house",
+                        "kind": "property",
+                        "children": [
+                            {
+                                "id": "yard",
+                                "kind": "outside",
+                                "stimuli": [
+                                    {
+                                        "entity": "binary_sensor.door",
+                                        "mode": "momentary",
+                                        "edges": ["enter"],
+                                    },
+                                    {"entity": "binary_sensor.lamp", "key": "lamp"},
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    door = tree.voices_by_entity["binary_sensor.door"][0]
+    lamp = tree.voices_by_entity["binary_sensor.lamp"][0]
+    assert door.voice.envelope.impulse is True
+    assert door.voice.envelope.release == 1800.0  # everything else still comes from the preset
+    assert door.mode == "momentary"
+    assert door.edges == frozenset({"enter"})
+    assert lamp.voice.envelope.impulse is False
+    assert lamp.mode == "sustained"
+    assert lamp.edges == frozenset({"enter", "leave"})
