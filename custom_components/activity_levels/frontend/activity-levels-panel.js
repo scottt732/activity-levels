@@ -857,6 +857,8 @@ const mn = {
 }), bn = (e) => e.label !== null && e.label.trim() !== "" ? e.label : e.id, $n = (e) => ({
   entity: e,
   to: ["on"],
+  mode: "sustained",
+  edges: ["enter", "leave"],
   gain: 1,
   key: null,
   envelope: null,
