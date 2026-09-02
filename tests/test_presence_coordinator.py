@@ -6,6 +6,7 @@ from datetime import timedelta
 from itertools import count
 from typing import Any
 
+import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNKNOWN
@@ -309,6 +310,33 @@ async def test_observations_are_coalesced_and_drive_the_room(
     assert outputs is not None and outputs.room == "kitchen"
     # five sensors and a tracker moved; one observation, so one notification
     assert len(updates) == 1
+
+
+async def test_a_reading_in_feet_is_read_as_metres(hass: HomeAssistant) -> None:
+    """A US-customary install converts every distance sensor to feet in the state machine.
+
+    The filter's ``scale`` and ``floor`` are tuned for metres. Read feet as metres and a
+    phone three metres from its scanner looks ten away -- far enough that every room
+    with no scanner outranks it and the belief wanders the house all night.
+    """
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    track = presence.devices["Scott"]
+
+    for room, entity_id in bermuda.sensors.items():
+        feet = 9.84 if room == "kitchen" else 32.81  # 3 m and 10 m
+        hass.states.async_set(entity_id, str(feet), {"unit_of_measurement": "ft"})
+    hass.states.async_set(
+        bermuda.sensors["hall"], "5.0", {"unit_of_measurement": "m"}
+    )  # a sensor left in metres still reads as metres
+
+    distances = presence._observation(track, 0.0).distances
+    by_room = {presence.scanner_map[key]: value for key, value in distances.items()}
+    assert by_room["kitchen"] == pytest.approx(3.0, abs=0.01)
+    assert by_room["dining_room"] == pytest.approx(10.0, abs=0.01)
+    assert by_room["hall"] == pytest.approx(5.0)
 
 
 async def test_occupancy_notes_the_presence_voice_on_and_off(

@@ -20,12 +20,19 @@ from datetime import datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_NOT_HOME, STATE_UNAVAILABLE, STATE_UNKNOWN
+from homeassistant.const import (
+    ATTR_UNIT_OF_MEASUREMENT,
+    STATE_NOT_HOME,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    UnitOfLength,
+)
 from homeassistant.core import (
     CALLBACK_TYPE,
     Event,
     EventStateChangedData,
     HomeAssistant,
+    State,
     callback,
 )
 from homeassistant.helpers import device_registry as dr
@@ -34,6 +41,8 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import DistanceConverter
+from homeassistant.util.unit_system import LENGTH_UNITS
 
 from .const import (
     AWAY,
@@ -470,7 +479,7 @@ class PresenceCoordinator:
         distances: dict[str, float | None] = {}
         for entity_id, key in track.sensors.items():
             state = self.hass.states.get(entity_id)
-            distances[key] = parse_distance(None if state is None else state.state)
+            distances[key] = None if state is None else self._metres(state)
         # `unavailable` and `unknown` read as not-home on purpose: an absent answer is
         # not evidence that somebody is in the house, and the filter's away state is the
         # honest place for "we cannot see them". The cost is that a Bermuda reload, which
@@ -483,6 +492,28 @@ class PresenceCoordinator:
             STATE_UNKNOWN,
         )
         return Observation(t=t, distances=distances, home=home)
+
+    @staticmethod
+    def _metres(state: State) -> float | None:
+        """One distance sensor's reading, in the unit the filter is tuned for.
+
+        Bermuda measures in metres, but that is not what the state machine holds. A
+        distance sensor is converted to the unit system's preferred length -- feet, on a
+        US-customary install -- before its state is written, and the user can pick any
+        length unit for it besides. ``scale`` and ``floor`` are metres, so feet read as
+        metres put every scanner three times further away than it is: a phone sitting
+        beside its own room's scanner looks far enough that every room *without* a
+        scanner outranks it, and the belief wanders the house all night. The unit is on
+        the state, so the reading is converted here, on the Home Assistant side of the
+        line, and the filter never learns there was another unit.
+        """
+        value = parse_distance(state.state)
+        if value is None:
+            return None
+        unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+        if unit is None or unit == UnitOfLength.METERS or unit not in LENGTH_UNITS:
+            return value
+        return DistanceConverter.convert(value, unit, UnitOfLength.METERS)
 
     def _apply_occupancy(self) -> None:
         """Who is where, and the note-ons that follow.
