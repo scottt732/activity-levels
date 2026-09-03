@@ -147,6 +147,7 @@ presence:
   carried:
     prior: 0.7            # P(a device is on its person) before any signal
     flip: 300s            # mean time between carried ↔ parked changes, for the transition
+    nearby: 0.3           # P(a parked device is in the same room as its person)
     weights:              # log-odds each signal contributes; 0 disables one
       charging: -3.0      # battery_state charging / full → parked
       moving: 2.0         # activity walking/running, or steps within `recent`
@@ -156,7 +157,9 @@ presence:
   devices: []             # kept for one release: each entry becomes a one-device person
 ```
 
-**Seeding (chosen).** With `person:` set, every `device_tracker` on the person entity whose
+**Seeding (chosen).** A person's `name` may be omitted; discovery names them after the
+first device's registry entry (a legacy `devices[]` entry without a name keeps that
+behaviour). With `person:` set, every `device_tracker` on the person entity whose
 platform is `bermuda` becomes a device; one whose platform is `mobile_app` becomes a
 `companion` — paired to the Bermuda device when there is exactly one of each, otherwise
 left for the config to pair. Entries under `devices:` merge by `tracker` and win. Signals
@@ -183,9 +186,11 @@ State: `(room, c)` for every room state including `away`, and `c ∈ {0,1}^D` ov
 person's `D` devices. Belief is an `(R, 2^D)` array.
 
 **Transition.** Rooms move through the topology's matrix `T` exactly as today. Each
-device's carried flag flips with probability `p = 1 − exp(−Δt / flip)` per update,
-independently: `C = ⊗_d [[1−p, p], [p, 1−p]]`. Predict is `Tᵀ · B · C` — two small
-matrix products, no Kronecker ever materialised.
+device's carried flag is *reconsidered* with probability `p = 1 − exp(−Δt / flip)` per
+update and then redrawn from the prior: `C_d = [[1 − p·prior, p·prior], [p·(1−prior),
+1 − p·(1−prior)]]`, so the prior is the flags' stationary distribution and the initial
+belief. `C = ⊗_d C_d`; predict is `Tᵀ · B · C` — two small matrix products (the
+Kronecker is 8×8 at three devices).
 
 **Emission.** For state `(r, c)`:
 
@@ -198,10 +203,17 @@ log E[r, c] = Σ_d ( c_d · L_d[r] + (1 − c_d) · M_d + S_d(c_d) ) + A[r]
 - `M_d` — the device's readings explained by *wherever the device is*: the log marginal
   likelihood of the same frame under the device's own filter,
   `logsumexp(log(Tᵀ·b_d) + L_d)`. This is what lets a parked phone's steady readings
-  explain themselves. When the device and the person agree, `L_d[r] ≈ M_d` and the
-  readings say nothing about carried — as they should; the signals decide.
-- `S_d(c_d)` — `+log_odds_d · c_d` from `carried.py`, with the prior folded in as
-  `logit(prior)`.
+  explain themselves. **The parked explanation is a mixture (chosen):** with probability
+  `carried.nearby` (default 0.3) a parked device is in its person's own room, so the
+  not-carried term is `logaddexp(log(1−nearby) + M_d, log(nearby) + L_d[r])`. Without
+  it a lone phone on a kitchen charger said nothing about the kitchen and the belief
+  diffused to the transition matrix's dead end. When the device and the person agree,
+  the two branches coincide and the readings say nothing about carried — as they
+  should; the signals decide.
+- `S_d(c_d)` — `c_d · log_odds_d · min(Δt, recent) / recent` from `carried.py`: the side
+  evidence is a *rate*, so a signal held for `recent` seconds is worth its whole weight
+  and the answer does not depend on Bermuda's frame rate. The prior is not in this term;
+  it lives in the transition above.
 - `A[r]` — the P1 activity term.
 
 `away` is handled as today (certain when the tracker says out; `floor²` when home), on
