@@ -43,6 +43,14 @@ def presence_storage_key(entry_id: str) -> str:
     return f"{DOMAIN}.{entry_id}.presence"
 
 
+PRESENCE_LABELS_VERSION = 1
+
+
+def presence_labels_key(entry_id: str) -> str:
+    """The corrections people have made: what the signature learner fits from."""
+    return f"{DOMAIN}.{entry_id}.presence_labels"
+
+
 CONF_VERSION = "version"
 CONF_DEFAULTS = "defaults"
 CONF_ENVELOPES = "envelopes"
@@ -133,6 +141,7 @@ SERVICE_SET_LEVEL = "set_level"
 SERVICE_RESET = "reset"
 SERVICE_REBUILD_PROFILE = "rebuild_profile"
 SERVICE_SIMULATE_NOW = "simulate_now"
+SERVICE_LOCATE = "locate"
 ATTR_GROUP_ID = "group_id"
 ATTR_PEAK = "peak"
 ATTR_VALUE = "value"
@@ -156,6 +165,8 @@ ATTR_UPDATED = "updated"
 ATTR_WHO = "who"
 ATTR_ROOMS = "rooms"
 ATTR_PROBABILITY = "probability"
+ATTR_PERSON = "person"
+ATTR_ROOM = "room"
 
 ISSUE_BERMUDA_MISSING = "bermuda_missing"
 ISSUE_NOT_BERMUDA = "not_a_bermuda_device"

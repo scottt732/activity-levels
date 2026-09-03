@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
 from typing import Any
@@ -64,8 +64,10 @@ from .const import (
     KIND_PROPERTY,
     KIND_STRUCTURE,
     PRESENCE_KEY,
+    PRESENCE_LABELS_VERSION,
     PRESENCE_STORAGE_VERSION,
     TRIGGER_KEY,
+    presence_labels_key,
     presence_storage_key,
 )
 from .coordinator import ActivityLevelsCoordinator
@@ -206,6 +208,12 @@ class PresenceCoordinator:
             hass, PRESENCE_STORAGE_VERSION, presence_storage_key(entry.entry_id)
         )
         self._stored: dict[str, Any] = {}
+        self._labels_store: Store[dict[str, Any]] = Store(
+            hass, PRESENCE_LABELS_VERSION, presence_labels_key(entry.entry_id)
+        )
+        self.labels: list[dict[str, Any]] = []
+        """Corrections, newest first. Each is everything the estimator saw at that
+        instant plus the room the person said they were in: the learner's input."""
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[CALLBACK_TYPE] = []
         self._state_unsub: CALLBACK_TYPE | None = None
@@ -240,6 +248,13 @@ class PresenceCoordinator:
         stored = await self._store.async_load()
         # a store we can no longer read is a uniform prior, not a failed setup
         self._stored = dict(stored) if isinstance(stored, Mapping) else {}
+        labels = await self._labels_store.async_load()
+        kept = labels.get("labels") if isinstance(labels, Mapping) else None
+        self.labels = (
+            [dict(label) for label in kept if isinstance(label, Mapping)]
+            if isinstance(kept, list)
+            else []
+        )
 
         if not self._bermuda_loaded():
             self._issue(ISSUE_BERMUDA_MISSING, present=True)
@@ -300,6 +315,7 @@ class PresenceCoordinator:
         self._listeners.clear()
         if self._usable:
             await self._store.async_save(self._snapshot())
+            await self._labels_store.async_save(self._labels_snapshot())
 
     # -- listeners -----------------------------------------------------------
 
@@ -892,7 +908,72 @@ class PresenceCoordinator:
         for gid, who in occupants.items():
             self.coordinator.set_occupied(gid, bool(who))
 
+    # -- corrections ---------------------------------------------------------
+
+    def correct(self, name: str, room: str, *, source: str) -> PersonOutputs:
+        """ "No, I am in the studio": move the belief, and keep the moment as a label.
+
+        The label is built *before* the belief moves and carries everything the
+        estimator was looking at -- every device's frame, the carried marginals, the
+        house's activity levels -- so the learner never has to reconstruct a moment from
+        history. A correction is not an observation: the device filters see no frame,
+        because the person saying where they are says nothing about where the phone is.
+        """
+        person = self.people.get(name)
+        if person is None or person.estimator is None:
+            raise ValueError(f"no such person: {name}")
+        if room not in self.topology.nodes and room != AWAY:
+            raise ValueError(f"not a room: {room}")
+        t = self.coordinator.now()
+        activity = self._activity(t)
+        frames = {
+            device_id: self._frame(track, t, activity)
+            for device_id, track in person.devices.items()
+        }
+        marginals = person.estimator.carried()
+        self.labels.insert(
+            0,
+            {
+                "t": t,
+                "person": name,
+                "room": room,
+                "source": source,
+                "frames": {
+                    device_id: {
+                        "distances": dict(frame.distances),
+                        "home": frame.home,
+                        "signals": asdict(frame.signals),
+                    }
+                    for device_id, frame in frames.items()
+                },
+                "carried": marginals,
+                "activity": {gid: reading.level for gid, reading in activity.items()},
+            },
+        )
+        del self.labels[self.settings["labels"]["keep"] :]
+        person.estimator.locate(room)
+        person.outputs = person.estimator.outputs(t)
+        self._apply_occupancy()
+        self._store.async_delay_save(self._snapshot, SAVE_DELAY)
+        self._labels_store.async_delay_save(self._labels_snapshot, SAVE_DELAY)
+        self._notify()
+        return person.outputs
+
+    def delete_label(self, t: float, name: str) -> bool:
+        """Forget one correction; True when there was one to forget."""
+        before = len(self.labels)
+        self.labels = [
+            label for label in self.labels if not (label["t"] == t and label["person"] == name)
+        ]
+        if len(self.labels) == before:
+            return False
+        self._labels_store.async_delay_save(self._labels_snapshot, SAVE_DELAY)
+        return True
+
     # -- persistence ---------------------------------------------------------
+
+    def _labels_snapshot(self) -> dict[str, Any]:
+        return {"labels": [dict(label) for label in self.labels]}
 
     def _snapshot(self) -> dict[str, Any]:
         return {
@@ -1032,6 +1113,7 @@ class PresenceCoordinator:
             "unmapped": list(self.unmapped),
             "disabled": list(self.disabled),
             "occupants": {gid: list(who) for gid, who in self.occupants.items()},
+            "labels": len(self.labels),
             "devices": {
                 name: {
                     "person": person.person,

@@ -276,6 +276,7 @@ def test_presence_defaults_and_absence() -> None:
         "stuck_after": 60.0,
         "activity": {"floor": 0.05},
         "carried": CARRIED_DEFAULTS,
+        "labels": {"keep": 5000},
         "scanner_areas": {},
     }
 
@@ -421,6 +422,7 @@ def test_people_normalise_with_a_person_a_companion_and_signals() -> None:
         ({"carried": {"recent": 0}}, "presence/carried/recent"),
         ({"carried": {"nearby": 1.0}}, "presence/carried/nearby"),
         ({"carried": {"weights": {"jitter": 11}}}, "presence/carried/weights/jitter"),
+        ({"labels": {"keep": 10}}, "presence/labels/keep"),
     ],
 )
 def test_people_and_carried_errors_are_pathed(presence, path) -> None:

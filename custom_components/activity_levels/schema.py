@@ -341,6 +341,14 @@ PRESENCE_ACTIVITY_SCHEMA = vol.Schema(
     }
 )
 
+PRESENCE_LABELS_SCHEMA = vol.Schema(
+    {
+        # corrections kept, newest first; the learner reads them and a bug report
+        # carries the count
+        vol.Optional("keep", default=5000): vol.All(int, vol.Range(min=100, max=50000)),
+    }
+)
+
 PRESENCE_SCHEMA = vol.Schema(
     {
         vol.Optional("enabled", default=False): cv.boolean,
@@ -357,6 +365,7 @@ PRESENCE_SCHEMA = vol.Schema(
         vol.Optional("stuck_after", default=60.0): vol.All(parse_duration, vol.Range(min=1.0)),
         vol.Optional("activity", default=dict): PRESENCE_ACTIVITY_SCHEMA,
         vol.Optional("carried", default=dict): CARRIED_SCHEMA,
+        vol.Optional("labels", default=dict): PRESENCE_LABELS_SCHEMA,
         # keyed by the scanner's device-registry id (or its Bermuda address); the value
         # is the room it is in, overriding whatever its area says
         vol.Optional("scanner_areas", default=dict): {cv.string: _group_id},

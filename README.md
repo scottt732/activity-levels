@@ -621,6 +621,8 @@ presence:                    # absent or enabled: false = the whole feature is o
   stuck_after: 60s           # implausible readings for this long reset the estimate
   activity:
     floor: 0.05              # likelihood of a room whose activity level is 0.0
+  labels:
+    keep: 5000               # corrections kept, newest first, for the learner
   scanner_areas:             # scanner device id -> room, overriding its area
     "1a2b3c4d5e6f": kitchen
 ```

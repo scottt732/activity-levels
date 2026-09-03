@@ -29,6 +29,7 @@ from custom_components.activity_levels.const import (
     ISSUE_UNMAPPED_SCANNERS,
     PRESENCE_KEY,
     PRESENCE_STORAGE_VERSION,
+    presence_labels_key,
     presence_storage_key,
 )
 from custom_components.activity_levels.diagnostics import async_get_config_entry_diagnostics
@@ -396,6 +397,77 @@ async def test_the_parked_phone_scenario_end_to_end(
     assert out is not None and out.room == "kitchen"
     assert out.carried[phone.id] < 0.5
     assert out.device_rooms[phone.id] == "dining_room"
+
+
+# -- corrections -------------------------------------------------------------
+
+
+async def test_a_correction_moves_the_person_and_keeps_a_label(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, hass_storage: dict[str, Any]
+) -> None:
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    for _ in range(4):
+        await observe(hass, freezer, bermuda, "kitchen")
+    before = presence.people["Scott"].outputs
+    assert before is not None and before.room == "kitchen"
+
+    updates: list[None] = []
+    presence.async_add_listener(lambda: updates.append(None))
+    out = presence.correct("Scott", "hall", source="panel")
+    assert out.room == "hall" and out.confidence == pytest.approx(1.0)
+    assert out.carried == before.carried
+    assert presence.people["Scott"].outputs is out
+    assert presence.occupants["hall"] == ["Scott"] and presence.occupants["kitchen"] == []
+    assert len(updates) == 1
+
+    (label,) = presence.labels
+    assert label["person"] == "Scott" and label["room"] == "hall" and label["source"] == "panel"
+    (device_id,) = presence.people["Scott"].devices
+    frame = label["frames"][device_id]
+    assert set(frame) == {"distances", "home", "signals"}
+    assert frame["home"] is True
+    assert set(frame["distances"]) == set(presence.scanner_map)
+    assert label["carried"] == before.carried
+    assert set(label["activity"]) == ROOMS
+
+    await presence.async_stop()
+    await hass.async_block_till_done()
+    stored = hass_storage[presence_labels_key(entry.entry_id)]["data"]
+    assert stored["labels"][0]["room"] == "hall"
+
+
+async def test_corrections_are_capped_newest_first(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    config = presence_config()
+    config["presence"]["labels"] = {"keep": 100}
+    entry = await add_entry(hass, config)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    await observe(hass, freezer, bermuda, "kitchen")
+    for i in range(101):
+        freezer.tick(timedelta(seconds=1))
+        presence.correct("Scott", "hall" if i % 2 else "kitchen", source="service")
+    assert len(presence.labels) == 100
+    assert presence.labels[0]["t"] > presence.labels[-1]["t"]
+    assert presence.delete_label(presence.labels[0]["t"], "Scott") is True
+    assert len(presence.labels) == 99
+    assert presence.delete_label(0.0, "Scott") is False
+
+
+async def test_a_correction_refuses_an_unknown_person_or_room(hass: HomeAssistant) -> None:
+    fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    with pytest.raises(ValueError, match="person"):
+        presence.correct("Nobody", "hall", source="panel")
+    with pytest.raises(ValueError, match="room"):
+        presence.correct("Scott", "downstairs", source="panel")  # a branch, not a room
 
 
 # -- repair issues -----------------------------------------------------------
