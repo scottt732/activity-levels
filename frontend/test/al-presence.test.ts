@@ -196,6 +196,22 @@ describe("al-presence", () => {
     expect((await changed).detail.presence!.threshold).toBe(0.8);
   });
 
+  it("edits the empty-room floor as presence.activity.floor", async () => {
+    const { el } = await tab();
+    const form = el.shadowRoot!.querySelector<HTMLElement & { schema: FormItem[]; data: Record<string, unknown> }>(
+      "ha-form.presence-settings",
+    )!;
+    expect(form.schema.find((i) => i.name === "activity_floor")!.selector).toEqual({
+      number: { min: 0.01, max: 1, step: 0.01, mode: "box" },
+    });
+    expect(form.data.activity_floor).toBe(0.05);
+    const changed = listenFor<AlChangeEvent>(el, "al-change");
+    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { activity_floor: 0.2 } } }));
+    const detail = (await changed).detail;
+    expect(detail.presence!.activity).toEqual({ floor: 0.2 });
+    expect(detail.presence!.floor).toBe(0.05);
+  });
+
   it("keeps the name of a device that is still selected when the picker changes", async () => {
     const { el } = await tab();
     const changed = listenFor<AlChangeEvent>(el, "al-change");

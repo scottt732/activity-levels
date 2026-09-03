@@ -137,6 +137,7 @@ const PRESENCE_SETTINGS: PresenceSettings = {
   scale: 3,
   floor: 0.05,
   stuck_after: 60,
+  activity: { floor: 0.05 },
   scanner_areas: {},
 };
 

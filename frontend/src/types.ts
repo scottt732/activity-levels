@@ -111,6 +111,8 @@ export interface PresenceSettings {
   scale: number;
   floor: number;
   stuck_after: number;
+  /** The room-activity evidence: the likelihood of a room whose level is 0.0. */
+  activity: { floor: number };
   scanner_areas: Record<string, string>;
 }
 

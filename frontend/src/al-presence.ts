@@ -43,6 +43,7 @@ const LABELS: Record<string, string> = {
   scale: "Distance scale",
   floor: "Room floor",
   stuck_after: "Reset when stuck for",
+  activity_floor: "Empty-room floor",
 };
 
 /** One line each, matching the README. */
@@ -56,6 +57,8 @@ const HELPERS: Record<string, string> = {
   scale: "Distance, in metres, at which a scanner stops telling you anything.",
   floor: "Likelihood given to a room with no scanner of its own.",
   stuck_after: "How long the readings have to stay implausible before the estimate is reset.",
+  activity_floor:
+    "Likelihood given to a room whose activity level is 0.0 while another room is busy. Lower makes an empty room a stronger 'not here'.",
 };
 
 /** Fields the form owns, checked in order to name the coalescing key. */
@@ -69,6 +72,7 @@ const FORM_FIELDS = [
   "scale",
   "floor",
   "stuck_after",
+  "activity_floor",
 ] as const;
 
 type FormField = (typeof FORM_FIELDS)[number];
@@ -308,6 +312,7 @@ export class AlPresence extends LitElement {
       { name: "scale", selector: SCALE_SELECTOR },
       { name: "floor", selector: FLOOR_SELECTOR },
       { name: "stuck_after", selector: DURATION_SELECTOR },
+      { name: "activity_floor", selector: FLOOR_SELECTOR },
     ];
   }
 
@@ -345,9 +350,14 @@ export class AlPresence extends LitElement {
       scale: number(v.scale) ?? s.scale,
       floor: number(v.floor) ?? s.floor,
       stuck_after: durationToSeconds(v.stuck_after as HaDuration | undefined) ?? s.stuck_after,
+      activity: { floor: number(v.activity_floor) ?? s.activity.floor },
     };
-    const same = (key: FormField): boolean =>
-      key === "devices" ? JSON.stringify(merged.devices) === JSON.stringify(s.devices) : merged[key] === s[key];
+    // The form flattens `activity.floor` to `activity_floor`; the document keeps the nesting.
+    const same = (key: FormField): boolean => {
+      if (key === "devices") return JSON.stringify(merged.devices) === JSON.stringify(s.devices);
+      if (key === "activity_floor") return merged.activity.floor === s.activity.floor;
+      return merged[key] === s[key];
+    };
     const field = FORM_FIELDS.find((key) => !same(key));
     if (field === undefined) return;
     this.dispatchEvent(alChange(setAt(config, ["presence"], merged), `presence:${field}`));
@@ -558,6 +568,7 @@ export class AlPresence extends LitElement {
       scale: s.scale,
       floor: s.floor,
       stuck_after: secondsToDuration(s.stuck_after),
+      activity_floor: s.activity.floor,
     };
     return html`<ha-card header="Settings">
       ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
