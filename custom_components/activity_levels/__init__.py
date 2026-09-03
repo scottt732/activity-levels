@@ -18,6 +18,8 @@ from .const import (
     ATTR_FORCE,
     ATTR_GROUP_ID,
     ATTR_PEAK,
+    ATTR_PERSON,
+    ATTR_ROOM,
     ATTR_VALUE,
     CONF_PRESENCE,
     DOMAIN,
@@ -27,6 +29,7 @@ from .const import (
     MODEL_BY_KIND,
     MODEL_HUB,
     MODEL_PRESENCE,
+    SERVICE_LOCATE,
     SERVICE_REBUILD_PROFILE,
     SERVICE_RESET,
     SERVICE_SET_LEVEL,
@@ -68,6 +71,9 @@ SERVICE_SET_LEVEL_SCHEMA = vol.Schema(
 SERVICE_RESET_SCHEMA = vol.Schema({vol.Optional(ATTR_GROUP_ID): cv.string})
 SERVICE_REBUILD_PROFILE_SCHEMA = vol.Schema({vol.Optional(ATTR_FORCE, default=False): cv.boolean})
 SERVICE_SIMULATE_NOW_SCHEMA = vol.Schema({vol.Required(ATTR_GROUP_ID): cv.string})
+SERVICE_LOCATE_SCHEMA = vol.Schema(
+    {vol.Required(ATTR_PERSON): cv.string, vol.Required(ATTR_ROOM): cv.string}
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntry) -> bool:
@@ -266,9 +272,24 @@ def _register_services(hass: HomeAssistant) -> None:
         handle_rebuild_profile,
         schema=SERVICE_REBUILD_PROFILE_SCHEMA,
     )
+
+    @callback
+    def handle_locate(call: ServiceCall) -> None:
+        """A correction from an automation or a companion notification action."""
+        presence = _runtime(hass).presence
+        if presence is None or not presence.ready:
+            raise ServiceValidationError("Presence is not running")
+        try:
+            presence.correct(call.data[ATTR_PERSON], call.data[ATTR_ROOM], source="service")
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_SIMULATE_NOW,
         handle_simulate_now,
         schema=SERVICE_SIMULATE_NOW_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_LOCATE, handle_locate, schema=SERVICE_LOCATE_SCHEMA
     )

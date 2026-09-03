@@ -11,6 +11,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
@@ -468,6 +469,68 @@ async def test_a_correction_refuses_an_unknown_person_or_room(hass: HomeAssistan
         presence.correct("Nobody", "hall", source="panel")
     with pytest.raises(ValueError, match="room"):
         presence.correct("Scott", "downstairs", source="panel")  # a branch, not a room
+
+
+async def test_the_websocket_corrects_lists_and_deletes(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    await add_entry(hass)
+    await observe(hass, freezer, bermuda, "kitchen")
+    client = await hass_ws_client(hass)
+
+    await client.send_json_auto_id(
+        {"type": f"{DOMAIN}/presence/correct", "person": "Scott", "room": "hall"}
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["room"] == "hall" and msg["result"]["confidence"] == 1.0
+
+    await client.send_json_auto_id(
+        {"type": f"{DOMAIN}/presence/correct", "person": "Scott", "room": "nope"}
+    )
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "not_found"
+    await client.send_json_auto_id(
+        {"type": f"{DOMAIN}/presence/correct", "person": "Nobody", "room": "hall"}
+    )
+    msg = await client.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "not_found"
+
+    await client.send_json_auto_id({"type": f"{DOMAIN}/presence/labels", "limit": 10})
+    msg = await client.receive_json()
+    assert msg["success"]
+    (label,) = msg["result"]["labels"]
+    assert label["room"] == "hall" and label["source"] == "panel"
+    assert msg["result"]["total"] == 1
+
+    await client.send_json_auto_id(
+        {"type": f"{DOMAIN}/presence/labels/delete", "t": label["t"], "person": "Scott"}
+    )
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"]["deleted"] is True
+    await client.send_json_auto_id({"type": f"{DOMAIN}/presence/labels"})
+    msg = await client.receive_json()
+    assert msg["result"]["labels"] == [] and msg["result"]["total"] == 0
+
+
+async def test_the_locate_service_corrects_a_person(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    await observe(hass, freezer, bermuda, "kitchen")
+    await hass.services.async_call(
+        DOMAIN, "locate", {"person": "Scott", "room": "hall"}, blocking=True
+    )
+    assert presence.people["Scott"].outputs.room == "hall"
+    assert presence.labels[0]["source"] == "service"
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "locate", {"person": "Scott", "room": "nope"}, blocking=True
+        )
 
 
 # -- repair issues -----------------------------------------------------------

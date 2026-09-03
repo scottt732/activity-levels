@@ -57,6 +57,9 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_topology)
     websocket_api.async_register_command(hass, ws_topology_paths)
     websocket_api.async_register_command(hass, ws_presence_state)
+    websocket_api.async_register_command(hass, ws_presence_correct)
+    websocket_api.async_register_command(hass, ws_presence_labels)
+    websocket_api.async_register_command(hass, ws_presence_labels_delete)
 
 
 @websocket_api.require_admin
@@ -436,3 +439,71 @@ def ws_presence_state(
     connection.send_result(
         msg["id"], {"bermuda": "bermuda" in hass.config.components, **presence.payload()}
     )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/presence/correct",
+        vol.Required("person"): str,
+        vol.Required("room"): str,
+    }
+)
+@callback
+def ws_presence_correct(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """ "No, I am in the studio": move the person's belief and keep the label."""
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    presence = runtime.presence
+    if presence is None or not presence.ready:
+        connection.send_error(msg["id"], "not_found", "presence is not running")
+        return
+    try:
+        outputs = presence.correct(msg["person"], msg["room"], source="panel")
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+        return
+    connection.send_result(msg["id"], outputs.as_dict())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/presence/labels",
+        vol.Optional("limit", default=100): vol.All(int, vol.Range(min=1, max=5000)),
+    }
+)
+@callback
+def ws_presence_labels(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """The corrections kept so far, newest first."""
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    labels = [] if runtime.presence is None else runtime.presence.labels
+    connection.send_result(
+        msg["id"],
+        {"labels": [dict(label) for label in labels[: msg["limit"]]], "total": len(labels)},
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/presence/labels/delete",
+        vol.Required("t"): vol.Coerce(float),
+        vol.Required("person"): str,
+    }
+)
+@callback
+def ws_presence_labels_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    deleted = runtime.presence is not None and runtime.presence.delete_label(
+        msg["t"], msg["person"]
+    )
+    connection.send_result(msg["id"], {"deleted": deleted})

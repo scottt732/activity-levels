@@ -74,6 +74,14 @@
       "fields": {
         "group_id": { "name": "Group", "description": "The group id to simulate." }
       }
+    },
+    "locate": {
+      "name": "Locate",
+      "description": "Say where a tracked person really is. Their room estimate moves there at once, and the correction is kept so the estimator can learn from it.",
+      "fields": {
+        "person": { "name": "Person", "description": "The tracked person's name, as configured under presence.people." },
+        "room": { "name": "Room", "description": "The room group id they are in, or `away`." }
+      }
     }
   },
   "issues": {

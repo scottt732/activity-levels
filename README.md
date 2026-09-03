@@ -260,6 +260,10 @@ And, while presence is on, one pair per tracked person, each on its own **Presen
 - `activity_levels.simulate_now` — sample and start a presence-simulation plan for one
   group immediately, ignoring the switches. Fields: `group_id` (required). If a hard
   precondition still fails it raises with the reason rather than doing nothing quietly.
+- `activity_levels.locate` — say where a tracked person really is. Fields: `person`
+  (their configured name) and `room` (a room group id, or `away`). Their estimate moves
+  there at once and the correction is kept as a label; a companion notification action
+  is the natural caller. The Presence tab does the same when you tap a person.
 
 ## Patterns & presence simulation
 

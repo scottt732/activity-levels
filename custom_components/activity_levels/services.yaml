@@ -47,3 +47,15 @@ simulate_now:
       example: living_room
       selector:
         text:
+locate:
+  fields:
+    person:
+      required: true
+      example: Scott
+      selector:
+        text:
+    room:
+      required: true
+      example: studio
+      selector:
+        text:
