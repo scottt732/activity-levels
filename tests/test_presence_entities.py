@@ -161,7 +161,7 @@ async def test_a_removed_tracked_device_takes_its_device_with_it(
     assert devices.async_get_device(identifiers={(DOMAIN, "presence_scott")}) is not None
 
     options = dict(entry.options)
-    options["presence"] = {**options["presence"], "devices": []}
+    options["presence"] = {**options["presence"], "devices": [], "people": []}
     hass.config_entries.async_update_entry(entry, options=options)
     await hass.async_block_till_done()
 

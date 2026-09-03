@@ -568,9 +568,31 @@ groups:
 
 presence:                    # absent or enabled: false = the whole feature is off
   enabled: true
-  devices:
-    - device: device_tracker.scotts_phone   # a Bermuda device_tracker
-      name: Scott                            # entity name; defaults to the tracker's own name
+  people:
+    - name: Scott                            # entity name; defaults to the first device's name
+      person: person.scott                   # optional; its device_trackers seed the devices
+      devices:
+        - tracker: device_tracker.scotts_phone_ble   # a Bermuda device_tracker
+          name: Phone                        # defaults to the Bermuda device's name
+          kind: phone                        # phone | watch | tag | laptop | other
+          companion: device_tracker.scotts_iphone    # the mobile_app tracker of the same phone
+          signals:                           # companion sensors; discovered from the
+            activity: sensor.scotts_iphone_activity  #   companion's device when omitted
+            steps: sensor.scotts_iphone_steps
+            battery_state: sensor.scotts_iphone_battery_state
+        - tracker: device_tracker.scotts_watch_ble
+          kind: watch
+  devices: []                # the older one-tracker-per-person list; still accepted and
+                             # folded into people on load
+  carried:                   # "is this device on its person" — see Rooms & presence
+    prior: 0.7               # P(carried) before any signal
+    flip: 5m                 # mean time between carried <-> parked changes
+    recent: 2m               # how far back "moved lately" looks
+    weights:                 # log-odds each signal adds while it is true; 0 disables one
+      charging: -3.0
+      moving: 2.0
+      still_room_empty: -2.0
+      jitter: 1.0
   envelope: default          # preset the presence channels start from
   threshold: 0.6             # confidence needed before somebody counts as in the room
   stay: 0.9                  # P(staying put between updates)

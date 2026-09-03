@@ -286,7 +286,14 @@ class PresenceCoordinator:
         wrong: list[str] = []
         tracked: dict[str, TrackedDevice] = {}
 
-        for spec in self.settings["devices"]:
+        # one device per person for now: the first tracker each person lists is the one
+        # that is followed, until the person filter takes all of them
+        specs = [
+            {"device": person["devices"][0]["tracker"], "name": person["name"]}
+            for person in self.settings["people"]
+            if person["devices"]
+        ]
+        for spec in specs:
             entry = entities.async_get(spec["device"])
             if entry is None or entry.platform != BERMUDA_DOMAIN:
                 # two different mistakes with the same consequence, and the fix differs:
@@ -295,7 +302,7 @@ class PresenceCoordinator:
                 wrong.append(f"{spec['device']} ({reason})")
                 _LOGGER.warning("Ignoring tracked device %s: %s", spec["device"], reason)
                 continue
-            name = spec["name"] or self._tracked_name(devices, entry)
+            name = spec["name"] or self._tracked_name(devices, entry)  # None: after the device
             track = TrackedDevice(name=name, tracker=entry.entity_id, device_id=entry.device_id)
             if entry.device_id is not None:
                 for member in er.async_entries_for_device(

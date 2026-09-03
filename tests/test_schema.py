@@ -253,10 +253,19 @@ def test_a_room_may_override_the_activity_floor() -> None:
     assert "groups/0/children/0/children/0/presence/activity_floor" in errors_of(config)
 
 
+CARRIED_DEFAULTS = {
+    "prior": 0.7,
+    "flip": 300.0,
+    "recent": 120.0,
+    "weights": {"charging": -3.0, "moving": 2.0, "still_room_empty": -2.0, "jitter": 1.0},
+}
+
+
 def test_presence_defaults_and_absence() -> None:
     assert validate_config(house_config())["presence"] == {
         "enabled": False,
         "devices": [],
+        "people": [],
         "envelope": None,
         "threshold": 0.6,
         "stay": 0.9,
@@ -265,8 +274,157 @@ def test_presence_defaults_and_absence() -> None:
         "floor": 0.05,
         "stuck_after": 60.0,
         "activity": {"floor": 0.05},
+        "carried": CARRIED_DEFAULTS,
         "scanner_areas": {},
     }
+
+
+def test_a_legacy_devices_list_becomes_one_device_people() -> None:
+    """The list this shipped with keeps loading; the normalised document says `people`."""
+    cfg = validate_config(presence_config())
+    assert cfg["presence"]["devices"] == []
+    assert cfg["presence"]["people"] == [
+        {
+            "name": "Scott",
+            "person": None,
+            "devices": [
+                {
+                    "tracker": "device_tracker.scotts_phone",
+                    "name": None,
+                    "kind": "other",
+                    "companion": None,
+                    "signals": {"activity": None, "steps": None, "battery_state": None},
+                }
+            ],
+        }
+    ]
+    # idempotent: the normalised document reads back as itself
+    assert validate_config(cfg) == cfg
+
+
+def test_a_legacy_device_a_person_already_lists_is_not_doubled() -> None:
+    config = presence_config()
+    config["presence"]["people"] = [
+        {"name": "Scott", "devices": [{"tracker": "device_tracker.scotts_phone", "kind": "phone"}]}
+    ]
+    people = validate_config(config)["presence"]["people"]
+    assert len(people) == 1 and len(people[0]["devices"]) == 1
+    assert people[0]["devices"][0]["kind"] == "phone"
+
+
+def test_a_legacy_device_with_no_name_stays_nameless_for_discovery_to_name() -> None:
+    config = rooms_config()
+    config["presence"] = {"enabled": True, "devices": [{"device": "device_tracker.phone"}]}
+    assert validate_config(config)["presence"]["people"][0]["name"] is None
+
+
+def test_people_normalise_with_a_person_a_companion_and_signals() -> None:
+    config = rooms_config()
+    config["presence"] = {
+        "enabled": True,
+        "people": [
+            {
+                "name": "Scott",
+                "person": "person.scott",
+                "devices": [
+                    {
+                        "tracker": "device_tracker.scotts_phone_ble",
+                        "kind": "phone",
+                        "companion": "device_tracker.scotts_iphone",
+                        "signals": {"activity": "sensor.scotts_iphone_activity"},
+                    },
+                    {
+                        "tracker": "device_tracker.scotts_watch_ble",
+                        "name": "Watch",
+                        "kind": "watch",
+                    },
+                ],
+            }
+        ],
+        "carried": {"prior": 0.5, "weights": {"charging": -5}},
+    }
+    presence = validate_config(config)["presence"]
+    person = presence["people"][0]
+    assert person["person"] == "person.scott"
+    phone, watch = person["devices"]
+    assert phone["signals"] == {
+        "activity": "sensor.scotts_iphone_activity",
+        "steps": None,
+        "battery_state": None,
+    }
+    assert watch["name"] == "Watch" and watch["companion"] is None
+    assert presence["carried"]["prior"] == 0.5
+    assert presence["carried"]["weights"]["charging"] == -5.0
+    assert presence["carried"]["weights"]["moving"] == 2.0
+
+
+@pytest.mark.parametrize(
+    ("presence", "path"),
+    [
+        ({"people": [{"name": "", "devices": []}]}, "presence/people/0/name"),
+        (
+            {"people": [{"name": "A", "person": "sensor.x", "devices": []}]},
+            "presence/people/0/person",
+        ),
+        (
+            {"people": [{"name": "A", "devices": [{"tracker": "sensor.x"}]}]},
+            "presence/people/0/devices/0/tracker",
+        ),
+        (
+            {
+                "people": [
+                    {"name": "A", "devices": [{"tracker": "device_tracker.x", "kind": "car"}]}
+                ]
+            },
+            "presence/people/0/devices/0/kind",
+        ),
+        (
+            {
+                "people": [
+                    {
+                        "name": "A",
+                        "devices": [{"tracker": "device_tracker.x", "companion": "sensor.x"}],
+                    }
+                ]
+            },
+            "presence/people/0/devices/0/companion",
+        ),
+        (
+            {
+                "people": [
+                    {
+                        "name": "A",
+                        "devices": [
+                            {"tracker": "device_tracker.x", "signals": {"steps": "binary_sensor.x"}}
+                        ],
+                    }
+                ]
+            },
+            "presence/people/0/devices/0/signals/steps",
+        ),
+        (
+            {"people": [{"name": "A", "devices": []}, {"name": "A", "devices": []}]},
+            "presence/people/1/name",
+        ),
+        (
+            {
+                "people": [
+                    {"name": "A", "devices": [{"tracker": "device_tracker.x"}]},
+                    {"name": "B", "devices": [{"tracker": "device_tracker.x"}]},
+                ]
+            },
+            "presence/people/1/devices/0/tracker",
+        ),
+        ({"carried": {"prior": 1.0}}, "presence/carried/prior"),
+        ({"carried": {"flip": 0}}, "presence/carried/flip"),
+        ({"carried": {"recent": 0}}, "presence/carried/recent"),
+        ({"carried": {"weights": {"jitter": 11}}}, "presence/carried/weights/jitter"),
+    ],
+)
+def test_people_and_carried_errors_are_pathed(presence, path) -> None:
+    config = rooms_config()
+    config["presence"] = {"enabled": True, **presence}
+    assert path in errors_of(config)
 
 
 @pytest.mark.parametrize(
