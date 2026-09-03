@@ -145,6 +145,7 @@ describe("getPresenceState", () => {
     const presence: PresenceState = {
       bermuda: true,
       enabled: true,
+      people: {},
       devices: {},
       occupants: {},
       scanners: [],

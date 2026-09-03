@@ -105,10 +105,37 @@ export interface Defaults {
 
 export interface PresenceDevice { device: string; name: string | null }
 
+export type DeviceKind = "phone" | "watch" | "tag" | "laptop" | "other";
+export const DEVICE_KINDS: readonly DeviceKind[] = ["phone", "watch", "tag", "laptop", "other"];
+
+/** The companion-app sensors a device's carried estimate reads, by role; null = discover. */
+export interface PresenceSignals { activity: string | null; steps: string | null; battery_state: string | null }
+export type SignalRole = keyof PresenceSignals;
+export const SIGNAL_ROLES: readonly SignalRole[] = ["activity", "steps", "battery_state"];
+
+/** One of a person's devices: a Bermuda tracker, and the companion app of the same phone if any. */
+export interface PresenceDeviceConfig {
+  tracker: string;
+  name: string | null;
+  kind: DeviceKind;
+  companion: string | null;
+  signals: PresenceSignals;
+}
+
+/** One person: a display name (null = after the first device), an optional person.* seed, devices. */
+export interface PresencePerson { name: string | null; person: string | null; devices: PresenceDeviceConfig[] }
+
+export interface CarriedWeights { charging: number; moving: number; still_room_empty: number; jitter: number }
+/** The "is this device on its person" model's knobs; see the README's Rooms & presence. */
+export interface CarriedSettings { prior: number; flip: number; recent: number; nearby: number; weights: CarriedWeights }
+
 /** The top-level `presence` block, with every field the backend fills in filled in. */
 export interface PresenceSettings {
   enabled: boolean;
+  /** The older one-tracker-per-person list; the backend folds it into `people` on load. */
   devices: PresenceDevice[];
+  people: PresencePerson[];
+  carried: CarriedSettings;
   envelope: string | null;
   threshold: number;
   stay: number;
@@ -217,6 +244,27 @@ export interface PresenceOutputs {
   path: string[];
 }
 
+/** One of a person's devices as `presence/state` reports it: where the object is, and whether it is on them. */
+export interface PresenceDeviceRow {
+  name: string;
+  kind: DeviceKind;
+  tracker: string;
+  companion: string | null;
+  room: string | null;
+  confidence: number | null;
+  carried: number | null;
+  signals: PresenceSignals;
+  found: Record<string, boolean>;
+}
+
+/** One person's estimate: the room outputs plus everything about their devices. */
+export interface PersonOutputs extends PresenceOutputs {
+  carried: Record<string, number>;
+  device_rooms: Record<string, string>;
+  person: string | null;
+  devices: Record<string, PresenceDeviceRow>;
+}
+
 /** One Bermuda scanner, as discovered from the device and entity registries. */
 export interface ScannerRow {
   key: string;
@@ -231,6 +279,8 @@ export interface PresenceState {
   /** Whether the Bermuda integration is loaded. The setup card asks before offering to turn presence on. */
   bermuda: boolean;
   enabled: boolean;
+  people: Record<string, PersonOutputs>;
+  /** The people's room outputs under the name this carried before people had devices. */
   devices: Record<string, PresenceOutputs>;
   occupants: Record<string, string[]>;
   scanners: ScannerRow[];

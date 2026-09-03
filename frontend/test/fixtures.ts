@@ -129,7 +129,29 @@ export const roomsConfig = (): Config => ({
 
 const PRESENCE_SETTINGS: PresenceSettings = {
   enabled: true,
-  devices: [{ device: "device_tracker.scotts_phone", name: "Scott" }],
+  devices: [],
+  people: [
+    {
+      name: "Scott",
+      person: null,
+      devices: [
+        {
+          tracker: "device_tracker.scotts_phone",
+          name: null,
+          kind: "phone",
+          companion: null,
+          signals: { activity: null, steps: null, battery_state: null },
+        },
+      ],
+    },
+  ],
+  carried: {
+    prior: 0.7,
+    flip: 300,
+    recent: 120,
+    nearby: 0.3,
+    weights: { charging: -3, moving: 2, still_room_empty: -2, jitter: 1 },
+  },
   envelope: "hour",
   threshold: 0.6,
   stay: 0.9,

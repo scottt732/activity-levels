@@ -1,11 +1,13 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import "./al-graph-map";
+import "./al-people-editor";
+import { KIND_ICONS, KIND_LABELS } from "./al-people-editor";
 import { getPresenceState, getTopology, getTopologyPaths } from "./api";
 import { durationToSeconds, secondsToDuration } from "./duration";
 import { fieldErrors } from "./errors";
 import { alChange } from "./events";
-import { presenceSettings } from "./model";
+import { newPresenceDevice, newPresencePerson, presenceSettings } from "./model";
 import { setAt } from "./store";
 import { envelopeOptions } from "./stimulus-form";
 import { sharedStyles } from "./styles";
@@ -13,11 +15,13 @@ import { branchRows } from "./topology";
 import type { PropertyValues, TemplateResult } from "lit";
 import type { Selector } from "./al-override-field";
 import type {
+  CarriedSettings,
   Config,
   HaDuration,
   HomeAssistant,
-  PresenceDevice,
-  PresenceOutputs,
+  PersonOutputs,
+  PresenceDeviceRow,
+  PresencePerson,
   PresenceSettings,
   PresenceState,
   ScannerRow,
@@ -44,6 +48,14 @@ const LABELS: Record<string, string> = {
   floor: "Room floor",
   stuck_after: "Reset when stuck for",
   activity_floor: "Empty-room floor",
+  carried_prior: "Carried prior",
+  carried_flip: "Carried flip time",
+  carried_recent: "Recent window",
+  carried_nearby: "Parked nearby",
+  carried_charging: "Charging weight",
+  carried_moving: "Moving weight",
+  carried_still_room_empty: "Still in an empty room weight",
+  carried_jitter: "Jitter weight",
 };
 
 /** One line each, matching the README. */
@@ -59,12 +71,19 @@ const HELPERS: Record<string, string> = {
   stuck_after: "How long the readings have to stay implausible before the estimate is reset.",
   activity_floor:
     "Likelihood given to a room whose activity level is 0.0 while another room is busy. Lower makes an empty room a stronger 'not here'.",
+  carried_prior: "How likely a device is on its person before any signal says otherwise.",
+  carried_flip: "Mean time between a device being picked up or put down. Longer is steadier.",
+  carried_recent: "How far back 'moved lately' looks. A signal held this long is worth its whole weight.",
+  carried_nearby: "Chance a parked device is in the same room as its person. A phone on the kitchen counter still says something about the kitchen.",
+  carried_charging: "Log-odds added while the battery is charging or full. Negative: on a cable means on a table.",
+  carried_moving: "Log-odds added while the companion app reports walking, or the step count rose lately.",
+  carried_still_room_empty: "Log-odds added while the device sits still in a room whose level is 0.0.",
+  carried_jitter: "Log-odds added while the device's closest distance wanders. A pocket moves; a shelf does not.",
 };
 
 /** Fields the form owns, checked in order to name the coalescing key. */
 const FORM_FIELDS = [
   "enabled",
-  "devices",
   "envelope",
   "threshold",
   "stay",
@@ -73,7 +92,17 @@ const FORM_FIELDS = [
   "floor",
   "stuck_after",
   "activity_floor",
+  "carried_prior",
+  "carried_flip",
+  "carried_recent",
+  "carried_nearby",
+  "carried_charging",
+  "carried_moving",
+  "carried_still_room_empty",
+  "carried_jitter",
 ] as const;
+
+const WEIGHTS = ["charging", "moving", "still_room_empty", "jitter"] as const;
 
 type FormField = (typeof FORM_FIELDS)[number];
 
@@ -93,6 +122,9 @@ const ESCAPE_SELECTOR: Selector = { number: { min: 0, max: 0.1, step: 0.001, mod
 const SCALE_SELECTOR: Selector = { number: { min: 0.1, step: 0.1, mode: "box" } };
 const FLOOR_SELECTOR: Selector = { number: { min: 0.01, max: 1, step: 0.01, mode: "box" } };
 const DURATION_SELECTOR: Selector = { duration: {} };
+// `carried.prior` and `carried.nearby` are open at both ends; a weight is [-10, 10].
+const PRIOR_SELECTOR: Selector = { number: { min: 0.01, max: 0.99, step: 0.01, mode: "slider" } };
+const WEIGHT_SELECTOR: Selector = { number: { min: -10, max: 10, step: 0.5, mode: "box" } };
 
 const ARROW = " → ";
 
@@ -145,6 +177,24 @@ export class AlPresence extends LitElement {
         font-size: 0.8em;
         background: var(--primary-color);
         color: var(--text-primary-color, #fff);
+      }
+      .device-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin: 0 4px 2px 0;
+        --mdc-icon-size: 16px;
+      }
+      .device-chip.parked {
+        background: var(--secondary-background-color);
+        color: var(--secondary-text-color);
+        border: 1px solid var(--divider-color);
+      }
+      h3 {
+        margin: 12px 0 8px;
+        font-size: 1em;
+        font-weight: 600;
+        color: var(--secondary-text-color);
       }
       .breadcrumb {
         color: var(--secondary-text-color);
@@ -304,7 +354,6 @@ export class AlPresence extends LitElement {
   private schemaFor(config: Config): FormItem[] {
     return [
       { name: "enabled", selector: { boolean: {} } },
-      { name: "devices", selector: DEVICES_SELECTOR },
       { name: "envelope", selector: { select: { mode: "dropdown", options: envelopeOptions(config) } } },
       { name: "threshold", selector: THRESHOLD_SELECTOR },
       { name: "stay", selector: STAY_SELECTOR },
@@ -313,19 +362,29 @@ export class AlPresence extends LitElement {
       { name: "floor", selector: FLOOR_SELECTOR },
       { name: "stuck_after", selector: DURATION_SELECTOR },
       { name: "activity_floor", selector: FLOOR_SELECTOR },
+      { name: "carried_prior", selector: PRIOR_SELECTOR },
+      { name: "carried_flip", selector: DURATION_SELECTOR },
+      { name: "carried_recent", selector: DURATION_SELECTOR },
+      { name: "carried_nearby", selector: PRIOR_SELECTOR },
+      ...WEIGHTS.map((weight) => ({ name: `carried_${weight}`, selector: WEIGHT_SELECTOR })),
     ];
   }
 
   /**
-   * The picker speaks entity ids; the config keeps a name beside each one. A device that
-   * survives the edit keeps the name it was given - re-picking the same phone must not
-   * quietly rename the person standing behind it.
+   * The setup picker speaks Bermuda tracker ids; the config keeps a person around each.
+   * A person whose tracker is still picked survives untouched — re-picking the same phone
+   * must not quietly rename the person standing behind it — and a new tracker becomes a
+   * one-device person to be named later.
    */
-  private mergeDevices(value: unknown, current: readonly PresenceDevice[]): PresenceDevice[] {
+  private mergePeople(value: unknown, current: readonly PresencePerson[]): PresencePerson[] {
     if (!Array.isArray(value)) return [...current];
-    return (value as unknown[])
-      .filter((id): id is string => typeof id === "string")
-      .map((device) => ({ device, name: current.find((d) => d.device === device)?.name ?? null }));
+    const picked = (value as unknown[]).filter((id): id is string => typeof id === "string");
+    const kept = current.filter((person) => person.devices.some((device) => picked.includes(device.tracker)));
+    const known = new Set(kept.flatMap((person) => person.devices.map((device) => device.tracker)));
+    const added = picked
+      .filter((tracker) => !known.has(tracker))
+      .map((tracker) => ({ ...newPresencePerson(), devices: [newPresenceDevice(tracker)] }));
+    return [...kept, ...added];
   }
 
   private onFormChanged(ev: CustomEvent<{ value?: Record<string, unknown> }>): void {
@@ -334,10 +393,15 @@ export class AlPresence extends LitElement {
     if (!config) return;
     const s = presenceSettings(config);
     const v = ev.detail?.value ?? {};
+    const weights: CarriedSettings["weights"] = {
+      charging: number(v.carried_charging) ?? s.carried.weights.charging,
+      moving: number(v.carried_moving) ?? s.carried.weights.moving,
+      still_room_empty: number(v.carried_still_room_empty) ?? s.carried.weights.still_room_empty,
+      jitter: number(v.carried_jitter) ?? s.carried.weights.jitter,
+    };
     const merged: PresenceSettings = {
       ...s,
       enabled: typeof v.enabled === "boolean" ? v.enabled : s.enabled,
-      devices: v.devices === undefined ? s.devices : this.mergeDevices(v.devices, s.devices),
       envelope:
         v.envelope === undefined
           ? s.envelope
@@ -351,12 +415,37 @@ export class AlPresence extends LitElement {
       floor: number(v.floor) ?? s.floor,
       stuck_after: durationToSeconds(v.stuck_after as HaDuration | undefined) ?? s.stuck_after,
       activity: { floor: number(v.activity_floor) ?? s.activity.floor },
+      carried: {
+        prior: number(v.carried_prior) ?? s.carried.prior,
+        flip: durationToSeconds(v.carried_flip as HaDuration | undefined) ?? s.carried.flip,
+        recent: durationToSeconds(v.carried_recent as HaDuration | undefined) ?? s.carried.recent,
+        nearby: number(v.carried_nearby) ?? s.carried.nearby,
+        weights,
+      },
     };
-    // The form flattens `activity.floor` to `activity_floor`; the document keeps the nesting.
+    // The form flattens `activity.floor` and `carried.*` to `activity_floor` and
+    // `carried_*`; the document keeps the nesting.
     const same = (key: FormField): boolean => {
-      if (key === "devices") return JSON.stringify(merged.devices) === JSON.stringify(s.devices);
-      if (key === "activity_floor") return merged.activity.floor === s.activity.floor;
-      return merged[key] === s[key];
+      switch (key) {
+        case "activity_floor":
+          return merged.activity.floor === s.activity.floor;
+        case "carried_prior":
+        case "carried_flip":
+        case "carried_recent":
+        case "carried_nearby": {
+          const field = key.slice("carried_".length) as "prior" | "flip" | "recent" | "nearby";
+          return merged.carried[field] === s.carried[field];
+        }
+        case "carried_charging":
+        case "carried_moving":
+        case "carried_still_room_empty":
+        case "carried_jitter": {
+          const weight = key.slice("carried_".length) as (typeof WEIGHTS)[number];
+          return merged.carried.weights[weight] === s.carried.weights[weight];
+        }
+        default:
+          return merged[key] === s[key];
+      }
     };
     const field = FORM_FIELDS.find((key) => !same(key));
     if (field === undefined) return;
@@ -381,8 +470,8 @@ export class AlPresence extends LitElement {
     const config = this.config;
     if (!config) return;
     const s = presenceSettings(config);
-    const merged: PresenceSettings = { ...s, devices: this.mergeDevices(ev.detail?.value, s.devices) };
-    this.dispatchEvent(alChange(setAt(config, ["presence"], merged), "presence:devices"));
+    const merged: PresenceSettings = { ...s, people: this.mergePeople(ev.detail?.value, s.people) };
+    this.dispatchEvent(alChange(setAt(config, ["presence"], merged), "presence:people"));
   };
 
   /**
@@ -424,7 +513,7 @@ export class AlPresence extends LitElement {
         .label=${LABELS.devices}
         .helper=${HELPERS.devices}
         .required=${false}
-        .value=${s.devices.map((d) => d.device)}
+        .value=${s.people.flatMap((person) => person.devices.map((device) => device.tracker))}
         @value-changed=${this.onDevicesChanged}
       ></ha-selector>
       <p class="muted">
@@ -472,10 +561,12 @@ export class AlPresence extends LitElement {
   }
 
   private renderPeople(): TemplateResult {
-    const devices = Object.entries(this.presence?.devices ?? {}).sort(([a], [b]) => a.localeCompare(b));
-    if (devices.length === 0)
+    const people = Object.entries(this.presence?.people ?? {})
+      .filter(([, outputs]) => typeof outputs.room === "string")
+      .sort(([a], [b]) => a.localeCompare(b));
+    if (people.length === 0)
       return html`<ha-card header="People"
-        ><div class="empty">No tracked device has reported a room yet.</div></ha-card
+        ><div class="empty">Nobody has reported a room yet.</div></ha-card
       >`;
     return html`<ha-card header="People">
       <table>
@@ -484,20 +575,22 @@ export class AlPresence extends LitElement {
             <th>Person</th>
             <th>Room</th>
             <th>Confidence</th>
+            <th>Devices</th>
             <th>Came from</th>
             <th>Updated</th>
           </tr>
         </thead>
         <tbody>
-          ${devices.map(([name, outputs]) => this.renderDevice(name, outputs))}
+          ${people.map(([name, outputs]) => this.renderPerson(name, outputs))}
         </tbody>
       </table>
     </ha-card>`;
   }
 
-  private renderDevice(name: string, outputs: PresenceOutputs): TemplateResult {
+  private renderPerson(name: string, outputs: PersonOutputs): TemplateResult {
     const percent = Math.round(outputs.confidence * 100);
-    return html`<tr class="device">
+    const devices = Object.entries(outputs.devices ?? {}).sort(([a], [b]) => a.localeCompare(b));
+    return html`<tr class="device person">
       <td class="who">${name}</td>
       <td class="room">
         ${this.roomName(outputs.room)}
@@ -508,9 +601,28 @@ export class AlPresence extends LitElement {
           <div class="confidence" style=${`width: ${percent}%`}></div>
         </div>
       </td>
+      <td class="devices">${devices.map(([id, device]) => this.renderDeviceChip(id, device))}</td>
       <td class="breadcrumb">${outputs.path.length === 0 ? "—" : this.trail(outputs.path)}</td>
       <td class="when">${new Date(outputs.t * 1000).toLocaleTimeString()}</td>
     </tr>`;
+  }
+
+  /**
+   * One device: what it is, how likely it is on the person, and — when it probably is
+   * not — where it was left. A parked phone's room is the answer to "where did I put it".
+   */
+  private renderDeviceChip(id: string, device: PresenceDeviceRow): TemplateResult {
+    const carried = device.carried;
+    const parked = carried !== null && carried < 0.5;
+    const percent = carried === null ? "—" : `${Math.round(carried * 100)}%`;
+    const title = `${device.name} (${KIND_LABELS[device.kind]}): carried ${percent}${
+      parked && device.room ? `, in ${this.roomName(device.room)}` : ""
+    }`;
+    return html`<span class="chip device-chip ${parked ? "parked" : "carried"}" data-device=${id} title=${title}>
+      <ha-icon icon=${KIND_ICONS[device.kind] ?? KIND_ICONS.other}></ha-icon>
+      <span class="carried-pct">${percent}</span>
+      ${parked && device.room ? html`<span class="parked-room">${this.roomName(device.room)}</span>` : nothing}
+    </span>`;
   }
 
   private renderScanners(): TemplateResult {
@@ -560,7 +672,6 @@ export class AlPresence extends LitElement {
     const own = this.errors.filter((e) => e.path === "presence");
     const data: Record<string, unknown> = {
       enabled: s.enabled,
-      devices: s.devices.map((d) => d.device),
       envelope: s.envelope ?? "",
       threshold: s.threshold,
       stay: s.stay,
@@ -569,9 +680,21 @@ export class AlPresence extends LitElement {
       floor: s.floor,
       stuck_after: secondsToDuration(s.stuck_after),
       activity_floor: s.activity.floor,
+      carried_prior: s.carried.prior,
+      carried_flip: secondsToDuration(s.carried.flip),
+      carried_recent: secondsToDuration(s.carried.recent),
+      carried_nearby: s.carried.nearby,
+      ...Object.fromEntries(WEIGHTS.map((weight) => [`carried_${weight}`, s.carried.weights[weight]])),
     };
     return html`<ha-card header="Settings">
       ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
+      <h3>People</h3>
+      <al-people-editor
+        .hass=${this.hass}
+        .config=${config}
+        .errors=${this.errors}
+        .presence=${this.presence}
+      ></al-people-editor>
       <ha-form
         class="presence-settings"
         .hass=${this.hass}

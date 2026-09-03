@@ -19,19 +19,51 @@ const TOPO: TopologyPayload = {
 
 const PATHS = [["kitchen", "dining_room", "hall", "bedroom"]];
 
+const SCOTT = {
+  t: 1_700_000_000,
+  room: "kitchen",
+  confidence: 0.82,
+  moving: false,
+  candidates: { kitchen: 0.82, dining_room: 0.1 },
+  path: ["dining_room", "kitchen"],
+};
+
 const presenceState = (over: Partial<PresenceState> = {}): PresenceState => ({
   bermuda: false,
   enabled: true,
-  devices: {
+  people: {
     Scott: {
-      t: 1_700_000_000,
-      room: "kitchen",
-      confidence: 0.82,
-      moving: false,
-      candidates: { kitchen: 0.82, dining_room: 0.1 },
-      path: ["dining_room", "kitchen"],
+      ...SCOTT,
+      person: "person.scott",
+      carried: { phone: 0.9, watch: 0.2 },
+      device_rooms: { phone: "kitchen", watch: "dining_room" },
+      devices: {
+        phone: {
+          name: "Phone",
+          kind: "phone",
+          tracker: "device_tracker.scotts_phone",
+          companion: "device_tracker.scotts_iphone",
+          room: "kitchen",
+          confidence: 0.9,
+          carried: 0.9,
+          signals: { activity: "sensor.scotts_iphone_activity", steps: null, battery_state: null },
+          found: { activity: true, steps: false, battery_state: false },
+        },
+        watch: {
+          name: "Watch",
+          kind: "watch",
+          tracker: "device_tracker.scotts_watch",
+          companion: null,
+          room: "dining_room",
+          confidence: 0.8,
+          carried: 0.2,
+          signals: { activity: null, steps: null, battery_state: null },
+          found: { activity: false, steps: false, battery_state: false },
+        },
+      },
     },
   },
+  devices: { Scott: SCOTT },
   occupants: { kitchen: ["Scott"] },
   scanners: [
     { key: "aa", device_id: "d1", name: "kitchen scanner", area_id: "kitchen_area", group_id: "kitchen" },
@@ -139,13 +171,26 @@ describe("al-presence", () => {
     expect(calls.filter((c) => c.type === "activity_levels/topology")).toHaveLength(before + 1);
   });
 
-  it("lists a row per tracked device with room, confidence and breadcrumb", async () => {
+  it("lists a row per person with room, confidence and breadcrumb", async () => {
     const { el } = await tab();
-    const row = el.shadowRoot!.querySelector("tr.device")!;
+    const row = el.shadowRoot!.querySelector("tr.person")!;
     expect(row.textContent).toContain("Scott");
     expect(row.textContent).toContain("Kitchen");
     expect(row.querySelector(".confidence")!.getAttribute("style")).toContain("82%");
     expect(norm(row.querySelector(".breadcrumb")!.textContent)).toContain("Dining Room → Kitchen");
+  });
+
+  it("draws a chip per device: carried percentage, and the room a parked one was left in", async () => {
+    const { el } = await tab();
+    const chips = el.shadowRoot!.querySelectorAll("tr.person .device-chip");
+    expect(chips).toHaveLength(2);
+    const phone = el.shadowRoot!.querySelector('.device-chip[data-device="phone"]')!;
+    expect(phone.classList.contains("carried")).toBe(true);
+    expect(norm(phone.textContent)).toBe("90%");
+    expect(phone.querySelector("ha-icon")!.getAttribute("icon")).toBe("mdi:cellphone");
+    const watch = el.shadowRoot!.querySelector('.device-chip[data-device="watch"]')!;
+    expect(watch.classList.contains("parked")).toBe(true);
+    expect(norm(watch.textContent)).toBe("20% Dining Room");
   });
 
   it("flags an unmapped scanner and a disabled sensor with the fix", async () => {
@@ -212,27 +257,31 @@ describe("al-presence", () => {
     expect(detail.presence!.floor).toBe(0.05);
   });
 
-  it("keeps the name of a device that is still selected when the picker changes", async () => {
+  it("edits the carried model as presence.carried, weights included", async () => {
     const { el } = await tab();
+    const form = el.shadowRoot!.querySelector<HTMLElement & { schema: FormItem[]; data: Record<string, unknown> }>(
+      "ha-form.presence-settings",
+    )!;
+    expect(form.schema.find((i) => i.name === "devices")).toBeUndefined();
+    expect(form.data.carried_prior).toBe(0.7);
+    expect(form.data.carried_charging).toBe(-3);
+    expect(form.data.carried_flip).toEqual({ hours: 0, minutes: 5, seconds: 0 });
     const changed = listenFor<AlChangeEvent>(el, "al-change");
-    el.shadowRoot!.querySelector("ha-form.presence-settings")!.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value: { devices: ["device_tracker.scotts_phone", "device_tracker.erins_phone"] } },
-      }),
+    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { carried_charging: -5 } } }));
+    const detail = (await changed).detail;
+    expect(detail.presence!.carried.weights.charging).toBe(-5);
+    expect(detail.presence!.carried.prior).toBe(0.7);
+    const again = listenFor<AlChangeEvent>(el, "al-change");
+    form.dispatchEvent(
+      new CustomEvent("value-changed", { detail: { value: { carried_flip: { hours: 0, minutes: 10, seconds: 0 } } } }),
     );
-    expect((await changed).detail.presence!.devices).toEqual([
-      { device: "device_tracker.scotts_phone", name: "Scott" },
-      { device: "device_tracker.erins_phone", name: null },
-    ]);
+    expect((await again).detail.presence!.carried.flip).toBe(600);
   });
 
-  it("filters the device picker to Bermuda device_trackers", async () => {
+  it("hosts the people editor above the form", async () => {
     const { el } = await tab();
-    const form = el.shadowRoot!.querySelector<HTMLElement & { schema: FormItem[] }>("ha-form.presence-settings")!;
-    const item = form.schema.find((i) => i.name === "devices")!;
-    expect(item.selector).toEqual({
-      entity: { multiple: true, filter: { domain: "device_tracker", integration: "bermuda" } },
-    });
+    const editor = el.shadowRoot!.querySelector("al-people-editor");
+    expect(editor).toBeTruthy();
   });
 
   // The bounds are the ones PRESENCE_SCHEMA in schema.py enforces. A slider whose end
@@ -281,7 +330,7 @@ describe("the setup card", () => {
     expect((await changed).detail.presence!.enabled).toBe(true);
   });
 
-  it("writes the device picker into the draft's presence, keeping a selected device's name", async () => {
+  it("writes the device picker into the draft's people, keeping a selected person intact", async () => {
     const config = presenceConfig();
     const { el } = await tab({ bermuda: true, enabled: false }, { ...config, presence: { ...config.presence!, enabled: false } });
     const changed = listenFor<AlChangeEvent>(el, "al-change");
@@ -290,10 +339,12 @@ describe("the setup card", () => {
         detail: { value: ["device_tracker.scotts_phone", "device_tracker.erins_phone"] },
       }),
     );
-    expect((await changed).detail.presence!.devices).toEqual([
-      { device: "device_tracker.scotts_phone", name: "Scott" },
-      { device: "device_tracker.erins_phone", name: null },
-    ]);
+    const people = (await changed).detail.presence!.people;
+    expect(people).toHaveLength(2);
+    expect(people[0]).toEqual(config.presence!.people[0]);
+    expect(people[1]!.name).toBeNull();
+    expect(people[1]!.devices.map((d) => d.tracker)).toEqual(["device_tracker.erins_phone"]);
+    expect(people[1]!.devices[0]!.kind).toBe("other");
   });
 
   it("gives way to the real tab once presence is on", async () => {

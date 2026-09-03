@@ -21,6 +21,7 @@ const hassStub = (): HomeAssistant => ({ states: {} }) as unknown as HomeAssista
 const presenceState = (over: Partial<PresenceState> = {}): PresenceState => ({
   bermuda: false,
   enabled: true,
+  people: {},
   devices: {},
   occupants: {},
   scanners: [],
