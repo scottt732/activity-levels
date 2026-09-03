@@ -47,6 +47,12 @@ updates:
         dependency-type: "development"
       production:
         dependency-type: "production"
+    ignore:
+      # typescript-eslint does not run against TypeScript 7 (the Go compiler) yet:
+      # https://github.com/typescript-eslint/typescript-eslint/issues/10940. Take the
+      # minors, and the major by hand once the linter follows.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # The workflows themselves.
   - package-ecosystem: "github-actions"
