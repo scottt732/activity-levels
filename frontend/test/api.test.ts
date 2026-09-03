@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   callService,
   getConfig,
+  correctPresence,
   getPresenceState,
   getProfile,
   getSimulationLog,
@@ -137,6 +138,16 @@ describe("getTopology / getTopologyPaths", () => {
     await getTopology(hass);
     await expect(getTopologyPaths(hass, "kitchen", "hall")).resolves.toEqual([["kitchen", "hall"]]);
     expect(calls[1]).toEqual({ type: "activity_levels/topology/paths", from: "kitchen", to: "hall" });
+  });
+});
+
+describe("correctPresence", () => {
+  it("posts the person and the room, and hands back the new outputs", async () => {
+    const outputs = { room: "hall", confidence: 1 };
+    const callWS = vi.fn(async () => outputs);
+    const hass = hassWith(callWS);
+    await expect(correctPresence(hass, "Scott", "hall")).resolves.toBe(outputs);
+    expect(callWS).toHaveBeenCalledWith({ type: "activity_levels/presence/correct", person: "Scott", room: "hall" });
   });
 });
 

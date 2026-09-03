@@ -3,11 +3,11 @@ import { customElement, property, state } from "lit/decorators.js";
 import "./al-graph-map";
 import "./al-people-editor";
 import { KIND_ICONS, KIND_LABELS } from "./al-people-editor";
-import { getPresenceState, getTopology, getTopologyPaths } from "./api";
+import { correctPresence, getPresenceState, getTopology, getTopologyPaths } from "./api";
 import { durationToSeconds, secondsToDuration } from "./duration";
 import { fieldErrors } from "./errors";
 import { alChange } from "./events";
-import { newPresenceDevice, newPresencePerson, presenceSettings } from "./model";
+import { newPresenceDevice, newPresencePerson, presenceSettings, roomIds } from "./model";
 import { setAt } from "./store";
 import { envelopeOptions } from "./stimulus-form";
 import { sharedStyles } from "./styles";
@@ -31,6 +31,8 @@ import type {
 
 /** How often the room estimate is re-read. The estimator itself moves at Bermuda's pace. */
 export const PRESENCE_POLL_MS = 2000;
+/** The state that is not a room, as the backend spells it. */
+const AWAY = "away";
 
 export interface FormItem {
   name: string;
@@ -185,6 +187,37 @@ export class AlPresence extends LitElement {
         margin: 0 4px 2px 0;
         --mdc-icon-size: 16px;
       }
+      .who button.link {
+        font: inherit;
+        color: var(--primary-color);
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-decoration: underline dotted;
+      }
+      tr.correct td {
+        background: var(--secondary-background-color);
+      }
+      tr.correct .question {
+        font-weight: 600;
+        margin-right: 8px;
+      }
+      tr.correct select {
+        font: inherit;
+        color: inherit;
+        background: var(--card-background-color, transparent);
+        border: 1px solid var(--divider-color);
+        border-radius: 4px;
+        padding: 4px;
+        margin: 0 8px;
+      }
+      .notice,
+      .hint {
+        margin-top: 8px;
+        font-size: 0.9em;
+        color: var(--secondary-text-color);
+      }
       .device-chip.parked {
         background: var(--secondary-background-color);
         color: var(--secondary-text-color);
@@ -248,6 +281,10 @@ export class AlPresence extends LitElement {
   @state() private paths: string[][] = [];
   /** A request is out. Until it lands there is no verdict to report, only a wait. */
   @state() private pathsPending = false;
+  /** The person whose room picker is open, if any. One at a time: it is a question. */
+  @state() private correcting: string | null = null;
+  /** The last correction's outcome, shown once under the People card. */
+  @state() private notice: string | null = null;
 
   private timer?: ReturnType<typeof setInterval>;
   /** Which paths request is the current one; an older answer resolving late is dropped. */
@@ -328,6 +365,31 @@ export class AlPresence extends LitElement {
     }
   }
 
+  /**
+   * "No, I'm in the studio." The estimate moves at once and the moment is kept as a
+   * label; the state is re-read straight after so the row shows the answer rather than
+   * waiting a poll for it.
+   */
+  private async correct(person: string, room: string): Promise<void> {
+    const hass = this.hass;
+    if (!hass) return;
+    this.correcting = null;
+    try {
+      await correctPresence(hass, person, room);
+      this.notice = `Moved ${person} to ${this.roomName(room)}.`;
+    } catch (err) {
+      this.notice = `Could not move ${person}: ${err instanceof Error ? err.message : String(err)}`;
+    }
+    await this.refreshPresence();
+  }
+
+  /** Every room a person can be said to be in: the graph's nodes, then Away. */
+  private get correctionRooms(): string[] {
+    const config = this.config;
+    const ids = this.topology?.nodes ?? (config ? [...roomIds(config)] : []);
+    return [...ids, AWAY];
+  }
+
   /** Friendly names for every group, so a room id never reaches the page. */
   private get labels(): Map<string, string> {
     const config = this.config;
@@ -336,6 +398,7 @@ export class AlPresence extends LitElement {
 
   private roomName(id: string | null | undefined): string {
     if (id === null || id === undefined || id === "") return "—";
+    if (id === AWAY) return "Away";
     return this.labels.get(id) ?? id;
   }
 
@@ -569,6 +632,7 @@ export class AlPresence extends LitElement {
         ><div class="empty">Nobody has reported a room yet.</div></ha-card
       >`;
     return html`<ha-card header="People">
+      <div class="muted hint">Tap a person to say where they really are; the estimate learns from it.</div>
       <table>
         <thead>
           <tr>
@@ -581,17 +645,61 @@ export class AlPresence extends LitElement {
           </tr>
         </thead>
         <tbody>
-          ${people.map(([name, outputs]) => this.renderPerson(name, outputs))}
+          ${people.flatMap(([name, outputs]) => [
+            this.renderPerson(name, outputs),
+            this.correcting === name ? this.renderCorrection(name, outputs) : nothing,
+          ])}
         </tbody>
       </table>
+      ${this.notice === null ? nothing : html`<div class="notice">${this.notice}</div>`}
     </ha-card>`;
+  }
+
+  /**
+   * "Where is Scott?" -- the rooms the estimate was weighing first, because one of them
+   * is usually right, then every room for when none of them is.
+   */
+  private renderCorrection(name: string, outputs: PersonOutputs): TemplateResult {
+    const candidates = Object.entries(outputs.candidates)
+      .sort(([, a], [, b]) => b - a)
+      .map(([room]) => room);
+    return html`<tr class="correct">
+      <td colspan="6">
+        <span class="question">Where is ${name}?</span>
+        ${candidates.map(
+          (room) =>
+            html`<ha-button class="candidate" @click=${() => void this.correct(name, room)}
+              >${this.roomName(room)}</ha-button
+            >`,
+        )}
+        <select
+          class="every-room"
+          @change=${(ev: Event) => {
+            const room = (ev.target as HTMLSelectElement).value;
+            if (room !== "") void this.correct(name, room);
+          }}
+        >
+          <option value="">Somewhere else…</option>
+          ${this.correctionRooms.map((room) => html`<option value=${room}>${this.roomName(room)}</option>`)}
+        </select>
+        <ha-button class="cancel" @click=${() => (this.correcting = null)}>That's right</ha-button>
+      </td>
+    </tr>`;
   }
 
   private renderPerson(name: string, outputs: PersonOutputs): TemplateResult {
     const percent = Math.round(outputs.confidence * 100);
     const devices = Object.entries(outputs.devices ?? {}).sort(([a], [b]) => a.localeCompare(b));
     return html`<tr class="device person">
-      <td class="who">${name}</td>
+      <td class="who">
+        <button
+          class="link"
+          title="Say where ${name} really is"
+          @click=${() => (this.correcting = this.correcting === name ? null : name)}
+        >
+          ${name}
+        </button>
+      </td>
       <td class="room">
         ${this.roomName(outputs.room)}
         ${outputs.moving ? html`<span class="chip moving">moving</span>` : nothing}

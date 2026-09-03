@@ -100,6 +100,8 @@ const hassStub = (): HomeAssistant =>
           if (holdPaths) return new Promise(() => undefined);
           // Hall reaches Bedroom through a one-way door, so there is no way back.
           return { paths: msg.from === "bedroom" ? [] : PATHS };
+        case "activity_levels/presence/correct":
+          return { ...SCOTT, room: msg.room, confidence: 1 };
         default:
           return {};
       }
@@ -178,6 +180,36 @@ describe("al-presence", () => {
     expect(row.textContent).toContain("Kitchen");
     expect(row.querySelector(".confidence")!.getAttribute("style")).toContain("82%");
     expect(norm(row.querySelector(".breadcrumb")!.textContent)).toContain("Dining Room → Kitchen");
+  });
+
+  it("tapping a person opens the room picker, candidates first, and posts the correction", async () => {
+    const { el, calls } = await tab();
+    (el.shadowRoot!.querySelector("tr.person .who button") as HTMLElement).click();
+    await el.updateComplete;
+    const picker = el.shadowRoot!.querySelector(".correct")!;
+    expect(norm(picker.textContent)).toContain("Where is Scott?");
+    const candidates = [...picker.querySelectorAll("ha-button.candidate")].map((b) => norm(b.textContent));
+    expect(candidates).toEqual(["Kitchen", "Dining Room"]);
+    const options = [...picker.querySelectorAll("select.every-room option")].map((o) => o.textContent);
+    expect(options).toContain("Hall");
+    expect(options).toContain("Away");
+    const select = picker.querySelector("select.every-room") as HTMLSelectElement;
+    select.value = "hall";
+    select.dispatchEvent(new Event("change"));
+    await settle();
+    expect(calls.at(-2)).toMatchObject({ type: "activity_levels/presence/correct", person: "Scott", room: "hall" });
+    expect(calls.at(-1)!.type).toBe("activity_levels/presence/state");
+    expect(el.shadowRoot!.querySelector(".correct")).toBeNull();
+    expect(norm(el.shadowRoot!.querySelector(".notice")!.textContent)).toContain("Moved Scott to Hall");
+  });
+
+  it("a candidate button corrects in one tap", async () => {
+    const { el, calls } = await tab();
+    (el.shadowRoot!.querySelector("tr.person .who button") as HTMLElement).click();
+    await el.updateComplete;
+    (el.shadowRoot!.querySelectorAll(".correct ha-button.candidate")[1] as HTMLElement).click();
+    await settle();
+    expect(calls.some((c) => c.type === "activity_levels/presence/correct" && c.room === "dining_room")).toBe(true);
   });
 
   it("draws a chip per device: carried percentage, and the room a parked one was left in", async () => {
