@@ -50,6 +50,18 @@ describe("al-presence-overrides", () => {
     expect(next.coalesceKey).toBe(`${KITCHEN.join("/")}:presence:gain`);
   });
 
+  it("offers the empty-room floor as an override that inherits the presence setting", async () => {
+    expect(field("activity_floor").value).toBeNull();
+    expect(field("activity_floor").inherited).toBe(0.05);
+    expect(field("activity_floor").inheritedFrom).toBe("presence");
+    field("activity_floor").dispatchEvent(new CustomEvent("value-changed", { detail: { value: 1 } }));
+    await el.updateComplete;
+    expect(changes.at(-1)!.detail.groups[0]?.children[0]?.children[0]?.presence.activity_floor).toBe(1);
+    field("activity_floor").dispatchEvent(new CustomEvent("value-changed", { detail: { value: null } }));
+    await el.updateComplete;
+    expect(changes.at(-1)!.detail.groups[0]?.children[0]?.children[0]?.presence.activity_floor).toBeNull();
+  });
+
   it("clears the preset back to the one the presence settings name", async () => {
     field("envelope").dispatchEvent(new CustomEvent("value-changed", { detail: { value: "" } }));
     await el.updateComplete;

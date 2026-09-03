@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import inf
 from typing import Any
 
-from .const import CONF_AREA_ID, CONF_FLOOR_ID, CONF_KIND, CONF_PRESENCE, PRESENCE_KEY, TRIGGER_KEY
+from .const import (
+    CONF_AREA_ID,
+    CONF_FLOOR_ID,
+    CONF_KIND,
+    CONF_PRESENCE,
+    MODE_MOMENTARY,
+    PRESENCE_KEY,
+    TRIGGER_KEY,
+)
 from .engine import Channel, Envelope, Group, Mix, NullHandling, RetriggerWhen, Unavailable, Voice
 from .topology import room_ids
 
@@ -40,6 +48,9 @@ class GroupInfo:
     group: Group
     trigger: Voice
     presence: Voice | None
+    activity_floor: float | None = None
+    """This room's own likelihood at an activity level of 0.0, overriding
+    ``presence.activity.floor``; None inherits. Only rooms carry one."""
 
 
 @dataclass(frozen=True)
@@ -49,6 +60,8 @@ class VoiceRef:
     voice: Voice
     group_id: str
     label: str
+    mode: str
+    edges: frozenset[str]
 
 
 @dataclass
@@ -162,15 +175,32 @@ def build_tree(config: dict[str, Any]) -> Tree:
         max_value = node["max_value"] if node["max_value"] is not None else defaults["max_value"]
         channels: list[Channel] = []
         for stim in node["stimuli"]:
+            envelope = resolve_envelope(defaults, presets, stim)
+            if stim["mode"] == MODE_MOMENTARY:
+                # A momentary source only ever plays note_on, and note_on on a sustaining
+                # envelope opens a gate nothing will ever close. Forcing the impulse here,
+                # once, is what makes that configuration unreachable rather than merely
+                # discouraged -- and it is also what lets `_reconcile` skip these voices at
+                # startup for free, since it already refuses to note_on an impulse and only
+                # ever notes off a voice that is gated.
+                envelope = replace(envelope, impulse=True)
             voice = Voice(
                 id=stim["entity"],
                 gain=stim["gain"],
-                envelope=resolve_envelope(defaults, presets, stim),
+                envelope=envelope,
                 ceiling=max_value,
             )
             channel = Channel(voice, key=stim["key"])
             channels.append(channel)
-            ref = VoiceRef(stim["entity"], frozenset(stim["to"]), voice, gid, channel.label)
+            ref = VoiceRef(
+                stim["entity"],
+                frozenset(stim["to"]),
+                voice,
+                gid,
+                channel.label,
+                stim["mode"],
+                frozenset(stim["edges"]),
+            )
             tree.voices_by_entity.setdefault(stim["entity"], []).append(ref)
         for child in node["children"]:
             channels.append(Channel(build(child, gid, rid), gain=child["gain"]))
@@ -209,6 +239,7 @@ def build_tree(config: dict[str, Any]) -> Tree:
             group=group,
             trigger=trigger,
             presence=presence,
+            activity_floor=node[CONF_PRESENCE]["activity_floor"] if gid in rooms else None,
         )
         return group
 

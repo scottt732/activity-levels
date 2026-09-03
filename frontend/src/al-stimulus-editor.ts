@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { customElement, property } from "lit/decorators.js";
 import { fieldErrors, pathKey } from "./errors";
 import { alChange } from "./events";
 import { groupAt, parentGroupPath, resolvedEnvelope, stimulusAt } from "./model";
@@ -8,12 +8,13 @@ import { setAt } from "./store";
 import {
   ENVELOPE_DEFINITION,
   ENVELOPE_FIELDS,
+  MOMENTARY_PINNED_HINT,
   OVERRIDES,
   OVERRIDES_DEFINITION,
   SOURCE_DEFINITION,
-  SOURCE_FIELDS,
   changedStimulusField,
   mergeStimulus,
+  overrideDisabled,
   overriddenCount,
   overrideSource,
   phaseCountdown,
@@ -21,14 +22,14 @@ import {
   stimulusHelper,
   stimulusLabel,
   stimulusSchema,
-  toTextMatches,
+  visibleSourceFields,
 } from "./stimulus-form";
 import { sharedStyles } from "./styles";
 import "./al-envelope-sketch";
 import "./al-override-field";
 import type { OverrideItem } from "./stimulus-form";
 import type { OverrideValue } from "./convert";
-import type { PropertyValues, TemplateResult } from "lit";
+import type { TemplateResult } from "lit";
 import type {
   Config,
   EnvelopeOverrides,
@@ -71,27 +72,6 @@ export class AlStimulusEditor extends LitElement {
   @property({ attribute: false }) errors: ValidationError[] = [];
   @property({ attribute: false }) live: LiveState | null = null;
 
-  /**
-   * Raw text of the "Active states" field while it is being edited. `formatToList` is lossy
-   * mid-word - a trailing separator in `on, playing,` parses back to `on, playing` - so rendering
-   * the parsed list on every keystroke would eat the separator and make a second state
-   * untypeable. `null` means "not being edited": show the config's value.
-   */
-  @state() private toText: string | null = null;
-
-  /** Drop the raw text when the selection moves, or when the config changed from elsewhere. */
-  protected override willUpdate(changed: PropertyValues<this>): void {
-    if (changed.has("path")) {
-      this.toText = null;
-      return;
-    }
-    if (this.toText === null || !changed.has("config")) return;
-    const { config, path } = this;
-    const stimulus = config && path ? stimulusAt(config, path) : undefined;
-    if (!stimulus) return;
-    if (!toTextMatches(stimulus.to, this.toText)) this.toText = null;
-  }
-
   private emitChange(next: Config, coalesceKey?: string): void {
     this.dispatchEvent(alChange(next, coalesceKey));
   }
@@ -103,7 +83,6 @@ export class AlStimulusEditor extends LitElement {
     const stimulus = stimulusAt(config, path);
     if (!stimulus) return;
     const v = ev.detail?.value ?? {};
-    if ("to" in v) this.toText = String(v.to ?? "");
     const merged = mergeStimulus(stimulus, v);
     const field = changedStimulusField(merged, stimulus);
     if (field === undefined) return;
@@ -136,10 +115,14 @@ export class AlStimulusEditor extends LitElement {
     fields: Record<string, string>,
   ): TemplateResult {
     const { config } = this;
+    // A momentary trigger's attack, decay and impulse belong to the mode, not to
+    // the stimulus. They stay on screen, pinned and explained, rather than vanishing.
+    const disabled = overrideDisabled(stimulus, item.name);
     return html`<al-override-field
       .hass=${this.hass}
       .label=${item.label}
-      .hint=${item.hint ?? ""}
+      .disabled=${disabled}
+      .hint=${disabled ? MOMENTARY_PINNED_HINT : (item.hint ?? "")}
       .kind=${item.kind}
       .selector=${item.selector}
       .value=${stimulus[item.name] as OverrideValue}
@@ -179,8 +162,8 @@ export class AlStimulusEditor extends LitElement {
           html`
             <ha-form
               .hass=${this.hass}
-              .data=${stimulusData(stimulus, this.toText, SOURCE_FIELDS)}
-              .schema=${stimulusSchema(config, SOURCE_FIELDS)}
+              .data=${stimulusData(stimulus, visibleSourceFields(stimulus))}
+              .schema=${stimulusSchema(config, stimulus, this.hass, visibleSourceFields(stimulus))}
               .error=${fields}
               .computeLabel=${stimulusLabel}
               .computeHelper=${stimulusHelper}
@@ -197,8 +180,8 @@ export class AlStimulusEditor extends LitElement {
           html`
             <ha-form
               .hass=${this.hass}
-              .data=${stimulusData(stimulus, this.toText, ENVELOPE_FIELDS)}
-              .schema=${stimulusSchema(config, ENVELOPE_FIELDS)}
+              .data=${stimulusData(stimulus, ENVELOPE_FIELDS)}
+              .schema=${stimulusSchema(config, stimulus, this.hass, ENVELOPE_FIELDS)}
               .error=${fields}
               .computeLabel=${stimulusLabel}
               .computeHelper=${stimulusHelper}

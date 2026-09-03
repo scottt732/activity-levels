@@ -36,6 +36,11 @@ describe("model", () => {
     expect(e).toEqual({ attack: 10, decay: 300, sustain: 0.6, release: 120, impulse: false, retrigger: "always", stack: false, unavailable: "hold", debounce: 5 });
     expect(resolvedEnvelope(cfg, newStimulus("binary_sensor.x")).release).toBe(1800);
   });
+  it("starts a new stimulus sustained, firing on both edges", () => {
+    const stimulus = newStimulus("binary_sensor.door");
+    expect(stimulus.mode).toBe("sustained");
+    expect(stimulus.edges).toEqual(["enter", "leave"]);
+  });
   it("returns undefined for a path whose node is gone", () => {
     expect(groupAt(cfg, ["groups", 9])).toBeUndefined();
     expect(groupAt(cfg, ["groups", 1, "children", 4])).toBeUndefined();

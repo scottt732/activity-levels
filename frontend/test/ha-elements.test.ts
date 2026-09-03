@@ -37,8 +37,10 @@ describe("ensureHaElements", () => {
   });
 
   it("keeps a missing optional element out of `missing`, where it would blank the panel", () => {
-    expect(HA_ELEMENTS as readonly string[]).not.toContain("ha-yaml-editor");
-    expect(HA_OPTIONAL_ELEMENTS).toContain("ha-yaml-editor");
+    for (const tag of ["ha-yaml-editor", "ha-state-icon"]) {
+      expect(HA_ELEMENTS as readonly string[]).not.toContain(tag);
+      expect(HA_OPTIONAL_ELEMENTS as readonly string[]).toContain(tag);
+    }
   });
 
   it("clears the deadline of every element that did register", async () => {
@@ -48,9 +50,9 @@ describe("ensureHaElements", () => {
     // nudges hold their shared deadline for the whole budget — one timer, not two.
     expect(vi.getTimerCount()).toBe(1);
     await vi.advanceTimersByTimeAsync(30_000);
-    // Now the nine registered elements settle at once and their deadlines go with them:
-    // only the two that never register are still waiting on their own.
-    expect(vi.getTimerCount()).toBe(2);
+    // Now every registered element settles at once and its deadline goes with it: only
+    // `ha-selector` and the optional elements it gates are still waiting on their own.
+    expect(vi.getTimerCount()).toBe(1 + HA_OPTIONAL_ELEMENTS.length);
     await vi.advanceTimersByTimeAsync(60_000);
     await pending;
     expect(vi.getTimerCount()).toBe(0);

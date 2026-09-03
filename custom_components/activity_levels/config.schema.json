@@ -402,6 +402,138 @@
           },
           "default": []
         },
+        "people": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                ],
+                "default": null
+              },
+              "person": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$",
+                    "description": "Validated by validate; not modelled here."
+                  }
+                ],
+                "default": null
+              },
+              "devices": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "tracker": {
+                      "type": "string",
+                      "pattern": "^device_tracker\\.[a-z0-9_]+$"
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      ],
+                      "default": null
+                    },
+                    "kind": {
+                      "enum": [
+                        "phone",
+                        "watch",
+                        "tag",
+                        "laptop",
+                        "other"
+                      ],
+                      "default": "other"
+                    },
+                    "companion": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^device_tracker\\.[a-z0-9_]+$"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "signals": {
+                      "type": "object",
+                      "properties": {
+                        "activity": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$",
+                              "description": "Validated by validate; not modelled here."
+                            }
+                          ],
+                          "default": null
+                        },
+                        "steps": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$",
+                              "description": "Validated by validate; not modelled here."
+                            }
+                          ],
+                          "default": null
+                        },
+                        "battery_state": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$",
+                              "description": "Validated by validate; not modelled here."
+                            }
+                          ],
+                          "default": null
+                        }
+                      },
+                      "additionalProperties": false,
+                      "default": {}
+                    }
+                  },
+                  "required": [
+                    "tracker"
+                  ],
+                  "additionalProperties": false
+                },
+                "default": []
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": []
+        },
         "envelope": {
           "anyOf": [
             {
@@ -457,6 +589,135 @@
           ],
           "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'. At least 1.0 seconds.",
           "default": 60.0
+        },
+        "activity": {
+          "type": "object",
+          "properties": {
+            "floor": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.05
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "carried": {
+          "type": "object",
+          "properties": {
+            "prior": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "exclusiveMaximum": 1.0,
+              "default": 0.7
+            },
+            "flip": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                }
+              ],
+              "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'. At least 1.0 seconds.",
+              "default": 300.0
+            },
+            "recent": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(\\d+(\\.\\d+)?\\s*[smhdSMHD]|\\d+:\\d{2}(:\\d{2}(\\.\\d+)?)?)\\s*$"
+                }
+              ],
+              "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'. At least 1.0 seconds.",
+              "default": 120.0
+            },
+            "nearby": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "exclusiveMaximum": 1.0,
+              "default": 0.3
+            },
+            "weights": {
+              "type": "object",
+              "properties": {
+                "charging": {
+                  "type": "number",
+                  "minimum": -10.0,
+                  "maximum": 10.0,
+                  "default": -3.0
+                },
+                "moving": {
+                  "type": "number",
+                  "minimum": -10.0,
+                  "maximum": 10.0,
+                  "default": 2.0
+                },
+                "still_room_empty": {
+                  "type": "number",
+                  "minimum": -10.0,
+                  "maximum": 10.0,
+                  "default": -2.0
+                },
+                "jitter": {
+                  "type": "number",
+                  "minimum": -10.0,
+                  "maximum": 10.0,
+                  "default": 1.0
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "labels": {
+          "type": "object",
+          "properties": {
+            "keep": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 50000,
+              "default": 5000
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
+        "signatures": {
+          "type": "object",
+          "properties": {
+            "min_labels": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 1000,
+              "default": 8
+            },
+            "prior_weight": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1000.0,
+              "default": 4.0
+            },
+            "rebuild_after": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000,
+              "default": 10
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
         },
         "scanner_areas": {
           "type": "object",
@@ -618,6 +879,27 @@
                 "description": "One state, or a list of states, that counts as a trigger.",
                 "default": [
                   "on"
+                ]
+              },
+              "mode": {
+                "enum": [
+                  "sustained",
+                  "momentary"
+                ],
+                "default": "sustained"
+              },
+              "edges": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "enter",
+                    "leave"
+                  ]
+                },
+                "minItems": 1,
+                "default": [
+                  "enter",
+                  "leave"
                 ]
               },
               "gain": {
@@ -910,6 +1192,19 @@
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9_]*$",
                   "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+                }
+              ],
+              "default": null
+            },
+            "activity_floor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0,
+                  "maximum": 1.0
                 }
               ],
               "default": null

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/scottt732/activity-levels/compare/v0.5.1...v0.6.0) (2026-09-01)
+
+
+### Added
+
+* **config:** stimulus modes, real state pickers and entity icons ([#15](https://github.com/scottt732/activity-levels/issues/15)) ([60296cd](https://github.com/scottt732/activity-levels/commit/60296cd6353db496652df0f5668cc967dec2fe3f))
+
+
+### Dependencies
+
+* bump ruff from 0.16.4 to 0.16.5 in the dev-dependencies group ([#12](https://github.com/scottt732/activity-levels/issues/12)) ([c2fb8c6](https://github.com/scottt732/activity-levels/commit/c2fb8c6aad49bde6ac8a634e9a36b6e422de99c4))
+
 ## [0.5.1](https://github.com/scottt732/activity-levels/compare/v0.5.0...v0.5.1) (2026-08-30)
 
 

@@ -43,6 +43,22 @@ def presence_storage_key(entry_id: str) -> str:
     return f"{DOMAIN}.{entry_id}.presence"
 
 
+PRESENCE_LABELS_VERSION = 1
+
+
+def presence_labels_key(entry_id: str) -> str:
+    """The corrections people have made: what the signature learner fits from."""
+    return f"{DOMAIN}.{entry_id}.presence_labels"
+
+
+PRESENCE_SIGNATURES_VERSION = 1
+
+
+def presence_signatures_key(entry_id: str) -> str:
+    """The learned room signatures: the document any producer may replace."""
+    return f"{DOMAIN}.{entry_id}.presence_signatures"
+
+
 CONF_VERSION = "version"
 CONF_DEFAULTS = "defaults"
 CONF_ENVELOPES = "envelopes"
@@ -95,6 +111,23 @@ and nothing in the estimator weights it yet."""
 
 DEFAULT_CONNECTION = "door"
 
+MODE_SUSTAINED = "sustained"
+MODE_MOMENTARY = "momentary"
+
+MODES = (MODE_SUSTAINED, MODE_MOMENTARY)
+"""How a stimulus reads its entity. `sustained` holds a note for as long as the entity sits
+in its active states, which is what a light or a media player wants. `momentary` treats each
+crossing as an event and lets go again -- an interior door, read as "somebody walked through
+here" rather than "a door is open"."""
+
+EDGE_ENTER = "enter"
+EDGE_LEAVE = "leave"
+
+EDGES = (EDGE_ENTER, EDGE_LEAVE)
+"""Which crossings of the active states a momentary stimulus fires on. `enter` is a
+transition into them, `leave` a transition out. An exterior door that only matters when it
+opens is `[enter]`; a door read as a footstep is both."""
+
 SLOT_MINUTES = 15
 SLOTS_PER_DAY = 96
 
@@ -116,6 +149,8 @@ SERVICE_SET_LEVEL = "set_level"
 SERVICE_RESET = "reset"
 SERVICE_REBUILD_PROFILE = "rebuild_profile"
 SERVICE_SIMULATE_NOW = "simulate_now"
+SERVICE_LOCATE = "locate"
+SERVICE_REBUILD_SIGNATURES = "rebuild_signatures"
 ATTR_GROUP_ID = "group_id"
 ATTR_PEAK = "peak"
 ATTR_VALUE = "value"
@@ -137,6 +172,12 @@ ATTR_CANDIDATES = "candidates"
 ATTR_PATH = "path"
 ATTR_UPDATED = "updated"
 ATTR_WHO = "who"
+ATTR_ROOMS = "rooms"
+ATTR_PROBABILITY = "probability"
+ATTR_PERSON = "person"
+ATTR_ROOM = "room"
+ATTR_ROOMS_LEARNED = "rooms_learned"
+ATTR_LABELS_USED = "labels_used"
 
 ISSUE_BERMUDA_MISSING = "bermuda_missing"
 ISSUE_NOT_BERMUDA = "not_a_bermuda_device"

@@ -16,10 +16,17 @@
       "expected_activity": { "name": "Expected activity" },
       "activity_anomaly": { "name": "Activity anomaly" },
       "profile": { "name": "Profile" },
+      "signatures": { "name": "Room signatures" },
       "room": { "name": "Room" },
+      "floor": { "name": "Floor" },
+      "device_room": { "name": "{device} room" },
       "occupants": { "name": "Occupants" }
     },
-    "binary_sensor": { "active": { "name": "Active" }, "moving": { "name": "Moving" } },
+    "binary_sensor": {
+      "active": { "name": "Active" },
+      "moving": { "name": "Moving" },
+      "carried": { "name": "{device} carried" }
+    },
     "button": { "trigger": { "name": "Trigger" } },
     "switch": {
       "mute": { "name": "Mute" },
@@ -67,6 +74,21 @@
       "description": "Sample a presence-simulation plan for a group and start it immediately, ignoring the presence simulation switches.",
       "fields": {
         "group_id": { "name": "Group", "description": "The group id to simulate." }
+      }
+    },
+    "locate": {
+      "name": "Locate",
+      "description": "Say where a tracked person really is. Their room estimate moves there at once, and the correction is kept so the estimator can learn from it.",
+      "fields": {
+        "person": { "name": "Person", "description": "The tracked person's name, as configured under presence.people." },
+        "room": { "name": "Room", "description": "The room group id they are in, or `away`." }
+      }
+    },
+    "rebuild_signatures": {
+      "name": "Rebuild room signatures",
+      "description": "Fit the per-room scanner signatures from the corrections kept so far, now rather than after the next few corrections.",
+      "fields": {
+        "force": { "name": "Force", "description": "Replace a signatures document another producer wrote." }
       }
     }
   },

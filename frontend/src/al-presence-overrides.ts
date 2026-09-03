@@ -9,7 +9,11 @@ import { sharedStyles } from "./styles";
 import "./al-envelope-sketch";
 import "./al-override-field";
 import type { OverrideValue } from "./convert";
+import type { Selector } from "./al-override-field";
 import type { Config, HomeAssistant, Path, ValidationError } from "./types";
+
+/** Mirrors `schema.py`: open at zero, closed at one. */
+const ACTIVITY_FLOOR_SELECTOR: Selector = { number: { min: 0.01, max: 1, step: 0.01, mode: "box" } };
 
 /**
  * A group's presence channel: a stimulus with no entity, fed by the room estimate rather
@@ -73,6 +77,20 @@ export class AlPresenceOverrides extends LitElement {
         .error=${errors.gain}
         @value-changed=${(ev: CustomEvent<{ value: number | null }>) =>
           this.setPresence("gain", ev.detail.value ?? 1)}
+      ></al-override-field>
+      <al-override-field
+        class="presence-activity_floor"
+        .hass=${this.hass}
+        label="Empty-room floor"
+        hint="Likelihood of this room at an activity level of 0.0. Set 1 for a room people sleep in: a still sleeper trips no motion, and the estimator must not read that as an empty room."
+        kind="number"
+        .selector=${ACTIVITY_FLOOR_SELECTOR}
+        .value=${overrides.activity_floor}
+        .inherited=${presenceSettings(config).activity.floor}
+        .inheritedFrom=${"presence"}
+        .error=${errors.activity_floor}
+        @value-changed=${(ev: CustomEvent<{ value: number | null }>) =>
+          this.setPresence("activity_floor", ev.detail.value ?? null)}
       ></al-override-field>
       ${OVERRIDES.map(
         (item) => html`<al-override-field

@@ -30,6 +30,16 @@ child triggers and child groups using `sum`, `max`, or `mean`, then applies a li
 nest, so a `living_room` group rolls up into a `house` group, and the same mixed value
 is recomputed recursively at every level whenever a leaf trigger changes.
 
+A stimulus reads its entity in one of two **modes**. The default, `sustained`, is the one
+described above: the trigger holds for as long as the entity stays in its `to` states,
+which is what a light, a media player or a door you care about standing open wants. A
+`momentary` stimulus instead treats each *crossing* of those states as one event, the way
+a motion sensor reports a footstep — an interior door, read as "somebody walked through
+here" rather than "a door is open". Its `edges` say which crossings count: `enter`,
+`leave`, or both. A momentary trigger is always an impulse — the state change is the whole
+event, so there is nothing to hold the envelope open and it jumps to its peak and releases
+from there, which also means its attack and decay never run.
+
 Two settings say what a *second* trigger does to an envelope that is still sounding.
 **Allow retrigger** decides whether it counts at all: `always`, `after_attack`,
 `after_decay`, `release` (only a note that is already fading) or `idle` (only once the
@@ -233,7 +243,11 @@ And, while presence is on, one pair per tracked person, each on its own **Presen
 | Entity | Description |
 | --- | --- |
 | `sensor.<name>_room` | Which room a tracked person is in, or `Away`. Attributes: `group_id`, `confidence`, `moving`, `candidates`, `path`, `updated`. |
+| `sensor.<name>_floor` | Which floor (or, in a house that declares none, which building) a tracked person is on, or `Away`. Attributes: `group_id`, `confidence` — the belief summed over the floor's rooms, so it can be sure of the floor while the room is a toss-up — `rooms`, `updated`. |
 | `binary_sensor.<name>_moving` | On while the person's two most likely rooms are adjacent and both plausible. |
+| `binary_sensor.<name>_<device>_carried` | On while this device is probably on its person. Attribute: `probability`. |
+| `sensor.<name>_<device>_room` | Which room the *object* is in — the phone, carried or not. Attributes: `group_id`, `confidence`, `updated`. |
+| `sensor.activity_levels_signatures` | When the room signatures were last learned. Attributes: `producer`, `producer_version`, `rooms_learned`, `labels_used`. |
 
 ## Services
 
@@ -247,6 +261,12 @@ And, while presence is on, one pair per tracked person, each on its own **Presen
 - `activity_levels.simulate_now` — sample and start a presence-simulation plan for one
   group immediately, ignoring the switches. Fields: `group_id` (required). If a hard
   precondition still fails it raises with the reason rather than doing nothing quietly.
+- `activity_levels.locate` — say where a tracked person really is. Fields: `person`
+  (their configured name) and `room` (a room group id, or `away`). Their estimate moves
+  there at once and the correction is kept as a label; a companion notification action
+  is the natural caller. The Presence tab does the same when you tap a person.
+- `activity_levels.rebuild_signatures` — fit the room signatures from the corrections
+  kept so far, now. Fields: `force` (replace a document another producer wrote).
 
 ## Patterns & presence simulation
 
@@ -414,9 +434,46 @@ all. `escape` is the small leftover probability of appearing somewhere with no p
 here, and it exists purely so a wrong guess is not permanent: without it, an estimate that
 starts (or is nudged) wrong could never recover.
 
-**What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`) and
-`binary_sensor.<name>_moving` (on while their two most likely rooms are adjacent and both
-still plausible). Per room: `sensor.<room>_occupants`, plus a `presence` channel folded
+The rooms' own activity levels are the other kind of evidence. A room at `0.0` while another
+is busy is somewhere nobody is, however many people are home, so it costs a candidate as
+much as having no scanner at all (`activity.floor`); a room whose level is rising has a stimulus firing right
+now and costs nothing; anything in between decays at the envelope's own rate. A busy room is
+never a *reward* — with more than one person home it could be anyone — so this only ever
+rules rooms out. The level the estimator reads leaves out the room's own `presence` channel,
+so it can never confirm itself. The one place the rule fails is a room somebody is asleep
+in: a still sleeper trips no motion, and `0.0` there means nothing. Give such a room its own
+`presence.activity_floor: 1.0` and the estimator leaves it alone.
+
+**People and their devices.** A person is followed by every device they own — a phone,
+a watch, later a wallet tag — and whether each one is actually *on* them is something the
+estimate works out rather than assumes. It holds one belief per person over both the room
+and a carried flag per device: a device's readings are explained by the person's room while
+it is carried, and by wherever the device itself sits while it is not. So "phone parked on
+the theater couch, person in the kitchen with the watch" is a hypothesis the filter can
+hold, and the phone's flat readings plus the theater's `0.0` level argue for it on their
+own. The companion app helps it along: a phone that is charging is on a table, one that
+reports walking is in a pocket, and a device whose distances never wander is not being
+carried around. `presence.carried` holds the weights.
+
+**Learning your rooms.** Every correction — a tap on the Presence tab, or a call to
+`activity_levels.locate` — is kept as a label: the room you said, and everything the
+estimator was reading at that instant. After a few of them (`signatures.rebuild_after`) the
+learner fits a *signature* per room and scanner: what that scanner reads when you are
+really in that room, and how often it hears you there at all. The theater scanner reads
+three metres from the couch and one from the door; the hall scanner never hears anybody
+in the bedroom. Wherever a signature exists the estimator uses it instead of the fixed
+distance formula, and the formula keeps answering for the pairs nobody has corrected yet.
+`sensor.activity_levels_signatures` says when the last fit ran and how much it covered.
+The document it writes is producer-agnostic: anything that can fit those numbers may
+replace it over `presence/signatures/save`, and the built-in learner then leaves it alone.
+
+**What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`),
+`sensor.<name>_floor` (which floor, with the belief summed over its rooms — sure of the
+floor when two rooms on it tie) and `binary_sensor.<name>_moving` (on while their two most
+likely rooms are adjacent and both still plausible). Per device:
+`binary_sensor.<name>_<device>_carried` and `sensor.<name>_<device>_room` — where the
+*object* is, which is the entity that answers "where did I leave my phone". Per room:
+`sensor.<room>_occupants`, plus a `presence` channel folded
 into that room's mix — silent, starting when the room fills and ending when it empties,
 tuned in the mixer's controls row exactly like any other channel (gain, envelope, and it
 mutes the same way).
@@ -429,7 +486,8 @@ mutes the same way).
    integration raises a repair issue naming the ones it still finds off.
 3. Give each scanner device an area matching a room's `area_id`, or map it directly with
    `presence.scanner_areas` when that is not convenient.
-4. List your phones' `device_tracker` entities under `presence.devices`.
+4. List the people under `presence.people`: point each at their `person.*` entity and
+   their devices are seeded from it, or list the Bermuda `device_tracker` entities by hand.
 5. Set `adjacent` (and `exit`, where it applies) on every room — an unreachable room is
    invisible to the filter, not just poorly connected to it.
 
@@ -447,8 +505,8 @@ document against as you type — see [Editing as YAML](#editing-as-yaml).
 
 Renaming a group's `id` creates new entities (history is not carried over); `area_id` is
 applied only when a group's device is first created. A tracked person's entities are
-keyed off their (slugified) `presence.devices[].name`, so renaming one renames their
-entities the same way.
+keyed off their (slugified) `presence.people[].name`, and a device's off its name within
+the person, so renaming either renames the entities the same way.
 
 `presence` and `trigger` are reserved channel labels — a stimulus `key` or a child group
 `id` of either name is rejected as a duplicate, whether or not presence is switched on.
@@ -519,7 +577,9 @@ groups:
     precision: 1             # optional; inherits defaults
     stimuli:
       - entity: binary_sensor.front_door
-        to: "on"             # trigger state(s); string or list
+        to: "on"             # active state(s); string or list
+        mode: sustained      # sustained (hold while active) | momentary (fire on each crossing)
+        edges: [enter, leave] # momentary only: which crossings fire; at least one
         gain: 1.0            # peak level one trigger of this stimulus reaches
         envelope: default    # preset; any envelope field may be overridden inline
         key: null            # required only when the same entity appears twice in a group
@@ -535,6 +595,8 @@ groups:
     presence:                # optional overrides for this room's presence channel
       gain: 1.0              # how loudly "somebody is here" contributes
       envelope: hour         # any envelope field may be overridden inline
+      activity_floor: 1.0    # this room's own presence.activity.floor; 1.0 exempts a
+                             # room people sleep in, where 0.0 does not mean empty
     children:
       - id: living_room
         gain: 1.0            # this subgroup's channel gain into the parent
@@ -542,9 +604,33 @@ groups:
 
 presence:                    # absent or enabled: false = the whole feature is off
   enabled: true
-  devices:
-    - device: device_tracker.scotts_phone   # a Bermuda device_tracker
-      name: Scott                            # entity name; defaults to the tracker's own name
+  people:
+    - name: Scott                            # entity name; defaults to the first device's name
+      person: person.scott                   # optional; its device_trackers seed the devices
+      devices:
+        - tracker: device_tracker.scotts_phone_ble   # a Bermuda device_tracker
+          name: Phone                        # defaults to the Bermuda device's name
+          kind: phone                        # phone | watch | tag | laptop | other
+          companion: device_tracker.scotts_iphone    # the mobile_app tracker of the same phone
+          signals:                           # companion sensors; discovered from the
+            activity: sensor.scotts_iphone_activity  #   companion's device when omitted
+            steps: sensor.scotts_iphone_steps
+            battery_state: sensor.scotts_iphone_battery_state
+        - tracker: device_tracker.scotts_watch_ble
+          kind: watch
+  devices: []                # the older one-tracker-per-person list; still accepted and
+                             # folded into people on load
+  carried:                   # "is this device on its person" — see Rooms & presence
+    prior: 0.7               # P(carried) before any signal
+    flip: 5m                 # mean time between carried <-> parked changes
+    recent: 2m               # how far back "moved lately" looks; a signal held this
+                             #   long is worth its whole weight
+    nearby: 0.3              # P(a parked device is in the same room as its person)
+    weights:                 # log-odds each signal adds while it is true; 0 disables one
+      charging: -3.0
+      moving: 2.0
+      still_room_empty: -2.0
+      jitter: 1.0
   envelope: default          # preset the presence channels start from
   threshold: 0.6             # confidence needed before somebody counts as in the room
   stay: 0.9                  # P(staying put between updates)
@@ -552,6 +638,14 @@ presence:                    # absent or enabled: false = the whole feature is o
   scale: 3.0                 # emission distance scale, metres
   floor: 0.05                # likelihood of a room with no scanner
   stuck_after: 60s           # implausible readings for this long reset the estimate
+  activity:
+    floor: 0.05              # likelihood of a room whose activity level is 0.0
+  labels:
+    keep: 5000               # corrections kept, newest first, for the learner
+  signatures:                # what the learner fits from those corrections
+    min_labels: 8            # labels a (room, scanner) pair needs before it is learned
+    prior_weight: 4.0        # how many labels the fixed formula counts for against them
+    rebuild_after: 10        # new corrections between automatic rebuilds
   scanner_areas:             # scanner device id -> room, overriding its area
     "1a2b3c4d5e6f": kitchen
 ```
