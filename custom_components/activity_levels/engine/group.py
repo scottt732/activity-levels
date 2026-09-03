@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from math import isfinite
 
@@ -134,14 +134,17 @@ class Group:
     def value_at(self, t: float) -> float:
         return self._limit(self._raw_value_at(t))
 
-    def value_at_excluding(self, t: float, label: str) -> float:
-        """The limited mix with the channel called ``label`` left out.
+    def value_at_excluding(self, t: float, labels: str | Iterable[str]) -> float:
+        """The limited mix with the channels called ``labels`` left out.
 
         Mirrors :meth:`value_at` rather than subtracting a contribution, so MAX and
         MEAN re-mix over the remaining channels instead of guessing. Used for a
-        group's "real" value: the level without the synthetic trigger voice.
+        group's "real" value -- the level without the synthetic trigger voice -- and
+        for the presence side's evidence level, which also leaves out the presence
+        voice so the room estimator never reads a level it raised itself.
         """
-        remaining = [ch for ch in self._live() if ch.label != label]
+        excluded = {labels} if isinstance(labels, str) else set(labels)
+        remaining = [ch for ch in self._live() if ch.label not in excluded]
         return self._limit(self._mix([ch.value_at(t) for ch in remaining]))
 
     def contribution_for(self, t: float, label: str, target: float) -> float:
