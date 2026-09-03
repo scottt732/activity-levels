@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/scottt732/activity-levels/compare/v0.6.0...v0.7.0) (2026-09-03)
+
+
+### Added
+
+* **presence:** one belief per person, fed by everything ([#16](https://github.com/scottt732/activity-levels/issues/16)) ([8d9d0dc](https://github.com/scottt732/activity-levels/commit/8d9d0dcae9e1b24d57f534192d049b5c58c6bdb6))
+
+
+### Dependencies
+
+* **frontend:** bump the dev-dependencies group in /frontend with 6 updates ([#13](https://github.com/scottt732/activity-levels/issues/13)) ([87d80b1](https://github.com/scottt732/activity-levels/commit/87d80b11d8d3aaffe79b47d6da22ac61c84e27c9))
+
 ## [0.6.0](https://github.com/scottt732/activity-levels/compare/v0.5.1...v0.6.0) (2026-09-01)
 
 
