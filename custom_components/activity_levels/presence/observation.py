@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from .carried import Signals
+
 BERMUDA_DOMAIN = "bermuda"
 RANGE_SUFFIX = "_range"
 UNREACHABLE = 999.0
@@ -52,6 +54,31 @@ class Observation:
     t: float
     distances: Mapping[str, float | None] = field(default_factory=dict)
     home: bool = True
+    activity: Mapping[str, RoomActivity] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class DeviceFrame:
+    """One device's part of a person's observation: its readings, and the side evidence
+    about whether it is on them. ``distances`` is a full frame, as for :class:`Observation`.
+    """
+
+    distances: Mapping[str, float | None] = field(default_factory=dict)
+    home: bool = True
+    signals: Signals = field(default_factory=Signals)
+
+
+@dataclass(frozen=True)
+class PersonObservation:
+    """Everything the person filter is told at one instant.
+
+    A device absent from ``devices`` said nothing this frame -- its carried flag drifts
+    toward the prior and its readings are neither for nor against any room. The
+    activity mapping is the house's, shared by every person.
+    """
+
+    t: float
+    devices: Mapping[str, DeviceFrame] = field(default_factory=dict)
     activity: Mapping[str, RoomActivity] = field(default_factory=dict)
 
 

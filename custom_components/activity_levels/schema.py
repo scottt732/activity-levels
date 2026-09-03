@@ -319,6 +319,11 @@ CARRIED_SCHEMA = vol.Schema(
         ),
         vol.Optional("flip", default=300.0): vol.All(parse_duration, vol.Range(min=1.0)),
         vol.Optional("recent", default=120.0): vol.All(parse_duration, vol.Range(min=1.0)),
+        # P(a parked device is in the same room as its person): a phone on the kitchen
+        # counter still says something about the kitchen
+        vol.Optional("nearby", default=0.3): _finite(
+            0.0, lo_exclusive=True, hi=1.0, hi_exclusive=True
+        ),
         vol.Optional("weights", default=dict): vol.Schema(
             {
                 vol.Optional(key, default=weight): _finite(-10.0, hi=10.0)

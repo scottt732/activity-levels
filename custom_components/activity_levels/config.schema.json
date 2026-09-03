@@ -640,6 +640,12 @@
               "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'. At least 1.0 seconds.",
               "default": 120.0
             },
+            "nearby": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "exclusiveMaximum": 1.0,
+              "default": 0.3
+            },
             "weights": {
               "type": "object",
               "properties": {

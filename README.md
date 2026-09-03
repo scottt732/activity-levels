@@ -587,7 +587,9 @@ presence:                    # absent or enabled: false = the whole feature is o
   carried:                   # "is this device on its person" — see Rooms & presence
     prior: 0.7               # P(carried) before any signal
     flip: 5m                 # mean time between carried <-> parked changes
-    recent: 2m               # how far back "moved lately" looks
+    recent: 2m               # how far back "moved lately" looks; a signal held this
+                             #   long is worth its whole weight
+    nearby: 0.3              # P(a parked device is in the same room as its person)
     weights:                 # log-odds each signal adds while it is true; 0 disables one
       charging: -3.0
       moving: 2.0

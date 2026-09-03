@@ -8,8 +8,15 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from custom_components.activity_levels.presence.carried import Signals, Weights
 from custom_components.activity_levels.presence.estimator import Estimator
-from custom_components.activity_levels.presence.observation import Observation, RoomActivity
+from custom_components.activity_levels.presence.observation import (
+    DeviceFrame,
+    Observation,
+    PersonObservation,
+    RoomActivity,
+)
+from custom_components.activity_levels.presence.person import PersonEstimator
 from custom_components.activity_levels.schema import validate_config
 from custom_components.activity_levels.topology import build_topology
 from tests.fixtures import rooms_config
@@ -98,6 +105,65 @@ def test_the_activity_term_never_rewards_a_room(distances, level, slope) -> None
     assert delta[kitchen] >= np.log(0.05) - 1e-12
     assert abs(delta[hall]) < 1e-12
     assert np.all(np.abs(np.delete(delta, [kitchen, hall])) < 1e-12)
+
+
+frames = st.lists(
+    st.tuples(
+        st.fixed_dictionaries(dict.fromkeys(SCANNERS, readings)),
+        st.fixed_dictionaries(dict.fromkeys(SCANNERS, readings)),
+        st.booleans(),
+        st.floats(min_value=0.0, max_value=600.0),
+    ),
+    min_size=1,
+    max_size=25,
+)
+
+
+@given(frames, dynamics(), st.floats(min_value=0.01, max_value=0.99))
+@settings(max_examples=40, deadline=None)
+def test_the_person_belief_is_always_a_distribution(rows, pair, prior) -> None:
+    stay, escape = pair
+    phone = Estimator(
+        TOPO, SCANNERS, stay=stay, escape=escape, scale=3.0, floor=0.05, stuck_after=60.0
+    )
+    watch = Estimator(
+        TOPO, SCANNERS, stay=stay, escape=escape, scale=3.0, floor=0.05, stuck_after=60.0
+    )
+    est = PersonEstimator(
+        TOPO,
+        {"phone": phone, "watch": watch},
+        stay=stay,
+        escape=escape,
+        prior=prior,
+        flip=300.0,
+        recent=120.0,
+        weights=Weights(),
+        stuck_after=60.0,
+    )
+    t = 0.0
+    for phone_d, watch_d, home, gap in rows:
+        t += gap
+        out = est.update(
+            PersonObservation(
+                t=t,
+                devices={
+                    "phone": DeviceFrame(
+                        distances=phone_d, home=home, signals=Signals(charging=True)
+                    ),
+                    "watch": DeviceFrame(
+                        distances=watch_d, home=home, signals=Signals(jitter=True)
+                    ),
+                },
+            )
+        )
+        phone.update(Observation(t=t, distances=phone_d, home=home))
+        watch.update(Observation(t=t, distances=watch_d, home=home))
+        assert np.all(np.isfinite(est.belief))
+        assert np.all(est.belief >= 0.0)
+        assert abs(est.belief.sum() - 1.0) < 1e-9
+        assert out.room in TOPO.states
+        assert all(0.0 <= p <= 1.0 for p in out.carried.values())
+        assert set(out.device_rooms) == {"phone", "watch"}
 
 
 @given(observations)

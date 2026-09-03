@@ -257,6 +257,7 @@ CARRIED_DEFAULTS = {
     "prior": 0.7,
     "flip": 300.0,
     "recent": 120.0,
+    "nearby": 0.3,
     "weights": {"charging": -3.0, "moving": 2.0, "still_room_empty": -2.0, "jitter": 1.0},
 }
 
@@ -418,6 +419,7 @@ def test_people_normalise_with_a_person_a_companion_and_signals() -> None:
         ({"carried": {"prior": 1.0}}, "presence/carried/prior"),
         ({"carried": {"flip": 0}}, "presence/carried/flip"),
         ({"carried": {"recent": 0}}, "presence/carried/recent"),
+        ({"carried": {"nearby": 1.0}}, "presence/carried/nearby"),
         ({"carried": {"weights": {"jitter": 11}}}, "presence/carried/weights/jitter"),
     ],
 )
