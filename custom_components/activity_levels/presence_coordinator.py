@@ -564,7 +564,9 @@ class PresenceCoordinator:
             if info is None:
                 continue
             level = info.group.value_at_excluding(t, _NOT_EVIDENCE) / info.max_value
-            activity[gid] = RoomActivity(level=min(level, 1.0), slope=info.group.slope_at(t))
+            activity[gid] = RoomActivity(
+                level=min(level, 1.0), slope=info.group.slope_at(t), floor=info.activity_floor
+            )
         return activity
 
     @staticmethod

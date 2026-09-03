@@ -27,6 +27,7 @@ export const PRESENCE_KEY = "presence";
 export const newPresenceOverrides = (): PresenceOverrides => ({
   gain: 1,
   envelope: null,
+  activity_floor: null,
   attack: null,
   decay: null,
   sustain: null,

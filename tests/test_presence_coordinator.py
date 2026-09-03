@@ -357,6 +357,18 @@ async def test_the_evidence_level_leaves_the_presence_channel_out(
     assert set(activity) == ROOMS
 
 
+async def test_a_room_s_activity_floor_override_reaches_the_filter(hass: HomeAssistant) -> None:
+    fake_bermuda(hass)
+    config = presence_config()
+    config["groups"][0]["children"][0]["children"][0]["presence"]["activity_floor"] = 1.0
+    entry = await add_entry(hass, config)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    activity = presence._activity(entry.runtime_data.coordinator.now())
+    assert activity["kitchen"].floor == 1.0
+    assert activity["hall"].floor is None
+
+
 async def test_an_active_room_reads_as_active_evidence(hass: HomeAssistant) -> None:
     fake_bermuda(hass)
     entry = await add_entry(hass)

@@ -240,6 +240,17 @@ def test_adjacency_and_exits_normalize() -> None:
     assert rooms["kitchen"]["exit"] is False
     assert rooms["kitchen"]["presence"]["gain"] == 1.0
     assert rooms["kitchen"]["presence"]["envelope"] is None
+    assert rooms["kitchen"]["presence"]["activity_floor"] is None
+
+
+def test_a_room_may_override_the_activity_floor() -> None:
+    config = rooms_config()
+    kitchen = config["groups"][0]["children"][0]["children"][0]
+    kitchen["presence"] = {"activity_floor": 1.0}
+    cfg = validate_config(config)
+    assert cfg["groups"][0]["children"][0]["children"][0]["presence"]["activity_floor"] == 1.0
+    kitchen["presence"] = {"activity_floor": 0}
+    assert "groups/0/children/0/children/0/presence/activity_floor" in errors_of(config)
 
 
 def test_presence_defaults_and_absence() -> None:

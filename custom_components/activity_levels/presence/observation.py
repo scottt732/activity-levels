@@ -23,11 +23,14 @@ class RoomActivity:
     ``level`` is already scaled to ``[0, 1]`` by the caller -- the room's evidence level
     over its ``max_value`` -- and ``slope`` is in the same units per second. Only the
     sign of the slope is read: a rising level is a stimulus firing right now, whatever
-    the level has reached.
+    the level has reached. ``floor`` is this room's own likelihood at a level of 0.0
+    when it has one -- a bedroom reads 0.0 with somebody asleep in it -- and ``None``
+    takes the estimator's.
     """
 
     level: float
     slope: float
+    floor: float | None = None
 
 
 @dataclass(frozen=True)

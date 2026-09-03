@@ -56,7 +56,12 @@ export interface Stimulus extends EnvelopeOverrides {
 export interface Adjacency { id: string; connection: Connection; one_way: boolean }
 
 /** A group's own presence-channel tuning: the same overridable shape as a stimulus's envelope. */
-export interface PresenceOverrides extends EnvelopeOverrides { gain: number; envelope: string | null }
+export interface PresenceOverrides extends EnvelopeOverrides {
+  gain: number;
+  envelope: string | null;
+  /** This room's own empty-room floor; null inherits `presence.activity.floor`. 1 exempts a room people sleep in. */
+  activity_floor: number | null;
+}
 
 export interface Group {
   id: string;

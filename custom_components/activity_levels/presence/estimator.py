@@ -150,12 +150,12 @@ class Estimator:
         term = np.zeros(len(self.states), dtype=np.float64)
         if not obs.activity:
             return term
-        epsilon = self.activity_floor
         seen: list[int] = []
         for room, activity in obs.activity.items():
             index = self._position.get(room)
             if index is None or room == AWAY:
                 continue
+            epsilon = self.activity_floor if activity.floor is None else activity.floor
             a = max(min(activity.level, 1.0), 1.0 if activity.slope > 0.0 else 0.0)
             term[index] = math.log(epsilon + (1.0 - epsilon) * a)
             seen.append(index)

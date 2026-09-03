@@ -431,7 +431,9 @@ much as having no scanner at all (`activity.floor`); a room whose level is risin
 now and costs nothing; anything in between decays at the envelope's own rate. A busy room is
 never a *reward* — with more than one person home it could be anyone — so this only ever
 rules rooms out. The level the estimator reads leaves out the room's own `presence` channel,
-so it can never confirm itself.
+so it can never confirm itself. The one place the rule fails is a room somebody is asleep
+in: a still sleeper trips no motion, and `0.0` there means nothing. Give such a room its own
+`presence.activity_floor: 1.0` and the estimator leaves it alone.
 
 **What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`),
 `sensor.<name>_floor` (which floor, with the belief summed over its rooms — sure of the
@@ -557,6 +559,8 @@ groups:
     presence:                # optional overrides for this room's presence channel
       gain: 1.0              # how loudly "somebody is here" contributes
       envelope: hour         # any envelope field may be overridden inline
+      activity_floor: 1.0    # this room's own presence.activity.floor; 1.0 exempts a
+                             # room people sleep in, where 0.0 does not mean empty
     children:
       - id: living_room
         gain: 1.0            # this subgroup's channel gain into the parent

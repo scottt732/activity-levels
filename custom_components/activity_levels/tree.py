@@ -48,6 +48,9 @@ class GroupInfo:
     group: Group
     trigger: Voice
     presence: Voice | None
+    activity_floor: float | None = None
+    """This room's own likelihood at an activity level of 0.0, overriding
+    ``presence.activity.floor``; None inherits. Only rooms carry one."""
 
 
 @dataclass(frozen=True)
@@ -236,6 +239,7 @@ def build_tree(config: dict[str, Any]) -> Tree:
             group=group,
             trigger=trigger,
             presence=presence,
+            activity_floor=node[CONF_PRESENCE]["activity_floor"] if gid in rooms else None,
         )
         return group
 

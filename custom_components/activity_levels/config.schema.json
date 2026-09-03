@@ -948,6 +948,19 @@
               ],
               "default": null
             },
+            "activity_floor": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0.0,
+                  "maximum": 1.0
+                }
+              ],
+              "default": null
+            },
             "attack": {
               "anyOf": [
                 {

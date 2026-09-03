@@ -251,6 +251,11 @@ GROUP_PRESENCE_SCHEMA = vol.All(
         {
             vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
             vol.Optional("envelope", default=None): vol.Any(None, _group_id),
+            # this room's own `presence.activity.floor`: 1.0 exempts a room people sleep
+            # in, where a level of 0.0 says nothing about whether somebody is there
+            vol.Optional("activity_floor", default=None): vol.Any(
+                None, _finite(0.0, lo_exclusive=True, hi=1.0)
+            ),
             **_ENVELOPE_OVERRIDES,
         }
     ),
