@@ -8,11 +8,12 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import floor_registry as fr
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.activity_levels.const import DOMAIN
 from custom_components.activity_levels.presence_coordinator import OBSERVATION_DEBOUNCE
-from tests.fixtures import fake_bermuda, rooms_config
+from tests.fixtures import fake_bermuda, presence_config, rooms_config
 from tests.test_presence_coordinator import add_entry, observe
 
 
@@ -44,6 +45,50 @@ async def test_presence_entities_and_their_device(
     assert entities.async_get("sensor.scott_room").unique_id == (
         f"{entry.entry_id}-presence-scott-room"
     )
+
+
+async def test_floor_sensor_names_the_floor_and_sums_its_rooms(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    await add_entry(hass)
+    for _ in range(4):
+        await observe(hass, freezer, bermuda, "kitchen")
+    floor = hass.states.get("sensor.scott_floor")
+    assert floor is not None
+    # rooms_config declares no kinds: `downstairs` is inferred to be a floor
+    assert floor.state == "Downstairs"
+    assert floor.attributes["group_id"] == "downstairs"
+    room = hass.states.get("sensor.scott_room")
+    assert floor.attributes["confidence"] >= room.attributes["confidence"]
+    assert "Kitchen" in floor.attributes["rooms"]
+    assert floor.attributes["updated"] == room.attributes["updated"]
+
+
+async def test_floor_sensor_uses_the_floor_registry_name(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    floor = fr.async_get(hass).async_create("Ground floor")
+    bermuda = fake_bermuda(hass)
+    config = presence_config()
+    config["groups"][0]["children"][0]["floor_id"] = floor.floor_id
+    await add_entry(hass, config)
+    for _ in range(4):
+        await observe(hass, freezer, bermuda, "kitchen")
+    assert hass.states.get("sensor.scott_floor").state == "Ground floor"
+
+
+async def test_floor_sensor_reads_away_when_away(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    await add_entry(hass)
+    for _ in range(6):
+        await observe(hass, freezer, bermuda, "none", home=False)
+    floor = hass.states.get("sensor.scott_floor")
+    assert floor.state == "Away"
+    assert floor.attributes["group_id"] is None
+    assert floor.attributes["rooms"] == {}
 
 
 async def test_occupants_sensor_counts_and_names(

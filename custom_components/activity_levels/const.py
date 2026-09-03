@@ -154,6 +154,7 @@ ATTR_CANDIDATES = "candidates"
 ATTR_PATH = "path"
 ATTR_UPDATED = "updated"
 ATTR_WHO = "who"
+ATTR_ROOMS = "rooms"
 
 ISSUE_BERMUDA_MISSING = "bermuda_missing"
 ISSUE_NOT_BERMUDA = "not_a_bermuda_device"

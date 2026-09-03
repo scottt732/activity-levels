@@ -17,6 +17,7 @@
       "activity_anomaly": { "name": "Activity anomaly" },
       "profile": { "name": "Profile" },
       "room": { "name": "Room" },
+      "floor": { "name": "Floor" },
       "occupants": { "name": "Occupants" }
     },
     "binary_sensor": { "active": { "name": "Active" }, "moving": { "name": "Moving" } },

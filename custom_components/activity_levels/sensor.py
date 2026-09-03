@@ -32,6 +32,7 @@ from .const import (
     ATTR_PRODUCER,
     ATTR_PRODUCER_VERSION,
     ATTR_READY,
+    ATTR_ROOMS,
     ATTR_TRAINED,
     ATTR_UPDATED,
     ATTR_WHO,
@@ -42,7 +43,7 @@ from .coordinator import ActivityLevelsCoordinator
 from .entity import ActivityLevelsEntity, PresenceEntity
 from .patterns.profile import group_ready
 from .patterns_coordinator import PatternsCoordinator
-from .presence_coordinator import PresenceCoordinator
+from .presence_coordinator import AWAY_LABEL, PresenceCoordinator
 from .runtime import ActivityLevelsConfigEntry
 from .tree import GroupInfo
 
@@ -70,6 +71,7 @@ async def async_setup_entry(
     presence = entry.runtime_data.presence
     if presence is not None and presence.ready:
         entities.extend(RoomSensor(presence, name) for name in sorted(presence.devices))
+        entities.extend(FloorSensor(presence, name) for name in sorted(presence.devices))
         entities.extend(
             OccupantsSensor(coordinator, presence, coordinator.tree.groups[gid])
             for gid in entry.runtime_data.topology.nodes
@@ -286,6 +288,46 @@ class RoomSensor(PresenceEntity, SensorEntity):
                 self.presence.room_name(room): p for room, p in out.candidates.items()
             },
             ATTR_PATH: [self.presence.room_name(room) for room in out.path],
+            ATTR_UPDATED: dt_util.utc_from_timestamp(out.t).isoformat(),
+        }
+
+
+class FloorSensor(PresenceEntity, SensorEntity):
+    """Which floor this person is believed to be on.
+
+    Its confidence is the belief summed over the floor's rooms, so it can be sure of
+    the floor while the room sensor is sure of nothing -- which is the answer worth
+    having when two rooms on the same floor tie.
+    """
+
+    _unrecorded_attributes = frozenset({ATTR_ROOMS})
+
+    def __init__(self, presence: PresenceCoordinator, name: str) -> None:
+        """Set up the floor sensor for one tracked person."""
+        super().__init__(presence, name, "floor", Platform.SENSOR)
+
+    @property
+    def native_value(self) -> str | None:
+        """The floor's name, "Away", or "Unknown" for a room the tree cannot place."""
+        out = self.outputs
+        if out is None:
+            return None
+        if out.room == AWAY:
+            return AWAY_LABEL
+        floor, _, _ = self.presence.floor_estimate(self.person)
+        return "Unknown" if floor is None else self.presence.floor_name(floor)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """The floor group's id, how sure, and which of its rooms carry the belief."""
+        out = self.outputs
+        if out is None:
+            return {}
+        floor, confidence, rooms = self.presence.floor_estimate(self.person)
+        return {
+            ATTR_GROUP_ID: floor,
+            ATTR_CONFIDENCE: confidence,
+            ATTR_ROOMS: {self.presence.room_name(room): p for room, p in rooms.items()},
             ATTR_UPDATED: dt_util.utc_from_timestamp(out.t).isoformat(),
         }
 

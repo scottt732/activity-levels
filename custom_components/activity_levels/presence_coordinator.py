@@ -38,6 +38,7 @@ from homeassistant.core import (
 )
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -54,13 +55,16 @@ from .const import (
     ISSUE_NOT_BERMUDA,
     ISSUE_TRANSITION,
     ISSUE_UNMAPPED_SCANNERS,
+    KIND_FLOOR,
+    KIND_PROPERTY,
+    KIND_STRUCTURE,
     PRESENCE_KEY,
     PRESENCE_STORAGE_VERSION,
     TRIGGER_KEY,
     presence_storage_key,
 )
 from .coordinator import ActivityLevelsCoordinator
-from .presence.estimator import Estimator, Outputs
+from .presence.estimator import CANDIDATE_FLOOR, Estimator, Outputs
 from .presence.observation import (
     BERMUDA_DOMAIN,
     Observation,
@@ -79,6 +83,9 @@ REGISTRY_DEBOUNCE = 5.0
 """Adopting one device rewrites the device registry and then every entity on it."""
 SAVE_DELAY = 10.0
 AWAY_LABEL = "Away"
+_FLOOR_LIKE = frozenset({KIND_FLOOR, KIND_STRUCTURE, KIND_PROPERTY})
+"""The kinds a floor answer may name, nearest first: the floor itself, else whatever
+stacks the rooms directly in a house that declares none."""
 _NOT_EVIDENCE = frozenset({TRIGGER_KEY, PRESENCE_KEY})
 """The channels a room's evidence level leaves out: the simulation's impulses, and the
 presence voice that would otherwise let the estimator confirm itself."""
@@ -621,6 +628,59 @@ class PresenceCoordinator:
             return AWAY_LABEL
         info = self.coordinator.tree.groups.get(room)
         return info.name if info is not None else room
+
+    def floor_of(self, room: str) -> str | None:
+        """The group a room's floor answer names.
+
+        The nearest floor above the room, else the building or the property it sits in:
+        a bungalow's rooms and an outside area still get an answer, and the entity says
+        what kind of thing it named. ``None`` only for a room the tree does not know.
+        """
+        groups = self.coordinator.tree.groups
+        info = groups.get(room)
+        while info is not None and info.parent_id is not None:
+            info = groups.get(info.parent_id)
+            if info is not None and info.kind in _FLOOR_LIKE:
+                return info.id
+        return None
+
+    def floor_name(self, group_id: str) -> str:
+        """A floor group as a person reads it: the registry's floor name when the group
+        is bound to one, else the group's own name."""
+        info = self.coordinator.tree.groups.get(group_id)
+        if info is not None and info.floor_id is not None:
+            entry = fr.async_get(self.hass).async_get_floor(info.floor_id)
+            if entry is not None:
+                return entry.name
+        return info.name if info is not None else group_id
+
+    def floor_estimate(self, name: str) -> tuple[str | None, float, dict[str, float]]:
+        """``(floor group id, its belief mass, the rooms on it)`` for one person.
+
+        Mass is summed from the whole belief, not from ``candidates``: a floor of five
+        rooms at 0.08 each is a confident floor and no confident room, and that is the
+        whole point of answering at the floor. ``away`` is its own answer with no floor.
+        """
+        track = self.devices.get(name)
+        out = None if track is None else track.outputs
+        if out is None or track is None or track.estimator is None:
+            return None, 0.0, {}
+        if out.room == AWAY:
+            return None, out.confidence, {}
+        floor = self.floor_of(out.room)
+        if floor is None:
+            return None, out.confidence, dict(out.candidates)
+        estimator = track.estimator
+        mass = 0.0
+        rooms: dict[str, float] = {}
+        for i, state in enumerate(estimator.states):
+            if state == AWAY or self.floor_of(state) != floor:
+                continue
+            p = float(estimator.belief[i])
+            mass += p
+            if p > CANDIDATE_FLOOR:
+                rooms[state] = round(p, 4)
+        return floor, round(mass, 4), rooms
 
     def payload(self) -> dict[str, Any]:
         """What ``activity_levels/presence/state`` answers."""

@@ -243,6 +243,7 @@ And, while presence is on, one pair per tracked person, each on its own **Presen
 | Entity | Description |
 | --- | --- |
 | `sensor.<name>_room` | Which room a tracked person is in, or `Away`. Attributes: `group_id`, `confidence`, `moving`, `candidates`, `path`, `updated`. |
+| `sensor.<name>_floor` | Which floor (or, in a house that declares none, which building) a tracked person is on, or `Away`. Attributes: `group_id`, `confidence` — the belief summed over the floor's rooms, so it can be sure of the floor while the room is a toss-up — `rooms`, `updated`. |
 | `binary_sensor.<name>_moving` | On while the person's two most likely rooms are adjacent and both plausible. |
 
 ## Services
@@ -432,9 +433,10 @@ never a *reward* — with more than one person home it could be anyone — so th
 rules rooms out. The level the estimator reads leaves out the room's own `presence` channel,
 so it can never confirm itself.
 
-**What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`) and
-`binary_sensor.<name>_moving` (on while their two most likely rooms are adjacent and both
-still plausible). Per room: `sensor.<room>_occupants`, plus a `presence` channel folded
+**What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`),
+`sensor.<name>_floor` (which floor, with the belief summed over its rooms — sure of the
+floor when two rooms on it tie) and `binary_sensor.<name>_moving` (on while their two most
+likely rooms are adjacent and both still plausible). Per room: `sensor.<room>_occupants`, plus a `presence` channel folded
 into that room's mix — silent, starting when the room fills and ending when it empties,
 tuned in the mixer's controls row exactly like any other channel (gain, envelope, and it
 mutes the same way).
