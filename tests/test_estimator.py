@@ -149,10 +149,28 @@ def test_activity_floor_is_configurable(topo) -> None:
         t=0.0,
         distances=at("kitchen", 0.0).distances,
         home=True,
-        activity={"kitchen": RoomActivity(level=0.0, slope=0.0)},
+        activity={
+            "kitchen": RoomActivity(level=0.0, slope=0.0),
+            "hall": RoomActivity(level=1.0, slope=0.0),
+        },
     )
     kitchen = topo.index("kitchen")
     assert est.log_emission(obs)[kitchen] == pytest.approx(plain[kitchen] + np.log(0.5))
+
+
+def test_a_house_with_every_room_empty_is_not_evidence_for_away(topo) -> None:
+    """Everybody asleep reads 0.0 everywhere; that says nothing about which room."""
+    est = make(topo)
+    plain = est.log_emission(at("kitchen", 0.0))
+    asleep = est.log_emission(
+        Observation(
+            t=0.0,
+            distances=at("kitchen", 0.0).distances,
+            home=True,
+            activity={room: RoomActivity(level=0.0, slope=0.0) for room in ROOMS},
+        )
+    )
+    assert np.allclose(asleep, plain)
 
 
 def test_an_empty_room_loses_a_distance_tie(topo) -> None:

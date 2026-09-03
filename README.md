@@ -424,9 +424,9 @@ all. `escape` is the small leftover probability of appearing somewhere with no p
 here, and it exists purely so a wrong guess is not permanent: without it, an estimate that
 starts (or is nudged) wrong could never recover.
 
-The rooms' own activity levels are the other kind of evidence. A room at `0.0` is somewhere
-nobody is, however many people are home, so it costs a candidate as much as having no
-scanner at all (`activity.floor`); a room whose level is rising has a stimulus firing right
+The rooms' own activity levels are the other kind of evidence. A room at `0.0` while another
+is busy is somewhere nobody is, however many people are home, so it costs a candidate as
+much as having no scanner at all (`activity.floor`); a room whose level is rising has a stimulus firing right
 now and costs nothing; anything in between decays at the envelope's own rate. A busy room is
 never a *reward* — with more than one person home it could be anyone — so this only ever
 rules rooms out. The level the estimator reads leaves out the room's own `presence` channel,

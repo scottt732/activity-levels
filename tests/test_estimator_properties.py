@@ -86,14 +86,18 @@ def test_the_activity_term_never_rewards_a_room(distances, level, slope) -> None
             t=0.0,
             distances=distances,
             home=True,
-            activity={"kitchen": RoomActivity(level=level, slope=slope)},
+            activity={
+                "kitchen": RoomActivity(level=level, slope=slope),
+                "hall": RoomActivity(level=1.0, slope=0.0),
+            },
         )
     )
     delta = busy - plain
-    kitchen = TOPO.index("kitchen")
+    kitchen, hall = TOPO.index("kitchen"), TOPO.index("hall")
     assert delta[kitchen] <= 1e-12
     assert delta[kitchen] >= np.log(0.05) - 1e-12
-    assert np.all(np.abs(np.delete(delta, kitchen)) < 1e-12)
+    assert abs(delta[hall]) < 1e-12
+    assert np.all(np.abs(np.delete(delta, [kitchen, hall])) < 1e-12)
 
 
 @given(observations)

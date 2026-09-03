@@ -339,6 +339,81 @@ async def test_a_reading_in_feet_is_read_as_metres(hass: HomeAssistant) -> None:
     assert by_room["hall"] == pytest.approx(5.0)
 
 
+async def test_the_evidence_level_leaves_the_presence_channel_out(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    for _ in range(4):
+        await observe(hass, freezer, bermuda, "kitchen")
+    # the kitchen's only contributor is now its presence voice ...
+    coordinator = entry.runtime_data.coordinator
+    assert coordinator.data["kitchen"].contributors[PRESENCE_KEY] > 0.0
+    # ... and the evidence level must not see it
+    activity = presence._activity(coordinator.now())
+    assert activity["kitchen"].level == 0.0
+    assert set(activity) == ROOMS
+
+
+async def test_an_active_room_reads_as_active_evidence(hass: HomeAssistant) -> None:
+    fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    hass.states.async_set("binary_sensor.hall_motion", "on")
+    await hass.async_block_till_done()
+    activity = presence._activity(entry.runtime_data.coordinator.now())
+    assert activity["hall"].level > 0.0
+    assert activity["kitchen"].level == 0.0
+
+
+async def test_an_empty_room_loses_a_distance_tie(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Kitchen and dining room read the same; only the dining room shows any life."""
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    hass.states.async_set("binary_sensor.dining_motion", "on")
+    hass.states.async_set(bermuda.tracker, "home")
+    for room, entity_id in bermuda.sensors.items():
+        hass.states.async_set(entity_id, "1.0" if room in ("kitchen", "dining_room") else "8.0")
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(seconds=OBSERVATION_DEBOUNCE + 0.1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    out = presence.devices["Scott"].outputs
+    assert out is not None and out.room == "dining_room"
+
+
+async def test_a_room_emptying_out_is_a_frame_of_its_own(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The kitchen's level falling to 0.0 re-runs the filter with no Bermuda change."""
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    hass.states.async_set("binary_sensor.kitchen_motion", "on")
+    await observe(hass, freezer, bermuda, "kitchen")
+    before = presence.devices["Scott"].outputs
+    assert before is not None
+    hass.states.async_set("binary_sensor.kitchen_motion", "off")
+    await hass.async_block_till_done()
+    # the kitchen's release (an hour, plus the presence voice's own) has to run out
+    freezer.tick(timedelta(hours=3))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(seconds=OBSERVATION_DEBOUNCE + 0.1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    after = presence.devices["Scott"].outputs
+    assert after is not None and after.t > before.t
+
+
 async def test_occupancy_notes_the_presence_voice_on_and_off(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

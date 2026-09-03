@@ -109,10 +109,12 @@ class Estimator:
 
         A room's own activity level is the other kind of evidence, and it only ever
         counts against: ``log(ε + (1 - ε)·a)`` with ``a`` the level in ``[0, 1]``, or 1
-        while the level is rising. With other people home, a busy room is weak evidence
-        that *this* person is there, so a busy room scores nothing; a room at ``0.0`` is
-        strong evidence they are not, and scores ``log ε`` -- the same footing as a room
-        with no scanner. ``away`` has no level and takes no term.
+        while the level is rising, shifted so the busiest room scores zero. With other
+        people home, a busy room is weak evidence that *this* person is there, so a busy
+        room scores nothing; a room at ``0.0`` beside a busy one is strong evidence they
+        are not, and scores ``log ε`` -- the same footing as a room with no scanner.
+        ``away`` has no level and takes no term, which is why the shift matters: see
+        :meth:`_log_activity`.
 
         **This method is the seam.** Learned per-room, per-scanner distance tables
         replace the distance half of it and change nothing else.
@@ -133,14 +135,33 @@ class Estimator:
             heard[position] = True
         out[~heard] = log_floor
         out[self._position[AWAY]] = 2.0 * log_floor if obs.home else 0.0
+        out += self._log_activity(obs)
+        return out
+
+    def _log_activity(self, obs: Observation) -> npt.NDArray[np.float64]:
+        """The activity term, per state: zero for the busiest room, ``log ε`` for an empty one.
+
+        Shifted so the best-scoring room sits at zero, because the term is about which
+        room is *more* plausible than another and nothing else. Without the shift a
+        house with every room at 0.0 -- everybody asleep -- would penalise every room
+        by the same amount and, ``away`` carrying no term, tip the belief out of the
+        house while the tracker says we are in it.
+        """
+        term = np.zeros(len(self.states), dtype=np.float64)
+        if not obs.activity:
+            return term
         epsilon = self.activity_floor
+        seen: list[int] = []
         for room, activity in obs.activity.items():
             index = self._position.get(room)
             if index is None or room == AWAY:
                 continue
             a = max(min(activity.level, 1.0), 1.0 if activity.slope > 0.0 else 0.0)
-            out[index] += math.log(epsilon + (1.0 - epsilon) * a)
-        return out
+            term[index] = math.log(epsilon + (1.0 - epsilon) * a)
+            seen.append(index)
+        if seen:
+            term[seen] -= term[seen].max()
+        return term
 
     def emission(self, obs: Observation) -> tuple[npt.NDArray[np.float64], float]:
         """The likelihood, scaled so its largest entry is 1, and the log scale removed.

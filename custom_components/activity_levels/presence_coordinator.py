@@ -17,6 +17,7 @@ import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -53,12 +54,20 @@ from .const import (
     ISSUE_NOT_BERMUDA,
     ISSUE_TRANSITION,
     ISSUE_UNMAPPED_SCANNERS,
+    PRESENCE_KEY,
     PRESENCE_STORAGE_VERSION,
+    TRIGGER_KEY,
     presence_storage_key,
 )
 from .coordinator import ActivityLevelsCoordinator
 from .presence.estimator import Estimator, Outputs
-from .presence.observation import BERMUDA_DOMAIN, Observation, parse_distance, scanner_key
+from .presence.observation import (
+    BERMUDA_DOMAIN,
+    Observation,
+    RoomActivity,
+    parse_distance,
+    scanner_key,
+)
 from .topology import Topology
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,6 +79,9 @@ REGISTRY_DEBOUNCE = 5.0
 """Adopting one device rewrites the device registry and then every entity on it."""
 SAVE_DELAY = 10.0
 AWAY_LABEL = "Away"
+_NOT_EVIDENCE = frozenset({TRIGGER_KEY, PRESENCE_KEY})
+"""The channels a room's evidence level leaves out: the simulation's impulses, and the
+presence voice that would otherwise let the estimator confirm itself."""
 
 PRESENCE_ISSUES = (
     ISSUE_BERMUDA_MISSING,
@@ -149,6 +161,7 @@ class PresenceCoordinator:
         self._registry_timer: CALLBACK_TYPE | None = None
         self._observe_timer: CALLBACK_TYPE | None = None
         self._dirty: set[str] = set()
+        self._empty: dict[str, bool] = {}
         self._usable = False
         self._stopped = False
 
@@ -193,7 +206,13 @@ class PresenceCoordinator:
             self._unsubs.append(self.hass.bus.async_listen(event, self._registry_changed))
         # a first observation from the states that are already there, so a restart does
         # not sit blank until somebody's phone next moves
-        self._observe(dt_util.utcnow().timestamp())
+        now = dt_util.utcnow().timestamp()
+        for gid, activity in self._activity(now).items():
+            self._empty[gid] = activity.level <= 0.0
+            self._unsubs.append(
+                self.coordinator.async_add_listener(gid, partial(self._room_level_changed, gid))
+            )
+        self._observe(now)
 
     def _bermuda_loaded(self) -> bool:
         """Whether Bermuda is installed, whether or not it has finished starting.
@@ -297,6 +316,7 @@ class PresenceCoordinator:
                 scale=self.settings["scale"],
                 floor=self.settings["floor"],
                 stuck_after=self.settings["stuck_after"],
+                activity_floor=self.settings["activity"]["floor"],
             )
             carried = (
                 previous.estimator.snapshot()
@@ -439,6 +459,35 @@ class PresenceCoordinator:
         self._observe_timer = async_call_later(self.hass, OBSERVATION_DEBOUNCE, self._observe_due)
 
     @callback
+    def _room_level_changed(self, gid: str) -> None:
+        """A room's level moved. Only the empty <-> busy crossing is worth a frame.
+
+        Every other change is already in the level the next Bermuda frame will read;
+        re-running the filter on an unchanged frame for each of them would count the
+        same readings twice. The crossing is different: the moment a room's evidence
+        level reaches zero it stops being somewhere this person can be, and waiting for
+        a phone to move first would leave a wrong belief standing for no reason.
+
+        Read against the *evidence* level, not the published one -- a room whose only
+        contributor is the presence voice of the very person we are placing is empty by
+        this measure, and that is exactly the case that has to fire.
+        """
+        if self._stopped or not self._usable or not self.devices:
+            return
+        activity = self._activity(self.coordinator.now()).get(gid)
+        if activity is None:
+            return
+        empty = activity.level <= 0.0
+        if self._empty.get(gid) is empty:
+            return
+        self._empty[gid] = empty
+        self._dirty.update(self.devices)
+        if self._observe_timer is None:
+            self._observe_timer = async_call_later(
+                self.hass, OBSERVATION_DEBOUNCE, self._observe_due
+            )
+
+    @callback
     def _observe_due(self, _now: datetime) -> None:
         self._observe_timer = None
         if self._stopped:
@@ -491,7 +540,25 @@ class PresenceCoordinator:
             STATE_UNAVAILABLE,
             STATE_UNKNOWN,
         )
-        return Observation(t=t, distances=distances, home=home)
+        return Observation(t=t, distances=distances, home=home, activity=self._activity(t))
+
+    def _activity(self, t: float) -> dict[str, RoomActivity]:
+        """Every room's evidence level: the mix with the trigger and presence voices out.
+
+        The presence voice is left out so the estimator never reads a level it raised
+        itself; the trigger voice, so the simulation's test impulses are not mistaken for
+        a person. ``t`` is this side's own clock reading, taken from the same clock the
+        level coordinator uses and never earlier than its last, so the engine's
+        never-backwards contract holds across the two.
+        """
+        activity: dict[str, RoomActivity] = {}
+        for gid in self.topology.nodes:
+            info = self.coordinator.tree.groups.get(gid)
+            if info is None:
+                continue
+            level = info.group.value_at_excluding(t, _NOT_EVIDENCE) / info.max_value
+            activity[gid] = RoomActivity(level=min(level, 1.0), slope=info.group.slope_at(t))
+        return activity
 
     @staticmethod
     def _metres(state: State) -> float | None:

@@ -74,10 +74,13 @@ a_r = max(level_r, 1.0 if slope_r > 0 else 0.0)
 log_e[r] += log(ε + (1 − ε) · a_r)
 ```
 
-with `ε = presence.activity.floor` (default `0.05`). A room at `0.0` therefore costs as
-much as a room with no scanner — `ln 0.05 ≈ −3` — and a room in full swing costs nothing.
-A rising level counts as fully active whatever its magnitude, because a rise is a
-stimulus firing *now*. `away` takes no activity term.
+with `ε = presence.activity.floor` (default `0.05`), then **shifted so the busiest room
+scores zero**. A room at `0.0` beside a busy one therefore costs as much as a room with no
+scanner — `ln 0.05 ≈ −3` — and a room in full swing costs nothing. A rising level counts
+as fully active whatever its magnitude, because a rise is a stimulus firing *now*. `away`
+takes no activity term, which is what the shift is for: a house with every room at `0.0`
+(everybody asleep) must not tip the belief out of the house while the tracker says home.
+The term is about which room is more plausible than another, nothing else.
 
 **Why this asymmetry.** With other people home, activity in a room is weak evidence that
 *this* person is there; its absence is strong evidence they are not. The term is capped at
