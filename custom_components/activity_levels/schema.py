@@ -251,6 +251,11 @@ GROUP_PRESENCE_SCHEMA = vol.All(
         {
             vol.Optional("gain", default=1.0): _finite(0.0, lo_exclusive=True),
             vol.Optional("envelope", default=None): vol.Any(None, _group_id),
+            # this room's own `presence.activity.floor`: 1.0 exempts a room people sleep
+            # in, where a level of 0.0 says nothing about whether somebody is there
+            vol.Optional("activity_floor", default=None): vol.Any(
+                None, _finite(0.0, lo_exclusive=True, hi=1.0)
+            ),
             **_ENVELOPE_OVERRIDES,
         }
     ),
@@ -262,11 +267,104 @@ PRESENCE_DEVICE_SCHEMA = vol.Schema(
         vol.Optional("name", default=None): vol.Any(None, vol.All(str, vol.Length(min=1))),
     }
 )
+"""The list presence shipped with: one Bermuda tracker per person. Kept so an existing
+document loads; `_apply_presence_defaults` folds it into `people`."""
+
+DEVICE_KINDS = ("phone", "watch", "tag", "laptop", "other")
+SIGNAL_KEYS = ("activity", "steps", "battery_state")
+"""The companion-app sensors a device's carried estimate reads, by their role."""
+
+_person_entity = vol.All(cv.entity_id, cv.entity_domain("person"))
+_sensor_entity = vol.All(cv.entity_id, cv.entity_domain("sensor"))
+
+PERSON_DEVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required("tracker"): _device_tracker,
+        vol.Optional("name", default=None): vol.Any(None, vol.All(str, vol.Length(min=1))),
+        vol.Optional("kind", default="other"): vol.In(DEVICE_KINDS),
+        # the mobile_app device_tracker of the same physical device, which is where the
+        # companion sensors hang; None for a device with no companion app (a watch, a tag)
+        vol.Optional("companion", default=None): vol.Any(None, _device_tracker),
+        vol.Optional("signals", default=dict): vol.Schema(
+            {vol.Optional(key, default=None): vol.Any(None, _sensor_entity) for key in SIGNAL_KEYS}
+        ),
+    }
+)
+
+PERSON_SCHEMA = vol.Schema(
+    {
+        # None is named at discovery, after the first device's registry entry -- Bermuda
+        # calls every tracker "Bermuda Tracker", so only the device knows whose it is
+        vol.Optional("name", default=None): vol.Any(None, vol.All(str, vol.Length(min=1))),
+        # seeds `devices` from the person entity's trackers at discovery time
+        vol.Optional("person", default=None): vol.Any(None, _person_entity),
+        vol.Optional("devices", default=list): [PERSON_DEVICE_SCHEMA],
+    }
+)
+
+CARRIED_WEIGHT_DEFAULTS = {
+    "charging": -3.0,
+    "moving": 2.0,
+    "still_room_empty": -2.0,
+    "jitter": 1.0,
+}
+"""Log-odds each carried signal adds when it is true. Charging says the phone is on a
+nightstand; walking says it is in a pocket; a still device in a room reading 0.0 is not
+on anybody; distances that wander are being carried around."""
+
+CARRIED_SCHEMA = vol.Schema(
+    {
+        vol.Optional("prior", default=0.7): _finite(
+            0.0, lo_exclusive=True, hi=1.0, hi_exclusive=True
+        ),
+        vol.Optional("flip", default=300.0): vol.All(parse_duration, vol.Range(min=1.0)),
+        vol.Optional("recent", default=120.0): vol.All(parse_duration, vol.Range(min=1.0)),
+        # P(a parked device is in the same room as its person): a phone on the kitchen
+        # counter still says something about the kitchen
+        vol.Optional("nearby", default=0.3): _finite(
+            0.0, lo_exclusive=True, hi=1.0, hi_exclusive=True
+        ),
+        vol.Optional("weights", default=dict): vol.Schema(
+            {
+                vol.Optional(key, default=weight): _finite(-10.0, hi=10.0)
+                for key, weight in CARRIED_WEIGHT_DEFAULTS.items()
+            }
+        ),
+    }
+)
+
+PRESENCE_ACTIVITY_SCHEMA = vol.Schema(
+    {
+        # the likelihood of a room whose evidence level is 0.0: the same footing as a
+        # room with no scanner, and never a reward for a busy one
+        vol.Optional("floor", default=0.05): _finite(0.0, lo_exclusive=True, hi=1.0),
+    }
+)
+
+PRESENCE_LABELS_SCHEMA = vol.Schema(
+    {
+        # corrections kept, newest first; the learner reads them and a bug report
+        # carries the count
+        vol.Optional("keep", default=5000): vol.All(int, vol.Range(min=100, max=50000)),
+    }
+)
+
+PRESENCE_SIGNATURES_SCHEMA = vol.Schema(
+    {
+        # labels a (room, scanner) pair needs before a signature is fitted for it
+        vol.Optional("min_labels", default=8): vol.All(int, vol.Range(min=2, max=1000)),
+        # how many pseudo-labels the fixed formula counts for, against real ones
+        vol.Optional("prior_weight", default=4.0): _finite(0.0, hi=1000.0),
+        # new corrections between automatic rebuilds
+        vol.Optional("rebuild_after", default=10): vol.All(int, vol.Range(min=1, max=10000)),
+    }
+)
 
 PRESENCE_SCHEMA = vol.Schema(
     {
         vol.Optional("enabled", default=False): cv.boolean,
         vol.Optional("devices", default=list): [PRESENCE_DEVICE_SCHEMA],
+        vol.Optional("people", default=list): [PERSON_SCHEMA],
         vol.Optional("envelope", default=None): vol.Any(None, _group_id),
         vol.Optional("threshold", default=0.6): _finite(0.0, lo_exclusive=True, hi=1.0),
         vol.Optional("stay", default=0.9): _finite(
@@ -276,6 +374,10 @@ PRESENCE_SCHEMA = vol.Schema(
         vol.Optional("scale", default=3.0): _finite(0.0, lo_exclusive=True),
         vol.Optional("floor", default=0.05): _finite(0.0, lo_exclusive=True, hi=1.0),
         vol.Optional("stuck_after", default=60.0): vol.All(parse_duration, vol.Range(min=1.0)),
+        vol.Optional("activity", default=dict): PRESENCE_ACTIVITY_SCHEMA,
+        vol.Optional("carried", default=dict): CARRIED_SCHEMA,
+        vol.Optional("labels", default=dict): PRESENCE_LABELS_SCHEMA,
+        vol.Optional("signatures", default=dict): PRESENCE_SIGNATURES_SCHEMA,
         # keyed by the scanner's device-registry id (or its Bermuda address); the value
         # is the room it is in, overriding whatever its area says
         vol.Optional("scanner_areas", default=dict): {cv.string: _group_id},
@@ -441,6 +543,28 @@ def _apply_pattern_defaults(cfg: dict[str, Any]) -> None:
     if patterns["day_type_precedence"] is None:
         calendar_ids = [cal["id"] for cal in patterns["calendars"]]
         patterns["day_type_precedence"] = [*calendar_ids, "holiday", "weekend", "weekday"]
+
+
+def _apply_presence_defaults(cfg: dict[str, Any]) -> None:
+    """Fold the legacy ``presence.devices`` list into ``presence.people``.
+
+    Presence shipped with one Bermuda tracker per person and nothing else to say about
+    them. A person now owns several devices, so each legacy entry becomes a one-device
+    person -- unless some person already lists that tracker, in which case the newer
+    entry is the one that carries the detail and the old one is dropped. The list is
+    emptied afterwards so the normalised document has one spelling, which is what the
+    panel writes back and what makes a second validation the identity.
+    """
+    presence = cfg[CONF_PRESENCE]
+    listed = {device["tracker"] for person in presence["people"] for device in person["devices"]}
+    for legacy in presence["devices"]:
+        if legacy["device"] in listed:
+            continue
+        presence["people"].append(
+            PERSON_SCHEMA({"name": legacy["name"], "devices": [{"tracker": legacy["device"]}]})
+        )
+        listed.add(legacy["device"])
+    presence["devices"] = []
 
 
 def _wanted_kinds(node: Mapping[str, Any], parent_kind: str | None) -> tuple[str, ...]:
@@ -680,6 +804,23 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
             if device["name"] in seen_names:
                 errors.append({"path": _path([*dpath, "name"]), "message": "duplicate name"})
             seen_names.add(device["name"])
+    seen_trackers: set[str] = set()
+    seen_people: set[str] = set()
+    for i, person in enumerate(presence["people"]):
+        ppath = [CONF_PRESENCE, "people", i]
+        if person["name"] is not None:
+            if person["name"] in seen_people:
+                errors.append({"path": _path([*ppath, "name"]), "message": "duplicate name"})
+            seen_people.add(person["name"])
+        for j, device in enumerate(person["devices"]):
+            if device["tracker"] in seen_trackers:
+                errors.append(
+                    {
+                        "path": _path([*ppath, "devices", j, "tracker"]),
+                        "message": "a tracker belongs to one person",
+                    }
+                )
+            seen_trackers.add(device["tracker"])
     for scanner, gid in presence["scanner_areas"].items():
         if gid not in seen_groups:
             errors.append(
@@ -743,6 +884,9 @@ def validate(config: Mapping[str, Any]) -> Validated:
     errors = _cross_checks(cfg, frozenset(inferred))
     if errors:
         raise ConfigError(errors)
+    # after the checks, so a duplicate in the legacy list is still reported where it was
+    # written rather than silently folded away
+    _apply_presence_defaults(cfg)
     return Validated(
         config=_stringify_enums(cfg),
         inferred=tuple(inferred),

@@ -2,6 +2,7 @@ import type {
   Config,
   HomeAssistant,
   LiveState,
+  PersonOutputs,
   PresenceState,
   ProfileState,
   SimulationLog,
@@ -109,6 +110,10 @@ export const getTopologyPaths = (hass: HomeAssistant, from: string, to: string):
 
 export const getPresenceState = (hass: HomeAssistant): Promise<PresenceState> =>
   hass.callWS<PresenceState>({ type: "activity_levels/presence/state" });
+
+/** "No, I'm in the studio": the person's estimate moves there and the moment is kept as a label. */
+export const correctPresence = (hass: HomeAssistant, person: string, room: string): Promise<PersonOutputs> =>
+  hass.callWS<PersonOutputs>({ type: "activity_levels/presence/correct", person, room });
 
 export const callService = (
   hass: HomeAssistant,

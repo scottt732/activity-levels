@@ -23,6 +23,7 @@ from .const import (
     ATTR_GROUP_ID,
     ATTR_GROUPS_READY,
     ATTR_GROUPS_TOTAL,
+    ATTR_LABELS_USED,
     ATTR_MAX_VALUE,
     ATTR_MIX,
     ATTR_MOVING,
@@ -32,6 +33,8 @@ from .const import (
     ATTR_PRODUCER,
     ATTR_PRODUCER_VERSION,
     ATTR_READY,
+    ATTR_ROOMS,
+    ATTR_ROOMS_LEARNED,
     ATTR_TRAINED,
     ATTR_UPDATED,
     ATTR_WHO,
@@ -39,10 +42,11 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import ActivityLevelsCoordinator
-from .entity import ActivityLevelsEntity, PresenceEntity
+from .entity import ActivityLevelsEntity, DeviceEntity, PresenceEntity
 from .patterns.profile import group_ready
 from .patterns_coordinator import PatternsCoordinator
-from .presence_coordinator import PresenceCoordinator
+from .presence.estimator import Outputs
+from .presence_coordinator import AWAY_LABEL, PresenceCoordinator
 from .runtime import ActivityLevelsConfigEntry
 from .tree import GroupInfo
 
@@ -69,7 +73,14 @@ async def async_setup_entry(
         entities.append(ActivityAnomalySensor(coordinator, patterns, info))
     presence = entry.runtime_data.presence
     if presence is not None and presence.ready:
-        entities.extend(RoomSensor(presence, name) for name in sorted(presence.devices))
+        entities.append(SignaturesSensor(presence, entry.entry_id))
+        entities.extend(RoomSensor(presence, name) for name in sorted(presence.people))
+        entities.extend(FloorSensor(presence, name) for name in sorted(presence.people))
+        entities.extend(
+            DeviceRoomSensor(presence, name, device_id)
+            for name, person in sorted(presence.people.items())
+            for device_id in person.devices
+        )
         entities.extend(
             OccupantsSensor(coordinator, presence, coordinator.tree.groups[gid])
             for gid in entry.runtime_data.topology.nodes
@@ -256,6 +267,48 @@ class ProfileSensor(SensorEntity):
         self.async_on_remove(self.patterns.async_add_listener(self.async_write_ha_state))
 
 
+class SignaturesSensor(SensorEntity):
+    """When the room signatures were last learned, and from how much.
+
+    On the hub, beside the profile sensor: both are documents some producer wrote, and
+    both answer "how much does this integration know yet".
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "signatures"
+
+    def __init__(self, presence: PresenceCoordinator, entry_id: str) -> None:
+        """Set up the signatures diagnostic on the integration's hub device."""
+        self.presence = presence
+        self._attr_unique_id = f"{entry_id}-signatures"
+        self.entity_id = "sensor.activity_levels_signatures"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry_id)})
+
+    @property
+    def native_value(self) -> datetime | None:
+        """When the document was built; unknown until something has been learned."""
+        return _ts(self.presence.signatures_info()["built_at"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        info = self.presence.signatures_info()
+        producer = info["producer"] or {}
+        return {
+            ATTR_PRODUCER: producer.get("name"),
+            ATTR_PRODUCER_VERSION: producer.get("version"),
+            ATTR_ROOMS_LEARNED: info["rooms_learned"],
+            ATTR_LABELS_USED: info["labels_used"],
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Rewrite whenever a rebuild or a producer replaces the document."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self.presence.async_add_listener(self.async_write_ha_state))
+
+
 class RoomSensor(PresenceEntity, SensorEntity):
     """Which room this person is believed to be in."""
 
@@ -286,6 +339,86 @@ class RoomSensor(PresenceEntity, SensorEntity):
                 self.presence.room_name(room): p for room, p in out.candidates.items()
             },
             ATTR_PATH: [self.presence.room_name(room) for room in out.path],
+            ATTR_UPDATED: dt_util.utc_from_timestamp(out.t).isoformat(),
+        }
+
+
+class FloorSensor(PresenceEntity, SensorEntity):
+    """Which floor this person is believed to be on.
+
+    Its confidence is the belief summed over the floor's rooms, so it can be sure of
+    the floor while the room sensor is sure of nothing -- which is the answer worth
+    having when two rooms on the same floor tie.
+    """
+
+    _unrecorded_attributes = frozenset({ATTR_ROOMS})
+
+    def __init__(self, presence: PresenceCoordinator, name: str) -> None:
+        """Set up the floor sensor for one tracked person."""
+        super().__init__(presence, name, "floor", Platform.SENSOR)
+
+    @property
+    def native_value(self) -> str | None:
+        """The floor's name, "Away", or "Unknown" for a room the tree cannot place."""
+        out = self.outputs
+        if out is None:
+            return None
+        if out.room == AWAY:
+            return AWAY_LABEL
+        floor, _, _ = self.presence.floor_estimate(self.person)
+        return "Unknown" if floor is None else self.presence.floor_name(floor)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """The floor group's id, how sure, and which of its rooms carry the belief."""
+        out = self.outputs
+        if out is None:
+            return {}
+        floor, confidence, rooms = self.presence.floor_estimate(self.person)
+        return {
+            ATTR_GROUP_ID: floor,
+            ATTR_CONFIDENCE: confidence,
+            ATTR_ROOMS: {self.presence.room_name(room): p for room, p in rooms.items()},
+            ATTR_UPDATED: dt_util.utc_from_timestamp(out.t).isoformat(),
+        }
+
+
+class DeviceRoomSensor(DeviceEntity, SensorEntity):
+    """Which room the *object* is in -- the phone, carried or not.
+
+    Its own filter's answer, so a phone left on the couch keeps reading the couch here
+    while the person's room sensor follows the person. "Where did I leave it" is a real
+    question, and this is the entity that answers it.
+    """
+
+    def __init__(self, presence: PresenceCoordinator, name: str, device_id: str) -> None:
+        """Set up the object-room sensor for one of a person's devices."""
+        super().__init__(presence, name, device_id, "room", Platform.SENSOR)
+        self._attr_translation_key = "device_room"
+
+    @property
+    def device_outputs(self) -> Outputs | None:
+        track = self.device
+        return None if track is None else track.outputs
+
+    @property
+    def available(self) -> bool:
+        """False until the device's own filter has answered once."""
+        return self.device_outputs is not None
+
+    @property
+    def native_value(self) -> str | None:
+        out = self.device_outputs
+        return None if out is None else self.presence.room_name(out.room)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        out = self.device_outputs
+        if out is None:
+            return {}
+        return {
+            ATTR_GROUP_ID: None if out.room == AWAY else out.room,
+            ATTR_CONFIDENCE: out.confidence,
             ATTR_UPDATED: dt_util.utc_from_timestamp(out.t).isoformat(),
         }
 

@@ -22,14 +22,12 @@ import numpy.typing as npt
 
 from ..const import AWAY
 from ..topology import Topology
-from .observation import Observation
+from .observation import Observation, RoomActivity
+from .signatures import Signatures
+from .stuck import StuckDetector
 
-HISTORY = 120
-"""Likelihoods the stuck detector keeps. At one observation a second, two minutes."""
 BUFFER = 30
 """Observations the bounded Viterbi runs over."""
-MIN_HISTORY = 20
-"""Before this many, there is no percentile worth comparing against."""
 CANDIDATE_FLOOR = 0.1
 MOVING_SECOND = 0.25
 PATH_STEPS = 5
@@ -72,22 +70,25 @@ class Estimator:
         scale: float,
         floor: float,
         stuck_after: float,
+        activity_floor: float = 0.05,
     ) -> None:
         self.topology = topology
         self.states = topology.states
         self.scanners = dict(scanners)
         self.scale = scale
         self.floor = floor
+        self.activity_floor = activity_floor
         self.stuck_after = stuck_after
+        self.signatures: Signatures = {}
+        """Learned per-room, per-scanner distance distributions; the coordinator sets
+        them when the learner has some. Empty means the fixed formula everywhere."""
         self._transition = topology.transition_matrix(stay, escape)
         self._log_transition = np.log(np.where(self._transition > 0.0, self._transition, _TINY))
         size = len(self.states)
         self._position = {state: i for i, state in enumerate(self.states)}
         self.belief: npt.NDArray[np.float64] = np.full(size, 1.0 / size, dtype=np.float64)
-        self._history: deque[float] = deque(maxlen=HISTORY)
         self._buffer: deque[npt.NDArray[np.float64]] = deque(maxlen=BUFFER)
-        self._low_since: float | None = None
-        self._frozen: float | None = None
+        self._stuck = StuckDetector(stuck_after)
         self.last_t: float | None = None
         self.resets = 0
 
@@ -105,8 +106,18 @@ class Estimator:
         does not -- worse than any room, so only the transition model can put us there
         while we are home.
 
-        **This method is the seam.** Phase 2 replaces it with learned per-room,
-        per-scanner distance tables and changes nothing else.
+        A room's own activity level is the other kind of evidence, and it only ever
+        counts against: ``log(ε + (1 - ε)·a)`` with ``a`` the level in ``[0, 1]``, or 1
+        while the level is rising, shifted so the busiest room scores zero. With other
+        people home, a busy room is weak evidence that *this* person is there, so a busy
+        room scores nothing; a room at ``0.0`` beside a busy one is strong evidence they
+        are not, and scores ``log ε`` -- the same footing as a room with no scanner.
+        ``away`` has no level and takes no term, which is why the shift matters: see
+        :func:`log_activity`.
+
+        A learned signature (see :mod:`.signatures`) replaces the distance half of this
+        for the ``(room, scanner)`` pairs it has been fitted for -- a proper log-normal
+        likelihood of the reading, and of silence -- and the formula stays for the rest.
         """
         tau = self.scale
         log_floor = math.log(self.floor)
@@ -114,17 +125,50 @@ class Estimator:
         heard = np.zeros(len(self.states), dtype=bool)
         for scanner, distance in obs.distances.items():
             room = self.scanners.get(scanner)
-            if distance is None or room is None:
+            if room is None:
                 continue
             position = self._position[room]
+            # a learned signature answers for its own (room, scanner) pair, silence
+            # included -- a scanner that always hears you in a room argues against
+            # that room when it does not; the fixed formula answers for the rest
+            learned = [
+                (self._position[other], sig[scanner])
+                for other, sig in self.signatures.items()
+                if scanner in sig and other in self._position
+            ]
+            for index, signature in learned:
+                out[index] += signature.log_likelihood(distance)
+                heard[index] = True
+            if distance is None:
+                continue
             near = -distance / tau
             against = -max(0.0, tau - distance) / tau
-            out += against
-            out[position] += near - against
+            fixed = np.full(len(self.states), against, dtype=np.float64)
+            fixed[position] = near
+            for index, _ in learned:
+                fixed[index] = 0.0
+            out += fixed
             heard[position] = True
         out[~heard] = log_floor
         out[self._position[AWAY]] = 2.0 * log_floor if obs.home else 0.0
+        out += log_activity(obs.activity, self._position, len(self.states), self.activity_floor)
         return out
+
+    def log_marginal(self, obs: Observation) -> float:
+        """log P(obs | everything before it): how well this frame fits the device's own
+        prediction of where it is. The person filter reads it as "the readings explained
+        by the device sitting wherever it sits", the alternative to "explained by the
+        person's room". Nothing here moves the belief.
+        """
+        predicted = self._transition.T @ self.belief
+        log_e = self.log_emission(obs)
+        return _logsumexp(log_e + np.log(np.where(predicted > 0.0, predicted, _TINY)))
+
+    @property
+    def room_belief(self) -> npt.NDArray[np.float64]:
+        """The belief over rooms -- the whole belief, for a device. Named for the person
+        filter, whose belief also ranges over carried flags."""
+        return self.belief
 
     def emission(self, obs: Observation) -> tuple[npt.NDArray[np.float64], float]:
         """The likelihood, scaled so its largest entry is 1, and the log scale removed.
@@ -157,95 +201,32 @@ class Estimator:
     def _check_stuck(self, t: float, logp: float, likelihood: npt.NDArray[np.float64]) -> None:
         """Reset when the evidence has been implausible for ``stuck_after`` seconds.
 
-        "Implausible" is measured against this device's own history, not an absolute
-        number: how surprising a reading is depends entirely on how many scanners hear
-        it and how far away they are. Below the history's 5th percentile for long
-        enough means the filter is following somebody who is not there, and the fastest
-        way out is to stop predicting and believe what the scanners say.
-
-        Every reading enters the history, including the bad ones. Keeping them out looks
-        like it protects the definition of normal, but the retained window is then the
-        distribution conditioned on clearing the running 5th percentile -- and *its* 5th
-        percentile is higher again. That ratchets, one censored tail at a time, until
-        normal means the best reading ever seen and a motionless person trips the
-        detector. Measured: on a stationary stream the threshold climbed -0.55 to -0.18
-        over five thousand frames and then reset on nothing.
-
-        What must hold still instead is the bar for a run already in progress. The
-        threshold is frozen when the run opens and the whole run is judged against that
-        one value, so a long stretch of nonsense cannot lower the bar out from under
-        itself mid-run. Recovery or a reset throws the frozen value away and the live
-        percentile -- computed over every reading -- takes over again.
+        The rule lives in :class:`StuckDetector`; what a reset *does* is this filter's
+        business: stop predicting, believe what the scanners say, and start the
+        breadcrumb over.
         """
-        if len(self._history) >= MIN_HISTORY:
-            threshold = self._frozen
-            if threshold is None:
-                threshold = float(np.quantile(np.asarray(self._history, dtype=np.float64), 0.05))
-            if logp < threshold:
-                if self._low_since is None:
-                    self._low_since, self._frozen = t, threshold
-                elif t - self._low_since >= self.stuck_after:
-                    total = float(likelihood.sum())
-                    if total > 0.0:
-                        self.belief = likelihood / total
-                    self._buffer.clear()
-                    self._history.clear()
-                    self._low_since = self._frozen = None
-                    self.resets += 1
-                    return
-            else:
-                self._low_since = self._frozen = None
-        self._history.append(logp)
+        if not self._stuck.check(t, logp):
+            return
+        total = float(likelihood.sum())
+        if total > 0.0:
+            self.belief = likelihood / total
+        self._buffer.clear()
+        self.resets += 1
 
     # -- reads --------------------------------------------------------------
 
     def outputs(self, t: float | None = None) -> Outputs:
-        order = np.argsort(self.belief)[::-1]
-        top = int(order[0])
-        second = int(order[1]) if order.size > 1 else top
-        moving = (
-            second != top
-            and float(self.belief[second]) > MOVING_SECOND
-            and self.topology.connected(self.states[top], self.states[second])
-        )
-        return Outputs(
+        return summarise(
+            self.topology,
+            self.states,
+            self.belief,
             t=t if t is not None else (self.last_t or 0.0),
-            room=self.states[top],
-            confidence=round(float(self.belief[top]), 4),
-            moving=moving,
-            candidates={
-                self.states[int(i)]: round(float(self.belief[int(i)]), 4)
-                for i in order
-                if float(self.belief[int(i)]) > CANDIDATE_FLOOR
-            },
             path=self.path(),
         )
 
     def path(self) -> list[str]:
-        """The most likely route through the buffered observations.
-
-        Viterbi over the ring buffer only, from a uniform prior: a bounded answer to a
-        bounded question ("how did you get here, roughly"), not a reconstruction of the
-        whole evening. Consecutive repeats collapse -- standing still is not a step --
-        and only the last few survive, because that is all a breadcrumb needs.
-        """
-        if not self._buffer:
-            return []
-        size = len(self.states)
-        scores = np.full(size, -math.log(size), dtype=np.float64) + self._buffer[0]
-        back: list[npt.NDArray[np.int64]] = []
-        for log_likelihood in list(self._buffer)[1:]:
-            step = scores[:, None] + self._log_transition
-            choice = np.argmax(step, axis=0)
-            scores = step[choice, np.arange(size)] + log_likelihood
-            back.append(choice)
-        route = [int(np.argmax(scores))]
-        for choice in reversed(back):
-            route.append(int(choice[route[-1]]))
-        route.reverse()
-        walked = [self.states[i] for i in route]
-        collapsed = [state for i, state in enumerate(walked) if i == 0 or state != walked[i - 1]]
-        return collapsed[-PATH_STEPS:]
+        """The most likely route through the buffered observations: see :func:`viterbi`."""
+        return viterbi(self._buffer, self._log_transition, self.states)
 
     # -- persistence --------------------------------------------------------
 
@@ -289,3 +270,104 @@ class Estimator:
         stamp = data.get("t")
         self.last_t = float(stamp) if isinstance(stamp, int | float) else None
         return True
+
+
+# -- shared with the person filter ---------------------------------------------
+
+
+def _logsumexp(values: npt.NDArray[np.float64]) -> float:
+    shift = float(values.max())
+    return shift + math.log(float(np.exp(values - shift).sum()))
+
+
+def log_activity(
+    activity: Mapping[str, RoomActivity],
+    position: Mapping[str, int],
+    size: int,
+    activity_floor: float,
+) -> npt.NDArray[np.float64]:
+    """The activity term, per state: zero for the busiest room, ``log ε`` for an empty one.
+
+    Shifted so the best-scoring room sits at zero, because the term is about which room
+    is *more* plausible than another and nothing else. Without the shift a house with
+    every room at 0.0 -- everybody asleep -- would penalise every room by the same
+    amount and, ``away`` carrying no term, tip the belief out of the house while the
+    tracker says we are in it.
+    """
+    term = np.zeros(size, dtype=np.float64)
+    if not activity:
+        return term
+    seen: list[int] = []
+    for room, reading in activity.items():
+        index = position.get(room)
+        if index is None or room == AWAY:
+            continue
+        epsilon = activity_floor if reading.floor is None else reading.floor
+        a = max(min(reading.level, 1.0), 1.0 if reading.slope > 0.0 else 0.0)
+        term[index] = math.log(epsilon + (1.0 - epsilon) * a)
+        seen.append(index)
+    if seen:
+        term[seen] -= term[seen].max()
+    return term
+
+
+def summarise(
+    topology: Topology,
+    states: tuple[str, ...],
+    belief: npt.NDArray[np.float64],
+    *,
+    t: float,
+    path: list[str],
+) -> Outputs:
+    """What a belief over rooms says: the room, how sure, whether between two, the rest."""
+    order = np.argsort(belief)[::-1]
+    top = int(order[0])
+    second = int(order[1]) if order.size > 1 else top
+    moving = (
+        second != top
+        and float(belief[second]) > MOVING_SECOND
+        and topology.connected(states[top], states[second])
+    )
+    return Outputs(
+        t=t,
+        room=states[top],
+        confidence=round(float(belief[top]), 4),
+        moving=moving,
+        candidates={
+            states[int(i)]: round(float(belief[int(i)]), 4)
+            for i in order
+            if float(belief[int(i)]) > CANDIDATE_FLOOR
+        },
+        path=path,
+    )
+
+
+def viterbi(
+    buffer: deque[npt.NDArray[np.float64]],
+    log_transition: npt.NDArray[np.float64],
+    states: tuple[str, ...],
+) -> list[str]:
+    """The most likely route through the buffered observations.
+
+    Viterbi over the ring buffer only, from a uniform prior: a bounded answer to a
+    bounded question ("how did you get here, roughly"), not a reconstruction of the
+    whole evening. Consecutive repeats collapse -- standing still is not a step -- and
+    only the last few survive, because that is all a breadcrumb needs.
+    """
+    if not buffer:
+        return []
+    size = len(states)
+    scores = np.full(size, -math.log(size), dtype=np.float64) + buffer[0]
+    back: list[npt.NDArray[np.int64]] = []
+    for log_likelihood in list(buffer)[1:]:
+        step = scores[:, None] + log_transition
+        choice = np.argmax(step, axis=0)
+        scores = step[choice, np.arange(size)] + log_likelihood
+        back.append(choice)
+    route = [int(np.argmax(scores))]
+    for choice in reversed(back):
+        route.append(int(choice[route[-1]]))
+    route.reverse()
+    walked = [states[i] for i in route]
+    collapsed = [state for i, state in enumerate(walked) if i == 0 or state != walked[i - 1]]
+    return collapsed[-PATH_STEPS:]

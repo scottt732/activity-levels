@@ -10,10 +10,29 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from .carried import Signals
+
 BERMUDA_DOMAIN = "bermuda"
 RANGE_SUFFIX = "_range"
 UNREACHABLE = 999.0
 """Bermuda's "no idea": a reading at or past this is not a reading at all."""
+
+
+@dataclass(frozen=True)
+class RoomActivity:
+    """One room's activity level, as evidence.
+
+    ``level`` is already scaled to ``[0, 1]`` by the caller -- the room's evidence level
+    over its ``max_value`` -- and ``slope`` is in the same units per second. Only the
+    sign of the slope is read: a rising level is a stimulus firing right now, whatever
+    the level has reached. ``floor`` is this room's own likelihood at a level of 0.0
+    when it has one -- a bedroom reads 0.0 with somebody asleep in it -- and ``None``
+    takes the estimator's.
+    """
+
+    level: float
+    slope: float
+    floor: float | None = None
 
 
 @dataclass(frozen=True)
@@ -26,11 +45,41 @@ class Observation:
     its room to the emission floor -- which can leave that room outranking one the
     evidence actively argues against. Omitting an unchanged reading would therefore
     quietly promote the rooms nobody can hear.
+
+    ``activity`` is each room's own activity level. A room absent from the mapping
+    contributes nothing, so a caller with no levels to offer leaves it empty and the
+    filter behaves as it did before there was such a thing.
     """
 
     t: float
     distances: Mapping[str, float | None] = field(default_factory=dict)
     home: bool = True
+    activity: Mapping[str, RoomActivity] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class DeviceFrame:
+    """One device's part of a person's observation: its readings, and the side evidence
+    about whether it is on them. ``distances`` is a full frame, as for :class:`Observation`.
+    """
+
+    distances: Mapping[str, float | None] = field(default_factory=dict)
+    home: bool = True
+    signals: Signals = field(default_factory=Signals)
+
+
+@dataclass(frozen=True)
+class PersonObservation:
+    """Everything the person filter is told at one instant.
+
+    A device absent from ``devices`` said nothing this frame -- its carried flag drifts
+    toward the prior and its readings are neither for nor against any room. The
+    activity mapping is the house's, shared by every person.
+    """
+
+    t: float
+    devices: Mapping[str, DeviceFrame] = field(default_factory=dict)
+    activity: Mapping[str, RoomActivity] = field(default_factory=dict)
 
 
 def scanner_key(unique_id: str, device_unique_id: str) -> str | None:

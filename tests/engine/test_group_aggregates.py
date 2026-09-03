@@ -35,6 +35,16 @@ def test_active_gated_and_counts() -> None:
     assert g.active_voices(1000.0) == 1  # a has released; b still sustaining
 
 
+def test_value_at_excluding_takes_several_labels() -> None:
+    a, b, c = held("a"), held("b"), held("c")
+    g = Group(id="g", channels=[Channel(a), Channel(b), Channel(c)])
+    for v in (a, b, c):
+        v.note_on(0.0)
+    assert g.value_at_excluding(1.0, "a") == pytest.approx(2.0)
+    assert g.value_at_excluding(1.0, {"a", "b"}) == pytest.approx(1.0)
+    assert g.value_at_excluding(1.0, {"a", "b", "c"}) == pytest.approx(0.0)
+
+
 def test_last_activity_is_max_over_subtree() -> None:
     a, b = impulse("a"), impulse("b")
     child = Group(id="c", channels=[Channel(b)])

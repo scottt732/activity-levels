@@ -1,7 +1,19 @@
 import { DEFAULT_CONNECTION, NODE_KINDS } from "./kinds";
 import { getAt } from "./store";
 import type { Connection, Kind } from "./kinds";
-import type { Adjacency, Config, EnvelopeOverrides, EnvelopePreset, Group, Path, PresenceOverrides, PresenceSettings, Stimulus } from "./types";
+import type {
+  Adjacency,
+  Config,
+  EnvelopeOverrides,
+  EnvelopePreset,
+  Group,
+  Path,
+  PresenceDeviceConfig,
+  PresenceOverrides,
+  PresencePerson,
+  PresenceSettings,
+  Stimulus,
+} from "./types";
 
 export const newGroup = (id: string, kind: Kind): Group => ({
   id,
@@ -27,6 +39,7 @@ export const PRESENCE_KEY = "presence";
 export const newPresenceOverrides = (): PresenceOverrides => ({
   gain: 1,
   envelope: null,
+  activity_floor: null,
   attack: null,
   decay: null,
   sustain: null,
@@ -93,8 +106,27 @@ const PRESENCE_DEFAULTS: PresenceSettings = {
   scale: 3,
   floor: 0.05,
   stuck_after: 60,
+  activity: { floor: 0.05 },
+  people: [],
+  carried: {
+    prior: 0.7,
+    flip: 300,
+    recent: 120,
+    nearby: 0.3,
+    weights: { charging: -3, moving: 2, still_room_empty: -2, jitter: 1 },
+  },
   scanner_areas: {},
 };
+
+export const newPresenceDevice = (tracker: string): PresenceDeviceConfig => ({
+  tracker,
+  name: null,
+  kind: "other",
+  companion: null,
+  signals: { activity: null, steps: null, battery_state: null },
+});
+
+export const newPresencePerson = (): PresencePerson => ({ name: null, person: null, devices: [] });
 
 /** The presence block with every default filled in; a config that predates it reads as off. */
 export const presenceSettings = (config: Config): PresenceSettings => ({
