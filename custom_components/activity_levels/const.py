@@ -51,6 +51,14 @@ def presence_labels_key(entry_id: str) -> str:
     return f"{DOMAIN}.{entry_id}.presence_labels"
 
 
+PRESENCE_SIGNATURES_VERSION = 1
+
+
+def presence_signatures_key(entry_id: str) -> str:
+    """The learned room signatures: the document any producer may replace."""
+    return f"{DOMAIN}.{entry_id}.presence_signatures"
+
+
 CONF_VERSION = "version"
 CONF_DEFAULTS = "defaults"
 CONF_ENVELOPES = "envelopes"
@@ -142,6 +150,7 @@ SERVICE_RESET = "reset"
 SERVICE_REBUILD_PROFILE = "rebuild_profile"
 SERVICE_SIMULATE_NOW = "simulate_now"
 SERVICE_LOCATE = "locate"
+SERVICE_REBUILD_SIGNATURES = "rebuild_signatures"
 ATTR_GROUP_ID = "group_id"
 ATTR_PEAK = "peak"
 ATTR_VALUE = "value"
@@ -167,6 +176,8 @@ ATTR_ROOMS = "rooms"
 ATTR_PROBABILITY = "probability"
 ATTR_PERSON = "person"
 ATTR_ROOM = "room"
+ATTR_ROOMS_LEARNED = "rooms_learned"
+ATTR_LABELS_USED = "labels_used"
 
 ISSUE_BERMUDA_MISSING = "bermuda_missing"
 ISSUE_NOT_BERMUDA = "not_a_bermuda_device"

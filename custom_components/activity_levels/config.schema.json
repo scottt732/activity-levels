@@ -694,6 +694,31 @@
           "additionalProperties": false,
           "default": {}
         },
+        "signatures": {
+          "type": "object",
+          "properties": {
+            "min_labels": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 1000,
+              "default": 8
+            },
+            "prior_weight": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1000.0,
+              "default": 4.0
+            },
+            "rebuild_after": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000,
+              "default": 10
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
         "scanner_areas": {
           "type": "object",
           "properties": {},

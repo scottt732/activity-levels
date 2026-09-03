@@ -60,6 +60,8 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_presence_correct)
     websocket_api.async_register_command(hass, ws_presence_labels)
     websocket_api.async_register_command(hass, ws_presence_labels_delete)
+    websocket_api.async_register_command(hass, ws_presence_signatures_get)
+    websocket_api.async_register_command(hass, ws_presence_signatures_save)
 
 
 @websocket_api.require_admin
@@ -507,3 +509,52 @@ def ws_presence_labels_delete(
         msg["t"], msg["person"]
     )
     connection.send_result(msg["id"], {"deleted": deleted})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/presence/signatures/get"})
+@callback
+def ws_presence_signatures_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """The learned document as stored, plus what the sensor says about it."""
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    presence = runtime.presence
+    if presence is None:
+        connection.send_result(msg["id"], {"document": {}, "info": None, "signatures": {}})
+        return
+    connection.send_result(
+        msg["id"],
+        {
+            "document": dict(presence.signatures_document),
+            "info": presence.signatures_info(),
+            "signatures": {
+                room: {
+                    scanner: {"mu": s.mu, "sigma": s.sigma, "heard": s.heard, "n": s.n}
+                    for scanner, s in scanners.items()
+                }
+                for room, scanners in presence.signatures.items()
+            },
+        },
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/presence/signatures/save",
+        vol.Required("document"): dict,
+        vol.Optional("force", default=False): bool,
+    }
+)
+@callback
+def ws_presence_signatures_save(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Accept a document from any producer. ``ok: False`` is a refusal, not an error."""
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    presence = runtime.presence
+    ok = presence is not None and presence.save_signatures(msg["document"], force=msg["force"])
+    connection.send_result(msg["id"], {"ok": ok})

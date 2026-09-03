@@ -23,6 +23,7 @@ from .const import (
     ATTR_GROUP_ID,
     ATTR_GROUPS_READY,
     ATTR_GROUPS_TOTAL,
+    ATTR_LABELS_USED,
     ATTR_MAX_VALUE,
     ATTR_MIX,
     ATTR_MOVING,
@@ -33,6 +34,7 @@ from .const import (
     ATTR_PRODUCER_VERSION,
     ATTR_READY,
     ATTR_ROOMS,
+    ATTR_ROOMS_LEARNED,
     ATTR_TRAINED,
     ATTR_UPDATED,
     ATTR_WHO,
@@ -71,6 +73,7 @@ async def async_setup_entry(
         entities.append(ActivityAnomalySensor(coordinator, patterns, info))
     presence = entry.runtime_data.presence
     if presence is not None and presence.ready:
+        entities.append(SignaturesSensor(presence, entry.entry_id))
         entities.extend(RoomSensor(presence, name) for name in sorted(presence.people))
         entities.extend(FloorSensor(presence, name) for name in sorted(presence.people))
         entities.extend(
@@ -262,6 +265,48 @@ class ProfileSensor(SensorEntity):
         """Rewrite whenever a producer replaces the document."""
         await super().async_added_to_hass()
         self.async_on_remove(self.patterns.async_add_listener(self.async_write_ha_state))
+
+
+class SignaturesSensor(SensorEntity):
+    """When the room signatures were last learned, and from how much.
+
+    On the hub, beside the profile sensor: both are documents some producer wrote, and
+    both answer "how much does this integration know yet".
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "signatures"
+
+    def __init__(self, presence: PresenceCoordinator, entry_id: str) -> None:
+        """Set up the signatures diagnostic on the integration's hub device."""
+        self.presence = presence
+        self._attr_unique_id = f"{entry_id}-signatures"
+        self.entity_id = "sensor.activity_levels_signatures"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry_id)})
+
+    @property
+    def native_value(self) -> datetime | None:
+        """When the document was built; unknown until something has been learned."""
+        return _ts(self.presence.signatures_info()["built_at"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        info = self.presence.signatures_info()
+        producer = info["producer"] or {}
+        return {
+            ATTR_PRODUCER: producer.get("name"),
+            ATTR_PRODUCER_VERSION: producer.get("version"),
+            ATTR_ROOMS_LEARNED: info["rooms_learned"],
+            ATTR_LABELS_USED: info["labels_used"],
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Rewrite whenever a rebuild or a producer replaces the document."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self.presence.async_add_listener(self.async_write_ha_state))
 
 
 class RoomSensor(PresenceEntity, SensorEntity):

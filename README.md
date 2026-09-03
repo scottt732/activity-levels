@@ -247,6 +247,7 @@ And, while presence is on, one pair per tracked person, each on its own **Presen
 | `binary_sensor.<name>_moving` | On while the person's two most likely rooms are adjacent and both plausible. |
 | `binary_sensor.<name>_<device>_carried` | On while this device is probably on its person. Attribute: `probability`. |
 | `sensor.<name>_<device>_room` | Which room the *object* is in — the phone, carried or not. Attributes: `group_id`, `confidence`, `updated`. |
+| `sensor.activity_levels_signatures` | When the room signatures were last learned. Attributes: `producer`, `producer_version`, `rooms_learned`, `labels_used`. |
 
 ## Services
 
@@ -264,6 +265,8 @@ And, while presence is on, one pair per tracked person, each on its own **Presen
   (their configured name) and `room` (a room group id, or `away`). Their estimate moves
   there at once and the correction is kept as a label; a companion notification action
   is the natural caller. The Presence tab does the same when you tap a person.
+- `activity_levels.rebuild_signatures` — fit the room signatures from the corrections
+  kept so far, now. Fields: `force` (replace a document another producer wrote).
 
 ## Patterns & presence simulation
 
@@ -452,6 +455,18 @@ own. The companion app helps it along: a phone that is charging is on a table, o
 reports walking is in a pocket, and a device whose distances never wander is not being
 carried around. `presence.carried` holds the weights.
 
+**Learning your rooms.** Every correction — a tap on the Presence tab, or a call to
+`activity_levels.locate` — is kept as a label: the room you said, and everything the
+estimator was reading at that instant. After a few of them (`signatures.rebuild_after`) the
+learner fits a *signature* per room and scanner: what that scanner reads when you are
+really in that room, and how often it hears you there at all. The theater scanner reads
+three metres from the couch and one from the door; the hall scanner never hears anybody
+in the bedroom. Wherever a signature exists the estimator uses it instead of the fixed
+distance formula, and the formula keeps answering for the pairs nobody has corrected yet.
+`sensor.activity_levels_signatures` says when the last fit ran and how much it covered.
+The document it writes is producer-agnostic: anything that can fit those numbers may
+replace it over `presence/signatures/save`, and the built-in learner then leaves it alone.
+
 **What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`),
 `sensor.<name>_floor` (which floor, with the belief summed over its rooms — sure of the
 floor when two rooms on it tie) and `binary_sensor.<name>_moving` (on while their two most
@@ -627,6 +642,10 @@ presence:                    # absent or enabled: false = the whole feature is o
     floor: 0.05              # likelihood of a room whose activity level is 0.0
   labels:
     keep: 5000               # corrections kept, newest first, for the learner
+  signatures:                # what the learner fits from those corrections
+    min_labels: 8            # labels a (room, scanner) pair needs before it is learned
+    prior_weight: 4.0        # how many labels the fixed formula counts for against them
+    rebuild_after: 10        # new corrections between automatic rebuilds
   scanner_areas:             # scanner device id -> room, overriding its area
     "1a2b3c4d5e6f": kitchen
 ```

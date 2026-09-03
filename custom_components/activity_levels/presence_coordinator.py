@@ -65,9 +65,11 @@ from .const import (
     KIND_STRUCTURE,
     PRESENCE_KEY,
     PRESENCE_LABELS_VERSION,
+    PRESENCE_SIGNATURES_VERSION,
     PRESENCE_STORAGE_VERSION,
     TRIGGER_KEY,
     presence_labels_key,
+    presence_signatures_key,
     presence_storage_key,
 )
 from .coordinator import ActivityLevelsCoordinator
@@ -83,6 +85,8 @@ from .presence.observation import (
     scanner_key,
 )
 from .presence.person import PersonEstimator, PersonOutputs
+from .presence.signatures import DOC_VERSION as SIGNATURES_DOC_VERSION
+from .presence.signatures import Signatures, fit, from_document, to_document
 from .schema import SIGNAL_KEYS
 from .topology import Topology
 
@@ -96,6 +100,9 @@ REGISTRY_DEBOUNCE = 5.0
 SAVE_DELAY = 10.0
 AWAY_LABEL = "Away"
 COMPANION_DOMAIN = "mobile_app"
+BUILTIN_PRODUCER = "builtin"
+SIGNATURES_VERSION = "0.1.0"
+"""The built-in learner's own version, written into the documents it produces."""
 MOVING_ACTIVITIES = frozenset({"walking", "running", "automotive", "cycling"})
 """What the companion app's activity sensor says while the phone is going somewhere."""
 CHARGING_STATES = frozenset({"charging", "full"})
@@ -214,6 +221,14 @@ class PresenceCoordinator:
         self.labels: list[dict[str, Any]] = []
         """Corrections, newest first. Each is everything the estimator saw at that
         instant plus the room the person said they were in: the learner's input."""
+        self._signatures_store: Store[dict[str, Any]] = Store(
+            hass, PRESENCE_SIGNATURES_VERSION, presence_signatures_key(entry.entry_id)
+        )
+        self.signatures_document: dict[str, Any] = {}
+        self.signatures: Signatures = {}
+        """What the learner (or another producer) knows about each room's scanners;
+        the same object every device filter reads, so a rebuild reaches them all."""
+        self._labels_since_build = 0
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[CALLBACK_TYPE] = []
         self._state_unsub: CALLBACK_TYPE | None = None
@@ -255,6 +270,9 @@ class PresenceCoordinator:
             if isinstance(kept, list)
             else []
         )
+        document = await self._signatures_store.async_load()
+        self.signatures = from_document(document)
+        self.signatures_document = dict(document) if isinstance(document, Mapping) else {}
 
         if not self._bermuda_loaded():
             self._issue(ISSUE_BERMUDA_MISSING, present=True)
@@ -316,6 +334,7 @@ class PresenceCoordinator:
         if self._usable:
             await self._store.async_save(self._snapshot())
             await self._labels_store.async_save(self._labels_snapshot())
+            await self._signatures_store.async_save(self.signatures_document)
 
     # -- listeners -----------------------------------------------------------
 
@@ -497,6 +516,7 @@ class PresenceCoordinator:
                 stuck_after=settings["stuck_after"],
                 activity_floor=settings["activity"]["floor"],
             )
+            track.estimator.signatures = self.signatures
             before = previous.devices.get(device_id) if previous is not None else None
             carried: Any = None
             if before is not None and before.estimator is not None:
@@ -951,6 +971,9 @@ class PresenceCoordinator:
             },
         )
         del self.labels[self.settings["labels"]["keep"] :]
+        self._labels_since_build += 1
+        if self._labels_since_build >= self.settings["signatures"]["rebuild_after"]:
+            self.rebuild_signatures(force=False)
         person.estimator.locate(room)
         person.outputs = person.estimator.outputs(t)
         self._apply_occupancy()
@@ -969,6 +992,93 @@ class PresenceCoordinator:
             return False
         self._labels_store.async_delay_save(self._labels_snapshot, SAVE_DELAY)
         return True
+
+    # -- signatures ----------------------------------------------------------
+
+    @property
+    def signatures_producer(self) -> str:
+        producer = self.signatures_document.get("producer")
+        name = producer.get("name") if isinstance(producer, Mapping) else None
+        return name if isinstance(name, str) else BUILTIN_PRODUCER
+
+    def rebuild_signatures(self, *, force: bool) -> bool:
+        """Fit signatures from the labels and hand them to every device filter.
+
+        A document another producer wrote is left alone unless forced: it was put there
+        on purpose, by something that presumably knows more than the built-in learner,
+        and the automatic rebuild after every few corrections must not trample it.
+        """
+        if self.signatures_document and self.signatures_producer != BUILTIN_PRODUCER and not force:
+            _LOGGER.debug(
+                "Signatures belong to producer %s; not rebuilding", self.signatures_producer
+            )
+            return False
+        settings = self.settings["signatures"]
+        fitted = fit(
+            self.labels,
+            scanner_map=self.scanner_map,
+            scale=self.settings["scale"],
+            min_labels=settings["min_labels"],
+            prior_weight=settings["prior_weight"],
+        )
+        self._apply_signatures(
+            to_document(
+                fitted,
+                producer={"name": BUILTIN_PRODUCER, "version": SIGNATURES_VERSION},
+                built_at=self.coordinator.now(),
+                labels_used=len(self.labels),
+            )
+        )
+        return True
+
+    def save_signatures(self, document: Mapping[str, Any], *, force: bool) -> bool:
+        """Accept a document from any producer, after checking it reads back.
+
+        Refuses to overwrite one that belongs to a *different* foreign producer unless
+        forced; the built-in learner's own document is always replaceable, because
+        anything a producer knows is more than the formula did.
+        """
+        if not isinstance(document, Mapping) or document.get("version") != SIGNATURES_DOC_VERSION:
+            return False
+        parsed = from_document(document)
+        if not parsed and document.get("signatures") not in ({}, None):
+            return False
+        producer = document.get("producer")
+        incoming = producer.get("name") if isinstance(producer, Mapping) else None
+        current = self.signatures_producer
+        if (
+            self.signatures_document
+            and current != BUILTIN_PRODUCER
+            and incoming != current
+            and not force
+        ):
+            return False
+        self._apply_signatures(dict(document))
+        return True
+
+    def _apply_signatures(self, document: dict[str, Any]) -> None:
+        self.signatures_document = document
+        self.signatures = from_document(document)
+        self._labels_since_build = 0
+        for person in self.people.values():
+            for track in person.devices.values():
+                if track.estimator is not None:
+                    track.estimator.signatures = self.signatures
+        self._signatures_store.async_delay_save(lambda: self.signatures_document, SAVE_DELAY)
+        self._notify()
+
+    def signatures_info(self) -> dict[str, Any]:
+        """What the diagnostic sensor and the panel show about the learned document."""
+        producer = self.signatures_document.get("producer")
+        built_at = self.signatures_document.get("built_at")
+        labels_used = self.signatures_document.get("labels_used")
+        return {
+            "producer": dict(producer) if isinstance(producer, Mapping) else None,
+            "built_at": float(built_at) if isinstance(built_at, int | float) else None,
+            "labels_used": int(labels_used) if isinstance(labels_used, int | float) else 0,
+            "rooms_learned": len(self.signatures),
+            "pairs_learned": sum(len(scanners) for scanners in self.signatures.values()),
+        }
 
     # -- persistence ---------------------------------------------------------
 
@@ -1114,6 +1224,7 @@ class PresenceCoordinator:
             "disabled": list(self.disabled),
             "occupants": {gid: list(who) for gid, who in self.occupants.items()},
             "labels": len(self.labels),
+            "signatures": self.signatures_info(),
             "devices": {
                 name: {
                     "person": person.person,

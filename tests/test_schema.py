@@ -277,6 +277,7 @@ def test_presence_defaults_and_absence() -> None:
         "activity": {"floor": 0.05},
         "carried": CARRIED_DEFAULTS,
         "labels": {"keep": 5000},
+        "signatures": {"min_labels": 8, "prior_weight": 4.0, "rebuild_after": 10},
         "scanner_areas": {},
     }
 

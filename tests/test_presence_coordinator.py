@@ -31,6 +31,7 @@ from custom_components.activity_levels.const import (
     PRESENCE_KEY,
     PRESENCE_STORAGE_VERSION,
     presence_labels_key,
+    presence_signatures_key,
     presence_storage_key,
 )
 from custom_components.activity_levels.diagnostics import async_get_config_entry_diagnostics
@@ -531,6 +532,118 @@ async def test_the_locate_service_corrects_a_person(
         await hass.services.async_call(
             DOMAIN, "locate", {"person": "Scott", "room": "nope"}, blocking=True
         )
+
+
+# -- signatures --------------------------------------------------------------
+
+
+async def test_signatures_rebuild_after_enough_corrections_and_reach_the_filters(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, hass_storage: dict[str, Any]
+) -> None:
+    bermuda = fake_bermuda(hass)
+    config = presence_config()
+    config["presence"]["signatures"] = {"min_labels": 4, "rebuild_after": 5}
+    entry = await add_entry(hass, config)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    await observe(hass, freezer, bermuda, "kitchen")
+    assert presence.signatures == {}
+    for _ in range(4):
+        freezer.tick(timedelta(seconds=1))
+        presence.correct("Scott", "kitchen", source="panel")
+    assert presence.signatures == {}  # four corrections; the fifth rebuilds
+    freezer.tick(timedelta(seconds=1))
+    presence.correct("Scott", "kitchen", source="panel")
+    assert "kitchen" in presence.signatures
+    (device,) = presence.people["Scott"].devices.values()
+    assert device.estimator is not None and device.estimator.signatures is presence.signatures
+    info = presence.signatures_info()
+    assert info["producer"]["name"] == "builtin"
+    assert info["rooms_learned"] == 1 and info["labels_used"] == 5
+    assert info["built_at"] is not None
+
+    await presence.async_stop()
+    await hass.async_block_till_done()
+    stored = hass_storage[presence_signatures_key(entry.entry_id)]["data"]
+    assert "kitchen" in stored["signatures"]
+
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    presence = entry.runtime_data.presence
+    assert presence is not None and "kitchen" in presence.signatures
+
+
+async def test_a_foreign_signatures_document_is_kept_unless_forced(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    config = presence_config()
+    config["presence"]["signatures"] = {"min_labels": 4, "rebuild_after": 2}
+    entry = await add_entry(hass, config)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    await observe(hass, freezer, bermuda, "kitchen")
+    foreign = {
+        "version": 1,
+        "producer": {"name": "cloud", "version": "9"},
+        "built_at": 1.0,
+        "labels_used": 0,
+        "signatures": {"hall": {"s": {"mu": 0.0, "sigma": 0.5, "heard": 0.9, "n": 50}}},
+    }
+    assert presence.save_signatures(foreign, force=False) is True
+    assert "hall" in presence.signatures
+    for _ in range(6):
+        freezer.tick(timedelta(seconds=1))
+        presence.correct("Scott", "kitchen", source="panel")
+    assert "hall" in presence.signatures  # the builtin learner did not overwrite it
+    assert presence.rebuild_signatures(force=False) is False
+    assert presence.rebuild_signatures(force=True) is True
+    assert "kitchen" in presence.signatures and "hall" not in presence.signatures
+    assert presence.save_signatures({"version": 1, "signatures": "no"}, force=True) is False
+
+
+async def test_the_signatures_sensor_service_and_websocket(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    config = presence_config()
+    config["presence"]["signatures"] = {"min_labels": 2, "rebuild_after": 100}
+    await add_entry(hass, config)
+    await observe(hass, freezer, bermuda, "kitchen")
+    sensor = hass.states.get("sensor.activity_levels_signatures")
+    assert sensor is not None and sensor.state == STATE_UNKNOWN
+    assert sensor.attributes["rooms_learned"] == 0
+
+    for _ in range(3):
+        freezer.tick(timedelta(seconds=1))
+        await hass.services.async_call(
+            DOMAIN, "locate", {"person": "Scott", "room": "kitchen"}, blocking=True
+        )
+    await hass.services.async_call(DOMAIN, "rebuild_signatures", {}, blocking=True)
+    await hass.async_block_till_done()
+    sensor = hass.states.get("sensor.activity_levels_signatures")
+    assert sensor.state != STATE_UNKNOWN
+    assert sensor.attributes["rooms_learned"] == 1
+    assert sensor.attributes["labels_used"] == 3
+    assert sensor.attributes["producer"] == "builtin"
+
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": f"{DOMAIN}/presence/signatures/get"})
+    msg = await client.receive_json()
+    assert msg["success"] and "kitchen" in msg["result"]["signatures"]
+    await client.send_json_auto_id(
+        {
+            "type": f"{DOMAIN}/presence/signatures/save",
+            "document": {"version": 1, "producer": {"name": "x", "version": "1"}, "signatures": {}},
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"]["ok"] is True
+    await client.send_json_auto_id(
+        {"type": f"{DOMAIN}/presence/signatures/save", "document": {"version": 3}}
+    )
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"]["ok"] is False
 
 
 # -- repair issues -----------------------------------------------------------

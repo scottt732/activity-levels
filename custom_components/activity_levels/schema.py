@@ -349,6 +349,17 @@ PRESENCE_LABELS_SCHEMA = vol.Schema(
     }
 )
 
+PRESENCE_SIGNATURES_SCHEMA = vol.Schema(
+    {
+        # labels a (room, scanner) pair needs before a signature is fitted for it
+        vol.Optional("min_labels", default=8): vol.All(int, vol.Range(min=2, max=1000)),
+        # how many pseudo-labels the fixed formula counts for, against real ones
+        vol.Optional("prior_weight", default=4.0): _finite(0.0, hi=1000.0),
+        # new corrections between automatic rebuilds
+        vol.Optional("rebuild_after", default=10): vol.All(int, vol.Range(min=1, max=10000)),
+    }
+)
+
 PRESENCE_SCHEMA = vol.Schema(
     {
         vol.Optional("enabled", default=False): cv.boolean,
@@ -366,6 +377,7 @@ PRESENCE_SCHEMA = vol.Schema(
         vol.Optional("activity", default=dict): PRESENCE_ACTIVITY_SCHEMA,
         vol.Optional("carried", default=dict): CARRIED_SCHEMA,
         vol.Optional("labels", default=dict): PRESENCE_LABELS_SCHEMA,
+        vol.Optional("signatures", default=dict): PRESENCE_SIGNATURES_SCHEMA,
         # keyed by the scanner's device-registry id (or its Bermuda address); the value
         # is the room it is in, overriding whatever its area says
         vol.Optional("scanner_areas", default=dict): {cv.string: _group_id},

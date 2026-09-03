@@ -31,6 +31,7 @@ from .const import (
     MODEL_PRESENCE,
     SERVICE_LOCATE,
     SERVICE_REBUILD_PROFILE,
+    SERVICE_REBUILD_SIGNATURES,
     SERVICE_RESET,
     SERVICE_SET_LEVEL,
     SERVICE_SIMULATE_NOW,
@@ -290,6 +291,24 @@ def _register_services(hass: HomeAssistant) -> None:
         handle_simulate_now,
         schema=SERVICE_SIMULATE_NOW_SCHEMA,
     )
+
+    @callback
+    def handle_rebuild_signatures(call: ServiceCall) -> None:
+        presence = _runtime(hass).presence
+        if presence is None or not presence.ready:
+            raise ServiceValidationError("Presence is not running")
+        if not presence.rebuild_signatures(force=call.data[ATTR_FORCE]):
+            raise ServiceValidationError(
+                f"The signatures belong to producer '{presence.signatures_producer}'; "
+                "call with force: true to replace them"
+            )
+
     hass.services.async_register(
         DOMAIN, SERVICE_LOCATE, handle_locate, schema=SERVICE_LOCATE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REBUILD_SIGNATURES,
+        handle_rebuild_signatures,
+        schema=SERVICE_REBUILD_PROFILE_SCHEMA,
     )

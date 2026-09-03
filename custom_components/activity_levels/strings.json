@@ -16,6 +16,7 @@
       "expected_activity": { "name": "Expected activity" },
       "activity_anomaly": { "name": "Activity anomaly" },
       "profile": { "name": "Profile" },
+      "signatures": { "name": "Room signatures" },
       "room": { "name": "Room" },
       "floor": { "name": "Floor" },
       "device_room": { "name": "{device} room" },
@@ -81,6 +82,13 @@
       "fields": {
         "person": { "name": "Person", "description": "The tracked person's name, as configured under presence.people." },
         "room": { "name": "Room", "description": "The room group id they are in, or `away`." }
+      }
+    },
+    "rebuild_signatures": {
+      "name": "Rebuild room signatures",
+      "description": "Fit the per-room scanner signatures from the corrections kept so far, now rather than after the next few corrections.",
+      "fields": {
+        "force": { "name": "Force", "description": "Replace a signatures document another producer wrote." }
       }
     }
   },
