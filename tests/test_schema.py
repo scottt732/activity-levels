@@ -253,6 +253,7 @@ def test_presence_defaults_and_absence() -> None:
         "scale": 3.0,
         "floor": 0.05,
         "stuck_after": 60.0,
+        "activity": {"floor": 0.05},
         "scanner_areas": {},
     }
 
@@ -305,6 +306,8 @@ def test_adjacency_errors_are_pathed(mutate, path, fragment) -> None:
         ({"scale": 0}, "presence/scale"),
         ({"floor": 0}, "presence/floor"),
         ({"stuck_after": 0}, "presence/stuck_after"),
+        ({"activity": {"floor": 0}}, "presence/activity/floor"),
+        ({"activity": {"floor": 1.5}}, "presence/activity/floor"),
         ({"envelope": "nope"}, "presence/envelope"),
         ({"scanner_areas": {"abc": "nope"}}, "presence/scanner_areas/abc"),
     ],

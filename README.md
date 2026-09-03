@@ -424,6 +424,14 @@ all. `escape` is the small leftover probability of appearing somewhere with no p
 here, and it exists purely so a wrong guess is not permanent: without it, an estimate that
 starts (or is nudged) wrong could never recover.
 
+The rooms' own activity levels are the other kind of evidence. A room at `0.0` is somewhere
+nobody is, however many people are home, so it costs a candidate as much as having no
+scanner at all (`activity.floor`); a room whose level is rising has a stimulus firing right
+now and costs nothing; anything in between decays at the envelope's own rate. A busy room is
+never a *reward* — with more than one person home it could be anyone — so this only ever
+rules rooms out. The level the estimator reads leaves out the room's own `presence` channel,
+so it can never confirm itself.
+
 **What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`) and
 `binary_sensor.<name>_moving` (on while their two most likely rooms are adjacent and both
 still plausible). Per room: `sensor.<room>_occupants`, plus a `presence` channel folded
@@ -564,6 +572,8 @@ presence:                    # absent or enabled: false = the whole feature is o
   scale: 3.0                 # emission distance scale, metres
   floor: 0.05                # likelihood of a room with no scanner
   stuck_after: 60s           # implausible readings for this long reset the estimate
+  activity:
+    floor: 0.05              # likelihood of a room whose activity level is 0.0
   scanner_areas:             # scanner device id -> room, overriding its area
     "1a2b3c4d5e6f": kitchen
 ```

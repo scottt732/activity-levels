@@ -263,6 +263,14 @@ PRESENCE_DEVICE_SCHEMA = vol.Schema(
     }
 )
 
+PRESENCE_ACTIVITY_SCHEMA = vol.Schema(
+    {
+        # the likelihood of a room whose evidence level is 0.0: the same footing as a
+        # room with no scanner, and never a reward for a busy one
+        vol.Optional("floor", default=0.05): _finite(0.0, lo_exclusive=True, hi=1.0),
+    }
+)
+
 PRESENCE_SCHEMA = vol.Schema(
     {
         vol.Optional("enabled", default=False): cv.boolean,
@@ -276,6 +284,7 @@ PRESENCE_SCHEMA = vol.Schema(
         vol.Optional("scale", default=3.0): _finite(0.0, lo_exclusive=True),
         vol.Optional("floor", default=0.05): _finite(0.0, lo_exclusive=True, hi=1.0),
         vol.Optional("stuck_after", default=60.0): vol.All(parse_duration, vol.Range(min=1.0)),
+        vol.Optional("activity", default=dict): PRESENCE_ACTIVITY_SCHEMA,
         # keyed by the scanner's device-registry id (or its Bermuda address); the value
         # is the room it is in, overriding whatever its area says
         vol.Optional("scanner_areas", default=dict): {cv.string: _group_id},

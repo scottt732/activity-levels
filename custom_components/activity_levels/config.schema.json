@@ -458,6 +458,19 @@
           "description": "A duration: a number of seconds, '30s'/'5m'/'2h'/'1d', or 'HH:MM[:SS[.f]]'. At least 1.0 seconds.",
           "default": 60.0
         },
+        "activity": {
+          "type": "object",
+          "properties": {
+            "floor": {
+              "type": "number",
+              "exclusiveMinimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.05
+            }
+          },
+          "additionalProperties": false,
+          "default": {}
+        },
         "scanner_areas": {
           "type": "object",
           "properties": {},
