@@ -2,7 +2,9 @@
 
 Status: direction approved in conversation 2026-09-02; the sectioned design was completed
 autonomously with the user signed off. Decisions the user did not make in person are
-marked **(chosen)** so they can be reviewed. Builds on the topology and presence spec
+marked **(chosen)** so they can be reviewed. All four slices are implemented on
+`feat/people-devices-evidence`; the ledgers `plan9`–`plan12` record every ruling made
+along the way and what each slice deferred. Builds on the topology and presence spec
 (2026-08-27), whose phases 2 and 3 this replaces and enlarges.
 
 ## Goal
