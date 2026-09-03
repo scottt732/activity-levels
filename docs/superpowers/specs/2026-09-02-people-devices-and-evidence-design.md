@@ -112,7 +112,17 @@ area — pool under the structure or property they sit in, and the entity says s
 presence:
   activity:
     floor: 0.05          # likelihood of a room whose level is 0.0 — as a scannerless room
+groups:
+  - id: theater
+    presence:
+      activity_floor: 1.0  # this room's own floor; 1.0 exempts a room people sleep in
 ```
+
+**The sleeper exemption (chosen).** A still sleeper trips no motion, so the room they are
+in reads `0.0` — the one case where "empty means nobody" is false. With somebody else up
+in a busy room the term would move the sleeper there within a few frames. A room may
+therefore carry its own floor (`groups[].presence.activity_floor`, `GroupInfo.activity_floor`
+→ `RoomActivity.floor`); `1.0` makes the term zero for that room whatever its level.
 
 ## P2 — People, devices and the joint carried model
 
