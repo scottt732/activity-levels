@@ -37,7 +37,16 @@ from custom_components.activity_levels.presence_coordinator import (
     REGISTRY_DEBOUNCE,
 )
 from custom_components.activity_levels.schema import validate_config
-from tests.fixtures import FakeBermuda, fake_bermuda, presence_config, rooms_config
+from custom_components.activity_levels.topology import build_topology
+from tests.fixtures import (
+    FakeBermuda,
+    fake_bermuda,
+    fake_companion,
+    fake_person,
+    fake_watch,
+    presence_config,
+    rooms_config,
+)
 
 ROOM_SENSORS = (
     "binary_sensor.kitchen_motion",
@@ -109,7 +118,7 @@ async def test_discovery_finds_the_scanners_and_the_distance_sensors(
 
     assert presence is not None and presence.ready
     assert set(presence.devices) == {"Scott"}
-    track = presence.devices["Scott"]
+    (track,) = presence.people["Scott"].devices.values()
     assert track.tracker == bermuda.tracker
     assert set(track.sensors.values()) == set(presence.scanner_map)
     assert set(presence.scanner_map.values()) == ROOMS
@@ -141,6 +150,252 @@ async def test_scanner_areas_override_the_area_mapping(hass: HomeAssistant) -> N
     assert presence is not None
     assert presence.unmapped == []
     assert set(presence.scanner_map.values()) == ROOMS
+
+
+# -- people and devices ------------------------------------------------------
+
+
+def people_config(**person: Any) -> dict[str, Any]:
+    """`presence_config` with the legacy list replaced by one explicit person."""
+    config = presence_config()
+    config["presence"]["devices"] = []
+    config["presence"]["people"] = [{"name": "Scott", **person}]
+    return config
+
+
+async def test_a_person_entity_seeds_the_devices_and_pairs_the_companion(
+    hass: HomeAssistant,
+) -> None:
+    bermuda = fake_bermuda(hass)
+    watch = fake_watch(hass, bermuda)
+    companion = fake_companion(hass)
+    fake_person(hass, [bermuda.tracker, watch.tracker, companion.tracker])
+    entry = await add_entry(hass, people_config(person="person.scott", devices=[]))
+    presence = entry.runtime_data.presence
+    assert presence is not None and presence.ready
+
+    scott = presence.people["Scott"]
+    assert scott.person == "person.scott"
+    by_tracker = {device.tracker: device for device in scott.devices.values()}
+    assert set(by_tracker) == {bermuda.tracker, watch.tracker}
+    # two Bermuda devices and one companion: nothing is paired by guesswork
+    assert by_tracker[bermuda.tracker].companion is None
+    assert by_tracker[watch.tracker].companion is None
+    assert by_tracker[bermuda.tracker].name == "Scott's Phone"
+    assert by_tracker[bermuda.tracker].kind == "other"
+
+
+async def test_one_bermuda_device_and_one_companion_pair_up(hass: HomeAssistant) -> None:
+    bermuda = fake_bermuda(hass)
+    companion = fake_companion(hass)
+    fake_person(hass, [bermuda.tracker, companion.tracker])
+    entry = await add_entry(hass, people_config(person="person.scott", devices=[]))
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    (device,) = presence.people["Scott"].devices.values()
+    assert device.companion == companion.tracker
+    assert device.kind == "phone"
+    assert device.signals == companion.signals
+    assert device.found == {"activity": True, "steps": True, "battery_state": True}
+
+
+async def test_explicit_config_wins_over_the_seed(hass: HomeAssistant) -> None:
+    bermuda = fake_bermuda(hass)
+    companion = fake_companion(hass)
+    fake_person(hass, [bermuda.tracker, companion.tracker])
+    entry = await add_entry(
+        hass,
+        people_config(
+            person="person.scott",
+            devices=[
+                {
+                    "tracker": bermuda.tracker,
+                    "name": "Pocket phone",
+                    "kind": "phone",
+                    "companion": companion.tracker,
+                    "signals": {"steps": "sensor.somewhere_else"},
+                }
+            ],
+        ),
+    )
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    (device,) = presence.people["Scott"].devices.values()
+    assert device.name == "Pocket phone"
+    assert device.signals["steps"] == "sensor.somewhere_else"
+    assert device.found["steps"] is False
+    assert device.signals["activity"] == companion.signals["activity"]
+    assert device.found["activity"] is True
+
+
+async def test_a_person_without_a_name_is_called_after_the_first_device(
+    hass: HomeAssistant,
+) -> None:
+    bermuda = fake_bermuda(hass)
+    config = presence_config()
+    config["presence"]["devices"] = []
+    config["presence"]["people"] = [{"devices": [{"tracker": bermuda.tracker}]}]
+    entry = await add_entry(hass, config)
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    assert set(presence.people) == {"Scott's Phone"}
+
+
+async def test_the_person_filter_runs_over_every_device(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    watch = fake_watch(hass, bermuda)
+    entry = await add_entry(
+        hass,
+        people_config(
+            devices=[
+                {"tracker": bermuda.tracker, "kind": "phone"},
+                {"tracker": watch.tracker, "kind": "watch"},
+            ]
+        ),
+    )
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    hass.states.async_set(bermuda.tracker, "home")
+    hass.states.async_set(watch.tracker, "home")
+    for _ in range(4):
+        for room, entity_id in bermuda.sensors.items():
+            hass.states.async_set(entity_id, f"{0.5 if room == 'kitchen' else 8.0:.3f}")
+        for room, entity_id in watch.sensors.items():
+            hass.states.async_set(entity_id, f"{0.5 if room == 'kitchen' else 8.0:.3f}")
+        await hass.async_block_till_done()
+        freezer.tick(timedelta(seconds=OBSERVATION_DEBOUNCE + 0.1))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+        # a real radio never repeats itself
+        for entity_id in (*bermuda.sensors.values(), *watch.sensors.values()):
+            state = hass.states.get(entity_id)
+            hass.states.async_set(entity_id, f"{float(state.state) + 0.001:.3f}")
+    out = presence.people["Scott"].outputs
+    assert out is not None and out.room == "kitchen"
+    assert set(out.carried) == set(presence.people["Scott"].devices)
+    assert presence.occupants["kitchen"] == ["Scott"]
+    for device in presence.people["Scott"].devices.values():
+        assert device.outputs is not None and device.outputs.room == "kitchen"
+
+
+async def test_a_charging_phone_is_read_as_parked(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    bermuda = fake_bermuda(hass)
+    companion = fake_companion(hass)
+    entry = await add_entry(
+        hass,
+        people_config(
+            devices=[{"tracker": bermuda.tracker, "kind": "phone", "companion": companion.tracker}]
+        ),
+    )
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    hass.states.async_set(companion.signals["battery_state"], "charging")
+    hass.states.async_set(companion.signals["activity"], "stationary")
+    for _ in range(3):
+        await observe(hass, freezer, bermuda, "kitchen")
+        freezer.tick(timedelta(seconds=120))
+    (device,) = presence.people["Scott"].devices
+    out = presence.people["Scott"].outputs
+    assert out is not None and out.carried[device] < 0.5
+    frame = presence._frame(presence.people["Scott"].devices[device], presence.coordinator.now())
+    assert frame.signals.charging is True
+    assert frame.signals.moving is False
+
+
+async def test_walking_and_rising_steps_read_as_moving(hass: HomeAssistant) -> None:
+    bermuda = fake_bermuda(hass)
+    companion = fake_companion(hass)
+    entry = await add_entry(
+        hass,
+        people_config(
+            devices=[{"tracker": bermuda.tracker, "kind": "phone", "companion": companion.tracker}]
+        ),
+    )
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    (device,) = presence.people["Scott"].devices.values()
+    hass.states.async_set(companion.signals["activity"], "walking")
+    assert presence._frame(device, 100.0).signals.moving is True
+    hass.states.async_set(companion.signals["activity"], "stationary")
+    hass.states.async_set(companion.signals["steps"], "1000")
+    assert presence._frame(device, 200.0).signals.moving is False
+    hass.states.async_set(companion.signals["steps"], "1020")
+    assert presence._frame(device, 210.0).signals.moving is True
+    assert presence._frame(device, 210.0 + 121.0).signals.moving is False
+
+
+async def test_jitter_is_a_wandering_closest_distance(hass: HomeAssistant) -> None:
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass, people_config(devices=[{"tracker": bermuda.tracker}]))
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    (device,) = presence.people["Scott"].devices.values()
+    for room, entity_id in bermuda.sensors.items():
+        hass.states.async_set(entity_id, "0.5" if room == "kitchen" else "8.0")
+    assert presence._frame(device, 0.0).signals.jitter is None  # one sample says nothing
+    assert presence._frame(device, 10.0).signals.jitter is False
+    hass.states.async_set(bermuda.sensors["kitchen"], "2.5")
+    assert presence._frame(device, 20.0).signals.jitter is True
+
+
+async def test_the_parked_phone_scenario_end_to_end(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The phone stays in the dining room; the watch and the motion go to the kitchen."""
+    bermuda = fake_bermuda(hass)
+    watch = fake_watch(hass, bermuda)
+    entry = await add_entry(
+        hass,
+        people_config(
+            devices=[
+                {"tracker": bermuda.tracker, "kind": "phone"},
+                {"tracker": watch.tracker, "kind": "watch"},
+            ]
+        ),
+    )
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    hass.states.async_set(bermuda.tracker, "home")
+    hass.states.async_set(watch.tracker, "home")
+
+    async def tick(phone_room: str, watch_room: str, jitter: float) -> None:
+        for room, entity_id in bermuda.sensors.items():
+            hass.states.async_set(entity_id, f"{0.5 if room == phone_room else 8.0:.3f}")
+        for room, entity_id in watch.sensors.items():
+            hass.states.async_set(entity_id, f"{(0.5 if room == watch_room else 8.0) + jitter:.3f}")
+        await hass.async_block_till_done()
+        freezer.tick(timedelta(seconds=OBSERVATION_DEBOUNCE + 0.1))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+        state = hass.states.get(bermuda.sensors[phone_room])
+        hass.states.async_set(bermuda.sensors[phone_room], f"{float(state.state) + 0.001:.3f}")
+
+    hass.states.async_set("binary_sensor.dining_motion", "on")
+    for i in range(6):
+        await tick("dining_room", "dining_room", 0.3 * (i % 2))
+    assert presence.people["Scott"].outputs.room == "dining_room"
+
+    hass.states.async_set("binary_sensor.dining_motion", "off")
+    hass.states.async_set("binary_sensor.kitchen_motion", "on")
+    freezer.tick(timedelta(hours=3))  # the dining room's level runs out
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    hass.states.async_set("binary_sensor.kitchen_motion", "off")
+    hass.states.async_set("binary_sensor.kitchen_motion", "on")
+    out = None
+    for i in range(30):
+        await tick("dining_room", "kitchen", 0.3 * (i % 2))
+        out = presence.people["Scott"].outputs
+        phone = next(d for d in presence.people["Scott"].devices.values() if d.kind == "phone")
+        if out.room == "kitchen" and out.carried[phone.id] < 0.5:
+            break
+    assert out is not None and out.room == "kitchen"
+    assert out.carried[phone.id] < 0.5
+    assert out.device_rooms[phone.id] == "dining_room"
 
 
 # -- repair issues -----------------------------------------------------------
@@ -253,7 +508,8 @@ async def test_bermuda_still_starting_up_is_not_bermuda_missing(hass: HomeAssist
         ir.async_get(hass).async_get_issue(DOMAIN, f"{ISSUE_BERMUDA_MISSING}_{entry.entry_id}")
         is None
     )
-    assert presence.devices["Scott"].tracker == bermuda.tracker
+    (track,) = presence.people["Scott"].devices.values()
+    assert track.tracker == bermuda.tracker
 
 
 async def test_turning_presence_off_clears_the_issues_it_left_behind(
@@ -323,7 +579,7 @@ async def test_a_reading_in_feet_is_read_as_metres(hass: HomeAssistant) -> None:
     entry = await add_entry(hass)
     presence = entry.runtime_data.presence
     assert presence is not None
-    track = presence.devices["Scott"]
+    (track,) = presence.people["Scott"].devices.values()
 
     for room, entity_id in bermuda.sensors.items():
         feet = 9.84 if room == "kitchen" else 32.81  # 3 m and 10 m
@@ -332,7 +588,7 @@ async def test_a_reading_in_feet_is_read_as_metres(hass: HomeAssistant) -> None:
         bermuda.sensors["hall"], "5.0", {"unit_of_measurement": "m"}
     )  # a sensor left in metres still reads as metres
 
-    distances = presence._observation(track, 0.0).distances
+    distances = presence._frame(track, 0.0).distances
     by_room = {presence.scanner_map[key]: value for key, value in distances.items()}
     assert by_room["kitchen"] == pytest.approx(3.0, abs=0.01)
     assert by_room["dining_room"] == pytest.approx(10.0, abs=0.01)
@@ -564,7 +820,10 @@ async def test_the_belief_survives_a_reload(
     await entry.runtime_data.presence.async_stop()
     await hass.async_block_till_done()
     stored = hass_storage[presence_storage_key(entry.entry_id)]["data"]
-    assert stored["beliefs"]["Scott"]["states"][0] == "kitchen"
+    assert stored["people"]["Scott"]["states"][0] == "kitchen"
+    # HA's slugify spells the apostrophe out, as it does for entity ids
+    assert stored["people"]["Scott"]["devices"] == ["scott_s_phone"]
+    assert stored["devices"]["Scott"]["scott_s_phone"]["states"][0] == "kitchen"
 
     # with no readings left, only a restored belief can still name the hall
     await blank(hass, bermuda)
@@ -572,8 +831,41 @@ async def test_the_belief_survives_a_reload(
     await hass.async_block_till_done()
     presence = entry.runtime_data.presence
     assert presence is not None
-    outputs = presence.devices["Scott"].outputs
+    outputs = presence.people["Scott"].outputs
     assert outputs is not None and outputs.room == "hall"
+    (device,) = presence.people["Scott"].devices.values()
+    assert device.outputs is not None and device.outputs.room == "hall"
+
+
+async def test_a_store_from_before_people_had_devices_still_restores(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """The old store held one belief per name; it seeds the one device's filter."""
+    bermuda = fake_bermuda(hass)
+    topo = build_topology(validate_config(presence_config()))
+    belief = [0.0] * len(topo.states)
+    belief[topo.index("hall")] = 1.0
+    hass_storage[presence_storage_key("legacy")] = {
+        "version": PRESENCE_STORAGE_VERSION,
+        "data": {"beliefs": {"Scott": {"states": list(topo.states), "belief": belief, "t": 1.0}}},
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options=validate_config(presence_config()),
+        title="Activity Levels",
+        entry_id="legacy",
+    )
+    for entity_id in ROOM_SENSORS:
+        hass.states.async_set(entity_id, "off")
+    await blank(hass, bermuda)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    presence = entry.runtime_data.presence
+    assert presence is not None
+    (device,) = presence.people["Scott"].devices.values()
+    assert device.outputs is not None and device.outputs.room == "hall"
 
 
 async def test_a_changed_topology_discards_the_stored_belief(

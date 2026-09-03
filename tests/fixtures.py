@@ -309,3 +309,108 @@ def fake_bermuda(
         scanner_devices=scanner_devices,
         areas=room_areas,
     )
+
+
+WATCH_ADDRESS = "11:11:11:22:22:22"
+
+
+@dataclass
+class FakeDevice:
+    """A second Bermuda device -- a watch -- seen by the same scanners."""
+
+    tracker: str
+    sensors: dict[str, str]  # room id -> distance sensor entity id
+
+
+def fake_watch(
+    hass: HomeAssistant, bermuda: FakeBermuda, name: str = "Scott's Watch"
+) -> FakeDevice:
+    """Register one more Bermuda device against the scanners ``fake_bermuda`` made."""
+    devices = dr.async_get(hass)
+    entities = er.async_get(hass)
+    watch = devices.async_get_or_create(
+        config_entry_id=bermuda.entry.entry_id,
+        identifiers={("bermuda", WATCH_ADDRESS)},
+        name=name,
+    )
+    tracker = entities.async_get_or_create(
+        "device_tracker",
+        "bermuda",
+        WATCH_ADDRESS,
+        config_entry=bermuda.entry,
+        device_id=watch.id,
+        original_name="Bermuda Tracker",
+        has_entity_name=True,
+        suggested_object_id="scotts_watch",
+    )
+    sensors: dict[str, str] = {}
+    for room, scanner_id in bermuda.scanner_devices.items():
+        scanner = devices.async_get(scanner_id)
+        assert scanner is not None
+        address = next(value for domain, value in scanner.identifiers if domain == "bermuda")
+        sensor = entities.async_get_or_create(
+            "sensor",
+            "bermuda",
+            f"{WATCH_ADDRESS}_{address}_range",
+            config_entry=bermuda.entry,
+            device_id=watch.id,
+            original_device_class="distance",
+            suggested_object_id=f"scotts_watch_distance_to_{room}",
+        )
+        sensors[room] = sensor.entity_id
+    return FakeDevice(tracker=tracker.entity_id, sensors=sensors)
+
+
+@dataclass
+class FakeCompanion:
+    """A mobile_app device: its device_tracker and the three sensors the carried
+    estimate reads, keyed by role."""
+
+    tracker: str
+    signals: dict[str, str]
+
+
+def fake_companion(
+    hass: HomeAssistant,
+    name: str = "Scott's iPhone",
+    *,
+    roles: tuple[str, ...] = ("activity", "steps", "battery_state"),
+) -> FakeCompanion:
+    """Register a companion-app device the way mobile_app does: one device, a tracker,
+    and sensors whose unique ids end in the sensor's own key."""
+    entry = MockConfigEntry(domain="mobile_app", data={}, title=name)
+    entry.add_to_hass(hass)
+    devices = dr.async_get(hass)
+    entities = er.async_get(hass)
+    webhook = "webhook_" + name.lower().replace("'", "").replace(" ", "_")
+    device = devices.async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={("mobile_app", webhook)}, name=name
+    )
+    slug = name.lower().replace("'", "").replace(" ", "_")
+    tracker = entities.async_get_or_create(
+        "device_tracker",
+        "mobile_app",
+        webhook,
+        config_entry=entry,
+        device_id=device.id,
+        suggested_object_id=slug,
+    )
+    signals: dict[str, str] = {}
+    for role in roles:
+        sensor = entities.async_get_or_create(
+            "sensor",
+            "mobile_app",
+            f"{webhook}_{role}",
+            config_entry=entry,
+            device_id=device.id,
+            suggested_object_id=f"{slug}_{role}",
+        )
+        signals[role] = sensor.entity_id
+    hass.states.async_set(tracker.entity_id, "home")
+    return FakeCompanion(tracker=tracker.entity_id, signals=signals)
+
+
+def fake_person(hass: HomeAssistant, trackers: list[str], entity_id: str = "person.scott") -> str:
+    """A person entity as the person integration writes it: its trackers as an attribute."""
+    hass.states.async_set(entity_id, "home", {"device_trackers": list(trackers), "id": "scott"})
+    return entity_id

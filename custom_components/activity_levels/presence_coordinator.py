@@ -2,11 +2,14 @@
 
 The integration-side half of :mod:`.presence`, mirroring :class:`.PatternsCoordinator`.
 It finds Bermuda's scanners and per-scanner distance sensors through the registries,
-coalesces their updates into one :class:`.Observation` per device per tick, runs each
-device's :class:`.Estimator`, and turns the answers into occupancy -- which is the only
-thing the engine ever hears about presence.
+finds each person's devices -- seeded from their ``person`` entity, refined by the
+configuration -- and the companion-app sensors that say whether a device is being
+carried, coalesces every update into one :class:`.PersonObservation` per person per
+tick, runs each person's :class:`.PersonEstimator` (and each device's own
+:class:`.Estimator`, for where the *object* is), and turns the answers into occupancy
+-- which is the only thing the engine ever hears about presence.
 
-Nothing here does arithmetic on a belief: the filter owns numpy, this owns Home
+Nothing here does arithmetic on a belief: the filters own numpy, this owns Home
 Assistant. Constructed only when ``presence.enabled`` is set; with Bermuda missing it
 raises a repair issue and stays inert rather than failing setup.
 """
@@ -14,6 +17,7 @@ raises a repair issue and stays inert rather than failing setup.
 from __future__ import annotations
 
 import logging
+from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -43,6 +47,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
 from homeassistant.util.unit_conversion import DistanceConverter
 from homeassistant.util.unit_system import LENGTH_UNITS
 
@@ -64,14 +69,19 @@ from .const import (
     presence_storage_key,
 )
 from .coordinator import ActivityLevelsCoordinator
+from .presence.carried import Signals, Weights
 from .presence.estimator import CANDIDATE_FLOOR, Estimator, Outputs
 from .presence.observation import (
     BERMUDA_DOMAIN,
+    DeviceFrame,
     Observation,
+    PersonObservation,
     RoomActivity,
     parse_distance,
     scanner_key,
 )
+from .presence.person import PersonEstimator, PersonOutputs
+from .schema import SIGNAL_KEYS
 from .topology import Topology
 
 _LOGGER = logging.getLogger(__name__)
@@ -83,12 +93,21 @@ REGISTRY_DEBOUNCE = 5.0
 """Adopting one device rewrites the device registry and then every entity on it."""
 SAVE_DELAY = 10.0
 AWAY_LABEL = "Away"
+COMPANION_DOMAIN = "mobile_app"
+MOVING_ACTIVITIES = frozenset({"walking", "running", "automotive", "cycling"})
+"""What the companion app's activity sensor says while the phone is going somewhere."""
+CHARGING_STATES = frozenset({"charging", "full"})
+"""What its battery-state sensor says while the phone is on a cable."""
+JITTER_SAMPLES = 64
+"""Closest-distance readings kept per device for the jitter signal; more than
+``carried.recent`` seconds of Bermuda's cadence, which is all the window ever reads."""
 _FLOOR_LIKE = frozenset({KIND_FLOOR, KIND_STRUCTURE, KIND_PROPERTY})
 """The kinds a floor answer may name, nearest first: the floor itself, else whatever
 stacks the rooms directly in a house that declares none."""
 _NOT_EVIDENCE = frozenset({TRIGGER_KEY, PRESENCE_KEY})
 """The channels a room's evidence level leaves out: the simulation's impulses, and the
 presence voice that would otherwise let the estimator confirm itself."""
+_ABSENT = (STATE_NOT_HOME, STATE_UNAVAILABLE, STATE_UNKNOWN)
 
 PRESENCE_ISSUES = (
     ISSUE_BERMUDA_MISSING,
@@ -115,14 +134,39 @@ def clear_presence_issues(hass: HomeAssistant, entry_id: str) -> None:
 
 @dataclass
 class TrackedDevice:
-    """One person's phone: where its readings come from, and what we make of them."""
+    """One of a person's devices: where its readings come from, and what we make of them.
 
+    ``estimator`` and ``outputs`` are about the *object* -- which room the phone is in,
+    carried or not. Whether it is on anybody is the person filter's question.
+    """
+
+    id: str
     name: str
+    kind: str
     tracker: str
     device_id: str | None = None
     sensors: dict[str, str] = field(default_factory=dict)
+    companion: str | None = None
+    signals: dict[str, str | None] = field(default_factory=dict)
+    found: dict[str, bool] = field(default_factory=dict)
     estimator: Estimator | None = None
     outputs: Outputs | None = None
+    closest: deque[tuple[float, float]] = field(
+        default_factory=lambda: deque(maxlen=JITTER_SAMPLES)
+    )
+    steps: float | None = None
+    steps_rose_at: float | None = None
+
+
+@dataclass
+class TrackedPerson:
+    """One person: their devices, their filter, and its last answer."""
+
+    name: str
+    person: str | None
+    devices: dict[str, TrackedDevice] = field(default_factory=dict)
+    estimator: PersonEstimator | None = None
+    outputs: PersonOutputs | None = None
 
 
 @dataclass(frozen=True)
@@ -152,7 +196,7 @@ class PresenceCoordinator:
         self.topology = topology
         self.settings: dict[str, Any] = dict(config[CONF_PRESENCE])
         self.threshold: float = self.settings["threshold"]
-        self.devices: dict[str, TrackedDevice] = {}
+        self.people: dict[str, TrackedPerson] = {}
         self.scanners: dict[str, Scanner] = {}
         self.scanner_map: dict[str, str] = {}
         self.unmapped: list[str] = []
@@ -161,7 +205,7 @@ class PresenceCoordinator:
         self._store: Store[dict[str, Any]] = Store(
             hass, PRESENCE_STORAGE_VERSION, presence_storage_key(entry.entry_id)
         )
-        self._beliefs: dict[str, Any] = {}
+        self._stored: dict[str, Any] = {}
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[CALLBACK_TYPE] = []
         self._state_unsub: CALLBACK_TYPE | None = None
@@ -172,12 +216,18 @@ class PresenceCoordinator:
         self._usable = False
         self._stopped = False
 
+    @property
+    def devices(self) -> dict[str, TrackedPerson]:
+        """The people, under the name this had when a person was one device. Kept for
+        one release so the entities and the panel can move over at their own pace."""
+        return self.people
+
     # -- lifecycle -----------------------------------------------------------
 
     @property
     def ready(self) -> bool:
         """Whether anything is actually being estimated right now."""
-        return self._usable and bool(self.devices)
+        return self._usable and bool(self.people)
 
     async def async_start(self) -> None:
         """Load the stored beliefs, discover Bermuda, and start listening.
@@ -188,9 +238,8 @@ class PresenceCoordinator:
         """
         clear_presence_issues(self.hass, self.entry.entry_id)
         stored = await self._store.async_load()
-        beliefs = stored.get("beliefs") if isinstance(stored, Mapping) else None
         # a store we can no longer read is a uniform prior, not a failed setup
-        self._beliefs = dict(beliefs) if isinstance(beliefs, Mapping) else {}
+        self._stored = dict(stored) if isinstance(stored, Mapping) else {}
 
         if not self._bermuda_loaded():
             self._issue(ISSUE_BERMUDA_MISSING, present=True)
@@ -256,7 +305,7 @@ class PresenceCoordinator:
 
     @callback
     def async_add_listener(self, cb: Callable[[], None]) -> Callable[[], None]:
-        """Subscribe to "a device's estimate moved"; the returned callable unsubscribes."""
+        """Subscribe to "somebody's estimate moved"; the returned callable unsubscribes."""
         self._listeners.append(cb)
 
         def remove() -> None:
@@ -276,72 +325,70 @@ class PresenceCoordinator:
         """Re-read the registries: who is tracked, by which scanners, in which rooms.
 
         Everything is rebuilt from scratch each time -- a scanner moving to another area
-        has to be able to move its readings with it -- but each device's belief is
-        carried over, because the state space has not changed.
+        has to be able to move its readings with it -- but every belief is carried over
+        by person and device name, because the state space has not changed.
         """
         entities = er.async_get(self.hass)
         devices = dr.async_get(self.hass)
         self.scanners = {}
         disabled: list[str] = []
         wrong: list[str] = []
-        tracked: dict[str, TrackedDevice] = {}
+        people: dict[str, TrackedPerson] = {}
 
-        # one device per person for now: the first tracker each person lists is the one
-        # that is followed, until the person filter takes all of them
-        specs = [
-            {"device": person["devices"][0]["tracker"], "name": person["name"]}
-            for person in self.settings["people"]
-            if person["devices"]
-        ]
-        for spec in specs:
-            entry = entities.async_get(spec["device"])
-            if entry is None or entry.platform != BERMUDA_DOMAIN:
-                # two different mistakes with the same consequence, and the fix differs:
-                # a typo or a removed entity, versus somebody else's device_tracker
-                reason = "no such entity" if entry is None else "not a Bermuda entity"
-                wrong.append(f"{spec['device']} ({reason})")
-                _LOGGER.warning("Ignoring tracked device %s: %s", spec["device"], reason)
+        for spec in self.settings["people"]:
+            tracked: list[TrackedDevice] = []
+            for device_spec in self._device_specs(spec, entities):
+                entry = entities.async_get(device_spec["tracker"])
+                if entry is None or entry.platform != BERMUDA_DOMAIN:
+                    # two different mistakes with the same consequence, and the fix
+                    # differs: a typo or a removed entity, versus somebody else's tracker
+                    reason = "no such entity" if entry is None else "not a Bermuda entity"
+                    wrong.append(f"{device_spec['tracker']} ({reason})")
+                    _LOGGER.warning(
+                        "Ignoring tracked device %s: %s", device_spec["tracker"], reason
+                    )
+                    continue
+                name = device_spec["name"] or self._tracked_name(devices, entry)
+                track = TrackedDevice(
+                    id=slugify(name),
+                    name=name,
+                    kind=device_spec["kind"],
+                    tracker=entry.entity_id,
+                    device_id=entry.device_id,
+                    companion=device_spec["companion"],
+                )
+                if entry.device_id is not None:
+                    for member in er.async_entries_for_device(
+                        entities, entry.device_id, include_disabled_entities=True
+                    ):
+                        key = scanner_key(member.unique_id, entry.unique_id)
+                        if key is None or member.domain != "sensor":
+                            continue  # the device's area sensor and friends are not readings
+                        if member.disabled:
+                            # Bermuda ships these off; without them there is nothing to filter
+                            disabled.append(member.entity_id)
+                            continue
+                        track.sensors[member.entity_id] = key
+                        self._register_scanner(devices, key)
+                self._find_signals(track, device_spec["signals"], entities)
+                tracked.append(track)
+            if not tracked:
                 continue
-            name = spec["name"] or self._tracked_name(devices, entry)  # None: after the device
-            track = TrackedDevice(name=name, tracker=entry.entity_id, device_id=entry.device_id)
-            if entry.device_id is not None:
-                for member in er.async_entries_for_device(
-                    entities, entry.device_id, include_disabled_entities=True
-                ):
-                    key = scanner_key(member.unique_id, entry.unique_id)
-                    if key is None or member.domain != "sensor":
-                        continue  # the device's area sensor and friends are not readings
-                    if member.disabled:
-                        # Bermuda ships these off; without them there is nothing to filter
-                        disabled.append(member.entity_id)
-                        continue
-                    track.sensors[member.entity_id] = key
-                    self._register_scanner(devices, key)
-            tracked[name] = track
+            name = spec["name"] or tracked[0].name
+            person = TrackedPerson(name=name, person=spec["person"])
+            for track in tracked:
+                # ids are entity-id fragments, so two "Phone"s must not collide
+                base, suffix = track.id, 2
+                while track.id in person.devices:
+                    track.id = f"{base}_{suffix}"
+                    suffix += 1
+                person.devices[track.id] = track
+            people[name] = person
 
         self._map_scanners()
-        for name, track in tracked.items():
-            previous = self.devices.get(name)
-            track.estimator = Estimator(
-                self.topology,
-                self.scanner_map,
-                stay=self.settings["stay"],
-                escape=self.settings["escape"],
-                scale=self.settings["scale"],
-                floor=self.settings["floor"],
-                stuck_after=self.settings["stuck_after"],
-                activity_floor=self.settings["activity"]["floor"],
-            )
-            carried = (
-                previous.estimator.snapshot()
-                if previous is not None and previous.estimator is not None
-                else self._beliefs.get(name)
-            )
-            if isinstance(carried, Mapping) and track.estimator.restore(carried):
-                track.outputs = track.estimator.outputs()
-            elif previous is not None:
-                track.outputs = previous.outputs
-        self.devices = tracked
+        for name, person in people.items():
+            self._build_estimators(person, self.people.get(name))
+        self.people = people
         self.disabled = sorted(disabled)
 
         self._issue(ISSUE_NOT_BERMUDA, present=bool(wrong), entities=", ".join(sorted(wrong)))
@@ -356,16 +403,136 @@ class PresenceCoordinator:
             scanners=", ".join(self.scanners[key].name for key in self.unmapped),
         )
 
+    def _device_specs(
+        self, spec: Mapping[str, Any], entities: er.EntityRegistry
+    ) -> list[dict[str, Any]]:
+        """The devices one person is followed by: the config's, seeded from their
+        ``person`` entity.
+
+        The person entity lists every tracker Home Assistant already knows is theirs.
+        A Bermuda one is a device to follow; a mobile_app one is a companion, the thing
+        the carried signals hang off. They are paired only when there is exactly one of
+        each -- two phones and one companion app is a question for the configuration,
+        not a guess. A configured device wins over a seeded one with the same tracker.
+        """
+        configured = {device["tracker"]: dict(device) for device in spec["devices"]}
+        seeded: list[str] = []
+        companions: list[str] = []
+        if spec["person"] is not None and (state := self.hass.states.get(spec["person"])):
+            for tracker in state.attributes.get("device_trackers") or []:
+                entry = entities.async_get(tracker)
+                if entry is None:
+                    continue
+                if entry.platform == BERMUDA_DOMAIN and tracker not in configured:
+                    seeded.append(tracker)
+                elif entry.platform == COMPANION_DOMAIN:
+                    companions.append(tracker)
+        claimed = {device["companion"] for device in configured.values()}
+        free = [tracker for tracker in companions if tracker not in claimed]
+        pair = free[0] if len(seeded) == 1 and len(free) == 1 else None
+        for tracker in seeded:
+            configured[tracker] = {
+                "tracker": tracker,
+                "name": None,
+                "kind": "phone" if pair is not None else "other",
+                "companion": pair,
+                "signals": dict.fromkeys(SIGNAL_KEYS),
+            }
+        return list(configured.values())
+
+    def _find_signals(
+        self, track: TrackedDevice, explicit: Mapping[str, str | None], entities: er.EntityRegistry
+    ) -> None:
+        """Which entity carries each carried signal, and whether it is really there.
+
+        An explicit entity wins. Otherwise the companion's registry device is searched
+        for the sensor mobile_app registers under that key -- its unique id ends in the
+        key, whatever the entity has been renamed to. ``found`` says whether the entity
+        exists at all, which is what the panel shows next to each picker.
+        """
+        discovered: dict[str, str] = {}
+        entry = None if track.companion is None else entities.async_get(track.companion)
+        if entry is not None and entry.device_id is not None:
+            for member in er.async_entries_for_device(entities, entry.device_id):
+                if member.domain != "sensor":
+                    continue
+                for role in SIGNAL_KEYS:
+                    if member.unique_id.endswith(f"_{role}"):
+                        discovered.setdefault(role, member.entity_id)
+        for role in SIGNAL_KEYS:
+            entity_id = explicit.get(role) or discovered.get(role)
+            track.signals[role] = entity_id
+            track.found[role] = entity_id is not None and entities.async_get(entity_id) is not None
+
+    def _build_estimators(self, person: TrackedPerson, previous: TrackedPerson | None) -> None:
+        """One filter per device, one per person; beliefs carried over where they fit."""
+        settings = self.settings
+        stored_devices = self._stored.get("devices", {})
+        stored_people = self._stored.get("people", {})
+        legacy = self._stored.get("beliefs", {})
+        for device_id, track in person.devices.items():
+            track.estimator = Estimator(
+                self.topology,
+                self.scanner_map,
+                stay=settings["stay"],
+                escape=settings["escape"],
+                scale=settings["scale"],
+                floor=settings["floor"],
+                stuck_after=settings["stuck_after"],
+                activity_floor=settings["activity"]["floor"],
+            )
+            before = previous.devices.get(device_id) if previous is not None else None
+            carried: Any = None
+            if before is not None and before.estimator is not None:
+                carried = before.estimator.snapshot()
+                track.closest = before.closest
+                track.steps, track.steps_rose_at = before.steps, before.steps_rose_at
+            else:
+                carried = stored_devices.get(person.name, {}).get(device_id)
+                if carried is None and len(person.devices) == 1:
+                    # the store from before people had devices: one belief per name
+                    carried = legacy.get(person.name)
+            if isinstance(carried, Mapping) and track.estimator.restore(carried):
+                track.outputs = track.estimator.outputs()
+            elif before is not None:
+                track.outputs = before.outputs
+        weights = Weights(**settings["carried"]["weights"])
+        filters = {
+            device_id: track.estimator
+            for device_id, track in person.devices.items()
+            if track.estimator is not None
+        }
+        person.estimator = PersonEstimator(
+            self.topology,
+            filters,
+            stay=settings["stay"],
+            escape=settings["escape"],
+            prior=settings["carried"]["prior"],
+            flip=settings["carried"]["flip"],
+            recent=settings["carried"]["recent"],
+            weights=weights,
+            stuck_after=settings["stuck_after"],
+            nearby=settings["carried"]["nearby"],
+            activity_floor=settings["activity"]["floor"],
+        )
+        carried = (
+            previous.estimator.snapshot()
+            if previous is not None and previous.estimator is not None
+            else stored_people.get(person.name)
+        )
+        if isinstance(carried, Mapping) and person.estimator.restore(carried):
+            person.outputs = person.estimator.outputs()
+        elif previous is not None:
+            person.outputs = previous.outputs
+
     def _tracked_name(self, devices: dr.DeviceRegistry, entry: er.RegistryEntry) -> str:
-        """What to call the person behind one Bermuda tracker.
+        """What to call the device behind one Bermuda tracker.
 
         Bermuda names every one of its ``device_tracker`` entities "Bermuda Tracker" and
         leans on ``has_entity_name`` to put the device in front of it, so the entity's
-        own name identifies nobody -- it is the device, "Scott's iPhone", that says whose
-        phone this is. Reading the entity name would therefore hand every tracked device
-        the same name, and ``self.devices`` is keyed by name, so the second phone would
-        silently displace the first. A name the user typed into Home Assistant still
-        wins, because that is a deliberate answer to this very question.
+        own name identifies nothing -- it is the device, "Scott's iPhone", that says
+        whose phone this is. A name the user typed into Home Assistant still wins,
+        because that is a deliberate answer to this very question.
         """
         if entry.name:
             return entry.name
@@ -432,10 +599,16 @@ class PresenceCoordinator:
         if self._stopped:
             return
 
-        def fingerprint() -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+        def fingerprint() -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
             return (
                 dict(self.scanner_map),
-                {name: dict(track.sensors) for name, track in self.devices.items()},
+                {
+                    name: {
+                        device_id: (dict(track.sensors), dict(track.signals), track.companion)
+                        for device_id, track in person.devices.items()
+                    }
+                    for name, person in self.people.items()
+                },
             )
 
         before = fingerprint()
@@ -447,15 +620,21 @@ class PresenceCoordinator:
 
     # -- observations --------------------------------------------------------
 
+    def _watched(self) -> set[str]:
+        watched: set[str] = set()
+        for person in self.people.values():
+            for track in person.devices.values():
+                watched.add(track.tracker)
+                watched.update(track.sensors)
+                watched.update(entity_id for entity_id in track.signals.values() if entity_id)
+        return watched
+
     def _subscribe(self) -> None:
         """Point the state subscription at the entities discovery just found."""
         if self._state_unsub is not None:
             self._state_unsub()
             self._state_unsub = None
-        watched = sorted(
-            {track.tracker for track in self.devices.values()}
-            | {entity_id for track in self.devices.values() for entity_id in track.sensors}
-        )
+        watched = sorted(self._watched())
         if not watched:
             return
         self._state_unsub = async_track_state_change_event(
@@ -465,9 +644,14 @@ class PresenceCoordinator:
     @callback
     def _handle_state_event(self, event: Event[EventStateChangedData]) -> None:
         entity_id = event.data["entity_id"]
-        for name, track in self.devices.items():
-            if entity_id == track.tracker or entity_id in track.sensors:
-                self._dirty.add(name)
+        for name, person in self.people.items():
+            for track in person.devices.values():
+                if (
+                    entity_id == track.tracker
+                    or entity_id in track.sensors
+                    or entity_id in track.signals.values()
+                ):
+                    self._dirty.add(name)
         if not self._dirty or self._observe_timer is not None:
             return
         self._observe_timer = async_call_later(self.hass, OBSERVATION_DEBOUNCE, self._observe_due)
@@ -486,7 +670,7 @@ class PresenceCoordinator:
         contributor is the presence voice of the very person we are placing is empty by
         this measure, and that is exactly the case that has to fire.
         """
-        if self._stopped or not self._usable or not self.devices:
+        if self._stopped or not self._usable or not self.people:
             return
         activity = self._activity(self.coordinator.now()).get(gid)
         if activity is None:
@@ -495,7 +679,7 @@ class PresenceCoordinator:
         if self._empty.get(gid) is empty:
             return
         self._empty[gid] = empty
-        self._dirty.update(self.devices)
+        self._dirty.update(self.people)
         if self._observe_timer is None:
             self._observe_timer = async_call_later(
                 self.hass, OBSERVATION_DEBOUNCE, self._observe_due
@@ -509,22 +693,40 @@ class PresenceCoordinator:
         self._observe(dt_util.utcnow().timestamp())
 
     def _observe(self, t: float) -> None:
-        """Run the filter for every device whose readings moved since the last tick.
+        """Run the filters for every person whose readings moved since the last tick.
 
-        Occupancy is reapplied whether or not a filter ran, because "no device moved" is
+        The person filter goes first, because it reads each device filter's *prediction*
+        for this frame -- the "explained by wherever the object is" half of its emission
+        -- and that has to be read before the device filter sees the frame itself.
+
+        Occupancy is reapplied whether or not a filter ran, because "nothing moved" is
         not the same as "nothing changed": discovery can have just taken the last tracked
-        device away, and then the only thing that releases the gates is an evaluation
+        person away, and then the only thing that releases the gates is an evaluation
         over an empty set. Only the persist and the notify are skipped when there was
         nothing to filter, since neither has anything new to say.
         """
-        names = sorted(self._dirty) or sorted(self.devices)
+        names = sorted(self._dirty) or sorted(self.people)
         self._dirty.clear()
         moved = False
+        activity = self._activity(t)
         for name in names:
-            track = self.devices.get(name)
-            if track is None or track.estimator is None:
+            person = self.people.get(name)
+            if person is None or person.estimator is None:
                 continue
-            track.outputs = track.estimator.update(self._observation(track, t))
+            frames = {
+                device_id: self._frame(track, t, activity)
+                for device_id, track in person.devices.items()
+            }
+            person.outputs = person.estimator.update(
+                PersonObservation(t=t, devices=frames, activity=activity)
+            )
+            for device_id, track in person.devices.items():
+                if track.estimator is None:
+                    continue
+                frame = frames[device_id]
+                track.outputs = track.estimator.update(
+                    Observation(t=t, distances=frame.distances, home=frame.home, activity=activity)
+                )
             moved = True
         self._apply_occupancy()
         if not moved:
@@ -532,8 +734,14 @@ class PresenceCoordinator:
         self._store.async_delay_save(self._snapshot, SAVE_DELAY)
         self._notify()
 
-    def _observation(self, track: TrackedDevice, t: float) -> Observation:
-        """A full frame: every scanner we know of, ``None`` where there is no reading.
+    def _frame(
+        self,
+        track: TrackedDevice,
+        t: float,
+        activity: Mapping[str, RoomActivity] | None = None,
+    ) -> DeviceFrame:
+        """One device's full frame: every scanner we know of, ``None`` where there is no
+        reading, plus everything the carried signals can say right now.
 
         Never a delta of what changed -- the filter reads a missing scanner as silence
         and floors its room, so leaving an unchanged reading out would quietly promote
@@ -549,12 +757,78 @@ class PresenceCoordinator:
         # takes every tracker through `unavailable` and back, flips everybody to Away and
         # then home again -- a burst of note-offs and note-ons rather than a wrong belief.
         tracker = self.hass.states.get(track.tracker)
-        home = tracker is not None and tracker.state not in (
-            STATE_NOT_HOME,
-            STATE_UNAVAILABLE,
-            STATE_UNKNOWN,
+        home = tracker is not None and tracker.state not in _ABSENT
+        if activity is None:
+            activity = self._activity(t)
+        return DeviceFrame(
+            distances=distances,
+            home=home,
+            signals=self._signals(track, t, distances, activity),
         )
-        return Observation(t=t, distances=distances, home=home, activity=self._activity(t))
+
+    def _signals(
+        self,
+        track: TrackedDevice,
+        t: float,
+        distances: Mapping[str, float | None],
+        activity: Mapping[str, RoomActivity],
+    ) -> Signals:
+        """The side evidence about one device being carried, from whatever exists.
+
+        Each signal is ``None`` when nothing can say: no companion sensor, no history
+        yet. The estimator reads ``None`` as silence, so a watch with no companion app
+        is judged on its readings alone rather than on absent sensors.
+        """
+        recent: float = self.settings["carried"]["recent"]
+        charging = self._read(track, "battery_state")
+        motion = self._read(track, "activity")
+        steps = self._read(track, "steps")
+
+        moving: bool | None = None
+        if motion is not None:
+            moving = motion in MOVING_ACTIVITIES
+        if steps is not None:
+            try:
+                count = float(steps)
+            except ValueError:
+                count = None
+            if count is not None:
+                if track.steps is not None and count > track.steps:
+                    track.steps_rose_at = t
+                track.steps = count
+                rose = track.steps_rose_at is not None and t - track.steps_rose_at <= recent
+                moving = True if rose else (moving if moving is not None else False)
+
+        heard = [d for d in distances.values() if d is not None]
+        if heard:
+            track.closest.append((t, min(heard)))
+        window = [d for when, d in track.closest if t - when <= recent]
+        jitter: bool | None = None
+        if len(window) >= 2:
+            jitter = (max(window) - min(window)) > self.settings["scale"] / 3.0
+
+        still_room_empty: bool | None = None
+        if moving is not True and track.outputs is not None and track.outputs.room != AWAY:
+            level = activity.get(track.outputs.room)
+            if level is not None:
+                still_room_empty = level.level <= 0.0
+
+        return Signals(
+            charging=None if charging is None else charging in CHARGING_STATES,
+            moving=moving,
+            still_room_empty=still_room_empty,
+            jitter=jitter,
+        )
+
+    def _read(self, track: TrackedDevice, role: str) -> str | None:
+        """One companion sensor's state, or None when there is no usable reading."""
+        entity_id = track.signals.get(role)
+        if entity_id is None:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return None
+        return state.state
 
     def _activity(self, t: float) -> dict[str, RoomActivity]:
         """Every room's evidence level: the mix with the trigger and presence voices out.
@@ -609,8 +883,8 @@ class PresenceCoordinator:
         shut until somebody leaves the room and comes back.
         """
         occupants: dict[str, list[str]] = {gid: [] for gid in self.topology.nodes}
-        for name, track in sorted(self.devices.items()):
-            out = track.outputs
+        for name, person in sorted(self.people.items()):
+            out = person.outputs
             if out is None or out.room == AWAY or out.confidence < self.threshold:
                 continue
             occupants[out.room].append(name)
@@ -622,11 +896,19 @@ class PresenceCoordinator:
 
     def _snapshot(self) -> dict[str, Any]:
         return {
-            "beliefs": {
-                name: track.estimator.snapshot()
-                for name, track in self.devices.items()
-                if track.estimator is not None
-            }
+            "people": {
+                name: person.estimator.snapshot()
+                for name, person in self.people.items()
+                if person.estimator is not None
+            },
+            "devices": {
+                name: {
+                    device_id: track.estimator.snapshot()
+                    for device_id, track in person.devices.items()
+                    if track.estimator is not None
+                }
+                for name, person in self.people.items()
+            },
         }
 
     # -- reads ---------------------------------------------------------------
@@ -670,35 +952,61 @@ class PresenceCoordinator:
         rooms at 0.08 each is a confident floor and no confident room, and that is the
         whole point of answering at the floor. ``away`` is its own answer with no floor.
         """
-        track = self.devices.get(name)
-        out = None if track is None else track.outputs
-        if out is None or track is None or track.estimator is None:
+        person = self.people.get(name)
+        out = None if person is None else person.outputs
+        if out is None or person is None or person.estimator is None:
             return None, 0.0, {}
         if out.room == AWAY:
             return None, out.confidence, {}
         floor = self.floor_of(out.room)
         if floor is None:
             return None, out.confidence, dict(out.candidates)
-        estimator = track.estimator
+        belief = person.estimator.room_belief
         mass = 0.0
         rooms: dict[str, float] = {}
-        for i, state in enumerate(estimator.states):
+        for i, state in enumerate(person.estimator.states):
             if state == AWAY or self.floor_of(state) != floor:
                 continue
-            p = float(estimator.belief[i])
+            p = float(belief[i])
             mass += p
             if p > CANDIDATE_FLOOR:
                 rooms[state] = round(p, 4)
         return floor, round(mass, 4), rooms
 
+    def _device_payload(self, track: TrackedDevice, out: PersonOutputs | None) -> dict[str, Any]:
+        return {
+            "name": track.name,
+            "kind": track.kind,
+            "tracker": track.tracker,
+            "companion": track.companion,
+            "room": None if track.outputs is None else track.outputs.room,
+            "confidence": None if track.outputs is None else track.outputs.confidence,
+            "carried": None if out is None else out.carried.get(track.id),
+            "signals": dict(track.signals),
+            "found": dict(track.found),
+        }
+
     def payload(self) -> dict[str, Any]:
         """What ``activity_levels/presence/state`` answers."""
+        people = {
+            name: {
+                **(person.outputs.as_dict() if person.outputs is not None else {}),
+                "person": person.person,
+                "devices": {
+                    device_id: self._device_payload(track, person.outputs)
+                    for device_id, track in person.devices.items()
+                },
+            }
+            for name, person in self.people.items()
+        }
         return {
             "enabled": True,
+            "people": people,
+            # the map this answered with when a person was one device; one release
             "devices": {
-                name: track.outputs.as_dict()
-                for name, track in self.devices.items()
-                if track.outputs is not None
+                name: person.outputs.as_dict()
+                for name, person in self.people.items()
+                if person.outputs is not None
             },
             "occupants": {gid: list(who) for gid, who in self.occupants.items()},
             "scanners": [
@@ -716,7 +1024,7 @@ class PresenceCoordinator:
         }
 
     def diagnostics(self) -> dict[str, Any]:
-        """The mapping and each device's raw belief: the two things a bug report needs."""
+        """The mapping and every raw belief: the things a bug report needs."""
         return {
             "ready": self.ready,
             "settings": dict(self.settings),
@@ -726,13 +1034,28 @@ class PresenceCoordinator:
             "occupants": {gid: list(who) for gid, who in self.occupants.items()},
             "devices": {
                 name: {
-                    "tracker": track.tracker,
-                    "sensors": dict(track.sensors),
-                    "outputs": None if track.outputs is None else track.outputs.as_dict(),
-                    "belief": None if track.estimator is None else track.estimator.snapshot(),
-                    "resets": 0 if track.estimator is None else track.estimator.resets,
+                    "person": person.person,
+                    "outputs": None if person.outputs is None else person.outputs.as_dict(),
+                    "belief": None if person.estimator is None else person.estimator.snapshot(),
+                    "resets": 0 if person.estimator is None else person.estimator.resets,
+                    "devices": {
+                        device_id: {
+                            "tracker": track.tracker,
+                            "kind": track.kind,
+                            "companion": track.companion,
+                            "sensors": dict(track.sensors),
+                            "signals": dict(track.signals),
+                            "found": dict(track.found),
+                            "outputs": None if track.outputs is None else track.outputs.as_dict(),
+                            "belief": None
+                            if track.estimator is None
+                            else track.estimator.snapshot(),
+                            "resets": 0 if track.estimator is None else track.estimator.resets,
+                        }
+                        for device_id, track in person.devices.items()
+                    },
                 }
-                for name, track in self.devices.items()
+                for name, person in self.people.items()
             },
         }
 
