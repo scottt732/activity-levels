@@ -23,13 +23,10 @@ import numpy.typing as npt
 from ..const import AWAY
 from ..topology import Topology
 from .observation import Observation
+from .stuck import StuckDetector
 
-HISTORY = 120
-"""Likelihoods the stuck detector keeps. At one observation a second, two minutes."""
 BUFFER = 30
 """Observations the bounded Viterbi runs over."""
-MIN_HISTORY = 20
-"""Before this many, there is no percentile worth comparing against."""
 CANDIDATE_FLOOR = 0.1
 MOVING_SECOND = 0.25
 PATH_STEPS = 5
@@ -86,10 +83,8 @@ class Estimator:
         size = len(self.states)
         self._position = {state: i for i, state in enumerate(self.states)}
         self.belief: npt.NDArray[np.float64] = np.full(size, 1.0 / size, dtype=np.float64)
-        self._history: deque[float] = deque(maxlen=HISTORY)
         self._buffer: deque[npt.NDArray[np.float64]] = deque(maxlen=BUFFER)
-        self._low_since: float | None = None
-        self._frozen: float | None = None
+        self._stuck = StuckDetector(stuck_after)
         self.last_t: float | None = None
         self.resets = 0
 
@@ -194,45 +189,17 @@ class Estimator:
     def _check_stuck(self, t: float, logp: float, likelihood: npt.NDArray[np.float64]) -> None:
         """Reset when the evidence has been implausible for ``stuck_after`` seconds.
 
-        "Implausible" is measured against this device's own history, not an absolute
-        number: how surprising a reading is depends entirely on how many scanners hear
-        it and how far away they are. Below the history's 5th percentile for long
-        enough means the filter is following somebody who is not there, and the fastest
-        way out is to stop predicting and believe what the scanners say.
-
-        Every reading enters the history, including the bad ones. Keeping them out looks
-        like it protects the definition of normal, but the retained window is then the
-        distribution conditioned on clearing the running 5th percentile -- and *its* 5th
-        percentile is higher again. That ratchets, one censored tail at a time, until
-        normal means the best reading ever seen and a motionless person trips the
-        detector. Measured: on a stationary stream the threshold climbed -0.55 to -0.18
-        over five thousand frames and then reset on nothing.
-
-        What must hold still instead is the bar for a run already in progress. The
-        threshold is frozen when the run opens and the whole run is judged against that
-        one value, so a long stretch of nonsense cannot lower the bar out from under
-        itself mid-run. Recovery or a reset throws the frozen value away and the live
-        percentile -- computed over every reading -- takes over again.
+        The rule lives in :class:`StuckDetector`; what a reset *does* is this filter's
+        business: stop predicting, believe what the scanners say, and start the
+        breadcrumb over.
         """
-        if len(self._history) >= MIN_HISTORY:
-            threshold = self._frozen
-            if threshold is None:
-                threshold = float(np.quantile(np.asarray(self._history, dtype=np.float64), 0.05))
-            if logp < threshold:
-                if self._low_since is None:
-                    self._low_since, self._frozen = t, threshold
-                elif t - self._low_since >= self.stuck_after:
-                    total = float(likelihood.sum())
-                    if total > 0.0:
-                        self.belief = likelihood / total
-                    self._buffer.clear()
-                    self._history.clear()
-                    self._low_since = self._frozen = None
-                    self.resets += 1
-                    return
-            else:
-                self._low_since = self._frozen = None
-        self._history.append(logp)
+        if not self._stuck.check(t, logp):
+            return
+        total = float(likelihood.sum())
+        if total > 0.0:
+            self.belief = likelihood / total
+        self._buffer.clear()
+        self.resets += 1
 
     # -- reads --------------------------------------------------------------
 
