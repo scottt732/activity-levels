@@ -23,6 +23,7 @@ import numpy.typing as npt
 from ..const import AWAY
 from ..topology import Topology
 from .observation import Observation, RoomActivity
+from .signatures import Signatures
 from .stuck import StuckDetector
 
 BUFFER = 30
@@ -78,6 +79,9 @@ class Estimator:
         self.floor = floor
         self.activity_floor = activity_floor
         self.stuck_after = stuck_after
+        self.signatures: Signatures = {}
+        """Learned per-room, per-scanner distance distributions; the coordinator sets
+        them when the learner has some. Empty means the fixed formula everywhere."""
         self._transition = topology.transition_matrix(stay, escape)
         self._log_transition = np.log(np.where(self._transition > 0.0, self._transition, _TINY))
         size = len(self.states)
@@ -111,8 +115,9 @@ class Estimator:
         ``away`` has no level and takes no term, which is why the shift matters: see
         :func:`log_activity`.
 
-        **This method is the seam.** Learned per-room, per-scanner distance tables
-        replace the distance half of it and change nothing else.
+        A learned signature (see :mod:`.signatures`) replaces the distance half of this
+        for the ``(room, scanner)`` pairs it has been fitted for -- a proper log-normal
+        likelihood of the reading, and of silence -- and the formula stays for the rest.
         """
         tau = self.scale
         log_floor = math.log(self.floor)
@@ -120,13 +125,29 @@ class Estimator:
         heard = np.zeros(len(self.states), dtype=bool)
         for scanner, distance in obs.distances.items():
             room = self.scanners.get(scanner)
-            if distance is None or room is None:
+            if room is None:
                 continue
             position = self._position[room]
+            # a learned signature answers for its own (room, scanner) pair, silence
+            # included -- a scanner that always hears you in a room argues against
+            # that room when it does not; the fixed formula answers for the rest
+            learned = [
+                (self._position[other], sig[scanner])
+                for other, sig in self.signatures.items()
+                if scanner in sig and other in self._position
+            ]
+            for index, signature in learned:
+                out[index] += signature.log_likelihood(distance)
+                heard[index] = True
+            if distance is None:
+                continue
             near = -distance / tau
             against = -max(0.0, tau - distance) / tau
-            out += against
-            out[position] += near - against
+            fixed = np.full(len(self.states), against, dtype=np.float64)
+            fixed[position] = near
+            for index, _ in learned:
+                fixed[index] = 0.0
+            out += fixed
             heard[position] = True
         out[~heard] = log_floor
         out[self._position[AWAY]] = 2.0 * log_floor if obs.home else 0.0
