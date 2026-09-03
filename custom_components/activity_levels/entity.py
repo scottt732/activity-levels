@@ -10,7 +10,7 @@ from homeassistant.util import slugify
 from .const import DOMAIN
 from .coordinator import ActivityLevelsCoordinator, GroupState
 from .presence.estimator import Outputs
-from .presence_coordinator import PresenceCoordinator
+from .presence_coordinator import PresenceCoordinator, TrackedDevice
 from .tree import GroupInfo
 
 
@@ -79,8 +79,8 @@ class PresenceEntity(Entity):
     @property
     def outputs(self) -> Outputs | None:
         """This person's last estimate, or None while there has not been one."""
-        track = self.presence.devices.get(self.person)
-        return None if track is None else track.outputs
+        person = self.presence.people.get(self.person)
+        return None if person is None else person.outputs
 
     @property
     def available(self) -> bool:
@@ -91,3 +91,35 @@ class PresenceEntity(Entity):
         """Write state whenever the filter has something new to say."""
         await super().async_added_to_hass()
         self.async_on_remove(self.presence.async_add_listener(self.async_write_ha_state))
+
+
+class DeviceEntity(PresenceEntity):
+    """One of a person's devices, as an entity on that person's device.
+
+    The person's device, not the phone's: the question these answer -- is it on them,
+    where is it -- is about the person, and everything about one person belongs in one
+    place. The device's name goes into the entity name, so two phones read apart.
+    """
+
+    def __init__(
+        self,
+        presence: PresenceCoordinator,
+        name: str,
+        device_id: str,
+        suffix: str,
+        platform: Platform,
+    ) -> None:
+        """Bind this entity to one of a person's devices and give it a stable id."""
+        super().__init__(presence, name, f"{device_id}_{suffix}", platform)
+        self.device_id = device_id
+        self._attr_translation_key = suffix
+        slug = slugify(name)
+        self._attr_unique_id = f"{presence.entry.entry_id}-presence-{slug}-{device_id}-{suffix}"
+        track = self.device
+        self._attr_translation_placeholders = {"device": track.name if track else device_id}
+
+    @property
+    def device(self) -> TrackedDevice | None:
+        """The tracked device behind this entity, or None once it has been removed."""
+        person = self.presence.people.get(self.person)
+        return None if person is None else person.devices.get(self.device_id)

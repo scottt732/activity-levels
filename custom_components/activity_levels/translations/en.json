@@ -18,9 +18,14 @@
       "profile": { "name": "Profile" },
       "room": { "name": "Room" },
       "floor": { "name": "Floor" },
+      "device_room": { "name": "{device} room" },
       "occupants": { "name": "Occupants" }
     },
-    "binary_sensor": { "active": { "name": "Active" }, "moving": { "name": "Moving" } },
+    "binary_sensor": {
+      "active": { "name": "Active" },
+      "moving": { "name": "Moving" },
+      "carried": { "name": "{device} carried" }
+    },
     "button": { "trigger": { "name": "Trigger" } },
     "switch": {
       "mute": { "name": "Mute" },

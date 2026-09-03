@@ -245,6 +245,8 @@ And, while presence is on, one pair per tracked person, each on its own **Presen
 | `sensor.<name>_room` | Which room a tracked person is in, or `Away`. Attributes: `group_id`, `confidence`, `moving`, `candidates`, `path`, `updated`. |
 | `sensor.<name>_floor` | Which floor (or, in a house that declares none, which building) a tracked person is on, or `Away`. Attributes: `group_id`, `confidence` — the belief summed over the floor's rooms, so it can be sure of the floor while the room is a toss-up — `rooms`, `updated`. |
 | `binary_sensor.<name>_moving` | On while the person's two most likely rooms are adjacent and both plausible. |
+| `binary_sensor.<name>_<device>_carried` | On while this device is probably on its person. Attribute: `probability`. |
+| `sensor.<name>_<device>_room` | Which room the *object* is in — the phone, carried or not. Attributes: `group_id`, `confidence`, `updated`. |
 
 ## Services
 
@@ -435,10 +437,24 @@ so it can never confirm itself. The one place the rule fails is a room somebody 
 in: a still sleeper trips no motion, and `0.0` there means nothing. Give such a room its own
 `presence.activity_floor: 1.0` and the estimator leaves it alone.
 
+**People and their devices.** A person is followed by every device they own — a phone,
+a watch, later a wallet tag — and whether each one is actually *on* them is something the
+estimate works out rather than assumes. It holds one belief per person over both the room
+and a carried flag per device: a device's readings are explained by the person's room while
+it is carried, and by wherever the device itself sits while it is not. So "phone parked on
+the theater couch, person in the kitchen with the watch" is a hypothesis the filter can
+hold, and the phone's flat readings plus the theater's `0.0` level argue for it on their
+own. The companion app helps it along: a phone that is charging is on a table, one that
+reports walking is in a pocket, and a device whose distances never wander is not being
+carried around. `presence.carried` holds the weights.
+
 **What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`),
 `sensor.<name>_floor` (which floor, with the belief summed over its rooms — sure of the
 floor when two rooms on it tie) and `binary_sensor.<name>_moving` (on while their two most
-likely rooms are adjacent and both still plausible). Per room: `sensor.<room>_occupants`, plus a `presence` channel folded
+likely rooms are adjacent and both still plausible). Per device:
+`binary_sensor.<name>_<device>_carried` and `sensor.<name>_<device>_room` — where the
+*object* is, which is the entity that answers "where did I leave my phone". Per room:
+`sensor.<room>_occupants`, plus a `presence` channel folded
 into that room's mix — silent, starting when the room fills and ending when it empties,
 tuned in the mixer's controls row exactly like any other channel (gain, envelope, and it
 mutes the same way).
@@ -451,7 +467,8 @@ mutes the same way).
    integration raises a repair issue naming the ones it still finds off.
 3. Give each scanner device an area matching a room's `area_id`, or map it directly with
    `presence.scanner_areas` when that is not convenient.
-4. List your phones' `device_tracker` entities under `presence.devices`.
+4. List the people under `presence.people`: point each at their `person.*` entity and
+   their devices are seeded from it, or list the Bermuda `device_tracker` entities by hand.
 5. Set `adjacent` (and `exit`, where it applies) on every room — an unreachable room is
    invisible to the filter, not just poorly connected to it.
 
@@ -469,8 +486,8 @@ document against as you type — see [Editing as YAML](#editing-as-yaml).
 
 Renaming a group's `id` creates new entities (history is not carried over); `area_id` is
 applied only when a group's device is first created. A tracked person's entities are
-keyed off their (slugified) `presence.devices[].name`, so renaming one renames their
-entities the same way.
+keyed off their (slugified) `presence.people[].name`, and a device's off its name within
+the person, so renaming either renames the entities the same way.
 
 `presence` and `trigger` are reserved channel labels — a stimulus `key` or a child group
 `id` of either name is rejected as a duplicate, whether or not presence is switched on.

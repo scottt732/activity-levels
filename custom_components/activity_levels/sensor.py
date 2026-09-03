@@ -40,9 +40,10 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import ActivityLevelsCoordinator
-from .entity import ActivityLevelsEntity, PresenceEntity
+from .entity import ActivityLevelsEntity, DeviceEntity, PresenceEntity
 from .patterns.profile import group_ready
 from .patterns_coordinator import PatternsCoordinator
+from .presence.estimator import Outputs
 from .presence_coordinator import AWAY_LABEL, PresenceCoordinator
 from .runtime import ActivityLevelsConfigEntry
 from .tree import GroupInfo
@@ -70,8 +71,13 @@ async def async_setup_entry(
         entities.append(ActivityAnomalySensor(coordinator, patterns, info))
     presence = entry.runtime_data.presence
     if presence is not None and presence.ready:
-        entities.extend(RoomSensor(presence, name) for name in sorted(presence.devices))
-        entities.extend(FloorSensor(presence, name) for name in sorted(presence.devices))
+        entities.extend(RoomSensor(presence, name) for name in sorted(presence.people))
+        entities.extend(FloorSensor(presence, name) for name in sorted(presence.people))
+        entities.extend(
+            DeviceRoomSensor(presence, name, device_id)
+            for name, person in sorted(presence.people.items())
+            for device_id in person.devices
+        )
         entities.extend(
             OccupantsSensor(coordinator, presence, coordinator.tree.groups[gid])
             for gid in entry.runtime_data.topology.nodes
@@ -328,6 +334,46 @@ class FloorSensor(PresenceEntity, SensorEntity):
             ATTR_GROUP_ID: floor,
             ATTR_CONFIDENCE: confidence,
             ATTR_ROOMS: {self.presence.room_name(room): p for room, p in rooms.items()},
+            ATTR_UPDATED: dt_util.utc_from_timestamp(out.t).isoformat(),
+        }
+
+
+class DeviceRoomSensor(DeviceEntity, SensorEntity):
+    """Which room the *object* is in -- the phone, carried or not.
+
+    Its own filter's answer, so a phone left on the couch keeps reading the couch here
+    while the person's room sensor follows the person. "Where did I leave it" is a real
+    question, and this is the entity that answers it.
+    """
+
+    def __init__(self, presence: PresenceCoordinator, name: str, device_id: str) -> None:
+        """Set up the object-room sensor for one of a person's devices."""
+        super().__init__(presence, name, device_id, "room", Platform.SENSOR)
+        self._attr_translation_key = "device_room"
+
+    @property
+    def device_outputs(self) -> Outputs | None:
+        track = self.device
+        return None if track is None else track.outputs
+
+    @property
+    def available(self) -> bool:
+        """False until the device's own filter has answered once."""
+        return self.device_outputs is not None
+
+    @property
+    def native_value(self) -> str | None:
+        out = self.device_outputs
+        return None if out is None else self.presence.room_name(out.room)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        out = self.device_outputs
+        if out is None:
+            return {}
+        return {
+            ATTR_GROUP_ID: None if out.room == AWAY else out.room,
+            ATTR_CONFIDENCE: out.confidence,
             ATTR_UPDATED: dt_util.utc_from_timestamp(out.t).isoformat(),
         }
 
