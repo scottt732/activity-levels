@@ -72,12 +72,14 @@ class Estimator:
         scale: float,
         floor: float,
         stuck_after: float,
+        activity_floor: float = 0.05,
     ) -> None:
         self.topology = topology
         self.states = topology.states
         self.scanners = dict(scanners)
         self.scale = scale
         self.floor = floor
+        self.activity_floor = activity_floor
         self.stuck_after = stuck_after
         self._transition = topology.transition_matrix(stay, escape)
         self._log_transition = np.log(np.where(self._transition > 0.0, self._transition, _TINY))
@@ -105,8 +107,15 @@ class Estimator:
         does not -- worse than any room, so only the transition model can put us there
         while we are home.
 
-        **This method is the seam.** Phase 2 replaces it with learned per-room,
-        per-scanner distance tables and changes nothing else.
+        A room's own activity level is the other kind of evidence, and it only ever
+        counts against: ``log(ε + (1 - ε)·a)`` with ``a`` the level in ``[0, 1]``, or 1
+        while the level is rising. With other people home, a busy room is weak evidence
+        that *this* person is there, so a busy room scores nothing; a room at ``0.0`` is
+        strong evidence they are not, and scores ``log ε`` -- the same footing as a room
+        with no scanner. ``away`` has no level and takes no term.
+
+        **This method is the seam.** Learned per-room, per-scanner distance tables
+        replace the distance half of it and change nothing else.
         """
         tau = self.scale
         log_floor = math.log(self.floor)
@@ -124,6 +133,13 @@ class Estimator:
             heard[position] = True
         out[~heard] = log_floor
         out[self._position[AWAY]] = 2.0 * log_floor if obs.home else 0.0
+        epsilon = self.activity_floor
+        for room, activity in obs.activity.items():
+            index = self._position.get(room)
+            if index is None or room == AWAY:
+                continue
+            a = max(min(activity.level, 1.0), 1.0 if activity.slope > 0.0 else 0.0)
+            out[index] += math.log(epsilon + (1.0 - epsilon) * a)
         return out
 
     def emission(self, obs: Observation) -> tuple[npt.NDArray[np.float64], float]:

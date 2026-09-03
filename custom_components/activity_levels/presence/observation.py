@@ -17,6 +17,20 @@ UNREACHABLE = 999.0
 
 
 @dataclass(frozen=True)
+class RoomActivity:
+    """One room's activity level, as evidence.
+
+    ``level`` is already scaled to ``[0, 1]`` by the caller -- the room's evidence level
+    over its ``max_value`` -- and ``slope`` is in the same units per second. Only the
+    sign of the slope is read: a rising level is a stimulus firing right now, whatever
+    the level has reached.
+    """
+
+    level: float
+    slope: float
+
+
+@dataclass(frozen=True)
 class Observation:
     """Everything the filter is told at one instant. ``None`` is "no reading".
 
@@ -26,11 +40,16 @@ class Observation:
     its room to the emission floor -- which can leave that room outranking one the
     evidence actively argues against. Omitting an unchanged reading would therefore
     quietly promote the rooms nobody can hear.
+
+    ``activity`` is each room's own activity level. A room absent from the mapping
+    contributes nothing, so a caller with no levels to offer leaves it empty and the
+    filter behaves as it did before there was such a thing.
     """
 
     t: float
     distances: Mapping[str, float | None] = field(default_factory=dict)
     home: bool = True
+    activity: Mapping[str, RoomActivity] = field(default_factory=dict)
 
 
 def scanner_key(unique_id: str, device_unique_id: str) -> str | None:

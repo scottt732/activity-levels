@@ -9,7 +9,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from custom_components.activity_levels.presence.estimator import Estimator
-from custom_components.activity_levels.presence.observation import Observation
+from custom_components.activity_levels.presence.observation import Observation, RoomActivity
 from custom_components.activity_levels.schema import validate_config
 from custom_components.activity_levels.topology import build_topology
 from tests.fixtures import rooms_config
@@ -69,6 +69,31 @@ def test_transition_rows_always_sum_to_one(pair) -> None:
     matrix = TOPO.transition_matrix(stay, escape)
     assert np.allclose(matrix.sum(axis=1), 1.0)
     assert np.all(matrix >= 0.0)
+
+
+@given(
+    st.fixed_dictionaries(dict.fromkeys(SCANNERS, readings)),
+    st.floats(min_value=0.0, max_value=1.0),
+    st.floats(min_value=-1.0, max_value=1.0),
+)
+@settings(max_examples=50, deadline=None)
+def test_the_activity_term_never_rewards_a_room(distances, level, slope) -> None:
+    """Capped at zero: an empty room is penalised, a busy one is merely not."""
+    est = Estimator(TOPO, SCANNERS, stay=0.9, escape=0.001, scale=3.0, floor=0.05, stuck_after=60.0)
+    plain = est.log_emission(Observation(t=0.0, distances=distances, home=True))
+    busy = est.log_emission(
+        Observation(
+            t=0.0,
+            distances=distances,
+            home=True,
+            activity={"kitchen": RoomActivity(level=level, slope=slope)},
+        )
+    )
+    delta = busy - plain
+    kitchen = TOPO.index("kitchen")
+    assert delta[kitchen] <= 1e-12
+    assert delta[kitchen] >= np.log(0.05) - 1e-12
+    assert np.all(np.abs(np.delete(delta, kitchen)) < 1e-12)
 
 
 @given(observations)

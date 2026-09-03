@@ -14,6 +14,7 @@ from custom_components.activity_levels.const import AWAY
 from custom_components.activity_levels.presence.estimator import Estimator
 from custom_components.activity_levels.presence.observation import (
     Observation,
+    RoomActivity,
     parse_distance,
     scanner_key,
 )
@@ -105,6 +106,74 @@ def test_a_close_reading_is_evidence_against_every_other_room(topo) -> None:
         Observation(t=0.0, distances=dict.fromkeys(SCANNERS, 9.0), home=True)
     )
     assert log_far[topo.index("kitchen")] == pytest.approx(log_far[topo.index("hall")])
+
+
+def test_an_empty_room_is_penalised_and_a_busy_one_is_not(topo) -> None:
+    est = make(topo)
+    plain = est.log_emission(at("kitchen", 0.0))
+    obs = Observation(
+        t=0.0,
+        distances=at("kitchen", 0.0).distances,
+        home=True,
+        activity={
+            "kitchen": RoomActivity(level=0.0, slope=0.0),
+            "hall": RoomActivity(level=1.0, slope=-0.1),
+        },
+    )
+    log_e = est.log_emission(obs)
+    kitchen, hall = topo.index("kitchen"), topo.index("hall")
+    assert log_e[kitchen] == pytest.approx(plain[kitchen] + np.log(0.05))
+    assert log_e[hall] == pytest.approx(plain[hall])
+    # rooms with no reading, and away, are untouched
+    assert log_e[topo.index("bedroom")] == pytest.approx(plain[topo.index("bedroom")])
+    assert log_e[topo.index(AWAY)] == pytest.approx(plain[topo.index(AWAY)])
+
+
+def test_a_rising_room_counts_as_fully_active(topo) -> None:
+    est = make(topo)
+    plain = est.log_emission(at("kitchen", 0.0))
+    obs = Observation(
+        t=0.0,
+        distances=at("kitchen", 0.0).distances,
+        home=True,
+        activity={"kitchen": RoomActivity(level=0.02, slope=0.5)},
+    )
+    kitchen = topo.index("kitchen")
+    assert est.log_emission(obs)[kitchen] == pytest.approx(plain[kitchen])
+
+
+def test_activity_floor_is_configurable(topo) -> None:
+    est = make(topo, activity_floor=0.5)
+    plain = est.log_emission(at("kitchen", 0.0))
+    obs = Observation(
+        t=0.0,
+        distances=at("kitchen", 0.0).distances,
+        home=True,
+        activity={"kitchen": RoomActivity(level=0.0, slope=0.0)},
+    )
+    kitchen = topo.index("kitchen")
+    assert est.log_emission(obs)[kitchen] == pytest.approx(plain[kitchen] + np.log(0.5))
+
+
+def test_an_empty_room_loses_a_distance_tie(topo) -> None:
+    """Kitchen and dining room read the same; the kitchen's level is 0.0."""
+    est = make(topo)
+    distances = {
+        key: (0.5 if room in ("kitchen", "dining_room") else 8.0) for key, room in SCANNERS.items()
+    }
+    for t in range(6):
+        out = est.update(
+            Observation(
+                t=float(t),
+                distances=distances,
+                home=True,
+                activity={
+                    "kitchen": RoomActivity(level=0.0, slope=0.0),
+                    "dining_room": RoomActivity(level=0.6, slope=-0.01),
+                },
+            )
+        )
+    assert out.room == "dining_room"
 
 
 def test_a_walk_is_recovered(topo) -> None:
