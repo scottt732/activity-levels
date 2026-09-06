@@ -261,10 +261,12 @@ And, while presence is on, one pair per tracked person, each on its own **Presen
 - `activity_levels.simulate_now` — sample and start a presence-simulation plan for one
   group immediately, ignoring the switches. Fields: `group_id` (required). If a hard
   precondition still fails it raises with the reason rather than doing nothing quietly.
-- `activity_levels.locate` — say where a tracked person really is. Fields: `person`
-  (their configured name) and `room` (a room group id, or `away`). Their estimate moves
-  there at once and the correction is kept as a label; a companion notification action
-  is the natural caller. The Presence tab does the same when you tap a person.
+- `activity_levels.locate` — correct a person or device. Use `person` (the configured
+  name) and `room` (a room group id, or `away`). Add `device` (the key in the presence
+  state) to correct the device's room instead. With a device, `carried: true` or
+  `carried: false` corrects whether the person carries it. A person-room request can
+  include `carrying: {device_key: false}` to submit both facts together. Use
+  `clear: true` without other corrections to return that target to automatic estimation.
 - `activity_levels.rebuild_signatures` — fit the room signatures from the corrections
   kept so far, now. Fields: `force` (replace a document another producer wrote).
 
@@ -455,7 +457,31 @@ own. The companion app helps it along: a phone that is charging is on a table, o
 reports walking is in a pocket, and a device whose distances never wander is not being
 carried around. `presence.carried` holds the weights.
 
-**Learning your rooms.** Every correction — a tap on the Presence tab, or a call to
+**Correcting presence.** Tap a person to correct their room. Tap a device chip to
+correct the device's room or say whether you carry it. You can also mark devices
+as carried or left behind when submitting a person-room correction. For example,
+“I'm in Den, watch not carried” keeps the watch in Office from pulling you back there.
+
+Room corrections are protected for 15 minutes, then fade over two minutes. Credible
+movement can release them sooner. A person correction needs fresh motion evidence
+as well as a credible carried device on a possible route; adjacent Bluetooth readings
+alone cannot undo it. The panel shows the correction's time and release reason.
+
+Carrying corrections do not expire with time alone. Fresh steps, activity reports,
+or sustained Bluetooth movement through connected rooms can weaken “Not carrying.”
+A single room jump or repeated stale reading cannot. The initial policy requires
+at least three fresh samples over 30 seconds, then fades over another 60 seconds of
+supported movement. Charging or reliable evidence that a device was left behind can
+weaken “Carrying.” Once released, the estimator decides again; device movement does
+not prove that its owner picked it up. **Use automatic estimate** clears a correction
+manually. Corrections survive restarts, but unfinished movement evidence does not.
+
+The device controls link to the Bermuda device and tracker. Scanner rows link to HA
+devices and areas. Stimulus and group editors link to their mapped entities, devices,
+and areas when available. Companion sensors are optional. Phone notification prompts
+are not part of this release.
+
+**Learning your rooms.** Every room correction — a tap on the Presence tab, or a call to
 `activity_levels.locate` — is kept as a label: the room you said, and everything the
 estimator was reading at that instant. After a few of them (`signatures.rebuild_after`) the
 learner fits a *signature* per room and scanner: what that scanner reads when you are
@@ -466,6 +492,9 @@ distance formula, and the formula keeps answering for the pairs nobody has corre
 `sensor.activity_levels_signatures` says when the last fit ran and how much it covered.
 The document it writes is producer-agnostic: anything that can fit those numbers may
 replace it over `presence/signatures/save`, and the built-in learner then leaves it alone.
+Person-room labels exclude devices corrected as not carried. Device-room labels use
+that device's readings even when it is parked. Carrying feedback is saved separately;
+it does not label a room or change global sensor weights or Bermuda settings.
 
 **What you get.** Per tracked person: `sensor.<name>_room` (which room, or `Away`),
 `sensor.<name>_floor` (which floor, with the belief summed over its rooms — sure of the

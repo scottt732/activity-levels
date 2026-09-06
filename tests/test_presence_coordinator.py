@@ -404,6 +404,98 @@ async def test_the_parked_phone_scenario_end_to_end(
 # -- corrections -------------------------------------------------------------
 
 
+async def test_device_and_carrying_corrections_are_separate_and_atomic(hass: HomeAssistant) -> None:
+    fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    person = presence.people["Scott"]
+    (device_id,) = person.devices
+    presence.correct("Scott", "hall", source="panel", carrying={device_id: False})
+    assert person.outputs.room == "hall"
+    assert person.outputs.carried[device_id] == 0.0
+    labels = list(presence.labels)
+    with pytest.raises(ValueError):
+        presence.correct("Scott", "kitchen", source="panel", carrying={"missing": True})
+    assert person.outputs.room == "hall"
+    assert presence.labels == labels
+    presence.correct("Scott", "kitchen", source="panel", device=device_id)
+    assert person.devices[device_id].outputs.room == "kitchen"
+    assert person.outputs.room == "hall"
+    assert presence.labels[0]["kind"] == "device_room"
+    assert presence.labels[0]["device"] == device_id
+    row = presence.payload()["people"]["Scott"]["devices"][device_id]
+    assert row["device_id"]
+    assert row["carrying_correction"]["value"] is False
+    presence.correct("Scott", source="panel", device=device_id, clear=True)
+    assert person.devices[device_id].estimator.correction is None
+    assert device_id not in person.estimator.carrying_corrections
+
+
+async def test_correction_frame_uses_actual_source_times(hass: HomeAssistant, freezer) -> None:
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    track = next(iter(presence.people["Scott"].devices.values()))
+    await observe(hass, freezer, bermuda, "kitchen")
+    first = presence._frame(track, presence.coordinator.now())
+    freezer.tick(timedelta(seconds=30))
+    second = presence._frame(track, presence.coordinator.now())
+    assert first.distance_t == second.distance_t
+    assert first.distance_t is not None
+    assert first.moving_t is None and second.moving_t is None
+
+
+async def test_device_correction_websocket_and_service(hass: HomeAssistant, hass_ws_client) -> None:
+    fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    (device_id,) = presence.people["Scott"].devices
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": f"{DOMAIN}/presence/correct",
+            "person": "Scott",
+            "device": device_id,
+            "carried": False,
+        }
+    )
+    response = await client.receive_json()
+    assert response["success"]
+    assert response["result"]["carried"][device_id] == 0.0
+    await hass.services.async_call(
+        DOMAIN,
+        "locate",
+        {
+            "person": "Scott",
+            "device": device_id,
+            "room": "hall",
+            "carried": False,
+        },
+        blocking=True,
+    )
+    assert presence.people["Scott"].devices[device_id].outputs.room == "hall"
+    await client.send_json_auto_id(
+        {"type": f"{DOMAIN}/presence/correct", "person": "Scott", "room": "kitchen", "clear": True}
+    )
+    response = await client.receive_json()
+    assert not response["success"]
+
+
+async def test_room_correction_expires_without_new_radio_updates(
+    hass: HomeAssistant, freezer
+) -> None:
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    await observe(hass, freezer, bermuda, "kitchen")
+    presence.correct("Scott", "hall", source="panel")
+    freezer.tick(timedelta(seconds=1100))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert presence.people["Scott"].outputs.t == presence.coordinator.now()
+    assert presence.payload()["people"]["Scott"]["correction"]["strength"] == 0.0
+
+
 async def test_a_correction_moves_the_person_and_keeps_a_label(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, hass_storage: dict[str, Any]
 ) -> None:

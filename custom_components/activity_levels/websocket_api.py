@@ -13,7 +13,7 @@ from .const import DOMAIN
 from .coordinator import ActivityLevelsCoordinator
 from .patterns.profile import ProfileError
 from .runtime import RuntimeData
-from .schema import ConfigError, validate, validate_config
+from .schema import PRESENCE_CORRECTION_FIELDS, ConfigError, validate, validate_config
 from .simulation import MAX_LOG_ROWS
 from .topology import MAX_HOPS
 from .tree import build_tree
@@ -447,8 +447,7 @@ def ws_presence_state(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/presence/correct",
-        vol.Required("person"): str,
-        vol.Required("room"): str,
+        **PRESENCE_CORRECTION_FIELDS,
     }
 )
 @callback
@@ -463,7 +462,15 @@ def ws_presence_correct(
         connection.send_error(msg["id"], "not_found", "presence is not running")
         return
     try:
-        outputs = presence.correct(msg["person"], msg["room"], source="panel")
+        outputs = presence.correct(
+            msg["person"],
+            msg.get("room"),
+            source="panel",
+            device=msg.get("device"),
+            carried=msg.get("carried"),
+            clear=msg["clear"],
+            carrying=msg.get("carrying"),
+        )
     except ValueError as err:
         connection.send_error(msg["id"], "not_found", str(err))
         return

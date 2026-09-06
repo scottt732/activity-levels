@@ -42,7 +42,7 @@ from .panel import async_register_panel, async_unregister_panel
 from .patterns_coordinator import PatternsCoordinator
 from .presence_coordinator import PresenceCoordinator, clear_presence_issues
 from .runtime import ActivityLevelsConfigEntry, RuntimeData
-from .schema import ConfigError, validate_config
+from .schema import PRESENCE_CORRECTION_FIELDS, ConfigError, validate_config
 from .topology import build_topology
 from .tree import Tree, build_tree
 from .websocket_api import async_register_websocket
@@ -72,9 +72,7 @@ SERVICE_SET_LEVEL_SCHEMA = vol.Schema(
 SERVICE_RESET_SCHEMA = vol.Schema({vol.Optional(ATTR_GROUP_ID): cv.string})
 SERVICE_REBUILD_PROFILE_SCHEMA = vol.Schema({vol.Optional(ATTR_FORCE, default=False): cv.boolean})
 SERVICE_SIMULATE_NOW_SCHEMA = vol.Schema({vol.Required(ATTR_GROUP_ID): cv.string})
-SERVICE_LOCATE_SCHEMA = vol.Schema(
-    {vol.Required(ATTR_PERSON): cv.string, vol.Required(ATTR_ROOM): cv.string}
-)
+SERVICE_LOCATE_SCHEMA = vol.Schema(PRESENCE_CORRECTION_FIELDS)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEntry) -> bool:
@@ -281,7 +279,15 @@ def _register_services(hass: HomeAssistant) -> None:
         if presence is None or not presence.ready:
             raise ServiceValidationError("Presence is not running")
         try:
-            presence.correct(call.data[ATTR_PERSON], call.data[ATTR_ROOM], source="service")
+            presence.correct(
+                call.data[ATTR_PERSON],
+                call.data.get(ATTR_ROOM),
+                source="service",
+                device=call.data.get("device"),
+                carried=call.data.get("carried"),
+                clear=call.data["clear"],
+                carrying=call.data.get("carrying"),
+            )
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
 

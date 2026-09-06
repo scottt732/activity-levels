@@ -23,6 +23,22 @@ ROOMS = ("kitchen", "dining_room", "hall", "bedroom", "back_patio")
 SCANNERS = {f"s_{room}": room for room in ROOMS}
 
 
+def test_device_room_labels_train_parked_devices_but_carrying_labels_do_not():
+    parked = label("kitchen", {"s_kitchen": 2.0}, carried=0.0)
+    parked.update(kind="device_room", device="phone")
+    carrying = label("hall", {"s_kitchen": 0.1})
+    carrying.update(kind="carrying", device="phone")
+    signatures = fit(
+        [parked] * 8 + [carrying] * 8,
+        scanner_map=SCANNERS,
+        scale=3.0,
+        min_labels=8,
+        prior_weight=4.0,
+    )
+    assert set(signatures) == {"kitchen"}
+    assert signatures["kitchen"]["s_kitchen"].n == 8
+
+
 def label(
     room: str, distances: dict[str, float | None], *, carried: float = 1.0, t: float = 0.0
 ) -> dict:

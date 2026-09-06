@@ -1,3 +1,4 @@
+import { registryLink } from "./ha-links";
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { fieldErrors, pathKey } from "./errors";
@@ -149,6 +150,7 @@ export class AlGroupEditor extends LitElement {
 
     return html`
       <ha-card header="Group">
+        ${group.area_id ? registryLink("area", group.area_id, "Open Home Assistant area") : nothing}
         ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
         ${renderPanel(
           "group",

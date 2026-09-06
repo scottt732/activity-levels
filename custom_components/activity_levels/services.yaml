@@ -62,7 +62,21 @@ locate:
       selector:
         text:
     room:
-      required: true
+      required: false
       example: studio
       selector:
         text:
+    device:
+      example: scott_s_watch
+      selector:
+        text:
+    carried:
+      selector:
+        boolean:
+    clear:
+      selector:
+        boolean:
+    carrying:
+      example: '{"scott_s_watch": false}'
+      selector:
+        object:

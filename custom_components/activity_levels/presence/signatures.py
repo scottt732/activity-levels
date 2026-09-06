@@ -88,13 +88,20 @@ def fit(
     """
     readings: dict[tuple[str, str], list[float | None]] = {}
     for item in labels:
+        if item.get("kind", "person_room") not in ("person_room", "device_room"):
+            continue
         room = item.get("room")
         frames = item.get("frames")
         carried = item.get("carried") or {}
         if not isinstance(room, str) or not isinstance(frames, Mapping):
             continue
         for device, frame in frames.items():
-            if float(carried.get(device, 0.0)) < min_carried or not isinstance(frame, Mapping):
+            direct = item.get("kind") == "device_room" and item.get("device") == device
+            if item.get("kind") == "device_room" and not direct:
+                continue
+            if not isinstance(frame, Mapping) or (
+                not direct and float(carried.get(device, 0.0)) < min_carried
+            ):
                 continue
             for scanner, distance in (frame.get("distances") or {}).items():
                 if scanner not in scanner_map:
