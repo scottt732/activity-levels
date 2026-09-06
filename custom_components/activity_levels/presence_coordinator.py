@@ -902,7 +902,7 @@ class PresenceCoordinator:
                 if track.steps is not None and count > track.steps:
                     track.steps_rose_at = self._source_time(track.signals.get("steps"))
                 track.steps = count
-                rose = track.steps_rose_at is not None and t - track.steps_rose_at <= recent
+                rose = track.steps_rose_at is not None and 0.0 <= t - track.steps_rose_at <= recent
                 moving = True if rose else (moving if moving is not None else False)
 
         heard = [d for d in distances.values() if d is not None]

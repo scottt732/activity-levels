@@ -309,7 +309,9 @@ async def test_a_charging_phone_is_read_as_parked(
     assert frame.signals.moving is False
 
 
-async def test_walking_and_rising_steps_read_as_moving(hass: HomeAssistant) -> None:
+async def test_walking_and_rising_steps_read_as_moving(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
     bermuda = fake_bermuda(hass)
     companion = fake_companion(hass)
     entry = await add_entry(
@@ -322,13 +324,19 @@ async def test_walking_and_rising_steps_read_as_moving(hass: HomeAssistant) -> N
     assert presence is not None
     (device,) = presence.people["Scott"].devices.values()
     hass.states.async_set(companion.signals["activity"], "walking")
-    assert presence._frame(device, 100.0).signals.moving is True
+    assert presence._frame(device, presence.coordinator.now()).signals.moving is True
+    freezer.tick(timedelta(seconds=100))
     hass.states.async_set(companion.signals["activity"], "stationary")
     hass.states.async_set(companion.signals["steps"], "1000")
-    assert presence._frame(device, 200.0).signals.moving is False
+    assert presence._frame(device, presence.coordinator.now()).signals.moving is False
+    freezer.tick(timedelta(seconds=10))
     hass.states.async_set(companion.signals["steps"], "1020")
-    assert presence._frame(device, 210.0).signals.moving is True
-    assert presence._frame(device, 210.0 + 121.0).signals.moving is False
+    t = presence.coordinator.now()
+    assert presence._frame(device, t).signals.moving is True
+    assert device.steps_rose_at == t
+    assert presence._signals(device, t - 1.0, {}, {}).moving is False
+    freezer.tick(timedelta(seconds=121))
+    assert presence._frame(device, presence.coordinator.now()).signals.moving is False
 
 
 async def test_jitter_is_a_wandering_closest_distance(hass: HomeAssistant) -> None:
