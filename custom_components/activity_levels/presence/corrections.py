@@ -59,11 +59,18 @@ class Correction:
         """Keep confirmed intermediate rooms so an observed walk can span many doors."""
         if sample is None or sample <= self.t or sample > t or t - sample > WINDOW:
             return False
+        if isinstance(self.value, bool) and self.anchor in (None, AWAY):
+            if room != AWAY and confidence >= 0.6:
+                # Coming back online locates a parked object; it is not a pickup.
+                # Establish the starting room so later movement can be assessed.
+                self.anchor = room
+                self.baseline = dict(distances or {})
+            return False
         if room == self.anchor:
             self._route_room = self._route_candidate = None
             self._route_count = 0
             return False
-        if self.baseline and distances is not None:
+        if any(value is not None for value in self.baseline.values()) and distances is not None:
             changed = any(
                 old is not None
                 and (current := distances.get(key)) is not None

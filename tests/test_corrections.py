@@ -224,3 +224,13 @@ def test_route_motion_must_follow_path_order(topo):
     assert not route_support(topo, "kitchen", "bedroom", 0.9, activity, 100.0, 0.0)
     activity["hall"] = RoomActivity(1.0, 0.0, observed_at=90.0)
     assert route_support(topo, "kitchen", "bedroom", 0.9, activity, 100.0, 0.0)
+
+
+def test_a_parked_device_can_recover_after_being_unavailable_at_correction(topo):
+    correction = Correction(False, 0.0, anchor="away", baseline={"s_kitchen": None})
+    assert not correction.route(topo, "kitchen", 0.9, {}, 10.0, 10.0, near("kitchen"))
+    assert correction.anchor == "kitchen"
+    for t in (20.0, 30.0, 50.0, 80.0, 110.0):
+        support = correction.route(topo, "dining_room", 0.9, {}, t, t, near("dining_room"))
+        correction.observe(t, t, support)
+    assert correction.strength == 0.0
