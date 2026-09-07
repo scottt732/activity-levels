@@ -7,7 +7,6 @@ import type { CorrectionStatus } from "./types";
 import { entityLinks, registryLink } from "./ha-links";
 import { correctPresence, getPresenceState, getTopology } from "./api";
 import { durationToSeconds, secondsToDuration } from "./duration";
-import { fieldErrors } from "./errors";
 import { alChange } from "./events";
 import { newPresenceDevice, newPresencePerson, presenceSettings, roomIds } from "./model";
 import { setAt } from "./store";
@@ -111,6 +110,27 @@ const WEIGHTS = ["charging", "moving", "still_room_empty", "jitter"] as const;
 
 type FormField = (typeof FORM_FIELDS)[number];
 
+const SETTINGS_SECTIONS: { id: string; title: string; hint: string; fields: FormField[] }[] = [
+  { id: "tracking", title: "Tracking", hint: "Turn room estimation on and choose when a person counts as present.",
+    fields: ["enabled", "envelope", "threshold"] },
+  { id: "rooms", title: "Room estimation", hint: "Tune how quickly estimates move between rooms and recover from weak signals.",
+    fields: ["stay", "escape", "scale", "floor", "stuck_after", "activity_floor"] },
+  { id: "carrying", title: "Device carrying", hint: "Tune how long carrying estimates persist and how parked devices affect room estimates.",
+    fields: ["carried_prior", "carried_flip", "carried_recent", "carried_nearby"] },
+  { id: "evidence", title: "Carrying evidence", hint: "Advanced weights. Positive values favor carrying; negative values favor a parked device.",
+    fields: ["carried_charging", "carried_moving", "carried_still_room_empty", "carried_jitter"] },
+];
+
+/** The form flattens nested settings; validation paths still use the saved structure. */
+const settingPath = (field: FormField): string => {
+  if (field === "activity_floor") return "presence/activity/floor";
+  if (field.startsWith("carried_")) {
+    const name = field.slice("carried_".length);
+    return `presence/carried/${WEIGHTS.includes(name as typeof WEIGHTS[number]) ? "weights/" : ""}${name}`;
+  }
+  return `presence/${field}`;
+};
+
 /**
  * The device picker is an entity picker, not a device one: Bermuda publishes a
  * `device_tracker` per followed device, and that entity is what the estimator reads.
@@ -195,6 +215,14 @@ export class AlPresence extends LitElement {
       .devices { min-width: 260px; }
       .confidence-label { display: block; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
       .settings-body { display: grid; gap: 20px; padding-top: 16px; }
+      .settings-section { border: 1px solid var(--al-control-border); border-radius: 6px; padding: 16px; min-width: 0; }
+      .settings-section h3 { margin: 0 0 8px; color: var(--primary-text-color); font-size: 1.05em; }
+      .settings-section p { color: var(--secondary-text-color); margin: 0 0 16px; line-height: 1.5; }
+      .settings-section summary { color: var(--primary-text-color); }
+      .settings-section summary + p { margin-top: 8px; }
+      .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; align-items: start; }
+      .settings-section ha-form { display: block; }
+
       summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
       .moving { display: block; font-size: 0.85em; margin-top: 4px; }
       .notice,
@@ -760,7 +788,10 @@ export class AlPresence extends LitElement {
 
   private renderSettings(config: Config): TemplateResult {
     const s = presenceSettings(config);
-    const fields = fieldErrors(this.errors, ["presence"]);
+    const fields = Object.fromEntries(FORM_FIELDS.flatMap((field) => {
+      const error = this.errors.find((item) => item.path === settingPath(field));
+      return error ? [[field, error.message]] : [];
+    }));
     const own = this.errors.filter((e) => e.path === "presence");
     const data: Record<string, unknown> = {
       enabled: s.enabled,
@@ -778,25 +809,34 @@ export class AlPresence extends LitElement {
       carried_nearby: s.carried.nearby,
       ...Object.fromEntries(WEIGHTS.map((weight) => [`carried_${weight}`, s.carried.weights[weight]])),
     };
-    return html`<ha-card><details><summary>Presence settings</summary><div class="settings-body">
+    const renderForm = (section: typeof SETTINGS_SECTIONS[number]): TemplateResult => html`<ha-form
+      class="presence-settings" data-section=${section.id}
+      .hass=${this.hass}
+      .data=${Object.fromEntries(section.fields.map((field) => [field, data[field]]))}
+      .schema=${this.schemaFor(config).filter((item) => section.fields.includes(item.name as FormField))}
+      .error=${fields}
+      .computeLabel=${this.computeLabel}
+      .computeHelper=${this.computeHelper}
+      @value-changed=${this.onFormChanged}
+    ></ha-form>`;
+    const tracking = SETTINGS_SECTIONS[0]!;
+    return html`<ha-card><details class="settings" ?open=${this.errors.some((error) => error.path.startsWith("presence"))}>
+      <summary>Presence settings</summary><div class="settings-body">
       ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
-      <h3>People</h3>
-      <al-people-editor
-        .hass=${this.hass}
-        .config=${config}
-        .errors=${this.errors}
-        .presence=${this.presence}
-      ></al-people-editor>
-      <ha-form
-        class="presence-settings"
-        .hass=${this.hass}
-        .data=${data}
-        .schema=${this.schemaFor(config)}
-        .error=${fields}
-        .computeLabel=${this.computeLabel}
-        .computeHelper=${this.computeHelper}
-        @value-changed=${this.onFormChanged}
-      ></ha-form>
+      <section class="settings-section">
+        <h3>People and devices</h3>
+        <p>Choose who to follow and the devices they carry. Open a device to edit its trackers and signals.</p>
+        <al-people-editor .hass=${this.hass} .config=${config} .errors=${this.errors} .presence=${this.presence}></al-people-editor>
+      </section>
+      <section class="settings-section">
+        <h3>${tracking.title}</h3><p>${tracking.hint}</p>${renderForm(tracking)}
+      </section>
+      <div class="settings-grid">
+        ${SETTINGS_SECTIONS.slice(1).map((section) => html`<details class="settings-section" data-section=${section.id}
+          ?open=${section.fields.some((field) => fields[field] !== undefined)}>
+          <summary>${section.title}</summary><p>${section.hint}</p>${renderForm(section)}
+        </details>`)}
+      </div>
     </div></details></ha-card>`;
   }
 

@@ -261,7 +261,7 @@ describe("al-presence", () => {
   it("edits the empty-room floor as presence.activity.floor", async () => {
     const { el } = await tab();
     const form = el.shadowRoot!.querySelector<HTMLElement & { schema: FormItem[]; data: Record<string, unknown> }>(
-      "ha-form.presence-settings",
+      'ha-form[data-section="rooms"]',
     )!;
     expect(form.schema.find((i) => i.name === "activity_floor")!.selector).toEqual({
       number: { min: 0.01, max: 1, step: 0.01, mode: "box" },
@@ -277,14 +277,15 @@ describe("al-presence", () => {
   it("edits the carried model as presence.carried, weights included", async () => {
     const { el } = await tab();
     const form = el.shadowRoot!.querySelector<HTMLElement & { schema: FormItem[]; data: Record<string, unknown> }>(
-      "ha-form.presence-settings",
+      'ha-form[data-section="carrying"]',
     )!;
     expect(form.schema.find((i) => i.name === "devices")).toBeUndefined();
     expect(form.data.carried_prior).toBe(0.7);
-    expect(form.data.carried_charging).toBe(-3);
+    const evidence = el.shadowRoot!.querySelector<HTMLElement & { data: Record<string, unknown> }>('ha-form[data-section="evidence"]')!;
+    expect(evidence.data.carried_charging).toBe(-3);
     expect(form.data.carried_flip).toEqual({ hours: 0, minutes: 5, seconds: 0 });
     const changed = listenFor<AlChangeEvent>(el, "al-change");
-    form.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { carried_charging: -5 } } }));
+    evidence.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { carried_charging: -5 } } }));
     const detail = (await changed).detail;
     expect(detail.presence!.carried.weights.charging).toBe(-5);
     expect(detail.presence!.carried.prior).toBe(0.7);
@@ -293,6 +294,21 @@ describe("al-presence", () => {
       new CustomEvent("value-changed", { detail: { value: { carried_flip: { hours: 0, minutes: 10, seconds: 0 } } } }),
     );
     expect((await again).detail.presence!.carried.flip).toBe(600);
+  });
+
+  it("groups settings without duplicate fields and reveals nested validation errors", async () => {
+    await tab();
+    const forms = [...el.shadowRoot!.querySelectorAll<HTMLElement & { schema: FormItem[]; error: Record<string, string> }>("ha-form.presence-settings")];
+    expect(forms.map((form) => form.dataset.section)).toEqual(["tracking", "rooms", "carrying", "evidence"]);
+    const names = forms.flatMap((form) => form.schema.map((item) => item.name));
+    expect(names).toHaveLength(17);
+    expect(new Set(names).size).toBe(names.length);
+    expect([...el.shadowRoot!.querySelectorAll<HTMLDetailsElement>("details.settings-section")].every((details) => !details.open)).toBe(true);
+    el.errors = [{ path: "presence/carried/weights/charging", message: "Invalid weight" }];
+    await settle();
+    expect(el.shadowRoot!.querySelector<HTMLDetailsElement>("details.settings")!.open).toBe(true);
+    expect(el.shadowRoot!.querySelector<HTMLDetailsElement>('details[data-section="evidence"]')!.open).toBe(true);
+    expect(forms[3]!.error.carried_charging).toBe("Invalid weight");
   });
 
   it("hosts the people editor above the form", async () => {
@@ -307,8 +323,8 @@ describe("al-presence", () => {
   // both ends; `escape` is [0, 0.1]; `scale` is open at zero with no ceiling.
   it("bounds every number field to what the config schema accepts", async () => {
     const { el } = await tab();
-    const form = el.shadowRoot!.querySelector<HTMLElement & { schema: FormItem[] }>("ha-form.presence-settings")!;
-    const selectorFor = (name: string) => form.schema.find((i) => i.name === name)!.selector;
+    const schema = [...el.shadowRoot!.querySelectorAll<HTMLElement & { schema: FormItem[] }>("ha-form.presence-settings")].flatMap((form) => form.schema);
+    const selectorFor = (name: string) => schema.find((i) => i.name === name)!.selector;
     expect(selectorFor("threshold")).toEqual({ number: { min: 0.01, max: 1, step: 0.01, mode: "slider" } });
     expect(selectorFor("stay")).toEqual({ number: { min: 0.01, max: 0.99, step: 0.01, mode: "slider" } });
     expect(selectorFor("floor")).toEqual({ number: { min: 0.01, max: 1, step: 0.01, mode: "box" } });

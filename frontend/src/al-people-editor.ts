@@ -101,6 +101,12 @@ export class AlPeopleEditor extends LitElement {
         padding-top: 8px;
         margin-top: 8px;
       }
+      .device summary { overflow-wrap: anywhere; cursor: pointer; padding: 10px 0; color: var(--primary-text-color); font-weight: 600; }
+      .device-kind { margin-left: 8px; font-weight: 400; color: var(--secondary-text-color); }
+      .device-body { padding: 8px 0 12px; }
+      .device .fields { gap: 16px; }
+      .device-head { justify-content: space-between; margin-bottom: 16px; }
+      .add-device { margin-top: 12px; }
       .fields {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
@@ -250,12 +256,13 @@ export class AlPeopleEditor extends LitElement {
     const errors = fieldErrors(this.errors, ["presence", "people", index, "devices", d]);
     const signalErrors = fieldErrors(this.errors, ["presence", "people", index, "devices", d, "signals"]);
     const found = this.found(person, device);
-    return html`<div class="device">
-      <div class="device-head">
-        <ha-icon icon=${KIND_ICONS[device.kind]}></ha-icon>
-        <h5>${device.name ?? (device.tracker || "New device")}</h5>
+    const live = Object.values(this.presence?.people?.[person.name ?? ""]?.devices ?? {}).find((row) => row.tracker === device.tracker);
+    const label = device.name ?? live?.name ?? (device.tracker || "New device");
+    return html`<details class="device" ?open=${!device.tracker || Object.keys(errors).length > 0 || Object.keys(signalErrors).length > 0}>
+      <summary>${label}${label === KIND_LABELS[device.kind] ? nothing : html`<span class="device-kind">${KIND_LABELS[device.kind]}</span>`}</summary>
+      <div class="device-body"><div class="device-head">
         <div class="resource-links">${entityLinks(this, this.hass, device.tracker, "Open tracker",
-          Object.values(this.presence?.people?.[person.name ?? ""]?.devices ?? {}).find((row) => row.tracker === device.tracker)?.device_id,
+          live?.device_id,
           "Open Bermuda device", true)}</div>
         <button type="button"
           class="remove-device"
@@ -308,8 +315,8 @@ export class AlPeopleEditor extends LitElement {
             this.editDevice(index, d, { companion: ev.detail.value ? ev.detail.value : null }, "companion")}
         ></ha-selector>
         ${SIGNAL_ROLES.map((role) => this.renderSignal(index, d, device, role, found, signalErrors))}
-      </div>
-    </div>`;
+      </div></div>
+    </details>`;
   }
 
   private renderPerson(index: number, person: PresencePerson): TemplateResult {
