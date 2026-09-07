@@ -5415,7 +5415,7 @@ var _o = 8e3, vo = (e) => e instanceof Error ? e.message : String(e), K = class 
         text-transform: uppercase;
       }
       .band-value {
-        margin-left: auto;
+        margin-left: 4px;
         flex-shrink: 0;
         font-size: 0.8em;
         font-variant-numeric: tabular-nums;

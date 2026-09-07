@@ -120,7 +120,7 @@ export class AlMixer extends LitElement {
         text-transform: uppercase;
       }
       .band-value {
-        margin-left: auto;
+        margin-left: 4px;
         flex-shrink: 0;
         font-size: 0.8em;
         font-variant-numeric: tabular-nums;
