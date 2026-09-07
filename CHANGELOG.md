@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/scottt732/activity-levels/compare/v0.9.0...v0.9.1) (2026-09-07)
+
+
+### Fixed
+
+* **mixer:** format level readings and improve strip spacing ([#25](https://github.com/scottt732/activity-levels/issues/25)) ([1b6c2bc](https://github.com/scottt732/activity-levels/commit/1b6c2bc6f946a6af69a8f3e0e6e496e129736fea))
+
 ## [0.9.0](https://github.com/scottt732/activity-levels/compare/v0.8.0...v0.9.0) (2026-09-07)
 
 
