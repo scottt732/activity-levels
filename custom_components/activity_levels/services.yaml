@@ -80,3 +80,16 @@ locate:
       example: '{"scott_s_watch": false}'
       selector:
         object:
+    floor:
+      example: upstairs
+      selector:
+        text:
+    certainty:
+      selector:
+        select:
+          options:
+            - definite
+            - probable
+    exclude:
+      selector:
+        boolean:

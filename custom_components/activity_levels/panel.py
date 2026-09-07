@@ -9,7 +9,10 @@ from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.const import LOVELACE_DATA
+from homeassistant.components.lovelace.resources import ResourceStorageCollection
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     BUNDLE_NAME,
@@ -29,14 +32,49 @@ _LOGGER = logging.getLogger(__name__)
 _STATIC_REGISTERED = f"{DOMAIN}_static_registered"
 _FRONTEND_DIR = Path(__file__).parent / "frontend"
 _SCHEMA_FILE = Path(__file__).parent / SCHEMA_NAME
+_CARDS_BUNDLE_NAME = "activity-levels-cards.js"
 
 
-def _bundle_hash() -> str | None:
+def _bundle_hash(name: str = BUNDLE_NAME) -> str | None:
     """Cache-busting digest of the built bundle, or None when it is not there."""
-    bundle = _FRONTEND_DIR / BUNDLE_NAME
+    bundle = _FRONTEND_DIR / name
     if not bundle.is_file():
         return None
     return hashlib.sha256(bundle.read_bytes()).hexdigest()[:12]
+
+
+async def _async_register_cards(hass: HomeAssistant) -> None:
+    """Keep the dashboard resource current without changing YAML-owned resources."""
+    lovelace = hass.data.get(LOVELACE_DATA)
+    if lovelace is None or not isinstance(lovelace.resources, ResourceStorageCollection):
+        return
+    digest = await hass.async_add_executor_job(_bundle_hash, _CARDS_BUNDLE_NAME)
+    if digest is None:
+        _LOGGER.warning("Dashboard cards bundle is missing; build the frontend or reinstall")
+        return
+    resource_path = f"{STATIC_URL}/{_CARDS_BUNDLE_NAME}"
+    url = f"{resource_path}?v={digest}"
+    resources = lovelace.resources
+    try:
+        # Resources load lazily. Listing before loading could create a duplicate on
+        # every restart; use the collection's public loading API first.
+        await resources.async_get_info()
+        matches = [
+            item
+            for item in resources.async_items()
+            if item["url"].split("?", 1)[0] == resource_path
+        ]
+        if not matches:
+            await resources.async_create_item({"url": url, "res_type": "module"})
+        else:
+            for item in matches:
+                if item["url"] != url or item["type"] != "module":
+                    await resources.async_update_item(
+                        item["id"], {"url": url, "res_type": "module"}
+                    )
+    except HomeAssistantError:
+        # A dashboard resource failure must not stop the room estimator or sidebar.
+        _LOGGER.exception("Could not register the Activity Levels dashboard cards resource")
 
 
 async def async_register_panel(hass: HomeAssistant) -> None:
@@ -55,6 +93,7 @@ async def async_register_panel(hass: HomeAssistant) -> None:
             ]
         )
         hass.data[_STATIC_REGISTERED] = True
+    await _async_register_cards(hass)
     if PANEL_URL_PATH in hass.data.get(frontend.DATA_PANELS, {}):
         return
     dev_server = os.environ.get(DEV_SERVER_ENV)

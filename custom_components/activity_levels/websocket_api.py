@@ -57,6 +57,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_topology)
     websocket_api.async_register_command(hass, ws_topology_paths)
     websocket_api.async_register_command(hass, ws_presence_state)
+    websocket_api.async_register_command(hass, ws_presence_dashboard)
     websocket_api.async_register_command(hass, ws_presence_correct)
     websocket_api.async_register_command(hass, ws_presence_labels)
     websocket_api.async_register_command(hass, ws_presence_labels_delete)
@@ -413,6 +414,28 @@ def ws_topology_paths(
     )
 
 
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/presence/dashboard"})
+@callback
+def ws_presence_dashboard(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Authenticated users can read estimates; only administrators can correct them."""
+    if (runtime := _loaded(hass, connection, msg)) is None:
+        return
+    presence = runtime.presence
+    connection.send_result(
+        msg["id"],
+        presence.dashboard_payload()
+        if presence is not None
+        else {
+            "enabled": False,
+            "people": {},
+            "groups": [],
+            "occupants": {},
+        },
+    )
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/presence/state"})
 @callback
@@ -470,6 +493,9 @@ def ws_presence_correct(
             carried=msg.get("carried"),
             clear=msg["clear"],
             carrying=msg.get("carrying"),
+            floor=msg.get("floor"),
+            certainty=msg.get("certainty", "definite"),
+            exclude=msg.get("exclude", False),
         )
     except ValueError as err:
         connection.send_error(msg["id"], "not_found", str(err))

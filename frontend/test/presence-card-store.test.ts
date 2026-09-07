@@ -1,0 +1,31 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { presenceCardSource } from "../src/presence-card-store";
+import type { HomeAssistant } from "../src/types";
+afterEach(() => vi.useRealTimers());
+it("shares requests and stops when the last card disconnects", async () => {
+  vi.useFakeTimers();
+  const callWS = vi.fn().mockResolvedValue({ people: {}, groups: [] });
+  const hass = { callWS } as unknown as HomeAssistant;
+  const source = presenceCardSource(hass);
+  expect(presenceCardSource({ ...hass })).toBe(source);
+  const a = source.subscribe(vi.fn()); const b = source.subscribe(vi.fn());
+  await vi.advanceTimersByTimeAsync(0);
+  expect(callWS).toHaveBeenCalledTimes(1);
+  a(); await vi.advanceTimersByTimeAsync(2000);
+  expect(callWS).toHaveBeenCalledTimes(2);
+  b(); await vi.advanceTimersByTimeAsync(4000);
+  expect(callWS).toHaveBeenCalledTimes(2);
+});
+it("ignores an in-flight response after disconnect and retries errors", async () => {
+  vi.useFakeTimers();
+  let resolve!: (value: unknown) => void;
+  const callWS = vi.fn().mockImplementationOnce(() => new Promise(r => { resolve = r; })).mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ people: {}, groups: [] });
+  const source = presenceCardSource({ callWS } as unknown as HomeAssistant);
+  const old = vi.fn(); source.subscribe(old)();
+  const next = vi.fn(); const stop = source.subscribe(next);
+  await vi.advanceTimersByTimeAsync(0);
+  resolve({ stale: true }); await vi.advanceTimersByTimeAsync(0);
+  expect(next.mock.lastCall?.[0].error).toBe("offline");
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(next.mock.lastCall?.[0].error).toBeUndefined(); stop();
+});

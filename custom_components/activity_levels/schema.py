@@ -52,6 +52,9 @@ from .engine import Mix, NullHandling, RetriggerWhen, Unavailable
 PRESENCE_CORRECTION_FIELDS: dict[Any, Any] = {
     vol.Required("person"): str,
     vol.Optional("room"): str,
+    vol.Optional("floor"): str,
+    vol.Optional("certainty", default="definite"): vol.In(("definite", "probable")),
+    vol.Optional("exclude", default=False): bool,
     vol.Optional("device"): str,
     vol.Optional("carried"): bool,
     vol.Optional("clear", default=False): bool,

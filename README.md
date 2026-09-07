@@ -714,3 +714,53 @@ problems go through [SECURITY.md](SECURITY.md) rather than a public issue.
 ## License
 
 MIT
+
+### Presence dashboard card
+
+The integration includes **Activity Levels Presence** in the dashboard card picker.
+For storage dashboards, setup registers its JavaScript resource automatically. Restart
+Home Assistant after updating the integration, then refresh the browser. Select a room
+or floor in the card editor. Use this card in a vertical stack below an existing room
+heading, or set `title` to give it its own heading:
+
+```yaml
+type: custom:activity-levels-presence-card
+group: theater
+# Optional:
+# title: Theater
+# min_probability: 0.1
+```
+
+`group` is the Activity Levels group ID, not an area entity ID. The editor lists valid
+room and floor groups. The card uses the linked `person.*` entity's picture, with an
+initial fallback. Full-color photos with solid borders show at least 60% probability;
+faded photos with dashed borders show other candidates above `min_probability`.
+Floor cards sum the probabilities of their rooms. Names and probabilities are available
+on hover and in the person dialog; the strip has no text labels.
+
+Tap a person to confirm a room or floor, mark it probable, rule it out, or return to
+automatic estimation. The plus button lists people not already shown and disappears
+when all tracked people appear. Tap a device independently to correct its location or
+whether it is carried. Watches use **Wearing / Not wearing**. Active explicit
+**Not wearing / Not carrying** corrections hide that device from the strip; it stays
+available on the Presence settings page. New qualifying evidence or clearing the
+correction can return it to automatic tracking.
+
+All authenticated users can view the card. Corrections require an administrator, as
+on the Presence page. Tentative, floor, and exclusion corrections adjust belief but do
+not train the estimator as if you had confirmed a specific room. Multiple cards share
+one refresh loop and preserve their content while fetching new estimates.
+
+If you manage dashboard resources in YAML, add the module yourself. Change the version
+query when updating to make browsers fetch the new bundle:
+
+```yaml
+lovelace:
+  resources:
+    - url: /activity_levels_panel/activity-levels-cards.js?v=1
+      type: module
+```
+
+The integration now ships separate panel and card modules with shared generated chunks.
+All generated files in `custom_components/activity_levels/frontend/` must be installed
+together; HACS handles that as part of the existing integration download.

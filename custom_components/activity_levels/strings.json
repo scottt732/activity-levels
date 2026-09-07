@@ -82,6 +82,9 @@
       "fields": {
         "person": { "name": "Person", "description": "The tracked person's name, as configured under presence.people." },
         "room": { "name": "Room", "description": "The person or device room group id, or away." },
+        "floor": { "name": "Floor", "description": "The floor group id. Do not combine with room." },
+        "certainty": { "name": "Certainty", "description": "Definite constrains the location; probable favors it while preserving alternatives." },
+        "exclude": { "name": "Not here", "description": "Exclude the selected room or floor from the person estimate." },
         "device": { "name": "Device", "description": "The tracked device key from the presence state. Omit to correct the person." },
         "carried": { "name": "Carrying", "description": "Whether the person carries this device. Requires device." },
         "clear": { "name": "Use automatic estimate", "description": "Release this target's corrections. Do not combine with room or carrying choices." },

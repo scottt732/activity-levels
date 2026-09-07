@@ -1026,6 +1026,9 @@ class PresenceCoordinator:
         carried: bool | None = None,
         clear: bool = False,
         carrying: Mapping[str, bool] | None = None,
+        floor: str | None = None,
+        certainty: str = "definite",
+        exclude: bool = False,
     ) -> PersonOutputs:
         """Apply an atomic human assertion and save only the asserted training targets.
 
@@ -1038,6 +1041,22 @@ class PresenceCoordinator:
             raise ValueError(f"no such person: {name}")
         if room is not None and room not in self.topology.states:
             raise ValueError(f"not a room: {room}")
+        if certainty not in ("definite", "probable") or not isinstance(exclude, bool):
+            raise ValueError("invalid location correction")
+        if floor is not None and room is not None:
+            raise ValueError("choose a room or floor")
+        targets: tuple[str, ...] = (room,) if room is not None else ()
+        if floor is not None:
+            info = self.coordinator.tree.groups.get(floor)
+            if info is None or info.kind != "floor":
+                raise ValueError(f"not a floor: {floor}")
+            targets = tuple(self.rooms_in_group(floor))
+            if not targets:
+                raise ValueError("floor has no rooms")
+        if (certainty != "definite" or exclude) and not targets:
+            raise ValueError("certainty and exclusion require a location")
+        if device is not None and (floor is not None or certainty != "definite" or exclude):
+            raise ValueError("floor, certainty and exclusion belong to a person correction")
         track = person.devices.get(device) if device is not None else None
         if device is not None and (track is None or track.estimator is None):
             raise ValueError(f"no such device: {device}")
@@ -1048,9 +1067,9 @@ class PresenceCoordinator:
             choices[device] = carried
         if device is not None and carrying is not None:
             raise ValueError("carrying choices belong to a person correction")
-        if clear and (room is not None or carried is not None or carrying is not None):
+        if clear and (targets or carried is not None or carrying is not None):
             raise ValueError("clear cannot include another correction")
-        if not clear and room is None and not choices:
+        if not clear and not targets and not choices:
             raise ValueError("provide a room or carrying correction")
         for key, value in choices.items():
             if key not in person.devices or not isinstance(value, bool):
@@ -1106,7 +1125,9 @@ class PresenceCoordinator:
                         "value": value,
                     },
                 )
-            if room is not None:
+            if targets and device is None:
+                est.correct_location(targets, t, certainty=certainty, exclude=exclude, floor=floor)
+            if room is not None and certainty == "definite" and not exclude:
                 label = {
                     **common,
                     "id": uuid4().hex,
@@ -1116,8 +1137,6 @@ class PresenceCoordinator:
                 if device is not None:
                     label["device"] = device
                     label["frames"] = {device: common["frames"][device]}
-                else:
-                    est.locate(room, t=t)
                 self.labels.insert(0, label)
                 self._labels_since_build += 1
             del self.labels[self.settings["labels"]["keep"] :]
@@ -1336,6 +1355,46 @@ class PresenceCoordinator:
             "signals": dict(track.signals),
             "found": dict(track.found),
         }
+
+    def rooms_in_group(self, group_id: str) -> list[str]:
+        """Return room leaves below a stable configuration group ID."""
+        result = []
+        groups = self.coordinator.tree.groups
+        for room in self.topology.nodes:
+            current = groups.get(room)
+            while current is not None:
+                if current.id == group_id:
+                    result.append(room)
+                    break
+                current = groups.get(current.parent_id) if current.parent_id else None
+        return sorted(result)
+
+    def dashboard_payload(self) -> dict[str, Any]:
+        """Read-only dashboard data, including probabilities below the panel cutoff."""
+        payload = self.payload()
+        for name, person in self.people.items():
+            payload["people"][name]["probabilities"] = (
+                dict(
+                    zip(
+                        person.estimator.states,
+                        map(float, person.estimator.room_belief),
+                        strict=True,
+                    )
+                )
+                if person.estimator is not None and person.outputs is not None
+                else {}
+            )
+        payload["groups"] = [
+            {
+                "id": info.id,
+                "name": self.room_name(info.id),
+                "kind": "room" if info.id in self.topology.nodes else info.kind,
+                "rooms": self.rooms_in_group(info.id),
+            }
+            for info in self.coordinator.tree.groups.values()
+            if info.id in self.topology.nodes or info.kind == "floor"
+        ]
+        return payload
 
     def payload(self) -> dict[str, Any]:
         """What ``activity_levels/presence/state`` answers."""
