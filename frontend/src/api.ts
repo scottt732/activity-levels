@@ -113,6 +113,9 @@ export const getPresenceState = (hass: HomeAssistant): Promise<PresenceState> =>
 
 /** "No, I'm in the studio": the person's estimate moves there and the moment is kept as a label. */
 export interface PresenceCorrection {
+  floor?: string;
+  certainty?: "definite" | "probable";
+  exclude?: boolean;
   room?: string;
   device?: string;
   carried?: boolean;

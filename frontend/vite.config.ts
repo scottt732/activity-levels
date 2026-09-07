@@ -3,16 +3,19 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   build: {
     lib: {
-      entry: "src/main.ts",
+      entry: {
+        "activity-levels-panel": "src/main.ts",
+        "activity-levels-cards": "src/cards.ts",
+      },
       formats: ["es"],
-      fileName: () => "activity-levels-panel.js",
+      fileName: (_format, entryName) => `${entryName}.js`,
     },
     outDir: "../custom_components/activity_levels/frontend",
     emptyOutDir: true,
     target: "es2022",
     minify: true,
     sourcemap: false,
-    rollupOptions: { output: { inlineDynamicImports: true } },
+    rollupOptions: { output: { chunkFileNames: "shared-[hash].js" } },
   },
   server: { port: 5173, cors: true, strictPort: true },
   test: {

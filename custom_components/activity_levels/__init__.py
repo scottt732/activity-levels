@@ -287,6 +287,9 @@ def _register_services(hass: HomeAssistant) -> None:
                 carried=call.data.get("carried"),
                 clear=call.data["clear"],
                 carrying=call.data.get("carrying"),
+                floor=call.data.get("floor"),
+                certainty=call.data.get("certainty", "definite"),
+                exclude=call.data.get("exclude", False),
             )
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err

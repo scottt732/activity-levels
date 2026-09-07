@@ -218,3 +218,31 @@ def test_snapshot_round_trips_and_refuses_a_changed_device_list(topo) -> None:
     assert (
         other.restore({"states": list(topo.states), "devices": ["phone"], "belief": "no"}) is False
     )
+
+
+def test_probable_location_does_not_compound_into_certainty(topo) -> None:
+    est = person(topo, {"phone": device(topo)})
+    carried = est.carried()
+    est.correct_location(("bedroom",), 10.0, certainty="probable")
+    for _ in range(10):
+        est.apply_corrections(10.0)
+    assert est.room_belief[est.states.index("bedroom")] == pytest.approx(0.75)
+    assert est.carried() == pytest.approx(carried)
+    assert est.room_belief.sum() == pytest.approx(1.0)
+
+
+def test_floor_and_negative_corrections_preserve_room_alternatives(topo) -> None:
+    est = person(topo, {"phone": device(topo)})
+    est.correct_location(("kitchen", "dining_room"), 10.0, floor="downstairs")
+    assert est.room_belief[est.states.index("kitchen")] > 0
+    assert est.room_belief[est.states.index("dining_room")] > 0
+    assert est.room_belief[est.states.index("hall")] == 0
+    snapshot = est.snapshot()
+    restored = person(topo, {"phone": device(topo)})
+    restored.restore(snapshot)
+    assert restored.correction.floor == "downstairs"
+    assert restored.correction.rooms == ("kitchen", "dining_room")
+    assert restored.correction.weight(1030.0) == 0.0
+    est.correct_location(("kitchen",), 20.0, exclude=True)
+    assert est.room_belief[est.states.index("kitchen")] == 0
+    assert est.room_belief.sum() == pytest.approx(1.0)

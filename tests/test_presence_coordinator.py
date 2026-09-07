@@ -1309,3 +1309,107 @@ async def test_diagnostics_carry_the_presence_block(
     assert device["outputs"]["room"] == "kitchen"
     assert device["belief"]["states"][0] == "kitchen"
     assert device["resets"] == 0
+
+
+async def test_general_location_corrections_are_not_training_labels(hass: HomeAssistant) -> None:
+    fake_bermuda(hass)
+    config = presence_config()
+    branch = config["groups"][0]["children"][0]
+    branch["children"] = [{"id": "ground_floor", "kind": "floor", "children": branch["children"]}]
+    entry = await add_entry(hass, config)
+    presence = entry.runtime_data.presence
+    person = presence.people["Scott"]
+    presence.correct("Scott", "kitchen", source="panel", certainty="probable")
+    assert person.estimator.room_belief[person.estimator.states.index("kitchen")] >= 0.75
+    assert presence.labels == []
+    presence.correct("Scott", floor="ground_floor", source="panel")
+    assert person.estimator.correction.floor == "ground_floor"
+    assert presence.labels == []
+    presence.correct("Scott", "kitchen", source="panel", exclude=True)
+    assert person.estimator.room_belief[person.estimator.states.index("kitchen")] == 0.0
+    assert presence.labels == []
+    for kwargs in (
+        {"room": "kitchen", "floor": "ground_floor"},
+        {"floor": "kitchen"},
+        {"certainty": "probable"},
+        {"room": "kitchen", "exclude": True, "clear": True},
+    ):
+        with pytest.raises(ValueError):
+            presence.correct("Scott", source="panel", **kwargs)
+
+
+async def test_dashboard_endpoint_includes_full_probabilities_and_groups(
+    hass: HomeAssistant,
+    hass_ws_client,
+) -> None:
+    fake_bermuda(hass)
+    config = presence_config()
+    branch = config["groups"][0]["children"][0]
+    branch["children"] = [{"id": "ground_floor", "kind": "floor", "children": branch["children"]}]
+    entry = await add_entry(hass, config)
+    presence = entry.runtime_data.presence
+    presence.correct("Scott", "kitchen", source="panel", certainty="probable")
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": "activity_levels/presence/dashboard"})
+    response = await client.receive_json()
+    assert response["success"]
+    payload = response["result"]
+    probabilities = payload["people"]["Scott"]["probabilities"]
+    assert sum(probabilities.values()) == pytest.approx(1.0)
+    assert set(probabilities) == set(presence.topology.states)
+    floor = next(group for group in payload["groups"] if group["id"] == "ground_floor")
+    assert "kitchen" in floor["rooms"]
+    assert floor["kind"] == "floor"
+
+
+async def test_dashboard_reader_cannot_change_corrections(
+    hass: HomeAssistant,
+    hass_ws_client,
+    hass_read_only_access_token,
+) -> None:
+    fake_bermuda(hass)
+    await add_entry(hass)
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json_auto_id({"type": "activity_levels/presence/dashboard"})
+    assert (await client.receive_json())["success"]
+    await client.send_json_auto_id(
+        {
+            "type": "activity_levels/presence/correct",
+            "person": "Scott",
+            "room": "kitchen",
+            "certainty": "probable",
+        }
+    )
+    assert not (await client.receive_json())["success"]
+
+
+async def test_general_corrections_websocket_and_service(
+    hass: HomeAssistant, hass_ws_client
+) -> None:
+    fake_bermuda(hass)
+    entry = await add_entry(hass)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": "activity_levels/presence/correct",
+            "person": "Scott",
+            "room": "kitchen",
+            "certainty": "probable",
+        }
+    )
+    assert (await client.receive_json())["success"]
+    presence = entry.runtime_data.presence
+    assert presence.people["Scott"].estimator.correction.certainty == "probable"
+    assert presence.labels == []
+    await hass.services.async_call(
+        DOMAIN,
+        "locate",
+        {
+            "person": "Scott",
+            "room": "kitchen",
+            "exclude": True,
+        },
+        blocking=True,
+    )
+    assert presence.people["Scott"].estimator.correction.exclude
+    assert presence.labels == []

@@ -35,6 +35,10 @@ class Correction:
     strength: float = 1.0
     reason: str = "Confirmed by you"
     baseline: dict[str, float | None] = field(default_factory=dict)
+    rooms: tuple[str, ...] = ()
+    certainty: str = "definite"
+    exclude: bool = False
+    floor: str | None = None
     _sample: float | None = None
     _start: float | None = None
     _last: float | None = None
@@ -66,6 +70,10 @@ class Correction:
                 self.anchor = room
                 self.baseline = dict(distances or {})
             return False
+        if self.rooms:
+            # A floor or negative assertion has no single confirmed starting room.
+            # Fresh sustained movement into contradictory territory can release it.
+            return confidence >= 0.6 and ((room in self.rooms) == self.exclude)
         if room == self.anchor:
             self._route_room = self._route_candidate = None
             self._route_count = 0
@@ -149,7 +157,16 @@ class Correction:
         reason = self.reason
         if isinstance(self.value, str) and t > self.t + ROOM_HOLD:
             reason = "Correction expiring" if strength else "Automatic — room correction expired"
-        return {"value": self.value, "t": self.t, "strength": strength, "reason": reason}
+        return {
+            "value": self.value,
+            "t": self.t,
+            "strength": strength,
+            "reason": reason,
+            "rooms": list(self.rooms),
+            "certainty": self.certainty,
+            "exclude": self.exclude,
+            "floor": self.floor,
+        }
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -159,6 +176,10 @@ class Correction:
             "strength": self.strength,
             "reason": self.reason,
             "baseline": dict(self.baseline),
+            "rooms": list(self.rooms),
+            "certainty": self.certainty,
+            "exclude": self.exclude,
+            "floor": self.floor,
         }
 
     @classmethod
@@ -166,8 +187,27 @@ class Correction:
         """Restore assertions, never partial movement support from before a restart."""
         if not isinstance(data, Mapping):
             return None
+        targets = data.get("rooms", [])
+        certainty = data.get("certainty", "definite")
+        exclude = data.get("exclude", False)
+        floor = data.get("floor")
+        if (
+            not isinstance(targets, list)
+            or len(targets) > len(rooms)
+            or any(not isinstance(room, str) or room not in rooms for room in targets)
+            or certainty not in ("definite", "probable")
+            or not isinstance(exclude, bool)
+            or (floor is not None and not isinstance(floor, str))
+        ):
+            return None
         value = data.get("value")
-        if not isinstance(value, bool) and (not isinstance(value, str) or value not in rooms):
+        if (targets and isinstance(value, bool)) or (floor is not None and not targets):
+            return None
+        if not isinstance(value, bool) and (
+            not isinstance(value, str) or (value not in rooms and not targets)
+        ):
+            return None
+        if exclude and set(targets or (value,)) == set(rooms):
             return None
         try:
             t, strength = float(data["t"]), float(data["strength"])
@@ -195,7 +235,18 @@ class Correction:
             for key, reading in baseline.items()
         ):
             return None
-        return cls(value, t, anchor, strength, str(reason)[:120], dict(baseline))
+        return cls(
+            value,
+            t,
+            anchor,
+            strength,
+            str(reason)[:120],
+            dict(baseline),
+            tuple(targets),
+            certainty,
+            exclude,
+            floor,
+        )
 
 
 def route_support(

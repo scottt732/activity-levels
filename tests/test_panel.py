@@ -2,10 +2,17 @@ import json
 import logging
 from http import HTTPStatus
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.components import frontend
+from homeassistant.components.lovelace import LOVELACE_DATA
+from homeassistant.components.lovelace.resources import (
+    ResourceStorageCollection,
+    ResourceYAMLCollection,
+)
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.typing import ClientSessionGenerator
 
@@ -114,3 +121,80 @@ async def test_missing_bundle_logs_and_skips_the_panel(
     assert PANEL_URL_PATH not in hass.data.get(frontend.DATA_PANELS, {})
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert any("panel" in r.getMessage() for r in errors)
+
+
+async def test_cards_resource_updates_existing_registration(
+    hass: HomeAssistant, entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reloads update the cache key in place and never duplicate the resource."""
+    resources = hass.data[LOVELACE_DATA].resources
+    await resources.async_get_info()
+    for item in list(resources.async_items()):
+        await resources.async_delete_item(item["id"])
+    existing = await resources.async_create_item(
+        {"url": "/activity_levels_panel/activity-levels-cards.js?v=old", "res_type": "js"}
+    )
+    await resources.store.async_save({"items": [existing]})
+    resources = ResourceStorageCollection(hass, resources.ll_config)
+    hass.data[LOVELACE_DATA].resources = resources
+    assert not resources.loaded
+    monkeypatch.setattr(panel_module, "_bundle_hash", lambda name: "newdigest")
+    await panel_module.async_register_panel(hass)
+    await panel_module.async_register_panel(hass)
+    assert resources.async_items() == [
+        {
+            "id": existing["id"],
+            "url": "/activity_levels_panel/activity-levels-cards.js?v=newdigest",
+            "type": "module",
+        }
+    ]
+
+
+async def test_cards_resource_created_once(
+    hass: HomeAssistant, entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    resources = hass.data[LOVELACE_DATA].resources
+    await resources.async_get_info()
+    for item in list(resources.async_items()):
+        await resources.async_delete_item(item["id"])
+    monkeypatch.setattr(panel_module, "_bundle_hash", lambda name: "cardsdigest")
+    await panel_module._async_register_cards(hass)
+    await panel_module._async_register_cards(hass)
+    assert len(resources.async_items()) == 1
+    assert resources.async_items()[0]["url"].endswith("activity-levels-cards.js?v=cardsdigest")
+    assert resources.async_items()[0]["type"] == "module"
+
+
+async def test_yaml_resources_are_not_modified(hass: HomeAssistant, entry: MockConfigEntry) -> None:
+    resources = ResourceYAMLCollection([{"url": "/local/my-card.js", "type": "module"}])
+    hass.data[LOVELACE_DATA].resources = resources
+    await panel_module._async_register_cards(hass)
+    assert resources.async_items() == [{"url": "/local/my-card.js", "type": "module"}]
+
+
+async def test_missing_cards_bundle_does_not_add_resource(
+    hass: HomeAssistant, entry: MockConfigEntry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    resources = hass.data[LOVELACE_DATA].resources
+    await resources.async_get_info()
+    before = list(resources.async_items())
+    monkeypatch.setattr(panel_module, "_bundle_hash", lambda name: None)
+    await panel_module._async_register_cards(hass)
+    assert resources.async_items() == before
+
+
+async def test_cards_resource_failure_keeps_sidebar(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(panel_module, "_bundle_hash", lambda name: "cardsdigest")
+    monkeypatch.setattr(
+        hass.data[LOVELACE_DATA].resources,
+        "async_get_info",
+        AsyncMock(side_effect=HomeAssistantError("storage unavailable")),
+    )
+    await panel_module.async_register_panel(hass)
+    assert PANEL_URL_PATH in hass.data[frontend.DATA_PANELS]
+    assert "Could not register" in caplog.text

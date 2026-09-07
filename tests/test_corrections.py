@@ -234,3 +234,16 @@ def test_a_parked_device_can_recover_after_being_unavailable_at_correction(topo)
         support = correction.route(topo, "dining_room", 0.9, {}, t, t, near("dining_room"))
         correction.observe(t, t, support)
     assert correction.strength == 0.0
+
+
+def test_general_location_requires_fresh_contradictory_evidence(topo):
+    floor = Correction("upstairs", 0.0, rooms=("hall", "bedroom"), floor="upstairs")
+    assert not floor.route(topo, "kitchen", 0.9, {}, 10.0, 0.0)
+    assert not floor.route(topo, "hall", 0.9, {}, 10.0, 10.0)
+    assert not floor.route(topo, "kitchen", 0.5, {}, 10.0, 10.0)
+    for t in (10.0, 20.0, 40.0, 70.0, 100.0):
+        floor.observe(t, t, floor.route(topo, "kitchen", 0.9, {}, t, t))
+    assert floor.strength == 0.0
+    negative = Correction("hall", 0.0, rooms=("hall",), exclude=True)
+    assert not negative.route(topo, "kitchen", 0.9, {}, 10.0, 10.0)
+    assert negative.route(topo, "hall", 0.9, {}, 10.0, 10.0)

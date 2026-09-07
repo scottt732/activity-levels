@@ -250,10 +250,36 @@ class PersonEstimator:
         being told where you are says nothing about which pockets are full."""
         if room not in self._position:
             raise ValueError(f"not a room: {room}")
-        self.correction = Correction(room, (self.last_t or 0.0) if t is None else t, anchor=room)
-        column = self.belief.sum(axis=0)
-        self.belief = np.zeros_like(self.belief)
-        self.belief[self._position[room], :] = column / float(column.sum())
+        self.correct_location((room,), (self.last_t or 0.0) if t is None else t)
+
+    def correct_location(
+        self,
+        rooms: tuple[str, ...],
+        t: float,
+        *,
+        certainty: str = "definite",
+        exclude: bool = False,
+        floor: str | None = None,
+    ) -> None:
+        """Protect a set of locations without inventing a room-level training label."""
+        if not rooms or any(room not in self._position for room in rooms):
+            raise ValueError("invalid location rooms")
+        if certainty not in ("definite", "probable"):
+            raise ValueError("invalid certainty")
+        if exclude and set(rooms) == set(self.states):
+            raise ValueError("cannot exclude every location")
+        generalized = len(rooms) > 1 or floor is not None or exclude or certainty == "probable"
+        self.correction = Correction(
+            floor or rooms[0],
+            t,
+            anchor=None if generalized else rooms[0],
+            rooms=rooms if generalized else (),
+            certainty=certainty,
+            exclude=exclude,
+            floor=floor,
+            reason="Probably, by you" if certainty == "probable" else "Confirmed by you",
+        )
+        self.apply_corrections(t)
         self._stuck.clear()
         self._buffer.clear()
 
@@ -281,10 +307,28 @@ class PersonEstimator:
                 forced[:, target] += self.belief[:, c]
             self.belief = (1.0 - weight) * self.belief + weight * forced
         if self.correction is not None and isinstance(self.correction.value, str):
-            weight = self.correction.weight(t)
-            column = self.belief.sum(axis=0)
-            self.belief *= 1.0 - weight
-            self.belief[self._position[self.correction.value], :] += weight * column
+            correction = self.correction
+            weight = correction.weight(t) * (0.75 if correction.certainty == "probable" else 1.0)
+            targets = set(correction.rooms or (str(correction.value),))
+            mask = np.array([(room in targets) != correction.exclude for room in self.states])
+            # A probable assertion establishes a minimum mass, not repeated evidence
+            # that compounds into certainty each time the coordinator ticks.
+            for column in range(self.belief.shape[1]):
+                values = self.belief[:, column]
+                total = float(values.sum())
+                if total == 0.0:
+                    continue
+                selected = float(values[mask].sum())
+                desired = max(selected, total * weight)
+                if desired <= selected:
+                    continue
+                values[mask] = (
+                    values[mask] * desired / selected
+                    if selected > 0.0
+                    else desired / int(mask.sum())
+                )
+                if selected < total:
+                    values[~mask] *= (total - desired) / (total - selected)
 
     def _observe_corrections(self, obs: PersonObservation) -> None:
         """Reconsider assertions using source evidence, not the protected outputs."""
