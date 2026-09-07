@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/scottt732/activity-levels/compare/v0.8.0...v0.9.0) (2026-09-07)
+
+
+### Added
+
+* **mixer:** add timeline transport and preview meters ([#21](https://github.com/scottt732/activity-levels/issues/21)) ([4e4eec4](https://github.com/scottt732/activity-levels/commit/4e4eec4c3cc08c9dfa6f98cd81ccd4b7d5493021))
+
+
+### Dependencies
+
+* bump ruff from 0.16.5 to 0.16.6 in the dev-dependencies group ([#23](https://github.com/scottt732/activity-levels/issues/23)) ([66055b3](https://github.com/scottt732/activity-levels/commit/66055b3c2e6e5b0ee90220546d0192e5bd4128f4))
+* **frontend:** bump the dev-dependencies group in /frontend with 4 updates ([#22](https://github.com/scottt732/activity-levels/issues/22)) ([f8bb578](https://github.com/scottt732/activity-levels/commit/f8bb5780f9867f3574f8ccaddaa99ee8a6a1571c))
+
 ## [0.8.0](https://github.com/scottt732/activity-levels/compare/v0.7.0...v0.8.0) (2026-09-07)
 
 
