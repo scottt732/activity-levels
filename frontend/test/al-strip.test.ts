@@ -71,6 +71,18 @@ describe("al-strip", () => {
   let mutes: unknown[];
   let resets: unknown[];
 
+  it("shows one formatted reading in both meter and edit modes", async () => {
+    el.value = 0.04;
+    for (const editable of [false, true]) {
+      el.editable = editable;
+      await el.updateComplete;
+      await fader().updateComplete;
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent).toBe("0.0");
+      expect(fader().shadowRoot?.querySelector(".value")).toBeNull();
+      expect(fader().shadowRoot?.querySelector("[aria-valuetext]")?.getAttribute("aria-valuetext")).toBe("0.0");
+    }
+  });
+
   const fader = (): AlFader => el.shadowRoot?.querySelector("al-fader") as AlFader;
 
   /** What the fader reports: `live` moves during a drag, `live: false` for a settled value. */
@@ -237,7 +249,7 @@ describe("al-strip", () => {
       await el.updateComplete;
       el.settle(4);
       await el.updateComplete;
-      expect(el.shadowRoot?.querySelector(".readout")?.textContent).toBe("—");
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent).toBe("No data");
       expect(el.shadowRoot?.querySelector("al-fader")).toBeNull();
     });
 

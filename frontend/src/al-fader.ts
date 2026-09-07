@@ -107,6 +107,8 @@ export class AlFader extends LitElement {
    */
   @property({ type: Boolean, reflect: true, attribute: "readonly" }) readOnly = false;
   @property({ type: String }) label = "Gain";
+  /** The host can supply its own readout while the accessible value stays on the control. */
+  @property({ type: Boolean }) showValue = true;
 
   /** Which quantity the fader is holding: a gain into a parent, or a group's own level. */
   @property({ type: String }) mode: "gain" | "level" = "gain";
@@ -249,7 +251,7 @@ export class AlFader extends LitElement {
           aria-valuetext=${scale.format(value)}
         >
           <div class="track">${marks}</div>
-          <div class="value">${scale.format(value)}</div>
+          ${this.showValue ? html`<div class="value">${scale.format(value)}</div>` : nothing}
         </div>
       `;
     return html`
@@ -277,7 +279,7 @@ export class AlFader extends LitElement {
           ${marks}
           <div class="knob" style="bottom: calc(${pct(pos)} - ${Math.round((pos - 0.5) * KNOB * 10) / 10}px - ${KNOB / 2}px)"></div>
         </div>
-        <div class="value">${scale.format(value)}</div>
+        ${this.showValue ? html`<div class="value">${scale.format(value)}</div>` : nothing}
       </div>
     `;
   }
