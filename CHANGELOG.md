@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/scottt732/activity-levels/compare/v0.7.0...v0.8.0) (2026-09-07)
+
+
+### Added
+
+* **presence:** let fresh movement release person and device corrections ([#19](https://github.com/scottt732/activity-levels/issues/19)) ([4873231](https://github.com/scottt732/activity-levels/commit/4873231cf99f61004e40737a1ce922394edfb649))
+
+
+### Dependencies
+
+* bump hypothesis from 6.165.10 to 6.167.1 in the dev-dependencies group ([#18](https://github.com/scottt732/activity-levels/issues/18)) ([49d5861](https://github.com/scottt732/activity-levels/commit/49d5861b4bb480adac9764836ea8869756d79557))
+
 ## [0.7.0](https://github.com/scottt732/activity-levels/compare/v0.6.0...v0.7.0) (2026-09-03)
 
 
