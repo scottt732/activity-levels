@@ -3,6 +3,9 @@ import { customElement, property, state } from "lit/decorators.js";
 import "./al-graph-map";
 import "./al-people-editor";
 import { KIND_ICONS, KIND_LABELS } from "./al-people-editor";
+import type { PresenceCorrection } from "./api";
+import type { CorrectionStatus } from "./types";
+import { entityLinks, registryLink } from "./ha-links";
 import { correctPresence, getPresenceState, getTopology, getTopologyPaths } from "./api";
 import { durationToSeconds, secondsToDuration } from "./duration";
 import { fieldErrors } from "./errors";
@@ -181,6 +184,9 @@ export class AlPresence extends LitElement {
         color: var(--text-primary-color, #fff);
       }
       .device-chip {
+        font: inherit;
+        cursor: pointer;
+        border: 1px solid var(--divider-color);
         display: inline-flex;
         align-items: center;
         gap: 4px;
@@ -283,6 +289,10 @@ export class AlPresence extends LitElement {
   @state() private pathsPending = false;
   /** The person whose room picker is open, if any. One at a time: it is a question. */
   @state() private correcting: string | null = null;
+  @state() private correctingDevice: { person: string; device: string } | null = null;
+  @state() private carryingChoices: Record<string, boolean> = {};
+  @state() private correctionPending = false;
+  @state() private correctionError: string | null = null;
   /** The last correction's outcome, shown once under the People card. */
   @state() private notice: string | null = null;
 
@@ -370,17 +380,37 @@ export class AlPresence extends LitElement {
    * label; the state is re-read straight after so the row shows the answer rather than
    * waiting a poll for it.
    */
-  private async correct(person: string, room: string): Promise<void> {
+  private async correct(person: string, correction: string | PresenceCorrection): Promise<void> {
     const hass = this.hass;
-    if (!hass) return;
-    this.correcting = null;
+    if (!hass || this.correctionPending) return;
+    const request = typeof correction === "string"
+      ? { room: correction, ...(Object.keys(this.carryingChoices).length ? { carrying: this.carryingChoices } : {}) }
+      : correction;
+    this.correctionPending = true;
+    this.correctionError = null;
+    this.notice = null;
     try {
-      await correctPresence(hass, person, room);
-      this.notice = `Moved ${person} to ${this.roomName(room)}.`;
+      await correctPresence(hass, person, request);
+      this.notice = request.device ? "Device correction saved." : request.room
+        ? `Moved ${person} to ${this.roomName(request.room)}.` : "Automatic estimate restored.";
+      this.correcting = null;
+      this.correctingDevice = null;
+      this.carryingChoices = {};
+      await this.refreshPresence();
     } catch (err) {
-      this.notice = `Could not move ${person}: ${err instanceof Error ? err.message : String(err)}`;
+      const message = err && typeof err === "object" && "message" in err ? String(err.message) : String(err);
+      this.correctionError = `Could not save correction: ${message}`;
+    } finally {
+      this.correctionPending = false;
     }
-    await this.refreshPresence();
+  }
+
+  private correctionStatus(status: CorrectionStatus | null | undefined): TemplateResult | typeof nothing {
+    if (!status) return nothing;
+    const value = typeof status.value === "boolean" ? (status.value ? "Carrying" : "Not carrying") : this.roomName(status.value);
+    const reason = status.reason.replaceAll("_", " ");
+    return html`<div class="hint correction-status" role="status">${value} — ${reason}
+      (${Math.round(status.strength * 100)}%) · <time datetime=${new Date(status.t * 1000).toISOString()}>${new Date(status.t * 1000).toLocaleTimeString()}</time></div>`;
   }
 
   /** Every room a person can be said to be in: the graph's nodes, then Away. */
@@ -648,10 +678,11 @@ export class AlPresence extends LitElement {
           ${people.flatMap(([name, outputs]) => [
             this.renderPerson(name, outputs),
             this.correcting === name ? this.renderCorrection(name, outputs) : nothing,
+            this.correctingDevice?.person === name ? this.renderDeviceCorrection(name, outputs) : nothing,
           ])}
         </tbody>
       </table>
-      ${this.notice === null ? nothing : html`<div class="notice">${this.notice}</div>`}
+      ${this.notice === null ? nothing : html`<div class="notice" role="status">${this.notice}</div>`}
     </ha-card>`;
   }
 
@@ -666,14 +697,26 @@ export class AlPresence extends LitElement {
     return html`<tr class="correct">
       <td colspan="6">
         <span class="question">Where is ${name}?</span>
+        <div>${Object.entries(outputs.devices ?? {}).map(([id, device]) => html`<label>${device.name}
+          <select data-carrying=${id} ?disabled=${this.correctionPending} aria-label=${`Carrying ${device.name}`} .value=${String(this.carryingChoices[id] ?? "")}
+            @change=${(ev: Event) => {
+              const value = (ev.target as HTMLSelectElement).value;
+              const choices = { ...this.carryingChoices };
+              if (value === "") delete choices[id]; else choices[id] = value === "true";
+              this.carryingChoices = choices;
+            }}>
+            <option value="">Keep estimate (${device.carried === null ? "unknown" : `${Math.round(device.carried * 100)}% carrying`})</option>
+            <option value="true">Carrying</option><option value="false">Not carrying</option>
+          </select></label>`)}</div>
+        ${this.correctionError ? html`<div role="alert">${this.correctionError}</div>` : nothing}
         ${candidates.map(
           (room) =>
-            html`<ha-button class="candidate" @click=${() => void this.correct(name, room)}
+            html`<ha-button class="candidate" .disabled=${this.correctionPending} @click=${() => void this.correct(name, room)}
               >${this.roomName(room)}</ha-button
             >`,
         )}
         <select
-          class="every-room"
+          class="every-room" aria-label="Person room" ?disabled=${this.correctionPending}
           @change=${(ev: Event) => {
             const room = (ev.target as HTMLSelectElement).value;
             if (room !== "") void this.correct(name, room);
@@ -682,6 +725,7 @@ export class AlPresence extends LitElement {
           <option value="">Somewhere else…</option>
           ${this.correctionRooms.map((room) => html`<option value=${room}>${this.roomName(room)}</option>`)}
         </select>
+        <ha-button class="automatic-person" .disabled=${this.correctionPending} @click=${() => void this.correct(name, { clear: true })}>Use automatic estimate</ha-button>
         <ha-button class="cancel" @click=${() => (this.correcting = null)}>That's right</ha-button>
       </td>
     </tr>`;
@@ -695,13 +739,19 @@ export class AlPresence extends LitElement {
         <button
           class="link"
           title="Say where ${name} really is"
-          @click=${() => (this.correcting = this.correcting === name ? null : name)}
+          @click=${() => {
+            this.correcting = this.correcting === name ? null : name;
+            this.correctingDevice = null;
+            this.carryingChoices = {};
+            this.correctionError = null;
+          }}
         >
           ${name}
         </button>
       </td>
       <td class="room">
         ${this.roomName(outputs.room)}
+        ${this.correctionStatus(outputs.correction)}
         ${outputs.moving ? html`<span class="chip moving">moving</span>` : nothing}
       </td>
       <td>
@@ -709,7 +759,7 @@ export class AlPresence extends LitElement {
           <div class="confidence" style=${`width: ${percent}%`}></div>
         </div>
       </td>
-      <td class="devices">${devices.map(([id, device]) => this.renderDeviceChip(id, device))}</td>
+      <td class="devices">${devices.map(([id, device]) => this.renderDeviceChip(name, id, device))}</td>
       <td class="breadcrumb">${outputs.path.length === 0 ? "—" : this.trail(outputs.path)}</td>
       <td class="when">${new Date(outputs.t * 1000).toLocaleTimeString()}</td>
     </tr>`;
@@ -719,18 +769,38 @@ export class AlPresence extends LitElement {
    * One device: what it is, how likely it is on the person, and — when it probably is
    * not — where it was left. A parked phone's room is the answer to "where did I put it".
    */
-  private renderDeviceChip(id: string, device: PresenceDeviceRow): TemplateResult {
+  private renderDeviceChip(person: string, id: string, device: PresenceDeviceRow): TemplateResult {
     const carried = device.carried;
     const parked = carried !== null && carried < 0.5;
     const percent = carried === null ? "—" : `${Math.round(carried * 100)}%`;
     const title = `${device.name} (${KIND_LABELS[device.kind]}): carried ${percent}${
       parked && device.room ? `, in ${this.roomName(device.room)}` : ""
     }`;
-    return html`<span class="chip device-chip ${parked ? "parked" : "carried"}" data-device=${id} title=${title}>
+    return html`<button type="button" aria-label=${`Correct ${device.name}`} @click=${() => { this.correctingDevice = { person, device: id }; this.correcting = null; this.correctionError = null; }} class="chip device-chip ${parked ? "parked" : "carried"}" data-device=${id} title=${title}>
       <ha-icon icon=${KIND_ICONS[device.kind] ?? KIND_ICONS.other}></ha-icon>
       <span class="carried-pct">${percent}</span>
       ${parked && device.room ? html`<span class="parked-room">${this.roomName(device.room)}</span>` : nothing}
-    </span>`;
+    </button>${this.correctionStatus(device.correction)}${this.correctionStatus(device.carrying_correction)}`;
+  }
+
+  private renderDeviceCorrection(person: string, outputs: PersonOutputs): TemplateResult | typeof nothing {
+    const id = this.correctingDevice?.device;
+    const device = id ? outputs.devices[id] : undefined;
+    if (!id || !device) return nothing;
+    return html`<tr class="correct device-correction"><td colspan="6">
+      <div class="question">${device.name}</div>
+      ${entityLinks(this, this.hass, device.tracker, "Open tracker", device.device_id, "Open Bermuda device")}
+      <label>Device room <select aria-label="Device room" ?disabled=${this.correctionPending} @change=${(ev: Event) => {
+        const room = (ev.target as HTMLSelectElement).value;
+        if (room) void this.correct(person, { device: id, room });
+      }}><option value="">Choose a room…</option>${this.correctionRooms.map((room) => html`<option value=${room}>${this.roomName(room)}</option>`)}</select></label>
+      <ha-button class="carrying" .disabled=${this.correctionPending} @click=${() => void this.correct(person, { device: id, carried: true })}>Carrying</ha-button>
+      <ha-button class="not-carrying" .disabled=${this.correctionPending} @click=${() => void this.correct(person, { device: id, carried: false })}>Not carrying</ha-button>
+      <ha-button class="automatic-device" .disabled=${this.correctionPending} @click=${() => void this.correct(person, { device: id, clear: true })}>Use automatic estimate</ha-button>
+      <ha-button @click=${() => { this.correctingDevice = null; }}>Close</ha-button>
+      <div class="hint">Movement can return this device to automatic estimation. Missing companion sensors are optional.</div>
+      ${this.correctionError ? html`<div role="alert">${this.correctionError}</div>` : nothing}
+    </td></tr>`;
   }
 
   private renderScanners(): TemplateResult {
@@ -757,8 +827,8 @@ export class AlPresence extends LitElement {
 
   private renderScanner(scanner: ScannerRow, unmapped: boolean): TemplateResult {
     return html`<tr class="scanner ${unmapped ? "unmapped" : ""}">
-      <td class="name">${scanner.name}</td>
-      <td class="area">${this.areaName(scanner.area_id)}</td>
+      <td class="name">${registryLink("device", scanner.device_id, scanner.name)}</td>
+      <td class="area">${registryLink("area", scanner.area_id, this.areaName(scanner.area_id))}</td>
       <td class="room">${unmapped ? UNMAPPED_FIX : this.roomName(scanner.group_id)}</td>
     </tr>`;
   }

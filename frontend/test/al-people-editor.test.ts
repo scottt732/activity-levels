@@ -105,9 +105,10 @@ describe("al-people-editor", () => {
     });
   });
 
-  it("marks each signal found or not from the live state", () => {
+  it("marks available signals and treats unconfigured sensors as optional", () => {
     expect(el.shadowRoot!.querySelector(".signal-activity .found")).toBeTruthy();
-    expect(el.shadowRoot!.querySelector(".signal-steps .missing")).toBeTruthy();
+    expect(el.shadowRoot!.querySelector(".signal-steps .missing")).toBeNull();
+    expect(el.shadowRoot!.querySelector(".signal-steps")?.textContent).toContain("Optional");
   });
 
   it("adds and removes people and devices as structural changes", async () => {
@@ -136,4 +137,12 @@ describe("al-people-editor", () => {
     await el.updateComplete;
     expect(el.shadowRoot!.querySelector(".device .error")!.textContent).toContain("one person");
   });
+});
+
+
+it("warns when an explicitly configured companion sensor is unavailable", async () => {
+  await change(field(".signal-steps ha-selector"), "sensor.missing_steps");
+  el.config = changes.at(-1)!.detail;
+  await el.updateComplete;
+  expect(el.shadowRoot!.querySelector(".signal-steps .missing")?.getAttribute("title")).toBe("Configured but unavailable");
 });

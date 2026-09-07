@@ -112,8 +112,16 @@ export const getPresenceState = (hass: HomeAssistant): Promise<PresenceState> =>
   hass.callWS<PresenceState>({ type: "activity_levels/presence/state" });
 
 /** "No, I'm in the studio": the person's estimate moves there and the moment is kept as a label. */
-export const correctPresence = (hass: HomeAssistant, person: string, room: string): Promise<PersonOutputs> =>
-  hass.callWS<PersonOutputs>({ type: "activity_levels/presence/correct", person, room });
+export interface PresenceCorrection {
+  room?: string;
+  device?: string;
+  carried?: boolean;
+  clear?: boolean;
+  carrying?: Record<string, boolean>;
+}
+
+export const correctPresence = (hass: HomeAssistant, person: string, correction: string | PresenceCorrection): Promise<PersonOutputs> =>
+  hass.callWS<PersonOutputs>({ type: "activity_levels/presence/correct", person, ...(typeof correction === "string" ? { room: correction } : correction) });
 
 export const callService = (
   hass: HomeAssistant,

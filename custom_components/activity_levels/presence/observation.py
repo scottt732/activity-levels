@@ -33,6 +33,7 @@ class RoomActivity:
     level: float
     slope: float
     floor: float | None = None
+    observed_at: float | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ class Observation:
     distances: Mapping[str, float | None] = field(default_factory=dict)
     home: bool = True
     activity: Mapping[str, RoomActivity] = field(default_factory=dict)
+    distance_t: float | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,9 @@ class DeviceFrame:
     distances: Mapping[str, float | None] = field(default_factory=dict)
     home: bool = True
     signals: Signals = field(default_factory=Signals)
+    distance_t: float | None = None
+    moving_t: float | None = None
+    charging_t: float | None = None
 
 
 @dataclass(frozen=True)

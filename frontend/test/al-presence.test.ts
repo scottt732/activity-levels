@@ -385,3 +385,63 @@ describe("the setup card", () => {
     expect(el.shadowRoot!.querySelector("al-graph-map")).toBeTruthy();
   });
 });
+
+it("corrects a device independently and keeps failed controls open", async () => {
+  await tab();
+  (el.shadowRoot!.querySelector('[data-device="watch"]') as HTMLElement).click();
+  await settle();
+  expect(el.shadowRoot!.querySelector('.device-correction')?.textContent).toContain('Watch');
+  (el.shadowRoot!.querySelector('.not-carrying') as HTMLElement).click();
+  await settle();
+  expect(calls).toContainEqual({ type: 'activity_levels/presence/correct', person: 'Scott', device: 'watch', carried: false });
+  (el.shadowRoot!.querySelector('[data-device="watch"]') as HTMLElement).click();
+  await settle();
+  vi.mocked(el.hass!.callWS).mockRejectedValueOnce(new Error('Offline'));
+  (el.shadowRoot!.querySelector('.automatic-device') as HTMLElement).click();
+  await settle();
+  expect(el.shadowRoot!.querySelector('.device-correction')).not.toBeNull();
+  expect(el.shadowRoot!.querySelector('[role="alert"]')?.textContent).toContain('Offline');
+});
+
+it("submits person room and carrying feedback together", async () => {
+  await tab();
+  (el.shadowRoot!.querySelector('.who button') as HTMLElement).click();
+  await settle();
+  const carrying = el.shadowRoot!.querySelector('[data-carrying="watch"]') as HTMLSelectElement;
+  carrying.value = 'false';
+  carrying.dispatchEvent(new Event('change'));
+  await settle();
+  (el.shadowRoot!.querySelector('.candidate') as HTMLElement).click();
+  await settle();
+  expect(calls).toContainEqual({ type: 'activity_levels/presence/correct', person: 'Scott', room: 'kitchen', carrying: { watch: false } });
+});
+
+it("links scanners and areas using registry IDs", async () => {
+  await tab();
+  expect(el.shadowRoot!.querySelector('.scanner .name a')?.getAttribute('href')).toBe('/config/devices/device/d1');
+  expect(el.shadowRoot!.querySelector('.scanner .area a')?.getAttribute('href')).toBe('/config/areas/area/kitchen_area');
+});
+
+it("shows correction time and reason and releases the person hold manually", async () => {
+  const people = presenceState().people;
+  people.Scott!.correction = { t: SCOTT.t, value: 'kitchen', reason: 'Confirmed by you', strength: 1 };
+  await tab({ people });
+  expect(el.shadowRoot!.querySelector('.correction-status')?.textContent).toContain('Confirmed by you');
+  expect(el.shadowRoot!.querySelector('.correction-status time')?.getAttribute('datetime')).toBe(new Date(SCOTT.t * 1000).toISOString());
+  (el.shadowRoot!.querySelector('.who button') as HTMLElement).click();
+  await settle();
+  (el.shadowRoot!.querySelector('.automatic-person') as HTMLElement).click();
+  await settle();
+  expect(calls).toContainEqual({ type: 'activity_levels/presence/correct', person: 'Scott', clear: true });
+});
+
+it("sends a device room without asserting a person room or carrying state", async () => {
+  await tab();
+  (el.shadowRoot!.querySelector('[data-device="watch"]') as HTMLElement).click();
+  await settle();
+  const picker = el.shadowRoot!.querySelector('.device-correction select') as HTMLSelectElement;
+  picker.value = 'dining_room';
+  picker.dispatchEvent(new Event('change'));
+  await settle();
+  expect(calls).toContainEqual({ type: 'activity_levels/presence/correct', person: 'Scott', device: 'watch', room: 'dining_room' });
+});

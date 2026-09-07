@@ -22,6 +22,7 @@ import numpy.typing as npt
 
 from ..const import AWAY
 from ..topology import Topology
+from .corrections import Correction
 from .observation import Observation, RoomActivity
 from .signatures import Signatures
 from .stuck import StuckDetector
@@ -91,6 +92,7 @@ class Estimator:
         self._stuck = StuckDetector(stuck_after)
         self.last_t: float | None = None
         self.resets = 0
+        self.correction: Correction | None = None
 
     # -- emission -----------------------------------------------------------
 
@@ -195,8 +197,38 @@ class Estimator:
         self.belief = joint / total
         self._buffer.append(np.log(np.where(likelihood > 0.0, likelihood, _TINY)))
         self._check_stuck(obs.t, math.log(max(total, _TINY)) + shift, likelihood)
+        if self.correction is not None:
+            room, confidence = self.evidence_room(obs.distances, obs.home)
+            supported = self.correction.route(
+                self.topology, room, confidence, obs.activity, obs.t, obs.distance_t, obs.distances
+            )
+            self.correction.observe(obs.t, obs.distance_t, supported)
+            self.apply_correction(obs.t)
         self.last_t = obs.t
         return self.outputs(obs.t)
+
+    def evidence_room(self, distances: Mapping[str, float | None], home: bool) -> tuple[str, float]:
+        """Read the radio evidence without a correction or room-activity feedback."""
+        log_e = self.log_emission(Observation(t=0.0, distances=distances, home=home))
+        likelihood = np.exp(log_e - float(log_e.max()))
+        belief = likelihood / float(likelihood.sum())
+        index = int(np.argmax(belief))
+        return self.states[index], float(belief[index])
+
+    def locate(self, room: str, t: float) -> None:
+        if room not in self._position:
+            raise ValueError(f"not a room: {room}")
+        self.correction = Correction(room, t, anchor=room)
+        self._buffer.clear()
+        self._stuck.clear()
+        self.apply_correction(t)
+
+    def apply_correction(self, t: float) -> None:
+        if self.correction is None or not isinstance(self.correction.value, str):
+            return
+        weight = self.correction.weight(t)
+        self.belief *= 1.0 - weight
+        self.belief[self._position[self.correction.value]] += weight
 
     def _check_stuck(self, t: float, logp: float, likelihood: npt.NDArray[np.float64]) -> None:
         """Reset when the evidence has been implausible for ``stuck_after`` seconds.
@@ -236,6 +268,7 @@ class Estimator:
             "states": list(self.states),
             "belief": [float(value) for value in self.belief],
             "t": self.last_t,
+            "correction": None if self.correction is None else self.correction.snapshot(),
         }
 
     def restore(self, data: Mapping[str, Any]) -> bool:
@@ -269,6 +302,7 @@ class Estimator:
         self.belief = belief / total
         stamp = data.get("t")
         self.last_t = float(stamp) if isinstance(stamp, int | float) else None
+        self.correction = Correction.restore(data.get("correction"), set(self.states))
         return True
 
 

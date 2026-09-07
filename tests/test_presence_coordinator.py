@@ -309,7 +309,9 @@ async def test_a_charging_phone_is_read_as_parked(
     assert frame.signals.moving is False
 
 
-async def test_walking_and_rising_steps_read_as_moving(hass: HomeAssistant) -> None:
+async def test_walking_and_rising_steps_read_as_moving(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
     bermuda = fake_bermuda(hass)
     companion = fake_companion(hass)
     entry = await add_entry(
@@ -322,13 +324,19 @@ async def test_walking_and_rising_steps_read_as_moving(hass: HomeAssistant) -> N
     assert presence is not None
     (device,) = presence.people["Scott"].devices.values()
     hass.states.async_set(companion.signals["activity"], "walking")
-    assert presence._frame(device, 100.0).signals.moving is True
+    assert presence._frame(device, presence.coordinator.now()).signals.moving is True
+    freezer.tick(timedelta(seconds=100))
     hass.states.async_set(companion.signals["activity"], "stationary")
     hass.states.async_set(companion.signals["steps"], "1000")
-    assert presence._frame(device, 200.0).signals.moving is False
+    assert presence._frame(device, presence.coordinator.now()).signals.moving is False
+    freezer.tick(timedelta(seconds=10))
     hass.states.async_set(companion.signals["steps"], "1020")
-    assert presence._frame(device, 210.0).signals.moving is True
-    assert presence._frame(device, 210.0 + 121.0).signals.moving is False
+    t = presence.coordinator.now()
+    assert presence._frame(device, t).signals.moving is True
+    assert device.steps_rose_at == t
+    assert presence._signals(device, t - 1.0, {}, {}).moving is False
+    freezer.tick(timedelta(seconds=121))
+    assert presence._frame(device, presence.coordinator.now()).signals.moving is False
 
 
 async def test_jitter_is_a_wandering_closest_distance(hass: HomeAssistant) -> None:
@@ -402,6 +410,98 @@ async def test_the_parked_phone_scenario_end_to_end(
 
 
 # -- corrections -------------------------------------------------------------
+
+
+async def test_device_and_carrying_corrections_are_separate_and_atomic(hass: HomeAssistant) -> None:
+    fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    person = presence.people["Scott"]
+    (device_id,) = person.devices
+    presence.correct("Scott", "hall", source="panel", carrying={device_id: False})
+    assert person.outputs.room == "hall"
+    assert person.outputs.carried[device_id] == 0.0
+    labels = list(presence.labels)
+    with pytest.raises(ValueError):
+        presence.correct("Scott", "kitchen", source="panel", carrying={"missing": True})
+    assert person.outputs.room == "hall"
+    assert presence.labels == labels
+    presence.correct("Scott", "kitchen", source="panel", device=device_id)
+    assert person.devices[device_id].outputs.room == "kitchen"
+    assert person.outputs.room == "hall"
+    assert presence.labels[0]["kind"] == "device_room"
+    assert presence.labels[0]["device"] == device_id
+    row = presence.payload()["people"]["Scott"]["devices"][device_id]
+    assert row["device_id"]
+    assert row["carrying_correction"]["value"] is False
+    presence.correct("Scott", source="panel", device=device_id, clear=True)
+    assert person.devices[device_id].estimator.correction is None
+    assert device_id not in person.estimator.carrying_corrections
+
+
+async def test_correction_frame_uses_actual_source_times(hass: HomeAssistant, freezer) -> None:
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    track = next(iter(presence.people["Scott"].devices.values()))
+    await observe(hass, freezer, bermuda, "kitchen")
+    first = presence._frame(track, presence.coordinator.now())
+    freezer.tick(timedelta(seconds=30))
+    second = presence._frame(track, presence.coordinator.now())
+    assert first.distance_t == second.distance_t
+    assert first.distance_t is not None
+    assert first.moving_t is None and second.moving_t is None
+
+
+async def test_device_correction_websocket_and_service(hass: HomeAssistant, hass_ws_client) -> None:
+    fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    (device_id,) = presence.people["Scott"].devices
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": f"{DOMAIN}/presence/correct",
+            "person": "Scott",
+            "device": device_id,
+            "carried": False,
+        }
+    )
+    response = await client.receive_json()
+    assert response["success"]
+    assert response["result"]["carried"][device_id] == 0.0
+    await hass.services.async_call(
+        DOMAIN,
+        "locate",
+        {
+            "person": "Scott",
+            "device": device_id,
+            "room": "hall",
+            "carried": False,
+        },
+        blocking=True,
+    )
+    assert presence.people["Scott"].devices[device_id].outputs.room == "hall"
+    await client.send_json_auto_id(
+        {"type": f"{DOMAIN}/presence/correct", "person": "Scott", "room": "kitchen", "clear": True}
+    )
+    response = await client.receive_json()
+    assert not response["success"]
+
+
+async def test_room_correction_expires_without_new_radio_updates(
+    hass: HomeAssistant, freezer
+) -> None:
+    bermuda = fake_bermuda(hass)
+    entry = await add_entry(hass)
+    presence = entry.runtime_data.presence
+    await observe(hass, freezer, bermuda, "kitchen")
+    presence.correct("Scott", "hall", source="panel")
+    freezer.tick(timedelta(seconds=1100))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert presence.people["Scott"].outputs.t == presence.coordinator.now()
+    assert presence.payload()["people"]["Scott"]["correction"]["strength"] == 0.0
 
 
 async def test_a_correction_moves_the_person_and_keeps_a_label(

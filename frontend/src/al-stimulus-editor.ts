@@ -1,3 +1,4 @@
+import { entityLinks } from "./ha-links";
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { fieldErrors, pathKey } from "./errors";
@@ -152,6 +153,7 @@ export class AlStimulusEditor extends LitElement {
 
     return html`
       <ha-card header="Stimulus">
+        ${entityLinks(this, this.hass, stimulus.entity)}
         ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
         ${renderPanel(
           "stimulus",

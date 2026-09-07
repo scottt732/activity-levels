@@ -27,6 +27,7 @@ import numpy.typing as npt
 
 from ..topology import Topology
 from .carried import Weights, log_odds
+from .corrections import WINDOW, Correction
 from .estimator import (
     _TINY,
     BUFFER,
@@ -107,6 +108,8 @@ class PersonEstimator:
         self._stuck = StuckDetector(stuck_after)
         self.last_t: float | None = None
         self.resets = 0
+        self.correction: Correction | None = None
+        self.carrying_corrections: dict[str, Correction] = {}
 
     # -- reads --------------------------------------------------------------
 
@@ -204,6 +207,14 @@ class PersonEstimator:
             there = est.log_marginal(single)
             side = rate * log_odds(frame.signals, self.weights)
             parked = np.logaddexp(math.log(1.0 - self.nearby) + there, math.log(self.nearby) + here)
+            correction = self.carrying_corrections.get(device)
+            if correction is not None and correction.value is False:
+                # A confirmed parked device says nothing about its owner's room.
+                # Fade its location influence with the correction, including the
+                # usual nearby assumption for the parked branch of the joint model.
+                weight = correction.weight(obs.t)
+                here = here * (1.0 - weight)
+                parked = parked * (1.0 - weight)
             bit = self._bits[:, d]
             out += bit[None, :] * (here[:, None] + side)
             out += (1.0 - bit)[None, :] * parked[:, None]
@@ -213,6 +224,7 @@ class PersonEstimator:
         """One forward step: rooms through the graph, flags through the flip clock, then
         weigh every joint state by the evidence."""
         dt = 0.0 if self.last_t is None else obs.t - self.last_t
+        self._observe_corrections(obs)
         predicted = self._transition.T @ self.belief @ self._carried_transition(dt)
         log_e = self.log_emission(obs, dt)
         shift = float(log_e.max())
@@ -229,16 +241,159 @@ class PersonEstimator:
             self.belief = likelihood / float(likelihood.sum())
             self._buffer.clear()
             self.resets += 1
+        self.apply_corrections(obs.t)
         self.last_t = obs.t
         return self.outputs(obs.t)
 
-    def locate(self, room: str) -> None:
+    def locate(self, room: str, t: float | None = None) -> None:
         """A correction: the person *is* in ``room``. The carried marginals are kept --
         being told where you are says nothing about which pockets are full."""
+        if room not in self._position:
+            raise ValueError(f"not a room: {room}")
+        self.correction = Correction(room, (self.last_t or 0.0) if t is None else t, anchor=room)
         column = self.belief.sum(axis=0)
         self.belief = np.zeros_like(self.belief)
         self.belief[self._position[room], :] = column / float(column.sum())
         self._stuck.clear()
+        self._buffer.clear()
+
+    def correct_carried(self, device: str, carried: bool, t: float) -> None:
+        if device not in self.devices:
+            raise ValueError(f"no such device: {device}")
+        est = self.devices[device]
+        anchor = est.outputs().room
+        self.carrying_corrections[device] = Correction(carried, t, anchor=anchor)
+        self.apply_corrections(t)
+        self._stuck.clear()
+
+    def apply_corrections(self, t: float) -> None:
+        """Constrain the actual joint belief, preserving unrelated marginals.
+
+        Moving a column's mass to its corrected bit works even when the desired
+        column had zero mass. Multiplication alone cannot revive that state.
+        """
+        for device, correction in self.carrying_corrections.items():
+            d = self.device_ids.index(device)
+            weight = correction.weight(t)
+            forced = np.zeros_like(self.belief)
+            for c in range(self.belief.shape[1]):
+                target = c | (1 << d) if correction.value else c & ~(1 << d)
+                forced[:, target] += self.belief[:, c]
+            self.belief = (1.0 - weight) * self.belief + weight * forced
+        if self.correction is not None and isinstance(self.correction.value, str):
+            weight = self.correction.weight(t)
+            column = self.belief.sum(axis=0)
+            self.belief *= 1.0 - weight
+            self.belief[self._position[self.correction.value], :] += weight * column
+
+    def _observe_corrections(self, obs: PersonObservation) -> None:
+        """Reconsider assertions using source evidence, not the protected outputs."""
+        if self.correction is None and not self.carrying_corrections:
+            return
+        carried = self.carried()
+        rooms = {
+            device: self.devices[device].evidence_room(frame.distances, frame.home)
+            for device, frame in obs.devices.items()
+            if device in self.devices
+        }
+        reliable = {
+            device: room
+            for device, (room, confidence) in rooms.items()
+            if confidence >= 0.6
+            and carried[device] >= 0.8
+            and (stamp := obs.devices[device].distance_t) is not None
+            and 0.0 <= obs.t - stamp <= WINDOW
+            and not (
+                device in self.carrying_corrections
+                and self.carrying_corrections[device].value is False
+                and self.carrying_corrections[device].weight(obs.t) > 0.0
+            )
+        }
+        # A person's correction can be released by a credible carried device on
+        # a route. A discounted watch cannot validate its own owner's movement.
+        if self.correction is not None:
+            evidence: list[tuple[float, bool]] = []
+            for device in reliable:
+                frame = obs.devices[device]
+                room, confidence = rooms[device]
+                support = self.correction.route(
+                    self.topology,
+                    room,
+                    confidence,
+                    obs.activity,
+                    obs.t,
+                    frame.distance_t,
+                    frame.distances,
+                )
+                motion = obs.activity.get(room)
+                fresh_motion = (
+                    motion is not None
+                    and motion.observed_at is not None
+                    and self.correction.t < motion.observed_at <= obs.t
+                    and obs.t - motion.observed_at <= WINDOW
+                )
+                fresh_steps = (
+                    frame.signals.moving is True
+                    and frame.moving_t is not None
+                    and self.correction.t < frame.moving_t <= obs.t
+                    and obs.t - frame.moving_t <= WINDOW
+                )
+                support = support and (fresh_motion or fresh_steps)
+                if frame.distance_t is not None:
+                    evidence.append((frame.distance_t, support))
+            if evidence:
+                stamp, supported = max(evidence)
+                self.correction.observe(obs.t, stamp, supported)
+        for device, correction in self.carrying_corrections.items():
+            current_frame = obs.devices.get(device)
+            if current_frame is None:
+                continue
+            frame = current_frame
+            room, confidence = rooms[device]
+            moved = correction.route(
+                self.topology,
+                room,
+                confidence,
+                obs.activity,
+                obs.t,
+                frame.distance_t,
+                frame.distances,
+            )
+            charging = (
+                frame.signals.charging is True
+                and frame.charging_t is not None
+                and 0.0 <= obs.t - frame.charging_t <= WINDOW
+            )
+            if correction.value is False:
+                sensor_moved = frame.signals.moving is True
+                stamps = [
+                    s
+                    for s in (
+                        frame.distance_t if moved else None,
+                        frame.moving_t if sensor_moved else None,
+                    )
+                    if s is not None
+                ]
+                sample = max(stamps, default=frame.distance_t)
+                supported = (moved or sensor_moved) and not charging
+            else:
+                # Another carried device must place the owner elsewhere. The
+                # device being assessed cannot supply that independent evidence.
+                elsewhere = any(
+                    other != device
+                    and other_room != room
+                    and (stamp := obs.devices[other].distance_t) is not None
+                    and stamp > correction.t
+                    for other, other_room in reliable.items()
+                )
+                stationary = room == correction.anchor and confidence >= 0.6 and not moved
+                sample = frame.charging_t if charging else frame.distance_t
+                supported = charging or (
+                    stationary and elsewhere and frame.signals.moving is not True
+                )
+            if charging and frame.charging_t is not None and obs.t - frame.charging_t > WINDOW:
+                supported = False
+            correction.observe(obs.t, sample, supported)
 
     # -- persistence --------------------------------------------------------
 
@@ -248,6 +403,11 @@ class PersonEstimator:
             "devices": list(self.device_ids),
             "belief": [float(value) for value in self.belief.ravel()],
             "t": self.last_t,
+            "correction": None if self.correction is None else self.correction.snapshot(),
+            "carrying_corrections": {
+                device: correction.snapshot()
+                for device, correction in self.carrying_corrections.items()
+            },
         }
 
     def restore(self, data: Mapping[str, Any]) -> bool:
@@ -271,4 +431,16 @@ class PersonEstimator:
         self.belief = (belief / total).reshape(self.belief.shape)
         stamp = data.get("t")
         self.last_t = float(stamp) if isinstance(stamp, int | float) else None
+        self.correction = Correction.restore(data.get("correction"), set(self.states))
+        self.carrying_corrections = {}
+        raw = data.get("carrying_corrections", {})
+        if isinstance(raw, Mapping):
+            for device, value in raw.items():
+                correction = Correction.restore(value, set(self.states))
+                if (
+                    device in self.devices
+                    and correction is not None
+                    and isinstance(correction.value, bool)
+                ):
+                    self.carrying_corrections[device] = correction
         return True

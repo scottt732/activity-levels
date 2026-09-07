@@ -23,6 +23,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
 from typing import Any
+from uuid import uuid4
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -74,6 +75,7 @@ from .const import (
 )
 from .coordinator import ActivityLevelsCoordinator
 from .presence.carried import Signals, Weights
+from .presence.corrections import ROOM_HOLD
 from .presence.estimator import CANDIDATE_FLOOR, Estimator, Outputs
 from .presence.observation import (
     BERMUDA_DOMAIN,
@@ -234,8 +236,10 @@ class PresenceCoordinator:
         self._state_unsub: CALLBACK_TYPE | None = None
         self._registry_timer: CALLBACK_TYPE | None = None
         self._observe_timer: CALLBACK_TYPE | None = None
+        self._correction_timer: CALLBACK_TYPE | None = None
         self._dirty: set[str] = set()
         self._empty: dict[str, bool] = {}
+        self._activity_seen: dict[str, float] = {}
         self._usable = False
         self._stopped = False
 
@@ -326,10 +330,16 @@ class PresenceCoordinator:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
-        for timer in (self._state_unsub, self._registry_timer, self._observe_timer):
+        for timer in (
+            self._state_unsub,
+            self._registry_timer,
+            self._observe_timer,
+            self._correction_timer,
+        ):
             if timer is not None:
                 timer()
         self._state_unsub = self._registry_timer = self._observe_timer = None
+        self._correction_timer = None
         self._listeners.clear()
         if self._usable:
             await self._store.async_save(self._snapshot())
@@ -657,7 +667,7 @@ class PresenceCoordinator:
     # -- observations --------------------------------------------------------
 
     def _watched(self) -> set[str]:
-        watched: set[str] = set()
+        watched: set[str] = set(self.coordinator.tree.entity_ids)
         for person in self.people.values():
             for track in person.devices.values():
                 watched.add(track.tracker)
@@ -680,6 +690,8 @@ class PresenceCoordinator:
     @callback
     def _handle_state_event(self, event: Event[EventStateChangedData]) -> None:
         entity_id = event.data["entity_id"]
+        if entity_id in self.coordinator.tree.voices_by_entity:
+            self._dirty.update(self.people)
         for name, person in self.people.items():
             for track in person.devices.values():
                 if (
@@ -761,7 +773,13 @@ class PresenceCoordinator:
                     continue
                 frame = frames[device_id]
                 track.outputs = track.estimator.update(
-                    Observation(t=t, distances=frame.distances, home=frame.home, activity=activity)
+                    Observation(
+                        t=t,
+                        distances=frame.distances,
+                        home=frame.home,
+                        activity=activity,
+                        distance_t=frame.distance_t,
+                    )
                 )
             moved = True
         self._apply_occupancy()
@@ -769,6 +787,32 @@ class PresenceCoordinator:
             return
         self._store.async_delay_save(self._snapshot, SAVE_DELAY)
         self._notify()
+        self._schedule_corrections(t)
+
+    def _schedule_corrections(self, t: float) -> None:
+        """Room holds expire even in a quiet house. Carrying assertions need no timer."""
+        if self._correction_timer is not None:
+            self._correction_timer()
+            self._correction_timer = None
+        deadlines: list[float] = []
+        for person in self.people.values():
+            estimators = [person.estimator, *(track.estimator for track in person.devices.values())]
+            for est in estimators:
+                correction = None if est is None else est.correction
+                if correction is not None and correction.weight(t) > 0.0:
+                    remaining = correction.t + ROOM_HOLD - t
+                    deadlines.append(max(1.0, remaining) if remaining > 0.0 else 30.0)
+        if deadlines and not self._stopped:
+            self._correction_timer = async_call_later(
+                self.hass, min(deadlines), self._corrections_due
+            )
+
+    @callback
+    def _corrections_due(self, _now: datetime) -> None:
+        self._correction_timer = None
+        if not self._stopped:
+            self._dirty.update(self.people)
+            self._observe(self.coordinator.now())
 
     def _frame(
         self,
@@ -796,11 +840,37 @@ class PresenceCoordinator:
         home = tracker is not None and tracker.state not in _ABSENT
         if activity is None:
             activity = self._activity(t)
+        signals = self._signals(track, t, distances, activity)
+        moving_times = [
+            stamp
+            for stamp in (
+                self._source_time(track.signals.get("activity")) if signals.moving else None,
+                track.steps_rose_at,
+            )
+            if stamp is not None
+        ]
         return DeviceFrame(
             distances=distances,
             home=home,
-            signals=self._signals(track, t, distances, activity),
+            signals=signals,
+            distance_t=max(
+                (
+                    stamp
+                    for entity in track.sensors
+                    if (stamp := self._source_time(entity)) is not None
+                ),
+                default=None,
+            ),
+            moving_t=max(moving_times, default=None),
+            charging_t=self._source_time(track.signals.get("battery_state")),
         )
+
+    def _source_time(self, entity_id: str | None) -> float | None:
+        """The source's sample time, never the time this coordinator read it again."""
+        state = self.hass.states.get(entity_id) if entity_id is not None else None
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return None
+        return state.last_updated.timestamp()
 
     def _signals(
         self,
@@ -830,9 +900,9 @@ class PresenceCoordinator:
                 count = None
             if count is not None:
                 if track.steps is not None and count > track.steps:
-                    track.steps_rose_at = t
+                    track.steps_rose_at = self._source_time(track.signals.get("steps"))
                 track.steps = count
-                rose = track.steps_rose_at is not None and t - track.steps_rose_at <= recent
+                rose = track.steps_rose_at is not None and 0.0 <= t - track.steps_rose_at <= recent
                 moving = True if rose else (moving if moving is not None else False)
 
         heard = [d for d in distances.values() if d is not None]
@@ -876,13 +946,29 @@ class PresenceCoordinator:
         never-backwards contract holds across the two.
         """
         activity: dict[str, RoomActivity] = {}
+        # Actual configured stimuli supply route timestamps. Presence voices and
+        # synthetic triggers cannot turn their own estimates into movement proof.
+        for ref in self.coordinator.tree.all_voice_refs():
+            state = self.hass.states.get(ref.entity_id)
+            if state is not None and state.state in ref.to and ref.group_id in self.topology.nodes:
+                self._activity_seen[ref.group_id] = max(
+                    self._activity_seen.get(ref.group_id, 0.0), state.last_changed.timestamp()
+                )
+        self._activity_seen = {
+            gid: stamp
+            for gid, stamp in self._activity_seen.items()
+            if gid in self.topology.nodes and t - stamp <= 120.0
+        }
         for gid in self.topology.nodes:
             info = self.coordinator.tree.groups.get(gid)
             if info is None:
                 continue
             level = info.group.value_at_excluding(t, _NOT_EVIDENCE) / info.max_value
             activity[gid] = RoomActivity(
-                level=min(level, 1.0), slope=info.group.slope_at(t), floor=info.activity_floor
+                level=min(level, 1.0),
+                slope=info.group.slope_at(t),
+                floor=info.activity_floor,
+                observed_at=self._activity_seen.get(gid),
             )
         return activity
 
@@ -930,56 +1016,119 @@ class PresenceCoordinator:
 
     # -- corrections ---------------------------------------------------------
 
-    def correct(self, name: str, room: str, *, source: str) -> PersonOutputs:
-        """ "No, I am in the studio": move the belief, and keep the moment as a label.
+    def correct(
+        self,
+        name: str,
+        room: str | None = None,
+        *,
+        source: str,
+        device: str | None = None,
+        carried: bool | None = None,
+        clear: bool = False,
+        carrying: Mapping[str, bool] | None = None,
+    ) -> PersonOutputs:
+        """Apply an atomic human assertion and save only the asserted training targets.
 
-        The label is built *before* the belief moves and carries everything the
-        estimator was looking at -- every device's frame, the carried marginals, the
-        house's activity levels -- so the learner never has to reconstruct a moment from
-        history. A correction is not an observation: the device filters see no frame,
-        because the person saying where they are says nothing about where the phone is.
+        A person room and carrying choices can arrive together. Validate everything
+        first, then apply the carrying choices before capturing the room label, so a
+        watch explicitly left behind cannot train the person's corrected room.
         """
         person = self.people.get(name)
         if person is None or person.estimator is None:
             raise ValueError(f"no such person: {name}")
-        if room not in self.topology.nodes and room != AWAY:
+        if room is not None and room not in self.topology.states:
             raise ValueError(f"not a room: {room}")
+        track = person.devices.get(device) if device is not None else None
+        if device is not None and (track is None or track.estimator is None):
+            raise ValueError(f"no such device: {device}")
+        choices = dict(carrying or {})
+        if carried is not None:
+            if device is None or not isinstance(carried, bool):
+                raise ValueError("carried requires a device and a boolean")
+            choices[device] = carried
+        if device is not None and carrying is not None:
+            raise ValueError("carrying choices belong to a person correction")
+        if clear and (room is not None or carried is not None or carrying is not None):
+            raise ValueError("clear cannot include another correction")
+        if not clear and room is None and not choices:
+            raise ValueError("provide a room or carrying correction")
+        for key, value in choices.items():
+            if key not in person.devices or not isinstance(value, bool):
+                raise ValueError(f"invalid carrying choice: {key}")
         t = self.coordinator.now()
-        activity = self._activity(t)
-        frames = {
-            device_id: self._frame(track, t, activity)
-            for device_id, track in person.devices.items()
-        }
-        marginals = person.estimator.carried()
-        self.labels.insert(
-            0,
-            {
+        est = person.estimator
+        if clear:
+            if track is not None and track.estimator is not None:
+                track.estimator.correction = None
+                est.carrying_corrections.pop(track.id, None)
+            else:
+                est.correction = None
+        else:
+            activity = self._activity(t)
+            frames = {key: self._frame(item, t, activity) for key, item in person.devices.items()}
+            if room is not None and track is not None and track.estimator is not None:
+                track.estimator.locate(room, t)
+                if track.estimator.correction is not None:
+                    track.estimator.correction.baseline = dict(frames[track.id].distances)
+                track.outputs = track.estimator.outputs(t)
+            for key, value in choices.items():
+                est.correct_carried(key, value, t)
+                est.carrying_corrections[key].baseline = dict(frames[key].distances)
+            marginals = est.carried()
+            # Exclude even a partially faded not-carried assertion from person
+            # training. Automatic probabilities are not a new ground-truth label.
+            for key, correction in est.carrying_corrections.items():
+                if correction.value is False and correction.weight(t) > 0.0:
+                    marginals[key] = 0.0
+            common: dict[str, Any] = {
                 "t": t,
                 "person": name,
-                "room": room,
                 "source": source,
                 "frames": {
-                    device_id: {
+                    key: {
                         "distances": dict(frame.distances),
                         "home": frame.home,
                         "signals": asdict(frame.signals),
                     }
-                    for device_id, frame in frames.items()
+                    for key, frame in frames.items()
                 },
                 "carried": marginals,
                 "activity": {gid: reading.level for gid, reading in activity.items()},
-            },
-        )
-        del self.labels[self.settings["labels"]["keep"] :]
-        self._labels_since_build += 1
-        if self._labels_since_build >= self.settings["signatures"]["rebuild_after"]:
-            self.rebuild_signatures(force=False)
-        person.estimator.locate(room)
-        person.outputs = person.estimator.outputs(t)
+            }
+            for key, value in choices.items():
+                self.labels.insert(
+                    0,
+                    {
+                        **common,
+                        "id": uuid4().hex,
+                        "kind": "carrying",
+                        "device": key,
+                        "value": value,
+                    },
+                )
+            if room is not None:
+                label = {
+                    **common,
+                    "id": uuid4().hex,
+                    "room": room,
+                    "kind": "person_room" if device is None else "device_room",
+                }
+                if device is not None:
+                    label["device"] = device
+                    label["frames"] = {device: common["frames"][device]}
+                else:
+                    est.locate(room, t=t)
+                self.labels.insert(0, label)
+                self._labels_since_build += 1
+            del self.labels[self.settings["labels"]["keep"] :]
+            if self._labels_since_build >= self.settings["signatures"]["rebuild_after"]:
+                self.rebuild_signatures(force=False)
+            self._labels_store.async_delay_save(self._labels_snapshot, SAVE_DELAY)
+        person.outputs = est.outputs(t)
         self._apply_occupancy()
         self._store.async_delay_save(self._snapshot, SAVE_DELAY)
-        self._labels_store.async_delay_save(self._labels_snapshot, SAVE_DELAY)
         self._notify()
+        self._schedule_corrections(t)
         return person.outputs
 
     def delete_label(self, t: float, name: str) -> bool:
@@ -1164,11 +1313,22 @@ class PresenceCoordinator:
                 rooms[state] = round(p, 4)
         return floor, round(mass, 4), rooms
 
-    def _device_payload(self, track: TrackedDevice, out: PersonOutputs | None) -> dict[str, Any]:
+    def _device_payload(
+        self,
+        track: TrackedDevice,
+        out: PersonOutputs | None,
+        est: PersonEstimator | None = None,
+    ) -> dict[str, Any]:
+        t = self.coordinator.now()
+        correction = None if track.estimator is None else track.estimator.correction
+        carrying = None if est is None else est.carrying_corrections.get(track.id)
         return {
             "name": track.name,
             "kind": track.kind,
             "tracker": track.tracker,
+            "device_id": track.device_id,
+            "correction": None if correction is None else correction.payload(t),
+            "carrying_correction": None if carrying is None else carrying.payload(t),
             "companion": track.companion,
             "room": None if track.outputs is None else track.outputs.room,
             "confidence": None if track.outputs is None else track.outputs.confidence,
@@ -1183,8 +1343,13 @@ class PresenceCoordinator:
             name: {
                 **(person.outputs.as_dict() if person.outputs is not None else {}),
                 "person": person.person,
+                "correction": (
+                    person.estimator.correction.payload(self.coordinator.now())
+                    if person.estimator is not None and person.estimator.correction is not None
+                    else None
+                ),
                 "devices": {
-                    device_id: self._device_payload(track, person.outputs)
+                    device_id: self._device_payload(track, person.outputs, person.estimator)
                     for device_id, track in person.devices.items()
                 },
             }

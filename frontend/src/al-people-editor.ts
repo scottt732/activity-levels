@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
+import { entityLinks } from "./ha-links";
 import { fieldErrors } from "./errors";
 import { alChange } from "./events";
 import { newPresenceDevice, newPresencePerson, presenceSettings } from "./model";
@@ -210,18 +211,22 @@ export class AlPeopleEditor extends LitElement {
     found: Record<string, boolean> | null,
     errors: Record<string, string>,
   ): TemplateResult {
+    const reported = Object.values(this.presence?.people ?? {}).flatMap((person) => Object.values(person.devices ?? {}))
+      .find((row) => row.tracker === device.tracker)?.signals[role];
     const mark =
       found === null
         ? nothing
         : found[role]
           ? html`<ha-icon class="found" icon="mdi:check-circle-outline" title="Found"></ha-icon>`
-          : html`<ha-icon class="missing" icon="mdi:alert-circle-outline" title="Not found"></ha-icon>`;
+          : device.signals[role] || reported
+            ? html`<ha-icon class="missing" icon="mdi:alert-circle-outline" title="Configured but unavailable"></ha-icon>`
+            : html`<span class="muted" title="Optional: no sensor configured or discovered">Optional</span>`;
     return html`<div class="signal signal-${role}">
       <ha-selector
         .hass=${this.hass}
         .selector=${SIGNAL_SELECTOR}
         .label=${SIGNAL_LABELS[role]}
-        .helper=${device.companion ? "Blank: found on the companion device." : ""}
+        .helper=${device.companion ? "Blank: found on the companion device when available." : "Optional. Movement can also be detected from Bluetooth."}
         .required=${false}
         .value=${this.text(device.signals[role])}
         @value-changed=${(ev: CustomEvent<{ value?: string }>) =>
@@ -245,6 +250,9 @@ export class AlPeopleEditor extends LitElement {
       <div class="device-head">
         <ha-icon icon=${KIND_ICONS[device.kind]}></ha-icon>
         <h5>${device.name ?? (device.tracker || "New device")}</h5>
+        ${entityLinks(this, this.hass, device.tracker, "Open tracker",
+          Object.values(this.presence?.people?.[person.name ?? ""]?.devices ?? {}).find((row) => row.tracker === device.tracker)?.device_id,
+          "Open Bermuda device")}
         <ha-icon-button
           class="remove-device"
           label="Remove device"
@@ -290,7 +298,7 @@ export class AlPeopleEditor extends LitElement {
           .hass=${this.hass}
           .selector=${COMPANION_SELECTOR}
           .label=${"Companion app tracker"}
-          .helper=${"The mobile_app device_tracker of the same phone; its sensors say whether it is carried."}
+          .helper=${"Optional. The companion tracker for this device supplies carrying evidence."}
           .required=${false}
           .value=${this.text(device.companion)}
           @value-changed=${(ev: CustomEvent<{ value?: string }>) =>

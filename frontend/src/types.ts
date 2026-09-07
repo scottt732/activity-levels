@@ -244,8 +244,19 @@ export interface PresenceOutputs {
   path: string[];
 }
 
-/** One of a person's devices as `presence/state` reports it: where the object is, and whether it is on them. */
+/** The active correction and the evidence that last changed its strength. */
+export interface CorrectionStatus {
+  t: number;
+  strength: number;
+  reason: string;
+  value: string | boolean;
+}
+
+/** One device: where it is, whether it is carried, and its available signals. */
 export interface PresenceDeviceRow {
+  device_id?: string | null;
+  correction?: CorrectionStatus | null;
+  carrying_correction?: CorrectionStatus | null;
   name: string;
   kind: DeviceKind;
   tracker: string;
@@ -259,6 +270,7 @@ export interface PresenceDeviceRow {
 
 /** One person's estimate: the room outputs plus everything about their devices. */
 export interface PersonOutputs extends PresenceOutputs {
+  correction?: CorrectionStatus | null;
   carried: Record<string, number>;
   device_rooms: Record<string, string>;
   person: string | null;
@@ -296,7 +308,7 @@ export interface HomeAssistant {
   areas: Record<string, { area_id: string; name: string }>;
   /** Optional: an older frontend has no floor registry, and a home need not use one. */
   floors?: Record<string, { floor_id: string; name: string }>;
-  entities: Record<string, { entity_id: string; name?: string; area_id?: string | null }>;
+  entities: Record<string, { entity_id: string; name?: string; device_id?: string | null; area_id?: string | null }>;
   user?: { is_admin: boolean; name: string };
   language: string;
   localize: (key: string, ...args: unknown[]) => string;

@@ -49,6 +49,16 @@ from .const import (
 from .duration import parse_duration
 from .engine import Mix, NullHandling, RetriggerWhen, Unavailable
 
+PRESENCE_CORRECTION_FIELDS: dict[Any, Any] = {
+    vol.Required("person"): str,
+    vol.Optional("room"): str,
+    vol.Optional("device"): str,
+    vol.Optional("carried"): bool,
+    vol.Optional("clear", default=False): bool,
+    vol.Optional("carrying"): {str: bool},
+}
+
+
 GROUP_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 HHMM_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
