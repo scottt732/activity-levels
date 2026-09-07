@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/scottt732/activity-levels/compare/v0.9.2...v0.10.0) (2026-09-07)
+
+
+### Added
+
+* **panel:** separate Paths and improve Presence layout ([#29](https://github.com/scottt732/activity-levels/issues/29)) ([3ab8ac2](https://github.com/scottt732/activity-levels/commit/3ab8ac27eb6a1277becd8387a9c3626ffc5aba59))
+
 ## [0.9.2](https://github.com/scottt732/activity-levels/compare/v0.9.1...v0.9.2) (2026-09-07)
 
 
