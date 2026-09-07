@@ -1,18 +1,18 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import "./al-graph-map";
 import "./al-people-editor";
 import { KIND_ICONS, KIND_LABELS } from "./al-people-editor";
 import type { PresenceCorrection } from "./api";
 import type { CorrectionStatus } from "./types";
 import { entityLinks, registryLink } from "./ha-links";
-import { correctPresence, getPresenceState, getTopology, getTopologyPaths } from "./api";
+import { correctPresence, getPresenceState, getTopology } from "./api";
 import { durationToSeconds, secondsToDuration } from "./duration";
 import { fieldErrors } from "./errors";
 import { alChange } from "./events";
 import { newPresenceDevice, newPresencePerson, presenceSettings, roomIds } from "./model";
 import { setAt } from "./store";
 import { envelopeOptions } from "./stimulus-form";
+import { presenceStyles } from "./presence-styles";
 import { sharedStyles } from "./styles";
 import { branchRows } from "./topology";
 import type { PropertyValues, TemplateResult } from "lit";
@@ -141,7 +141,7 @@ const DISABLED_FIX =
 const number = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 /**
- * The Presence tab: the room graph, who the estimator thinks is where, what it is reading
+ * The Presence tab: who the estimator thinks is where, what it is reading
  * that from, and the settings behind all of it.
  *
  * Unlike the other tabs this one fetches its own data. The topology and the presence state
@@ -152,6 +152,7 @@ const number = (v: unknown): number | null => (typeof v === "number" && Number.i
 export class AlPresence extends LitElement {
   static styles = [
     sharedStyles,
+    presenceStyles,
     css`
       table {
         width: 100%;
@@ -164,7 +165,7 @@ export class AlPresence extends LitElement {
       }
       th,
       td {
-        padding: 4px 8px 4px 0;
+        padding: 12px 16px;
         border-bottom: 1px solid var(--divider-color);
         vertical-align: top;
       }
@@ -176,58 +177,32 @@ export class AlPresence extends LitElement {
         width: 100%;
         min-width: 60px;
       }
-      .chip {
-        border-radius: 10px;
-        padding: 1px 8px;
-        font-size: 0.8em;
-        background: var(--primary-color);
-        color: var(--text-primary-color, #fff);
-      }
       .device-chip {
-        font: inherit;
-        cursor: pointer;
-        border: 1px solid var(--divider-color);
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        margin: 0 4px 2px 0;
-        --mdc-icon-size: 16px;
+        gap: 8px;
+        --mdc-icon-size: 18px;
+        text-align: left;
       }
-      .who button.link {
-        font: inherit;
-        color: var(--primary-color);
-        background: none;
-        border: none;
-        padding: 0;
-        cursor: pointer;
-        text-decoration: underline dotted;
-      }
-      tr.correct td {
-        background: var(--secondary-background-color);
-      }
-      tr.correct .question {
-        font-weight: 600;
-        margin-right: 8px;
-      }
-      tr.correct select {
-        font: inherit;
-        color: inherit;
-        background: var(--card-background-color, transparent);
-        border: 1px solid var(--divider-color);
-        border-radius: 4px;
-        padding: 4px;
-        margin: 0 8px;
-      }
+      .device-entry + .device-entry { margin-top: 12px; }
+      .device-chip .carried-pct { font-variant-numeric: tabular-nums; }
+      .correction-panel { display: grid; gap: 16px; padding: 16px; }
+      .correction-panel .question { font-weight: 600; }
+      .correction-fields { display: flex; flex-wrap: wrap; gap: 16px; }
+      .correction-fields label { display: grid; gap: 6px; min-width: 200px; }
+      .correct td { background: var(--secondary-background-color); padding: 0; }
+      .who { width: 120px; }
+      .when { white-space: nowrap; }
+      .devices { min-width: 260px; }
+      .confidence-label { display: block; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+      .settings-body { display: grid; gap: 20px; padding-top: 16px; }
+      summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+      .moving { display: block; font-size: 0.85em; margin-top: 4px; }
       .notice,
       .hint {
         margin-top: 8px;
         font-size: 0.9em;
         color: var(--secondary-text-color);
-      }
-      .device-chip.parked {
-        background: var(--secondary-background-color);
-        color: var(--secondary-text-color);
-        border: 1px solid var(--divider-color);
       }
       h3 {
         margin: 12px 0 8px;
@@ -251,16 +226,29 @@ export class AlPresence extends LitElement {
         margin: 4px 0 0;
         padding-left: 20px;
       }
-      .paths {
-        margin-top: 12px;
-      }
-      .paths ol {
-        margin: 4px 0 0;
-        padding-left: 20px;
-      }
       .empty {
         color: var(--secondary-text-color);
         font-size: 0.9em;
+      }
+      @media (max-width: 850px) {
+        .people-table, .people-table tbody { display: block; }
+        .people-table thead { display: none; }
+        .people-table tr.person { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+        .people-table tr.person td { width: auto; min-width: 0; padding: 12px 4px; }
+        .people-table td[data-label]::before {
+          content: attr(data-label);
+          display: block;
+          color: var(--secondary-text-color);
+          font-size: 0.85em;
+          margin-bottom: 6px;
+        }
+        .people-table td.devices { grid-column: 1 / -1; }
+        .people-table tr.correct, .people-table tr.correct td { display: block; }
+        .device-chip { flex-wrap: wrap; max-width: 100%; }
+        .correction-panel { padding: 12px; }
+        .correction-fields label { min-width: 0; width: 100%; }
+        .correction-fields select { width: 100%; }
+        .when { white-space: normal; }
       }
       .setup p {
         margin: 0 0 12px;
@@ -282,11 +270,6 @@ export class AlPresence extends LitElement {
 
   @state() private topology: TopologyPayload | null = null;
   @state() private presence: PresenceState | null = null;
-  /** The pair of rooms the map is routing between; a third pick shifts the older one out. */
-  @state() private selected: [string | null, string | null] = [null, null];
-  @state() private paths: string[][] = [];
-  /** A request is out. Until it lands there is no verdict to report, only a wait. */
-  @state() private pathsPending = false;
   /** The person whose room picker is open, if any. One at a time: it is a question. */
   @state() private correcting: string | null = null;
   @state() private correctingDevice: { person: string; device: string } | null = null;
@@ -297,8 +280,6 @@ export class AlPresence extends LitElement {
   @state() private notice: string | null = null;
 
   private timer?: ReturnType<typeof setInterval>;
-  /** Which paths request is the current one; an older answer resolving late is dropped. */
-  private pathSeq = 0;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -339,39 +320,6 @@ export class AlPresence extends LitElement {
       this.presence = await getPresenceState(hass);
     } catch {
       /* transient websocket failure: keep the last frame and retry on the next tick */
-    }
-  }
-
-  /**
-   * Keeps the last two rooms picked. Picking one that is already in the pair drops it, so
-   * a mis-click is undone by repeating it rather than by picking two more rooms.
-   */
-  private onMapSelect = (ev: CustomEvent<{ id: string }>): void => {
-    ev.stopPropagation();
-    const id = ev.detail.id;
-    const pair = this.selected.filter((x): x is string => x !== null);
-    const next = pair.includes(id) ? pair.filter((x) => x !== id) : [...pair, id].slice(-2);
-    this.selected = [next[0] ?? null, next[1] ?? null];
-    this.paths = [];
-    void this.refreshPaths();
-  };
-
-  private async refreshPaths(): Promise<void> {
-    const [from, to] = this.selected;
-    const hass = this.hass;
-    const seq = ++this.pathSeq;
-    if (!hass || from === null || to === null || from === to) {
-      this.pathsPending = false;
-      return;
-    }
-    this.pathsPending = true;
-    try {
-      const paths = await getTopologyPaths(hass, from, to);
-      if (seq === this.pathSeq) this.paths = paths;
-    } catch {
-      /* a room that has gone away answers with an error; the empty list is the honest answer */
-    } finally {
-      if (seq === this.pathSeq) this.pathsPending = false;
     }
   }
 
@@ -617,42 +565,6 @@ export class AlPresence extends LitElement {
     </ha-card>`;
   }
 
-  private renderMap(config: Config): TemplateResult {
-    return html`<ha-card header="Rooms">
-      <al-graph-map
-        .hass=${this.hass}
-        .config=${config}
-        .topology=${this.topology}
-        .presence=${this.presence}
-        .selected=${this.selected}
-        .paths=${this.paths}
-        @al-map-select=${this.onMapSelect}
-      ></al-graph-map>
-      ${this.renderPaths()}
-    </ha-card>`;
-  }
-
-  private renderPaths(): TemplateResult {
-    const [from, to] = this.selected;
-    if (from === null || to === null)
-      return html`<div class="paths empty">Pick two rooms on the map to see the routes between them.</div>`;
-    const heading = `${this.roomName(from)}${ARROW}${this.roomName(to)}`;
-    // Only an answered request can say there is no route; before that it is still looking.
-    if (this.pathsPending) return html`<div class="paths muted">Finding routes from ${heading}…</div>`;
-    if (this.paths.length === 0)
-      return html`<div class="paths">
-        <div class="muted">no route from ${heading}</div>
-      </div>`;
-    return html`<div class="paths">
-      <div class="muted">
-        ${this.paths.length} route${this.paths.length === 1 ? "" : "s"} from ${heading}
-      </div>
-      <ol>
-        ${this.paths.map((path) => html`<li class="path">${this.trail(path)}</li>`)}
-      </ol>
-    </div>`;
-  }
-
   private renderPeople(): TemplateResult {
     const people = Object.entries(this.presence?.people ?? {})
       .filter(([, outputs]) => typeof outputs.room === "string")
@@ -661,9 +573,9 @@ export class AlPresence extends LitElement {
       return html`<ha-card header="People"
         ><div class="empty">Nobody has reported a room yet.</div></ha-card
       >`;
-    return html`<ha-card header="People">
-      <div class="muted hint">Tap a person to say where they really are; the estimate learns from it.</div>
-      <table>
+    return html`<ha-card><h2>People</h2>
+      <div class="muted hint">Select a person or device to correct its estimate.</div>
+      <div class="table-scroll"><table class="people-table">
         <thead>
           <tr>
             <th>Person</th>
@@ -681,7 +593,7 @@ export class AlPresence extends LitElement {
             this.correctingDevice?.person === name ? this.renderDeviceCorrection(name, outputs) : nothing,
           ])}
         </tbody>
-      </table>
+      </table></div>
       ${this.notice === null ? nothing : html`<div class="notice" role="status">${this.notice}</div>`}
     </ha-card>`;
   }
@@ -695,9 +607,9 @@ export class AlPresence extends LitElement {
       .sort(([, a], [, b]) => b - a)
       .map(([room]) => room);
     return html`<tr class="correct">
-      <td colspan="6">
+      <td colspan="6"><div class="correction-panel">
         <span class="question">Where is ${name}?</span>
-        <div>${Object.entries(outputs.devices ?? {}).map(([id, device]) => html`<label>${device.name}
+        <div class="correction-fields">${Object.entries(outputs.devices ?? {}).map(([id, device]) => html`<label>${device.name}
           <select data-carrying=${id} ?disabled=${this.correctionPending} aria-label=${`Carrying ${device.name}`} .value=${String(this.carryingChoices[id] ?? "")}
             @change=${(ev: Event) => {
               const value = (ev.target as HTMLSelectElement).value;
@@ -709,10 +621,10 @@ export class AlPresence extends LitElement {
             <option value="true">Carrying</option><option value="false">Not carrying</option>
           </select></label>`)}</div>
         ${this.correctionError ? html`<div role="alert">${this.correctionError}</div>` : nothing}
-        ${candidates.map(
+        <div class="actions">${candidates.map(
           (room) =>
-            html`<ha-button class="candidate" .disabled=${this.correctionPending} @click=${() => void this.correct(name, room)}
-              >${this.roomName(room)}</ha-button
+            html`<button type="button" class="candidate" ?disabled=${this.correctionPending} @click=${() => void this.correct(name, room)}
+              >${this.roomName(room)}</button
             >`,
         )}
         <select
@@ -725,9 +637,9 @@ export class AlPresence extends LitElement {
           <option value="">Somewhere else…</option>
           ${this.correctionRooms.map((room) => html`<option value=${room}>${this.roomName(room)}</option>`)}
         </select>
-        <ha-button class="automatic-person" .disabled=${this.correctionPending} @click=${() => void this.correct(name, { clear: true })}>Use automatic estimate</ha-button>
-        <ha-button class="cancel" @click=${() => (this.correcting = null)}>That's right</ha-button>
-      </td>
+        <button type="button" class="automatic-person" ?disabled=${this.correctionPending} @click=${() => void this.correct(name, { clear: true })}>Use automatic estimate</button>
+        <button type="button" class="cancel" @click=${() => (this.correcting = null)}>Close</button></div>
+      </div></td>
     </tr>`;
   }
 
@@ -735,9 +647,10 @@ export class AlPresence extends LitElement {
     const percent = Math.round(outputs.confidence * 100);
     const devices = Object.entries(outputs.devices ?? {}).sort(([a], [b]) => a.localeCompare(b));
     return html`<tr class="device person">
-      <td class="who">
+      <td class="who" data-label="Person">
         <button
-          class="link"
+          class="link" type="button"
+          aria-expanded=${this.correcting === name ? "true" : "false"}
           title="Say where ${name} really is"
           @click=${() => {
             this.correcting = this.correcting === name ? null : name;
@@ -749,19 +662,20 @@ export class AlPresence extends LitElement {
           ${name}
         </button>
       </td>
-      <td class="room">
+      <td class="room" data-label="Room">
         ${this.roomName(outputs.room)}
         ${this.correctionStatus(outputs.correction)}
         ${outputs.moving ? html`<span class="chip moving">moving</span>` : nothing}
       </td>
-      <td>
+      <td data-label="Confidence">
+        <span class="confidence-label">${percent}%</span>
         <div class="meter" title=${`${percent}%`}>
           <div class="confidence" style=${`width: ${percent}%`}></div>
         </div>
       </td>
-      <td class="devices">${devices.map(([id, device]) => this.renderDeviceChip(name, id, device))}</td>
-      <td class="breadcrumb">${outputs.path.length === 0 ? "—" : this.trail(outputs.path)}</td>
-      <td class="when">${new Date(outputs.t * 1000).toLocaleTimeString()}</td>
+      <td class="devices" data-label="Devices">${devices.map(([id, device]) => this.renderDeviceChip(name, id, device))}</td>
+      <td class="breadcrumb" data-label="Came from">${outputs.path.length === 0 ? "—" : this.trail(outputs.path)}</td>
+      <td class="when" data-label="Updated">${new Date(outputs.t * 1000).toLocaleTimeString()}</td>
     </tr>`;
   }
 
@@ -776,40 +690,41 @@ export class AlPresence extends LitElement {
     const title = `${device.name} (${KIND_LABELS[device.kind]}): carried ${percent}${
       parked && device.room ? `, in ${this.roomName(device.room)}` : ""
     }`;
-    return html`<button type="button" aria-label=${`Correct ${device.name}`} @click=${() => { this.correctingDevice = { person, device: id }; this.correcting = null; this.correctionError = null; }} class="chip device-chip ${parked ? "parked" : "carried"}" data-device=${id} title=${title}>
+    return html`<div class="device-entry"><button type="button" aria-expanded=${this.correctingDevice?.person === person && this.correctingDevice.device === id ? "true" : "false"} aria-label=${`Correct ${device.name}`} @click=${() => { this.correctingDevice = { person, device: id }; this.correcting = null; this.correctionError = null; }} class="chip device-chip ${parked ? "parked" : "carried"}" data-device=${id} title=${title}>
       <ha-icon icon=${KIND_ICONS[device.kind] ?? KIND_ICONS.other}></ha-icon>
-      <span class="carried-pct">${percent}</span>
+      <span class="device-name">${device.name}</span>
+      <span class="carried-pct">${percent} carrying</span>
       ${parked && device.room ? html`<span class="parked-room">${this.roomName(device.room)}</span>` : nothing}
-    </button>${this.correctionStatus(device.correction)}${this.correctionStatus(device.carrying_correction)}`;
+    </button>${this.correctionStatus(device.correction)}${this.correctionStatus(device.carrying_correction)}</div>`;
   }
 
   private renderDeviceCorrection(person: string, outputs: PersonOutputs): TemplateResult | typeof nothing {
     const id = this.correctingDevice?.device;
     const device = id ? outputs.devices[id] : undefined;
     if (!id || !device) return nothing;
-    return html`<tr class="correct device-correction"><td colspan="6">
+    return html`<tr class="correct device-correction"><td colspan="6"><div class="correction-panel">
       <div class="question">${device.name}</div>
-      ${entityLinks(this, this.hass, device.tracker, "Open tracker", device.device_id, "Open Bermuda device")}
-      <label>Device room <select aria-label="Device room" ?disabled=${this.correctionPending} @change=${(ev: Event) => {
+      <div class="resource-links">${entityLinks(this, this.hass, device.tracker, "Open tracker", device.device_id, "Open Bermuda device", true)}</div>
+      <div class="correction-fields"><label>Device room <select aria-label="Device room" ?disabled=${this.correctionPending} @change=${(ev: Event) => {
         const room = (ev.target as HTMLSelectElement).value;
         if (room) void this.correct(person, { device: id, room });
-      }}><option value="">Choose a room…</option>${this.correctionRooms.map((room) => html`<option value=${room}>${this.roomName(room)}</option>`)}</select></label>
-      <ha-button class="carrying" .disabled=${this.correctionPending} @click=${() => void this.correct(person, { device: id, carried: true })}>Carrying</ha-button>
-      <ha-button class="not-carrying" .disabled=${this.correctionPending} @click=${() => void this.correct(person, { device: id, carried: false })}>Not carrying</ha-button>
-      <ha-button class="automatic-device" .disabled=${this.correctionPending} @click=${() => void this.correct(person, { device: id, clear: true })}>Use automatic estimate</ha-button>
-      <ha-button @click=${() => { this.correctingDevice = null; }}>Close</ha-button>
+      }}><option value="">Choose a room…</option>${this.correctionRooms.map((room) => html`<option value=${room}>${this.roomName(room)}</option>`)}</select></label></div>
+      <div class="actions"><button type="button" class="carrying" ?disabled=${this.correctionPending} @click=${() => void this.correct(person, { device: id, carried: true })}>Carrying</button>
+      <button type="button" class="not-carrying" ?disabled=${this.correctionPending} @click=${() => void this.correct(person, { device: id, carried: false })}>Not carrying</button>
+      <button type="button" class="automatic-device" ?disabled=${this.correctionPending} @click=${() => void this.correct(person, { device: id, clear: true })}>Use automatic estimate</button>
+      <button type="button" @click=${() => { this.correctingDevice = null; }}>Close</button></div>
       <div class="hint">Movement can return this device to automatic estimation. Missing companion sensors are optional.</div>
       ${this.correctionError ? html`<div role="alert">${this.correctionError}</div>` : nothing}
-    </td></tr>`;
+    </div></td></tr>`;
   }
 
   private renderScanners(): TemplateResult {
     const scanners = this.presence?.scanners ?? [];
     const unmapped = new Set(this.presence?.unmapped ?? []);
-    return html`<ha-card header="Scanners">
+    return html`<ha-card><h2>Scanners</h2>
       ${scanners.length === 0
         ? html`<div class="empty">No Bermuda scanners have been discovered.</div>`
-        : html`<table>
+        : html`<div class="table-scroll"><table>
             <thead>
               <tr>
                 <th>Scanner</th>
@@ -820,7 +735,7 @@ export class AlPresence extends LitElement {
             <tbody>
               ${scanners.map((scanner) => this.renderScanner(scanner, unmapped.has(scanner.key)))}
             </tbody>
-          </table>`}
+          </table></div>`}
       ${this.renderDisabled()}
     </ha-card>`;
   }
@@ -864,7 +779,7 @@ export class AlPresence extends LitElement {
       carried_nearby: s.carried.nearby,
       ...Object.fromEntries(WEIGHTS.map((weight) => [`carried_${weight}`, s.carried.weights[weight]])),
     };
-    return html`<ha-card header="Settings">
+    return html`<ha-card><details><summary>Presence settings</summary><div class="settings-body">
       ${own.map((e) => html`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
       <h3>People</h3>
       <al-people-editor
@@ -883,7 +798,7 @@ export class AlPresence extends LitElement {
         .computeHelper=${this.computeHelper}
         @value-changed=${this.onFormChanged}
       ></ha-form>
-    </ha-card>`;
+    </div></details></ha-card>`;
   }
 
   override render() {
@@ -891,7 +806,7 @@ export class AlPresence extends LitElement {
     if (!config) return html`<div class="page"><ha-card><span class="muted">Loading…</span></ha-card></div>`;
     if (!presenceSettings(config).enabled) return html`<div class="page">${this.renderSetup(config)}</div>`;
     return html`<div class="page">
-      ${this.renderMap(config)} ${this.renderPeople()} ${this.renderScanners()} ${this.renderSettings(config)}
+      ${this.renderPeople()} ${this.renderScanners()} ${this.renderSettings(config)}
     </div>`;
   }
 }

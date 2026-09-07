@@ -52,6 +52,8 @@ so browsers pick up a new one immediately.
 | `al-timeline.ts`, `timeseries.ts` | The history/forecast chart (plain SVG) and its pure scale/decimation math. |
 | `al-strip-controls.ts` | The controls row for whatever is selected in the Mixer. |
 | `al-patterns.ts` | The Patterns tab: profile status, per-group readiness, simulation log. |
+| `al-presence.ts`, `al-people-editor.ts` | People, devices, corrections, scanners, and presence settings. |
+| `al-paths.ts`, `al-graph-map.ts` | Room hierarchy, adjacency map, and route selection. |
 | `al-tree.ts` | The group and stimulus tree, with the live overlay. |
 | `al-group-editor.ts`, `al-stimulus-editor.ts` | Editors for one selected node. |
 | `al-envelopes.ts`, `al-envelope-sketch.ts`, `sketch.ts` | Preset library and ADSR sketch. |

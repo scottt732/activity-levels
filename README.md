@@ -142,14 +142,14 @@ picking a strip here also opens it in Groups, and back:
   learned, the expected-activity sensor's current reading), which groups presence
   simulation is currently blocked on and why, the simulation log, and a "rebuild profile"
   button with a "force" switch for overwriting a profile an external producer owns.
-- **Presence** — shown only while `presence.enabled` is on. A room map (a row per
-  top-level branch, doorways drawn between rooms, a door glyph on each exit, occupant
-  counts and names on the rooms, the two most likely rooms joined by a line while someone
-  is `moving`) that also answers "how would I get from A to B", one row per tracked
-  device with its room, confidence and moving state, a table of Bermuda's scanners with
-  the room each maps to (or a fix, when it does not), and a settings card — in the same
-  style as Defaults — for the top-level `presence` block, whose device picker only offers
-  Bermuda's `device_tracker`s.
+- **Presence** — people and their estimated rooms, confidence, and carried devices.
+  Select a person or device to correct an estimate. Scanner mappings and collapsible
+  presence settings sit below. When estimation is off, this tab offers setup.
+- **Paths** — the room hierarchy on the left and the adjacency map on the right.
+  Select two rooms in either view to see routes between them. This page is available
+  even when presence estimation is off. The map keeps room labels readable and scrolls
+  within its card on large homes.
+
 
 Edits are held as a draft: **Undo**/**Redo** walk it, **Discard** throws it away, and
 **Save** validates first — problems come back attached to the fields that caused them —

@@ -42,7 +42,7 @@ export class AlGraphMap extends LitElement {
         height: auto;
       }
       .edge {
-        stroke: var(--divider-color);
+        stroke: var(--secondary-text-color);
         stroke-width: 2;
       }
       .edge.on-path {
@@ -51,11 +51,11 @@ export class AlGraphMap extends LitElement {
       }
       .arrow {
         fill: currentColor;
-        color: var(--divider-color);
+        color: var(--secondary-text-color);
       }
       .node {
         cursor: pointer;
-        color: var(--divider-color);
+        color: var(--secondary-text-color);
       }
       .node .box {
         fill: var(--card-background-color, transparent);
@@ -247,6 +247,7 @@ export class AlGraphMap extends LitElement {
     const summary = this.summary(map);
     return html`
       <svg
+        style="width: ${map.width}px"
         viewBox="0 0 ${map.width} ${map.height}"
         preserveAspectRatio="xMidYMid meet"
         role="group"

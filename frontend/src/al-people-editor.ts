@@ -5,6 +5,7 @@ import { fieldErrors } from "./errors";
 import { alChange } from "./events";
 import { newPresenceDevice, newPresencePerson, presenceSettings } from "./model";
 import { setAt } from "./store";
+import { presenceStyles } from "./presence-styles";
 import { sharedStyles } from "./styles";
 import type { TemplateResult } from "lit";
 import type { Selector } from "./al-override-field";
@@ -69,9 +70,11 @@ const KIND_SELECTOR: Selector = {
 export class AlPeopleEditor extends LitElement {
   static styles = [
     sharedStyles,
+    presenceStyles,
     css`
       :host {
         display: block;
+        background: none;
       }
       .person {
         border: 1px solid var(--divider-color);
@@ -83,6 +86,7 @@ export class AlPeopleEditor extends LitElement {
       .device-head {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: 8px;
         margin-bottom: 8px;
       }
@@ -99,7 +103,7 @@ export class AlPeopleEditor extends LitElement {
       }
       .fields {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
         gap: 8px;
       }
       .signal {
@@ -250,15 +254,14 @@ export class AlPeopleEditor extends LitElement {
       <div class="device-head">
         <ha-icon icon=${KIND_ICONS[device.kind]}></ha-icon>
         <h5>${device.name ?? (device.tracker || "New device")}</h5>
-        ${entityLinks(this, this.hass, device.tracker, "Open tracker",
+        <div class="resource-links">${entityLinks(this, this.hass, device.tracker, "Open tracker",
           Object.values(this.presence?.people?.[person.name ?? ""]?.devices ?? {}).find((row) => row.tracker === device.tracker)?.device_id,
-          "Open Bermuda device")}
-        <ha-icon-button
+          "Open Bermuda device", true)}</div>
+        <button type="button"
           class="remove-device"
-          label="Remove device"
+          aria-label="Remove device"
           @click=${() => this.removeDevice(index, d)}
-          ><ha-icon icon="mdi:close"></ha-icon
-        ></ha-icon-button>
+          >Remove device</button>
       </div>
       <div class="fields">
         <ha-selector
@@ -315,9 +318,8 @@ export class AlPeopleEditor extends LitElement {
       <div class="person-head">
         <ha-icon icon="mdi:account"></ha-icon>
         <h4>${person.name ?? person.devices[0]?.name ?? person.person ?? "New person"}</h4>
-        <ha-icon-button class="remove-person" label="Remove person" @click=${() => this.removePerson(index)}
-          ><ha-icon icon="mdi:close"></ha-icon
-        ></ha-icon-button>
+        <button type="button" class="remove-person" aria-label="Remove person" @click=${() => this.removePerson(index)}
+          >Remove person</button>
       </div>
       <div class="fields">
         <ha-selector
@@ -346,7 +348,7 @@ export class AlPeopleEditor extends LitElement {
         ${errors.person ? html`<div class="error">${errors.person}</div>` : nothing}
       </div>
       ${person.devices.map((device, d) => this.renderDevice(index, d, person, device))}
-      <ha-button class="add-device" @click=${() => this.addDevice(index)}>Add device</ha-button>
+      <button type="button" class="add-device" @click=${() => this.addDevice(index)}>Add device</button>
     </div>`;
   }
 
@@ -358,7 +360,7 @@ export class AlPeopleEditor extends LitElement {
         ? html`<div class="empty">Nobody is followed yet. Add a person and pick their person entity.</div>`
         : nothing}
       ${people.map((person, index) => this.renderPerson(index, person))}
-      <ha-button class="add-person" @click=${() => this.addPerson()}>Add person</ha-button>
+      <button type="button" class="add-person" @click=${() => this.addPerson()}>Add person</button>
     `;
   }
 }

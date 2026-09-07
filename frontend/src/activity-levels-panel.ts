@@ -34,14 +34,14 @@ import type {
   ValidationError,
 } from "./types";
 
-type Tab = "mixer" | "groups" | "envelopes" | "defaults" | "patterns" | "presence" | "code";
+type Tab = "mixer" | "groups" | "envelopes" | "defaults" | "patterns" | "presence" | "paths" | "code";
 
 /**
  * Every tab, always. Presence used to appear only while it was enabled, which meant the
  * only way to switch it on was to write `presence.enabled` into the options by hand — and
  * the tab is where you turn it on, so it has to be reachable before it is on.
  */
-const TABS: Tab[] = ["mixer", "groups", "envelopes", "defaults", "patterns", "presence", "code"];
+const TABS: Tab[] = ["mixer", "groups", "envelopes", "defaults", "patterns", "presence", "paths", "code"];
 const LIVE_POLL_MS = 2000;
 const SIM_POLL_MS = 10_000;
 /** A profile only changes when it is retrained, so anything fresher than this will do. */
@@ -726,6 +726,8 @@ export class ActivityLevelsPanel extends LitElement {
           @al-change=${this.onChange}
           @al-code-status=${this.onCodeStatus}
         ></al-code>`;
+      case "paths":
+        return html`<al-paths .hass=${this.hass} .config=${d.config} .narrow=${this.narrow}></al-paths>`;
       case "presence":
         return html`<al-presence
           .hass=${this.hass}
