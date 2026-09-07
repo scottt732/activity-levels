@@ -132,13 +132,6 @@ const tab = async (
 const listenFor = <T extends Event>(node: HTMLElement, type: string): Promise<T> =>
   new Promise<T>((resolve) => node.addEventListener(type, (ev) => resolve(ev as T), { once: true }));
 
-const select = async (id: string): Promise<void> => {
-  el.shadowRoot!.querySelector("al-graph-map")!.dispatchEvent(
-    new CustomEvent("al-map-select", { detail: { id }, bubbles: true, composed: true }),
-  );
-  await settle();
-};
-
 const norm = (s: string | null | undefined): string => (s ?? "").replace(/\s+/g, " ").trim();
 
 beforeEach(() => {
@@ -188,7 +181,7 @@ describe("al-presence", () => {
     await el.updateComplete;
     const picker = el.shadowRoot!.querySelector(".correct")!;
     expect(norm(picker.textContent)).toContain("Where is Scott?");
-    const candidates = [...picker.querySelectorAll("ha-button.candidate")].map((b) => norm(b.textContent));
+    const candidates = [...picker.querySelectorAll("button.candidate")].map((b) => norm(b.textContent));
     expect(candidates).toEqual(["Kitchen", "Dining Room"]);
     const options = [...picker.querySelectorAll("select.every-room option")].map((o) => o.textContent);
     expect(options).toContain("Hall");
@@ -207,7 +200,7 @@ describe("al-presence", () => {
     const { el, calls } = await tab();
     (el.shadowRoot!.querySelector("tr.person .who button") as HTMLElement).click();
     await el.updateComplete;
-    (el.shadowRoot!.querySelectorAll(".correct ha-button.candidate")[1] as HTMLElement).click();
+    (el.shadowRoot!.querySelectorAll(".correct button.candidate")[1] as HTMLElement).click();
     await settle();
     expect(calls.some((c) => c.type === "activity_levels/presence/correct" && c.room === "dining_room")).toBe(true);
   });
@@ -218,11 +211,11 @@ describe("al-presence", () => {
     expect(chips).toHaveLength(2);
     const phone = el.shadowRoot!.querySelector('.device-chip[data-device="phone"]')!;
     expect(phone.classList.contains("carried")).toBe(true);
-    expect(norm(phone.textContent)).toBe("90%");
+    expect(norm(phone.textContent)).toBe("Phone 90% carrying");
     expect(phone.querySelector("ha-icon")!.getAttribute("icon")).toBe("mdi:cellphone");
     const watch = el.shadowRoot!.querySelector('.device-chip[data-device="watch"]')!;
     expect(watch.classList.contains("parked")).toBe(true);
-    expect(norm(watch.textContent)).toBe("20% Dining Room");
+    expect(norm(watch.textContent)).toBe("Watch 20% carrying Dining Room");
   });
 
   it("flags an unmapped scanner and a disabled sensor with the fix", async () => {
@@ -235,33 +228,25 @@ describe("al-presence", () => {
     expect(el.shadowRoot!.querySelector(".disabled-sensors")!.textContent).toContain("Enable");
   });
 
-  it("asks for the paths between two selected rooms and lists them", async () => {
-    const { el, calls } = await tab();
-    await select("kitchen");
-    await select("bedroom");
-    expect(calls.at(-1)).toMatchObject({
-      type: "activity_levels/topology/paths",
-      from: "kitchen",
-      to: "bedroom",
-    });
-    expect(norm(el.shadowRoot!.querySelector(".paths")!.textContent)).toContain("Kitchen → Dining Room");
+  it("uses native correction controls and sends the selected device action", async () => {
+    await tab();
+    (el.shadowRoot!.querySelector('[data-device="phone"]') as HTMLButtonElement).click();
+    await settle();
+    const panel = el.shadowRoot!.querySelector(".device-correction")!;
+    expect(panel.querySelector("ha-button")).toBeNull();
+    expect(panel.querySelector("select")?.getAttribute("aria-label")).toBe("Device room");
+    (panel.querySelector("button.not-carrying") as HTMLButtonElement).click();
+    await settle();
+    expect(calls).toContainEqual(expect.objectContaining({
+      type: "activity_levels/presence/correct", person: "Scott", device: "phone", carried: false,
+    }));
   });
 
-  it("says so when there is no route between the pair", async () => {
-    const { el } = await tab();
-    await select("bedroom");
-    await select("kitchen");
-    expect(norm(el.shadowRoot!.querySelector(".paths")!.textContent)).toContain("no route");
-  });
-
-  it("waits for the answer before saying there is no route", async () => {
-    const { el } = await tab();
-    holdPaths = true;
-    await select("kitchen");
-    await select("bedroom");
-    const paths = norm(el.shadowRoot!.querySelector(".paths")!.textContent);
-    expect(paths).not.toContain("no route");
-    expect(paths).toContain("Finding routes");
+  it("keeps room routing off the Presence page", async () => {
+    await tab();
+    expect(el.shadowRoot?.querySelector("al-graph-map")).toBeNull();
+    expect(el.shadowRoot?.querySelector(".who button")?.getAttribute("aria-expanded")).toBe("false");
+    expect(el.shadowRoot?.querySelector(".confidence-label")?.textContent).toBe("82%");
   });
 
   it("edits presence settings through the draft store", async () => {
@@ -382,7 +367,7 @@ describe("the setup card", () => {
   it("gives way to the real tab once presence is on", async () => {
     const { el } = await tab({ bermuda: true, enabled: true }, presenceConfig());
     expect(el.shadowRoot!.querySelector(".setup")).toBeNull();
-    expect(el.shadowRoot!.querySelector("al-graph-map")).toBeTruthy();
+    expect(el.shadowRoot!.querySelector(".person")).toBeTruthy();
   });
 });
 
