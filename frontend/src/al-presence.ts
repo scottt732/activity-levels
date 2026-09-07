@@ -144,9 +144,8 @@ const number = (v: unknown): number | null => (typeof v === "number" && Number.i
  * The Presence tab: who the estimator thinks is where, what it is reading
  * that from, and the settings behind all of it.
  *
- * Unlike the other tabs this one fetches its own data. The topology and the presence state
- * are read nowhere else in the panel, and holding them in the shell would keep two
- * websocket polls alive on every tab that does not draw them.
+ * This tab owns its presence polling so leaving the page stops the requests. Topology
+ * supplies the correction room choices; the separate Paths page owns route selection.
  */
 @customElement("al-presence")
 export class AlPresence extends LitElement {
@@ -299,7 +298,7 @@ export class AlPresence extends LitElement {
   }
 
   override willUpdate(changed: PropertyValues<this>): void {
-    // Adjacency is part of the draft, so the map has to follow an edit, not just a save.
+    // Refresh the correction room choices when the configuration changes.
     if (changed.has("config") && changed.get("config") !== undefined) void this.refreshTopology();
   }
 
