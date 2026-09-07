@@ -554,9 +554,10 @@ describe("activity-levels-panel patterns", () => {
     });
   });
 
-  it("fetches the profile for the Mixer tab and hands it to the controls row", async () => {
+  it("keeps profile status available in Groups", async () => {
     await mount(houseConfig());
     expect(wsCalls("activity_levels/profile/get")).toHaveLength(1);
+    await selectTab(1);
     const controls = el.shadowRoot?.querySelector("al-strip-controls") as unknown as {
       profileState: ProfileState | null;
     };
@@ -566,6 +567,7 @@ describe("activity-levels-panel patterns", () => {
   it("rebuilds the profile and refetches it", async () => {
     await mount(houseConfig());
     const before = wsCalls("activity_levels/profile/get").length;
+    await selectTab(1);
     el.shadowRoot?.querySelector("al-strip-controls")?.dispatchEvent(alRebuild(true));
     await settle();
     expect(wsCalls("activity_levels/profile/rebuild")).toEqual([
@@ -578,6 +580,7 @@ describe("activity-levels-panel patterns", () => {
   it("says so when the rebuild was skipped", async () => {
     rebuilt = false;
     await mount(houseConfig());
+    await selectTab(1);
     el.shadowRoot?.querySelector("al-strip-controls")?.dispatchEvent(alRebuild());
     await settle();
     expect(el.shadowRoot?.querySelector("ha-alert")?.textContent).toContain("Rebuild skipped");
@@ -596,6 +599,7 @@ describe("activity-levels-panel patterns", () => {
   it("says when the rebuild itself failed", async () => {
     rebuildError = new Error("busy");
     await mount(houseConfig());
+    await selectTab(1);
     el.shadowRoot?.querySelector("al-strip-controls")?.dispatchEvent(alRebuild());
     await settle();
     expect(el.shadowRoot?.querySelector("ha-alert")?.textContent).toContain("Could not rebuild the profile: busy");
@@ -933,5 +937,29 @@ describe("activity-levels-panel code tab", () => {
     expect(saveDisabled()).toBe(true); // undone back to clean
     await dirty();
     expect(saveDisabled()).toBe(false);
+  });
+});
+
+
+describe("timeline transport shell", () => {
+  it("keeps only timeline and mixer on the first page and opens selected group settings", async () => {
+    await mount(houseConfig());
+    expect(el.shadowRoot?.querySelector("al-strip-controls")).toBeNull();
+    el.shadowRoot?.querySelector("al-mixer")?.dispatchEvent(new CustomEvent("al-open-group", {
+      detail: ["groups", 0], bubbles: true, composed: true,
+    }));
+    await settle();
+    expect(el.shadowRoot?.querySelector("al-group-editor")).not.toBeNull();
+    expect((el.shadowRoot?.querySelector("al-strip-controls") as unknown as {statusOnly: boolean}).statusOnly).toBe(true);
+  });
+  it("immediately switches the mixer to read-only preview and restores live on leave", async () => {
+    await mount(houseConfig());
+    const chart = el.shadowRoot?.querySelector("al-timeline");
+    chart?.dispatchEvent(new CustomEvent("al-transport", {detail: {time: 500, window: null}, bubbles: true}));
+    await el.updateComplete;
+    expect((el.shadowRoot?.querySelector("al-mixer") as unknown as {preview: {time:number}}).preview.time).toBe(500);
+    chart?.dispatchEvent(new CustomEvent("al-transport", {detail: {time: null, window: null}, bubbles: true}));
+    await el.updateComplete;
+    expect((el.shadowRoot?.querySelector("al-mixer") as unknown as {preview: unknown}).preview).toBeNull();
   });
 });

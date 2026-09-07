@@ -134,17 +134,6 @@ export class AlFader extends LitElement {
     return this.dragValue ?? this.value;
   }
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    // Not declarative: the wheel listener has to be non-passive to be allowed to preventDefault.
-    this.addEventListener("wheel", this.onWheel, { passive: false });
-  }
-
-  override disconnectedCallback(): void {
-    this.removeEventListener("wheel", this.onWheel);
-    super.disconnectedCallback();
-  }
-
   private emit(value: number, live: boolean): void {
     this.dispatchEvent(new CustomEvent<FaderChangeDetail>("value-changed", { detail: { value, live } }));
   }
@@ -156,14 +145,8 @@ export class AlFader extends LitElement {
     this.emit(value, false);
   }
 
-  private readonly onWheel = (ev: WheelEvent): void => {
-    if (this.disabled || ev.deltaY === 0) return;
-    ev.preventDefault();
-    this.commit(this.scale.step(this.current, ev.deltaY < 0 ? 1 : -1, ev.shiftKey));
-  };
-
   private onKeyDown(ev: KeyboardEvent): void {
-    if (this.disabled) return;
+    if (this.disabled || this.readOnly) return;
     const scale = this.scale;
     const v = this.current;
     let next: number;
@@ -199,7 +182,7 @@ export class AlFader extends LitElement {
   /** Only a scale with a home to go back to answers a double-click; a level has none. */
   private onDoubleClick(): void {
     const reset = this.scale.reset;
-    if (this.disabled || reset === null) return;
+    if (this.disabled || this.readOnly || reset === null) return;
     this.commit(reset);
   }
 
@@ -214,7 +197,7 @@ export class AlFader extends LitElement {
   }
 
   private onPointerDown(ev: PointerEvent): void {
-    if (this.disabled) return;
+    if (this.disabled || this.readOnly) return;
     const track = ev.currentTarget as HTMLElement;
     ev.preventDefault();
     this.dragging = true;

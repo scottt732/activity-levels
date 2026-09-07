@@ -229,6 +229,18 @@ describe("al-strip", () => {
       expect(fader().value).toBe(2);
     });
 
+    it("ignores an old command answer after entering a read-only preview", async () => {
+      await move(4, true);
+      await move(4, false);
+      el.editable = false;
+      el.value = null;
+      await el.updateComplete;
+      el.settle(4);
+      await el.updateComplete;
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent).toBe("—");
+      expect(el.shadowRoot?.querySelector("al-fader")).toBeNull();
+    });
+
     it("leaves a settled answer alone while a new drag holds the fader", async () => {
       await move(4, true);
       el.settle(1);

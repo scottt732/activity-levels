@@ -349,42 +349,27 @@ describe("mixerLayout", () => {
     expect(layout.rows).toBe(2);
   });
 
-  it("gives a closed group a narrow column of its own, right of its strip", () => {
+  it("keeps only the summary strip for a closed group", () => {
     const layout = mixerLayout(houseConfig(), navOf(["house"], null));
     expect(layout.columns).toEqual([1, 2, 3]);
-    expect(layout.kinds).toEqual(["strip", "strip", "strip", "tab"]);
+    expect(layout.kinds).toEqual(["strip", "strip", "strip"]);
     expect(layout.bands).toEqual([
-      // The open root spans the tab too: the closed branch is still inside it.
-      { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 5, expanded: true },
-      { id: "living_room", label: "Living Room", depth: 1, colStart: 4, colEnd: 5, expanded: false },
+      { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 4, expanded: true },
     ]);
     expect(layout.rows).toBe(1);
   });
 
-  it("has no band rows at all when every group is closed", () => {
-    const layout = mixerLayout(houseConfig(), navOf([], null));
-    expect(layout.columns).toEqual([1]);
-    expect(layout.kinds).toEqual(["strip", "tab"]);
-    expect(layout.bands).toEqual([
-      { id: "house", label: "House", depth: 0, colStart: 2, colEnd: 3, expanded: false },
-    ]);
-    expect(layout.rows).toBe(0);
+  it("has no band rows when every group is closed", () => {
+    expect(mixerLayout(houseConfig(), navOf([], null))).toEqual({
+      columns: [1], kinds: ["strip"], bands: [], rows: 0,
+    });
   });
 
-  it("closes each band at its own subtree, not at the end of the row", () => {
-    // house(1) kitchen(2) living_room(3) [its tab](4) shed(5) workbench(6)
+  it("closes each band at its own subtree", () => {
     const layout = mixerLayout(twoRoots(), navOf(["house", "shed"], null));
     expect(layout.bands).toEqual([
-      { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 5, expanded: true },
-      { id: "living_room", label: "Living Room", depth: 1, colStart: 4, colEnd: 5, expanded: false },
-      { id: "shed", label: "shed", depth: 0, colStart: 5, colEnd: 7, expanded: true },
-    ]);
-  });
-
-  it("names a group with no name of its own by its id", () => {
-    const layout = mixerLayout(houseConfig(), navOf(["kitchen"], null));
-    expect(layout.bands).toEqual([
-      { id: "house", label: "House", depth: 0, colStart: 2, colEnd: 3, expanded: false },
+      { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 4, expanded: true },
+      { id: "shed", label: "shed", depth: 0, colStart: 4, colEnd: 6, expanded: true },
     ]);
   });
 

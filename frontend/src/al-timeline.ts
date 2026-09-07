@@ -3,6 +3,8 @@ import { customElement, property, state } from "lit/decorators.js";
 import { getTimeseries } from "./api";
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { alTimelineRange } from "./events";
+import { boundWindow, sampleAt, zoomWindow } from "./transport";
+import type { TransportDetail, TransportWindow } from "./transport";
 import { sharedStyles } from "./styles";
 import {
   bandPolygon,
@@ -153,7 +155,7 @@ const toPolygonPoints = (d: string): string => (d ? d.replace(/[MLZ]/g, " ").tri
 /** An axis label reads as a clock over a day or two and as a date over anything longer. */
 const timeLabel = (t: number, span: number): string => {
   const d = new Date(t * 1000);
-  return span <= 2 * 86_400
+  return span < 86_400
     ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
     : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
@@ -254,8 +256,14 @@ export class AlTimeline extends LitElement {
       :host {
         display: block;
         position: relative;
-        background: none;
+        background: var(--card-background-color, #222);
+        border: 1px solid var(--divider-color, #4444);
+        border-radius: 12px;
+        padding: 12px;
+        overflow: hidden;
       }
+      .transport { margin-top: 10px; }
+      .transport-status { font-size: 0.85em; margin-left: auto; }
       .toolbar {
         display: flex;
         align-items: center;
@@ -302,6 +310,7 @@ export class AlTimeline extends LitElement {
         flex-basis: 100%;
       }
       svg.chart {
+        overflow: hidden;
         display: block;
         width: 100%;
         height: auto;
@@ -414,6 +423,11 @@ export class AlTimeline extends LitElement {
   @property({ attribute: false }) groupId: string | null = null;
   /** The bus this chart is of, named for the toolbar; `heading` so it is not the host's tooltip. */
   @property({ attribute: false }) heading = "";
+  @property({ attribute: false }) labels: Record<string, string> = {};
+  @state() private cursorTime: number | null = null;
+  @state() private viewport: TransportWindow | null = null;
+  private pinnedTime: number | null = null;
+  private dragging = false;
   @property({ attribute: false }) range: Range = "7d";
   @property({ attribute: false }) horizon: Horizon = "24h";
   @property({ type: Boolean }) showChannels = true;
@@ -439,6 +453,7 @@ export class AlTimeline extends LitElement {
   private observer?: ResizeObserver;
   private timer?: ReturnType<typeof setInterval>;
   /** The pending "the live value moved" refetch, if one is already on its way. */
+  private viewportTimer?: ReturnType<typeof setTimeout>;
   private liveTimer?: ReturnType<typeof setTimeout>;
   /** The live value that refetch was scheduled against; `null` until the first frame. */
   private liveValue: number | null = null;
@@ -505,6 +520,9 @@ export class AlTimeline extends LitElement {
     if (this.timer !== undefined) clearInterval(this.timer);
     this.timer = undefined;
     this.resetLiveWatch();
+    this.clearViewportTimer();
+    this.seq++;
+    this.dragging = false;
   }
 
   /** Forgets the pending refetch and the value it was measured against. */
@@ -567,6 +585,17 @@ export class AlTimeline extends LitElement {
     // the real clock — it is drawn from `nowAt`, not from the window.
     const now = Math.floor(Date.now() / 1000 / 60) * 60;
     const w = windowFor(now, this.range, this.horizon);
+    if (this.viewport) {
+      const end = Math.min(now, this.viewport.end);
+      return {
+        group_id: groupId,
+        start: Math.min(this.viewport.start, end - 3600),
+        end,
+        resolution: end - Math.min(this.viewport.start, end - 3600) <= 86400 ? "5m" : "1h",
+        include_children: this.showChannels,
+        ...(this.viewport.end > now ? { forecast_until: Math.min(now + 7 * 86400, this.viewport.end) } : {}),
+      };
+    }
     return {
       group_id: groupId,
       start: w.start,
@@ -637,6 +666,7 @@ export class AlTimeline extends LitElement {
     if (!loaded) return null;
     const key: unknown[] = [
       loaded.data,
+      this.viewport,
       loaded.q.group_id,
       loaded.q.start,
       loaded.q.end,
@@ -651,6 +681,7 @@ export class AlTimeline extends LitElement {
     const value = computePaths(
       loaded.data,
       loaded.q.group_id,
+      this.viewport ? { ...this.viewport, until: this.viewport.end } :
       { start: loaded.q.start, end: loaded.q.end, until: loaded.q.forecast_until ?? loaded.q.end },
       { width: this.width, height: this.height, maxValue: this.maxValue, showChannels: this.showChannels },
     );
@@ -662,8 +693,8 @@ export class AlTimeline extends LitElement {
    * "now" follows the live poll when there is one and the real clock otherwise, so the
    * line keeps moving between refetches even though the window itself is quantized.
    */
-  private nowAt(p: ComputedTimeline): number {
-    return clamp(this.live?.now ?? Math.floor(Date.now() / 1000), p.t0, p.t1);
+  private nowAt(): number {
+    return this.live?.now ?? Math.floor(Date.now() / 1000);
   }
 
   /**
@@ -696,6 +727,7 @@ export class AlTimeline extends LitElement {
   private setRange(range: Range): void {
     if (this.range === range) return;
     this.range = range;
+    this.resetTransport();
     this.cursorIndex = null;
     this.emitSettings();
   }
@@ -703,6 +735,7 @@ export class AlTimeline extends LitElement {
   private setHorizon(horizon: Horizon): void {
     if (this.horizon === horizon) return;
     this.horizon = horizon;
+    this.resetTransport();
     this.cursorIndex = null;
     this.emitSettings();
   }
@@ -731,34 +764,131 @@ export class AlTimeline extends LitElement {
     return p.t0 + ratio * (p.t1 - p.t0);
   }
 
+  private emitTransport(): void {
+    const detail: TransportDetail = { time: this.cursorTime, window: this.viewport };
+    this.dispatchEvent(new CustomEvent("al-transport", { detail, bubbles: true, composed: true }));
+  }
+
+  private clearViewportTimer(): void {
+    if (this.viewportTimer !== undefined) clearTimeout(this.viewportTimer);
+    this.viewportTimer = undefined;
+  }
+
+  private resetTransport(): void {
+    this.clearViewportTimer();
+    this.seq++;
+    this.viewport = null;
+    this.pinnedTime = null;
+    this.cursorTime = null;
+    this.cursorIndex = null;
+    this.emitTransport();
+    void this.load();
+  }
+
+  private selectTime(time: number | null): void {
+    this.cursorTime = time;
+    const points = this.paths?.bus.points ?? [];
+    this.cursorIndex = time === null || !points.length ? null : nearestIndex(points, time);
+    this.emitTransport();
+  }
+
   private onMove(ev: MouseEvent): void {
     const p = this.paths;
-    if (!p || p.bus.points.length === 0) return;
-    this.cursorIndex = nearestIndex(p.bus.points, this.timeAt(ev, p));
+    if (!p) return;
+    const time = this.timeAt(ev, p);
+    if (this.dragging) this.pinnedTime = time;
+    this.selectTime(time);
+  }
+
+  private onPin(ev: MouseEvent): void {
+    const p = this.paths;
+    if (!p) return;
+    this.pinnedTime = this.timeAt(ev, p);
+    this.selectTime(this.pinnedTime);
+  }
+
+  private onPointerDown(ev: PointerEvent): void {
+    if (ev.button !== 0) return;
+    this.dragging = true;
+    (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+    this.onPin(ev);
+  }
+
+  private onPointerUp(ev: PointerEvent): void {
+    if (!this.dragging) return;
+    this.onPin(ev);
+    this.dragging = false;
   }
 
   private onLeave(): void {
-    this.cursorIndex = null;
+    if (!this.dragging) this.selectTime(this.pinnedTime);
+  }
+
+  private changeWindow(window: TransportWindow, immediate = false): void {
+    this.clearViewportTimer();
+    this.seq++;
+    this.viewport = boundWindow(window, Date.now() / 1000);
+    this.emitTransport();
+    if (immediate) void this.load();
+    else this.viewportTimer = setTimeout(() => {
+      this.viewportTimer = undefined;
+      void this.load();
+    }, 100);
+  }
+
+  private zoom(factor: number, time?: number): void {
+    const p = this.paths;
+    if (!p) return;
+    this.changeWindow(zoomWindow({ start: p.t0, end: p.t1 }, time ?? this.cursorTime ?? (p.t0 + p.t1) / 2,
+      factor, Date.now() / 1000));
+  }
+
+  private onWheel(ev: WheelEvent): void {
+    const p = this.paths;
+    if (!p) return;
+    if (ev.ctrlKey || ev.metaKey) {
+      ev.preventDefault();
+      this.zoom(Math.exp(clamp(ev.deltaY, -100, 100) * 0.01), this.timeAt(ev, p));
+    } else if (Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) {
+      ev.preventDefault();
+      const delta = ev.deltaX * (ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? p.plotW : 1);
+      const offset = delta / p.plotW * (p.t1 - p.t0);
+      this.changeWindow({ start: p.t0 + offset, end: p.t1 + offset });
+    }
+  }
+
+  private jump(days: number): void {
+    const p = this.paths;
+    if (!p) return;
+    const now = Date.now() / 1000;
+    const time = Math.min(now + 7 * 86400, (this.cursorTime ?? this.pinnedTime ?? now) + days * 86400);
+    this.pinnedTime = time;
+    this.selectTime(time);
+    const span = p.t1 - p.t0;
+    this.changeWindow({ start: time - span / 2, end: time + span / 2 }, true);
   }
 
   /** ←/→ walk the samples (×10 with Shift) so the tooltip is reachable without a mouse. */
   private onKeyDown(ev: KeyboardEvent): void {
     const p = this.paths;
     if (!p) return;
-    const last = p.bus.points.length - 1;
-    if (last < 0) return;
     if (ev.key === "Escape") {
-      if (this.cursorIndex === null) return;
+      if (this.cursorTime === null && this.pinnedTime === null) return;
       ev.preventDefault();
-      this.cursorIndex = null;
+      this.pinnedTime = null;
+      this.selectTime(null);
       return;
     }
+    const last = p.bus.points.length - 1;
+    if (last < 0) return;
     if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
     ev.preventDefault();
     const step = (ev.key === "ArrowRight" ? 1 : -1) * (ev.shiftKey ? 10 : 1);
     // A first arrow press puts the cursor at the end it came from rather than jumping.
     this.cursorIndex =
       this.cursorIndex === null ? (step > 0 ? 0 : last) : clamp(this.cursorIndex + step, 0, last);
+    this.pinnedTime = p.bus.points[this.cursorIndex]![0];
+    this.selectTime(this.pinnedTime);
   }
 
   private renderChips(): TemplateResult {
@@ -816,10 +946,10 @@ export class AlTimeline extends LitElement {
   private renderChart(p: ComputedTimeline): TemplateResult {
     const w = this.width;
     const h = this.height;
-    const nowX = p.x(this.nowAt(p));
+    const nowX = p.x(this.nowAt());
     const tail = this.tailPath(p);
     const stripY = p.plotH + STRIP_OFFSET;
-    const cursorX = this.cursorIndex === null ? null : p.x(p.bus.points[this.cursorIndex]?.[0] ?? p.t0);
+    const cursorX = this.cursorTime === null ? null : p.x(this.cursorTime);
     const label = `${this.heading} activity, ${this.range} history, ${this.horizon} forecast`;
     return html`
       <svg
@@ -829,6 +959,13 @@ export class AlTimeline extends LitElement {
         tabindex="0"
         aria-label=${label}
         @mousemove=${this.onMove}
+        @pointermove=${this.onMove}
+        @pointerdown=${this.onPointerDown}
+        @pointerup=${this.onPointerUp}
+        @pointercancel=${() => { this.dragging = false; this.onLeave(); }}
+        @lostpointercapture=${() => { this.dragging = false; }}
+        @click=${this.onPin}
+        @wheel=${this.onWheel}
         @mouseleave=${this.onLeave}
         @keydown=${this.onKeyDown}
       >
@@ -851,8 +988,8 @@ export class AlTimeline extends LitElement {
               fill=${r.fill}
             ></rect>`,
           )}
-          ${p.band ? svg`<polygon class="band" points=${p.band}></polygon>` : nothing}
-          ${p.p50 ? svg`<path class="p50" d=${p.p50} stroke-dasharray="4 3"></path>` : nothing}
+          ${this.forecastReady && p.band ? svg`<polygon class="band" points=${p.band}></polygon>` : nothing}
+          ${this.forecastReady && p.p50 ? svg`<path class="p50" d=${p.p50} stroke-dasharray="4 3"></path>` : nothing}
           ${p.children.map((c) => svg`<path class="child" d=${c.d} stroke=${c.color}></path>`)}
           ${p.bus.d ? svg`<path class="bus" d=${p.bus.d}></path>` : nothing}
           ${tail ? svg`<path class="tail" d=${tail}></path>` : nothing}
@@ -882,8 +1019,8 @@ export class AlTimeline extends LitElement {
                 ></rect>`,
               )
             : nothing}
-          <line class="now" x1=${nowX} y1="0" x2=${nowX} y2=${p.plotH}></line>
-          <text class="now-label" x=${nowX + 3} y="10">now</text>
+          ${nowX >= 0 && nowX <= p.plotW ? svg`<line class="now" x1=${nowX} y1="0" x2=${nowX} y2=${p.plotH}></line>
+          <text class="now-label" x=${nowX + 3} y="10">now</text>` : nothing}
           ${cursorX === null
             ? nothing
             : svg`<line class="cursor" x1=${cursorX} y1="0" x2=${cursorX} y2=${p.plotH}></line>`}
@@ -908,11 +1045,13 @@ export class AlTimeline extends LitElement {
   }
 
   private renderTooltip(p: ComputedTimeline): unknown {
-    const i = this.cursorIndex;
-    if (i === null) return nothing;
-    const point = p.bus.points[i];
-    if (!point) return nothing;
-    const [t, v] = point;
+    const t = this.cursorTime;
+    if (t === null || t < p.t0 || t > p.t1) return nothing;
+    const forecast = this.forecastReady ? this.loaded?.data.forecast : null;
+    const maxGap = this.loaded?.q.resolution === "5m" ? 600 : 7200;
+    const v = t > this.nowAt()
+      ? (forecast ? sampleAt(forecastLine(forecast, "p50"), t) : null)
+      : sampleAt(p.bus.points, t, maxGap);
     const cx = MARGIN_LEFT + p.x(t);
     const pct = (cx / this.width) * 100;
     const dayType = this.loaded?.data.day_types.find(([s, e]) => t >= s && t < e)?.[2];
@@ -922,21 +1061,21 @@ export class AlTimeline extends LitElement {
         <div class="tt-row">
           <span class="tt-swatch" style="background: var(--primary-color)"></span>
           <span class="tt-name">${this.heading || p.busId}</span>
-          <span class="tt-value">${tick(v)}</span>
+          <span class="tt-value">${v === null ? "—" : tick(v)}</span>
         </div>
-        ${p.children.map((c) => {
-          const j = nearestIndex(c.points, t);
-          const cp = c.points[j];
-          return cp
+        ${p.children.slice(0, 5).map((c) => {
+          const value = sampleAt(c.points, t, maxGap);
+          return value !== null
             ? html`
                 <div class="tt-row">
                   <span class="tt-swatch" style="background: ${c.color}"></span>
-                  <span class="tt-name">${c.id}</span>
-                  <span class="tt-value">${tick(cp[1])}</span>
+                  <span class="tt-name">${this.labels[c.id] ?? c.id.replaceAll("_", " ")}</span>
+                  <span class="tt-value">${tick(value)}</span>
                 </div>
               `
             : nothing;
         })}
+        ${p.children.length > 5 ? html`<div class="muted">+${p.children.length - 5} channels</div>` : nothing}
         ${dayType ? html`<div class="tt-daytype muted">${dayType}</div>` : nothing}
       </div>
     `;
@@ -950,6 +1089,14 @@ export class AlTimeline extends LitElement {
     return html`
       ${this.renderChips()}
       ${p ? this.renderChart(p) : html`<div class="placeholder muted">Loading…</div>`}
+      <div class="transport toolbar" role="group" aria-label="Timeline transport">
+        <button class="chip" aria-label="Zoom out" @click=${() => this.zoom(2)}>−</button>
+        <button class="chip" aria-label="Zoom in" @click=${() => this.zoom(0.5)}>+</button>
+        ${[-7, -3, -1].map((days) => html`<button class="chip" data-days=${days} @click=${() => this.jump(days)}>${days}d</button>`)}
+        <button class="chip transport-now" @click=${this.resetTransport}>Now</button>
+        ${[1, 3, 7].map((days) => html`<button class="chip" data-days=${days} @click=${() => this.jump(days)}>+${days}d</button>`)}
+        <span class="muted transport-status">${this.cursorTime === null ? "Live" : `${this.cursorTime > this.nowAt() ? "Forecast" : "History"} · ${new Date(this.cursorTime * 1000).toLocaleString()}`}</span>
+      </div>
       ${p && p.legend.length > 0
         ? html`
             <div class="legend">

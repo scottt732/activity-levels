@@ -112,7 +112,7 @@ const strips = (): AlStrip[] => [...(el.shadowRoot?.querySelectorAll<AlStrip>("a
 const container = (): HTMLElement | null => el.shadowRoot?.querySelector<HTMLElement>(".grid") ?? null;
 const labels = (): string[] => strips().map((s) => s.label);
 const bands = (): HTMLElement[] => [...(el.shadowRoot?.querySelectorAll<HTMLElement>(".band") ?? [])];
-const tabs = (): HTMLElement[] => [...(el.shadowRoot?.querySelectorAll<HTMLElement>(".tab") ?? [])];
+const expandButtons = (): HTMLButtonElement[] => strips().flatMap((strip) => [...(strip.shadowRoot?.querySelectorAll<HTMLButtonElement>(".expand") ?? [])]);
 const textOf = (nodes: HTMLElement[]): string[] =>
   nodes.map((n) => n.querySelector(".label")?.textContent?.trim() ?? "");
 /** Where a band, a tab or a strip was placed. jsdom parses no grid shorthands, so this
@@ -511,10 +511,10 @@ describe("al-mixer track resolution", () => {
 });
 
 describe("al-mixer bands", () => {
-  // Property(1) House(2) [House's tab](3) Garage(4) outside(5), one band row above.
+  // Property(1) House(2) Garage(3) outside(4), one band row above.
   it("brackets each open group over its own strip and its subtree", () => {
     expect(textOf(bands())).toEqual(["Property"]);
-    expect(placed(bands()[0])).toBe("grid-column: 1 / 6; grid-row: 1;");
+    expect(placed(bands()[0])).toBe("grid-column: 1 / 5; grid-row: 1;");
     expect(bands()[0]?.getAttribute("role")).toBe("group");
     expect(bands()[0]?.getAttribute("aria-label")).toBe("Property");
   });
@@ -523,8 +523,8 @@ describe("al-mixer bands", () => {
     expect(strips().map((n) => placed(n))).toEqual([
       "grid-column: 1; grid-row: 2;",
       "grid-column: 2; grid-row: 2;",
+      "grid-column: 3; grid-row: 2;",
       "grid-column: 4; grid-row: 2;",
-      "grid-column: 5; grid-row: 2;",
     ]);
   });
 
@@ -564,31 +564,32 @@ describe("al-mixer bands", () => {
 });
 
 describe("al-mixer collapsed bands", () => {
-  it("stands a closed band on end, right of the group's own strip", () => {
-    expect(textOf(tabs())).toEqual(["House"]);
-    // Column 3 is the one immediately after House's strip; the strips' own row.
-    expect(placed(tabs()[0])).toBe("grid-column: 3 / 4; grid-row: 2;");
-    expect(tabs()[0]?.getAttribute("role")).toBe("button");
-    expect(tabs()[0]?.getAttribute("aria-expanded")).toBe("false");
-    expect(tabs()[0]?.getAttribute("aria-label")).toBe("Expand House");
+  it("keeps an expand button in the summary strip header", () => {
+    expect(el.shadowRoot?.querySelector(".tab")).toBeNull();
+    expect(expandButtons()).toHaveLength(1);
+    expect(expandButtons()[0]?.getAttribute("aria-expanded")).toBe("false");
+    expect(expandButtons()[0]?.getAttribute("aria-label")).toBe("Expand House");
   });
 
   it("opens the subtree again when it is clicked", async () => {
     withNavReducer();
-    tabs()[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    expandButtons()[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
     await settle();
     expect(el.nav.expanded.has("house")).toBe(true);
     expect(labels()).toEqual(["Property", "House", "den", "Garage", "outside"]);
-    expect(tabs()).toEqual([]);
+    expect(expandButtons()).toEqual([]);
   });
 
   it.each(["Enter", " "])("opens it on %o, and does not toggle it twice", async (key) => {
     withNavReducer();
     const ev = new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true });
-    tabs()[0]?.dispatchEvent(ev);
+    expandButtons()[0]?.dispatchEvent(ev);
+    await settle();
+    expect(navs).toEqual([]);
+    // Native buttons turn these keys into clicks in the browser. jsdom does not.
+    expandButtons()[0]?.click();
     await settle();
     expect(navs).toEqual([{ type: "toggle", id: "house" }]);
-    expect(ev.defaultPrevented).toBe(true);
   });
 
   // The caret is a real button: the key press is already its click, so all the band has to
@@ -603,11 +604,11 @@ describe("al-mixer collapsed bands", () => {
 
   it("gives the band controls the tab stop only for the selected group", async () => {
     expect(bands()[0]?.querySelector(".caret")?.getAttribute("tabindex")).toBe("0");
-    expect(tabs()[0]?.getAttribute("tabindex")).toBe("-1");
+    expect(expandButtons()[0]?.getAttribute("tabindex")).toBe("-1");
     el.nav = { expanded: new Set(["property"]), selection: ["groups", 0, "children", 0] };
     await el.updateComplete;
     expect(bands()[0]?.querySelector(".caret")?.getAttribute("tabindex")).toBe("-1");
-    expect(tabs()[0]?.getAttribute("tabindex")).toBe("0");
+    expect(expandButtons()[0]?.getAttribute("tabindex")).toBe("0");
   });
 });
 
@@ -658,5 +659,36 @@ describe("al-mixer edit mode", () => {
     expect(el.nav.selection).toEqual(["groups", 0]);
     await press("Enter");
     expect(el.nav.expanded.has("property")).toBe(false);
+  });
+});
+
+
+describe("al-mixer transport preview", () => {
+  it("shows preview values, missing data, and restores the saved edit mode", async () => {
+    await setEditing(true);
+    el.live = { now: 100, groups: { house: groupLive({ value: 4 }) }, voices: {} };
+    el.preview = { time: 90, mode: "history", values: { property: 2, house: null } };
+    await settle();
+    expect(strips()[0]?.value).toBe(2);
+    expect(strips()[1]?.value).toBeNull();
+    expect(strips().every((s) => !s.editable)).toBe(true);
+    expect(strips()[1]?.shadowRoot?.querySelector(".readout")?.textContent).toBe("—");
+    expect(el.shadowRoot?.querySelector(".preview-status")?.textContent).toContain("History");
+    for (const [type, detail] of [["al-level-override", { value: 2 }], ["al-mute-toggle", { muted: true }], ["al-reset", {}]] as const) {
+      strips()[1]?.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+    }
+    expect(el.hass?.callWS).not.toHaveBeenCalled();
+    el.preview = null;
+    await settle();
+    expect(strips().every((s) => s.editable)).toBe(true);
+    expect(strips()[1]?.value).toBe(4);
+  });
+
+  it("opens settings for the selected group", async () => {
+    const open = vi.fn();
+    el.addEventListener("al-open-group", open);
+    el.shadowRoot?.querySelector<HTMLButtonElement>(".open-group")?.click();
+    expect(open).toHaveBeenCalledOnce();
+    expect((open.mock.calls[0]![0] as CustomEvent).detail).toEqual(["groups", 0]);
   });
 });

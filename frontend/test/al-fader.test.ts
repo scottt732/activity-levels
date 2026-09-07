@@ -166,14 +166,14 @@ describe("al-fader pointer and wheel", () => {
     expect(events).toEqual([]);
   });
 
-  it("steps on the wheel, up for a scroll away from the user", async () => {
-    el.dispatchEvent(new WheelEvent("wheel", { deltaY: -1, bubbles: true }));
-    el.dispatchEvent(new WheelEvent("wheel", { deltaY: 1, bubbles: true }));
+  it("leaves vertical and diagonal wheel gestures to scrolling", async () => {
+    for (const deltaX of [0, 60]) {
+      const event = new WheelEvent("wheel", { deltaX, deltaY: -1, bubbles: true, cancelable: true });
+      el.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
     await el.updateComplete;
-    expect(events).toEqual([
-      { value: 1.25, live: false },
-      { value: 0.8, live: false },
-    ]);
+    expect(events).toEqual([]);
   });
 });
 
