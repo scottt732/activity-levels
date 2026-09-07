@@ -112,7 +112,7 @@ const strips = (): AlStrip[] => [...(el.shadowRoot?.querySelectorAll<AlStrip>("a
 const container = (): HTMLElement | null => el.shadowRoot?.querySelector<HTMLElement>(".grid") ?? null;
 const labels = (): string[] => strips().map((s) => s.label);
 const bands = (): HTMLElement[] => [...(el.shadowRoot?.querySelectorAll<HTMLElement>(".band") ?? [])];
-const expandButtons = (): HTMLButtonElement[] => strips().flatMap((strip) => [...(strip.shadowRoot?.querySelectorAll<HTMLButtonElement>(".expand") ?? [])]);
+const expandButtons = (): HTMLButtonElement[] => [...(el.shadowRoot?.querySelectorAll<HTMLButtonElement>('.band .caret[aria-expanded="false"]') ?? [])];
 const textOf = (nodes: HTMLElement[]): string[] =>
   nodes.map((n) => n.querySelector(".label")?.textContent?.trim() ?? "");
 /** Where a band, a tab or a strip was placed. jsdom parses no grid shorthands, so this
@@ -511,9 +511,9 @@ describe("al-mixer track resolution", () => {
 });
 
 describe("al-mixer bands", () => {
-  // Property(1) House(2) Garage(3) outside(4), one band row above.
+  // Property(1) House(2) Garage(3) outside(4), two hierarchy rows above.
   it("brackets each open group over its own strip and its subtree", () => {
-    expect(textOf(bands())).toEqual(["Property"]);
+    expect(textOf(bands())).toEqual(["Property", "House"]);
     expect(placed(bands()[0])).toBe("grid-column: 1 / 5; grid-row: 1;");
     expect(bands()[0]?.getAttribute("role")).toBe("group");
     expect(bands()[0]?.getAttribute("aria-label")).toBe("Property");
@@ -521,10 +521,10 @@ describe("al-mixer bands", () => {
 
   it("puts the strips on the row below every band", () => {
     expect(strips().map((n) => placed(n))).toEqual([
-      "grid-column: 1; grid-row: 2;",
-      "grid-column: 2; grid-row: 2;",
-      "grid-column: 3; grid-row: 2;",
-      "grid-column: 4; grid-row: 2;",
+      "grid-column: 1; grid-row: 3;",
+      "grid-column: 2; grid-row: 3;",
+      "grid-column: 3; grid-row: 3;",
+      "grid-column: 4; grid-row: 3;",
     ]);
   });
 
@@ -550,6 +550,16 @@ describe("al-mixer bands", () => {
     expect(textOf(bands())).toEqual(["Property", "House"]);
   });
 
+  it("shows formatted live and preview group values in hierarchy headers", async () => {
+    el.live = { now: 100, voices: {}, groups: { property: groupLive({ value: 4.94 }), house: groupLive({ value: 2.345, precision: 2 }) } };
+    await settle();
+    expect(bands().map((band) => band.querySelector(".band-value")?.textContent)).toEqual(["4.9", "2.35"]);
+    el.preview = { time: 50, mode: "history", values: { property: 1.26, house: null } };
+    await settle();
+    expect(bands().map((band) => band.querySelector(".band-value")?.textContent)).toEqual(["1.3", ""]);
+    expect(strips().every((strip) => strip.shadowRoot?.querySelector(".expand") === null)).toBe(true);
+  });
+
   it("labels the caret with what it will do", () => {
     const caret = bands()[0]?.querySelector(".caret");
     expect(caret?.getAttribute("aria-expanded")).toBe("true");
@@ -564,7 +574,7 @@ describe("al-mixer bands", () => {
 });
 
 describe("al-mixer collapsed bands", () => {
-  it("keeps an expand button in the summary strip header", () => {
+  it("keeps the expand button above the track in its hierarchy header", () => {
     expect(el.shadowRoot?.querySelector(".tab")).toBeNull();
     expect(expandButtons()).toHaveLength(1);
     expect(expandButtons()[0]?.getAttribute("aria-expanded")).toBe("false");
@@ -672,7 +682,7 @@ describe("al-mixer transport preview", () => {
     expect(strips()[0]?.value).toBe(2);
     expect(strips()[1]?.value).toBeNull();
     expect(strips().every((s) => !s.editable)).toBe(true);
-    expect(strips()[1]?.shadowRoot?.querySelector(".readout")?.textContent).toBe("No data");
+    expect(strips()[1]?.shadowRoot?.querySelector(".readout")?.textContent?.trim()).toBe("");
     expect(el.shadowRoot?.querySelector(".preview-status")?.textContent).toContain("History");
     for (const [type, detail] of [["al-level-override", { value: 2 }], ["al-mute-toggle", { muted: true }], ["al-reset", {}]] as const) {
       strips()[1]?.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));

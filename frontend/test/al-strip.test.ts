@@ -71,6 +71,25 @@ describe("al-strip", () => {
   let mutes: unknown[];
   let resets: unknown[];
 
+  it("keeps the same meter track mounted across missing preview samples", async () => {
+    const control = fader();
+    await control.updateComplete;
+    const track = control.shadowRoot?.querySelector(".track");
+    el.value = null;
+    await el.updateComplete;
+    await control.updateComplete;
+    expect(fader()).toBe(control);
+    expect(control.shadowRoot?.querySelector(".track")).toBe(track);
+    expect(control.shadowRoot?.querySelector(".fill")).toBeNull();
+    expect(control.shadowRoot?.querySelector("[aria-valuenow]")).toBeNull();
+    expect(el.shadowRoot?.querySelector(".readout")?.textContent?.trim()).toBe("");
+    el.value = 1.2;
+    await el.updateComplete;
+    await control.updateComplete;
+    expect(control.shadowRoot?.querySelector(".track")).toBe(track);
+    expect(control.shadowRoot?.querySelector(".fill")).not.toBeNull();
+  });
+
   it("shows one formatted reading in both meter and edit modes", async () => {
     el.value = 0.04;
     for (const editable of [false, true]) {
@@ -249,8 +268,8 @@ describe("al-strip", () => {
       await el.updateComplete;
       el.settle(4);
       await el.updateComplete;
-      expect(el.shadowRoot?.querySelector(".readout")?.textContent).toBe("No data");
-      expect(el.shadowRoot?.querySelector("al-fader")).toBeNull();
+      expect(el.shadowRoot?.querySelector(".readout")?.textContent?.trim()).toBe("");
+      expect(el.shadowRoot?.querySelector("al-fader")?.unavailable).toBe(true);
     });
 
     it("leaves a settled answer alone while a new drag holds the fader", async () => {

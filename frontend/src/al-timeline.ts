@@ -1062,27 +1062,33 @@ export class AlTimeline extends LitElement {
     const cx = MARGIN_LEFT + p.x(t);
     const pct = (cx / this.width) * 100;
     const dayType = this.loaded?.data.day_types.find(([s, e]) => t >= s && t < e)?.[2];
+    const reading = (id: string, value: number | null): string | null => {
+      if (value === null) return null;
+      const formatted = formatLevel(value, this.precisions[id] ?? this.live?.groups[id]?.precision ?? 1);
+      return Number(formatted) === 0 ? null : formatted;
+    };
+    const busValue = reading(p.busId, v);
+    // Filter before limiting the rows so quiet channels do not hide active ones.
+    const children = p.children.flatMap((c) => {
+      const value = reading(c.id, sampleAt(c.points, t, maxGap));
+      return value === null ? [] : [{ ...c, formatted: value }];
+    });
     return html`
       <div class="tooltip ${pct > 60 ? "flip" : ""}" style="left: ${pct}%">
         <div class="tt-time">${new Date(t * 1000).toLocaleString()}</div>
-        <div class="tt-row">
+        ${busValue === null ? nothing : html`<div class="tt-row">
           <span class="tt-swatch" style="background: var(--primary-color)"></span>
           <span class="tt-name">${this.heading || p.busId}</span>
-          <span class="tt-value">${v === null ? "—" : formatLevel(v, this.precisions[p.busId] ?? this.live?.groups[p.busId]?.precision ?? 1)}</span>
-        </div>
-        ${p.children.slice(0, 5).map((c) => {
-          const value = sampleAt(c.points, t, maxGap);
-          return value !== null
-            ? html`
-                <div class="tt-row">
-                  <span class="tt-swatch" style="background: ${c.color}"></span>
-                  <span class="tt-name">${this.labels[c.id] ?? c.id.replaceAll("_", " ")}</span>
-                  <span class="tt-value">${formatLevel(value, this.precisions[c.id] ?? this.live?.groups[c.id]?.precision ?? 1)}</span>
-                </div>
-              `
-            : nothing;
-        })}
-        ${p.children.length > 5 ? html`<div class="muted">+${p.children.length - 5} channels</div>` : nothing}
+          <span class="tt-value">${busValue}</span>
+        </div>`}
+        ${children.slice(0, 5).map((c) => html`
+          <div class="tt-row">
+            <span class="tt-swatch" style="background: ${c.color}"></span>
+            <span class="tt-name">${this.labels[c.id] ?? c.id.replaceAll("_", " ")}</span>
+            <span class="tt-value">${c.formatted}</span>
+          </div>
+        `)}
+        ${children.length > 5 ? html`<div class="muted">+${children.length - 5} channels</div>` : nothing}
         ${dayType ? html`<div class="tt-daytype muted">${dayType}</div>` : nothing}
       </div>
     `;

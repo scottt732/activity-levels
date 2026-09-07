@@ -96,7 +96,7 @@ export interface MixerLayout {
 }
 
 /**
- * The grid has one column per visible strip and a band over each expanded group.
+ * The grid has one column per visible strip and a band over each group with children.
  *
  * The walk is {@link visibleTracks}' own pre-order, so a band's subtree is the run of
  * tracks that follows it until the depth comes back to its own - which is exactly when
@@ -121,12 +121,10 @@ export function mixerLayout(config: Config, nav: MixerNav): MixerLayout {
     columns.push(kinds.length);
     if (!track.hasChildren) continue;
     const label = groupAt(config, track.path)?.name ?? track.id;
-    if (track.expanded) {
-      const band: Band = { id: track.id, label, depth: track.depth, colStart: kinds.length, colEnd: 0, expanded: true };
-      found.push(band);
-      pending.push({ band, depth: track.depth });
-      rows = Math.max(rows, track.depth + 1);
-    }
+    const band: Band = { id: track.id, label, depth: track.depth, colStart: kinds.length, colEnd: kinds.length + 1, expanded: track.expanded };
+    found.push(band);
+    if (track.expanded) pending.push({ band, depth: track.depth });
+    rows = Math.max(rows, track.depth + 1);
   }
   closeTo(0);
   return { columns, kinds, bands: found, rows };
