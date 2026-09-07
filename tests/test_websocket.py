@@ -9,6 +9,63 @@ from custom_components.activity_levels.schema import validate_config
 from tests.fixtures import house_config
 
 
+async def test_floorplan_parse_does_not_change_config(hass, hass_ws_client, entry):
+    original = dict(entry.options)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {
+            "type": "activity_levels/floorplan/parse",
+            "text": "gps: {latitude: 0, longitude: 0}\nmqtt: {password: !secret test}",
+        }
+    )
+    response = await client.receive_json()
+    assert response["success"]
+    assert response["result"] == {"gps": {"latitude": 0, "longitude": 0}, "items": []}
+    assert dict(entry.options) == original
+
+
+async def test_floorplan_parse_reports_bad_source(hass, hass_ws_client, entry):
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/floorplan/parse", "text": "floors: ["})
+    response = await client.receive_json()
+    assert not response["success"]
+    assert response["error"]["code"] == "invalid_format"
+    assert "YAML" in response["error"]["message"]
+
+
+async def test_floorplan_geometry_survives_config_save_and_reload(hass, hass_ws_client, entry):
+    config = validate_config(house_config())
+    config["gps"] = {"latitude": 0, "longitude": 0, "rotation": 15}
+    room = config["groups"][0]["children"][0]
+    room["points"] = [[0, 0], [3, 0], [0, 4]]
+    room["bounds"] = [[0, 0, 11.8], [3, 4, 13.8]]
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/config/save", "config": config})
+    response = await client.receive_json()
+    assert response["success"] and response["result"]["ok"]
+    await hass.async_block_till_done()
+    await client.send_json_auto_id({"type": "activity_levels/config/get"})
+    saved = (await client.receive_json())["result"]["config"]
+    assert saved["gps"] == config["gps"]
+    assert saved["groups"][0]["children"][0]["bounds"] == room["bounds"]
+    assert saved["groups"][0]["children"][0]["points"] == room["points"]
+
+
+async def test_floorplan_parse_requires_admin(
+    hass, hass_ws_client, entry, hass_read_only_access_token
+):
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json_auto_id(
+        {
+            "type": "activity_levels/floorplan/parse",
+            "text": "gps: {latitude: 0, longitude: 0}",
+        }
+    )
+    response = await client.receive_json()
+    assert not response["success"]
+    assert response["error"]["code"] == "unauthorized"
+
+
 @pytest.fixture
 async def entry(hass: HomeAssistant) -> MockConfigEntry:
     for e in (

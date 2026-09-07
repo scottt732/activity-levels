@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
 from .coordinator import ActivityLevelsCoordinator
+from .floorplan import MAX_IMPORT_LENGTH, FloorplanError, parse_floorplan
 from .patterns.profile import ProfileError
 from .runtime import RuntimeData
 from .schema import PRESENCE_CORRECTION_FIELDS, ConfigError, validate, validate_config
@@ -45,6 +46,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_config_get)
     websocket_api.async_register_command(hass, ws_config_validate)
     websocket_api.async_register_command(hass, ws_config_save)
+    websocket_api.async_register_command(hass, ws_floorplan_parse)
     websocket_api.async_register_command(hass, ws_state)
     websocket_api.async_register_command(hass, ws_profile_get)
     websocket_api.async_register_command(hass, ws_profile_save)
@@ -63,6 +65,26 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_presence_labels_delete)
     websocket_api.async_register_command(hass, ws_presence_signatures_get)
     websocket_api.async_register_command(hass, ws_presence_signatures_save)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/floorplan/parse",
+        vol.Required("text"): vol.All(str, vol.Length(max=MAX_IMPORT_LENGTH)),
+    }
+)
+@websocket_api.async_response
+async def ws_floorplan_parse(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Preview selected measurements without persisting any of the pasted document."""
+    try:
+        result = await hass.async_add_executor_job(parse_floorplan, msg["text"])
+    except FloorplanError as err:
+        connection.send_error(msg["id"], "invalid_format", str(err))
+        return
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.require_admin

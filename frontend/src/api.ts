@@ -10,6 +10,10 @@ import type {
   TopologyPayload,
   ValidationError,
 } from "./types";
+import type { FloorplanSource } from "./floorplan-import";
+
+export const parseFloorplan = (hass: HomeAssistant, text: string): Promise<FloorplanSource> =>
+  hass.callWS<FloorplanSource>({ type: "activity_levels/floorplan/parse", text });
 
 export interface ValidateResult {
   ok: boolean;

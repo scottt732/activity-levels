@@ -26,7 +26,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "custom_components" / "activity_levels"
 PURE_PACKAGES = ("engine", "patterns", "presence")
-PURE_MODULES = ("topology",)
+PURE_MODULES = ("topology", "geometry", "floorplan")
 
 # The guarded importer, run as `python -c` so the parent process's already-imported
 # Home Assistant cannot make it pass by accident.

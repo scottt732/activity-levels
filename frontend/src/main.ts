@@ -15,3 +15,4 @@ import "./al-patterns";
 import "./al-presence";
 import "./al-paths";
 import "./al-code";
+import "./al-floorplan-import";

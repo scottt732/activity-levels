@@ -525,6 +525,55 @@ they are an occupant of nowhere and show up as `moving` instead. `threshold` is 
 that line: below it, no room is sure enough to claim the person; at or above it, they
 count.
 
+## Importing floorplans
+
+Open **Floorplans** in the Activity Levels panel and paste an ESPresense configuration,
+or choose a YAML/JSON file. You can import the whole file: only root `gps` and `floors`
+are used. MQTT settings, scanners, devices and other root sections are ignored. Ordinary
+YAML is the primary format; encoded line breaks from an editor paste are also recognized.
+
+**Parse and match** lists source floors and rooms. Unique ID/name matches are suggestions;
+ambiguous and unmatched entries default to **Skip**. Choose any existing group as a
+destination, regardless of the old ESPresense hierarchy. Importing geometry never changes
+an existing group's name, parent, Home Assistant bindings, stimuli or activity settings.
+
+**Create new group** is an explicit choice for each source entry. Choose its name, ID,
+kind and parent; the parent can be an existing group or another group you explicitly
+chose to create in this import. Normal nesting rules apply. For an empty configuration,
+you can first build your preferred property/structure tree in **Groups**, or explicitly
+create those kinds in the import. No missing hierarchy or registry entries are created
+automatically. GPS import has its own unchecked checkbox.
+
+Review **Changes to apply**, then choose **Apply to draft**. The complete candidate is
+validated before it becomes one undoable edit. Use the panel's **Save** to persist it,
+or **Undo**/**Discard** to revert. Changing the source or the current draft requires
+parsing again so the mapping summary cannot overwrite newer edits.
+
+Measurements are stored in meters using optional `bounds` and `points` on groups:
+
+```yaml
+gps:
+  latitude: 38.8
+  longitude: -77.0
+  elevation: 13       # optional, meters
+  rotation: 0        # optional, degrees from north
+
+# Fields on a group, alongside its id, kind, stimuli and children:
+# bounds: [[0, 0, 11.8], [3, 4, 13.8]]  # two XYZ corners
+# points: [[0, 0], [3, 0], [0, 4]]      # XY footprint
+```
+
+Each room gets its own vertical bounds from its source floor, even when that floor is
+skipped or mapped elsewhere. Coordinates are absolute within the imported floorplan
+frame, independent of the group tree; moving a group later does not move its geometry.
+When a room's source has no floor bounds, only its footprint is imported and any previous
+bounds on the destination are cleared. Repeated consecutive/closing polygon points are
+normalized. Malformed YAML, invalid coordinates and degenerate outlines are reported
+instead of guessed. Imports are limited to 1 MB of text, 128 floors and 2,048 rooms.
+
+The import preserves geometry for a future rotatable activity wireframe. This version
+imports measurements; it does not yet render a 3D house or infer doors and adjacency.
+
 ## Configuration reference
 
 Durations accept `30s`, `5m`, `2h`, `1d`, `HH:MM:SS`, or a plain number of seconds.
