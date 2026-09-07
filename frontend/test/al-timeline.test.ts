@@ -43,6 +43,20 @@ const makeResponse = (gid: string, points = 200): TimeseriesResponse => {
   };
 };
 
+  const trainedFor = (gid: string, days = 21): ProfileState => ({
+    trained: true,
+    ready: { [gid]: true },
+    profile: {
+      version: 1,
+      producer: { name: "activity_levels", version: "0.4.0" },
+      generated_at: 0,
+      training_window: [0, 0],
+      day_types: ["weekday"],
+      slot_minutes: 15,
+      groups: { [gid]: { ready: true, days, expected: {}, lights: {} } },
+    },
+  });
+
 const EMPTY: TimeseriesResponse = { series: {}, forecast: null, day_types: [], lights: {}, plan: [] };
 
 const groupLive = (over: Partial<GroupLive> = {}): GroupLive => ({
@@ -330,7 +344,7 @@ describe("al-timeline rendering", () => {
   beforeEach(async () => {
     gid = nextGid();
     h = hassStub(async () => makeResponse(gid));
-    el = await mount({ groupId: gid, heading: "House", range: "24h", horizon: "24h" }, h);
+    el = await mount({ groupId: gid, heading: "House", range: "24h", horizon: "24h", profileState: trainedFor(gid) }, h);
   });
 
   it("draws the bus, the children, the forecast band and its median", () => {
@@ -743,19 +757,7 @@ describe("al-timeline toolbar", () => {
 });
 
 describe("al-timeline forecast readiness", () => {
-  const trainedFor = (gid: string, days = 21): ProfileState => ({
-    trained: true,
-    ready: { [gid]: true },
-    profile: {
-      version: 1,
-      producer: { name: "activity_levels", version: "0.4.0" },
-      generated_at: 0,
-      training_window: [0, 0],
-      day_types: ["weekday"],
-      slot_minutes: 15,
-      groups: { [gid]: { ready: true, days, expected: {}, lights: {} } },
-    },
-  });
+
 
   const horizonChip = (el: AlTimeline, h: string): HTMLButtonElement =>
     q(el, `.chip[data-horizon="${h}"]`) as HTMLButtonElement;
@@ -905,5 +907,104 @@ describe("computePaths", () => {
     expect(out.bus.points.length).toBeGreaterThan(1000);
     expect(out.bus.points[0]?.[0]).toBe(NOW - DAY);
     expect(out.bus.points[out.bus.points.length - 1]?.[0]).toBe(NOW);
+  });
+});
+
+describe("timeline transport", () => {
+  it("previews future time without clamping to history and restores live on leave", async () => {
+    const gid = nextGid();
+    const el = await mount({ groupId: gid, range: "24h", horizon: "24h" }, hassStub(async () => makeResponse(gid)));
+    const events: { time: number | null }[] = [];
+    el.addEventListener("al-transport", (event) => events.push((event as CustomEvent).detail));
+    await hover(el, 700);
+    expect(events.at(-1)?.time).toBeGreaterThan(NOW);
+    expect(q(el, ".tt-value")?.textContent).toBe("—");
+    expect(q(el, "path.p50")).toBeNull();
+    svgOf(el).dispatchEvent(new MouseEvent("mouseleave"));
+    await settle(el);
+    expect(events.at(-1)?.time).toBeNull();
+  });
+  it("pans horizontally and zooms without issuing an invalid fine-resolution request", async () => {
+    const gid = nextGid();
+    const harness = hassStub(async () => makeResponse(gid));
+    const el = await mount({ groupId: gid, range: "24h", horizon: "24h" }, harness);
+    const events: { window: { start: number; end: number } | null }[] = [];
+    el.addEventListener("al-transport", (event) => events.push((event as CustomEvent).detail));
+    svgOf(el).dispatchEvent(new WheelEvent("wheel", { deltaX: -384, deltaY: 1, cancelable: true }));
+    await settle(el);
+    await vi.advanceTimersByTimeAsync(100);
+    await settle(el);
+    const first = events.at(-1)!.window!;
+    expect(first.end - first.start).toBe(2 * DAY);
+    expect(harness.calls.at(-1)?.resolution).toBe("1h");
+    svgOf(el).dispatchEvent(new WheelEvent("wheel", { deltaY: -50, ctrlKey: true, clientX: 416, cancelable: true }));
+    await settle(el);
+    const second = events.at(-1)!.window!;
+    expect(second.end - second.start).toBeLessThan(first.end - first.start);
+  });
+
+  it("debounces gestures and cancels pending loads on Now and disconnect", async () => {
+    const gid = nextGid();
+    const harness = hassStub(async () => makeResponse(gid));
+    const el = await mount({ groupId: gid }, harness);
+    const pan = (): void => { svgOf(el).dispatchEvent(new WheelEvent("wheel", { deltaX: 40 })); };
+    const initial = harness.calls.length;
+    pan();
+    pan();
+    expect(harness.calls).toHaveLength(initial);
+    await vi.advanceTimersByTimeAsync(100);
+    await settle(el);
+    expect(harness.calls).toHaveLength(initial + 1);
+    pan();
+    (q(el, ".transport-now") as HTMLButtonElement).click();
+    const resetCalls = harness.calls.length;
+    await vi.advanceTimersByTimeAsync(100);
+    expect(harness.calls).toHaveLength(resetCalls);
+    pan();
+    el.remove();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(harness.calls).toHaveLength(resetCalls);
+  });
+
+  it("clears a pinned future cursor with Escape even without history", async () => {
+    const gid = nextGid();
+    const el = await mount({ groupId: gid }, hassStub(async () => EMPTY));
+    const events: { time: number | null }[] = [];
+    el.addEventListener("al-transport", (event) => events.push((event as CustomEvent).detail));
+    svgOf(el).dispatchEvent(new MouseEvent("click", { clientX: 750 }));
+    expect(events.at(-1)?.time).not.toBeNull();
+    await press(el, "Escape");
+    expect(events.at(-1)?.time).toBeNull();
+  });
+
+  it("ends scrubbing after capture is lost", async () => {
+    const gid = nextGid();
+    const el = await mount({ groupId: gid }, hassStub(async () => makeResponse(gid)));
+    const events: { time: number | null }[] = [];
+    el.addEventListener("al-transport", (event) => events.push((event as CustomEvent).detail));
+    svgOf(el).dispatchEvent(new MouseEvent("pointerdown", { clientX: 200, button: 0 }));
+    svgOf(el).dispatchEvent(new MouseEvent("pointermove", { clientX: 250 }));
+    const pinned = events.at(-1)?.time;
+    svgOf(el).dispatchEvent(new Event("lostpointercapture"));
+    svgOf(el).dispatchEvent(new MouseEvent("pointermove", { clientX: 500 }));
+    svgOf(el).dispatchEvent(new MouseEvent("mouseleave"));
+    expect(events.at(-1)?.time).toBe(pinned);
+  });
+
+  it("pins a click and day navigation requests history only through now", async () => {
+    const gid = nextGid();
+    const harness = hassStub(async () => makeResponse(gid));
+    const el = await mount({ groupId: gid }, harness);
+    const events: { time: number | null }[] = [];
+    el.addEventListener("al-transport", (event) => events.push((event as CustomEvent).detail));
+    svgOf(el).dispatchEvent(new MouseEvent("click", { clientX: 200 }));
+    const pinned = events.at(-1)?.time;
+    svgOf(el).dispatchEvent(new MouseEvent("mouseleave"));
+    expect(events.at(-1)?.time).toBe(pinned);
+    (q(el, '[data-days="7"]') as HTMLButtonElement).click();
+    await settle(el);
+    expect(harness.calls.at(-1)?.end).toBeLessThanOrEqual(NOW);
+    (q(el, '.transport-now') as HTMLButtonElement).click();
+    expect(events.at(-1)?.time).toBeNull();
   });
 });

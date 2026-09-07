@@ -7,7 +7,7 @@ import type { FaderChangeDetail } from "./events";
 import type { PropertyValues } from "lit";
 
 /**
- * How long a keyboard (or wheel) run of steps is allowed to keep going before the level it
+ * How long a keyboard run of steps is allowed to keep going before the level it
  * arrived at is sent. A drag has a pointer-up to say "this one"; a run of arrow keys does
  * not, and one websocket command per keypress would fight the engine's own cooldown.
  */
@@ -92,6 +92,12 @@ export class AlStrip extends LitElement {
     al-fader {
       align-self: center;
     }
+    .missing {
+      height: 138px;
+      display: grid;
+      place-items: center;
+      color: var(--secondary-text-color);
+    }
     .readout {
       text-align: center;
       font-size: 0.85em;
@@ -140,8 +146,9 @@ export class AlStrip extends LitElement {
   @property({ type: Boolean, reflect: true }) editable = false;
 
   /** The group's live level, and what it would be without a simulated stimulus holding it. */
-  @property({ type: Number }) value = 0;
-  @property({ type: Number }) realValue = 0;
+  @property({ attribute: false }) value: number | null = 0;
+  @property({ attribute: false }) realValue: number | null = 0;
+  @property({ type: Boolean }) expandable = false;
   @property({ type: Number }) maxValue = 5;
   @property({ type: Number }) precision = 1;
 
@@ -200,7 +207,7 @@ export class AlStrip extends LitElement {
    * over outranks it - the pointer is the newer intent.
    */
   settle(value: number | null): void {
-    if (this.dragging) return;
+    if (this.dragging || !this.editable) return;
     this.pending = value;
   }
 
@@ -226,7 +233,7 @@ export class AlStrip extends LitElement {
 
   /**
    * A fader move. A drag reports its steps live and settles on pointer-up, which is the
-   * user saying "there" - that goes out at once. A keyboard or wheel step settles
+   * user saying "there" - that goes out at once. A keyboard step settles
    * immediately with no live moves before it, so a run of them is coalesced instead.
    *
    * A read-only fader reports nothing, but the guard is here as well: the level is the
@@ -254,11 +261,11 @@ export class AlStrip extends LitElement {
   }
 
   private onMute(): void {
-    this.dispatchEvent(alMuteToggle(!this.muted));
+    if (this.editable) this.dispatchEvent(alMuteToggle(!this.muted));
   }
 
   private onReset(): void {
-    this.dispatchEvent(alReset());
+    if (this.editable) this.dispatchEvent(alReset());
   }
 
   override render() {
@@ -266,9 +273,20 @@ export class AlStrip extends LitElement {
     return html`
       <div class="strip" @click=${this.select}>
         <div class="head">
+          ${this.expandable ? html`<button
+            class="expand" type="button" tabindex=${this.stop} aria-expanded="false"
+            aria-label=${`Expand ${this.label}`} title=${`Expand ${this.label}`}
+            @click=${(event: Event) => {
+              event.stopPropagation();
+              this.dispatchEvent(new CustomEvent("al-expand-strip", { bubbles: true, composed: true }));
+            }}
+            @keydown=${(event: KeyboardEvent) => {
+              if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+            }}
+          >▸</button>` : nothing}
           <span class="name" title=${this.label}>${this.label}</span>
         </div>
-        <al-fader
+        ${shown === null ? html`<div class="missing" aria-label="No data">—</div>` : html`<al-fader
           mode="level"
           ?readonly=${!this.editable}
           .value=${shown}
@@ -278,8 +296,8 @@ export class AlStrip extends LitElement {
           .focusable=${this.selected}
           label=${`${this.label} level`}
           @value-changed=${this.onFader}
-        ></al-fader>
-        <div class="readout">${formatLevel(shown, this.precision)}</div>
+        ></al-fader>`}
+        <div class="readout">${shown === null ? "—" : formatLevel(shown, this.precision)}</div>
         ${this.editable
           ? html`<div class="buttons">
               <button

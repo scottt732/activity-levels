@@ -70,8 +70,7 @@ export function visibleTracks(config: Config, nav: MixerNav): VisibleTrack[] {
  * `colStart` and `colEnd` are 1-based CSS grid lines, so `grid-column: colStart / colEnd`
  * places a band without the caller counting anything. An **open** band spans its own
  * strip through the last strip of its subtree, one row higher per level of nesting. A
- * **closed** one has no subtree on screen to span, so it takes the single narrow column
- * immediately right of its own strip - the vertical tab that opens it again.
+ * closed group has no band: its own strip header holds the expand button.
  */
 export interface Band {
   id: string;
@@ -82,8 +81,8 @@ export interface Band {
   expanded: boolean;
 }
 
-/** What a column of the mixer grid holds: a track strip, or a closed band's vertical tab. */
-export type ColumnKind = "strip" | "tab";
+/** Each column holds one visible track strip. */
+export type ColumnKind = "strip";
 
 /** Everything the mixer needs to lay its grid out, from the config and the nav alone. */
 export interface MixerLayout {
@@ -97,8 +96,7 @@ export interface MixerLayout {
 }
 
 /**
- * The grid the mixer draws: a column per visible strip, an extra narrow one after every
- * closed group, and a band over each group that has children.
+ * The grid has one column per visible strip and a band over each expanded group.
  *
  * The walk is {@link visibleTracks}' own pre-order, so a band's subtree is the run of
  * tracks that follows it until the depth comes back to its own - which is exactly when
@@ -128,16 +126,6 @@ export function mixerLayout(config: Config, nav: MixerNav): MixerLayout {
       found.push(band);
       pending.push({ band, depth: track.depth });
       rows = Math.max(rows, track.depth + 1);
-    } else {
-      kinds.push("tab");
-      found.push({
-        id: track.id,
-        label,
-        depth: track.depth,
-        colStart: kinds.length,
-        colEnd: kinds.length + 1,
-        expanded: false,
-      });
     }
   }
   closeTo(0);

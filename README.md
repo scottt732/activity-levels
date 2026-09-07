@@ -64,7 +64,7 @@ DAW-style **Mixer**.
 
 ### Mixer
 
-Three rows, stacked, for tuning the tree that's already there — adding, removing or
+Timeline and mixer, stacked, for tuning the tree that's already there — adding, removing or
 moving groups and stimuli is done in **Groups** (below), not here:
 
 1. **Timeline** — the selected strip's history and forecast, overlaid on one chart.
@@ -80,8 +80,7 @@ moving groups and stimuli is done in **Groups** (below), not here:
    strips, with the tree drawn *above* them the way a DAW brackets track groups: a group
    with children gets a **band** spanning its own strip and its whole subtree, one row
    higher per level of nesting. The band's caret closes it — the subtree leaves the row
-   and the band folds into a narrow vertical tab beside the group's own strip, which opens
-   it again. Roots start open, and the row reopens the way it was left.
+   and only the group's summary strip remains. Its expand button opens the subtree again. Roots start open, and the row reopens the way it was left.
 
    The row is **read-only** until you say otherwise: it shows levels, and nothing on it
    can be leant on by accident. The **Edit** switch above the strips turns the meters back
@@ -95,19 +94,20 @@ moving groups and stimuli is done in **Groups** (below), not here:
    | the level without simulated stimuli | a tick on the fader, while the two differ |
    | muted / reset | the strip's **M** and **R** buttons, in Edit mode |
 
-   Clicking a strip selects it (the timeline and the controls row below follow); a band's
+   Clicking a strip selects it (the timeline follows); a band's
    caret only opens and closes. In Edit mode, dragging the value fader **overrides** the
    group's level — a simulated stimulus, which then cools down from where it was left —
    and **M** mutes the group out of its parent's mix while it keeps publishing its own
    value. Neither touches the configuration: they go straight to the engine, and the next
-   live frame says where it ended up. Everything a strip cannot hold — mix, limiter, the
-   presence-simulation switch — is in the controls row below.
-3. **Controls** — everything about the selected group that doesn't fit on a strip: name,
-   mix, null handling, limiter, precision, gain into its parent (not for a root), how many
-   lights it owns, its presence-simulation switch and the last few things it has done, the
-   expected/anomaly readings, a "rebuild profile" button — and its **stimuli**, each one
-   the same editor the Groups tab uses: envelope preset, A/D/S/R, sustain, impulse, gain,
-   trigger (`to`) states and debounce, every override showing what it falls back to.
+   live frame says where it ended up. Wheel gestures scroll without changing fader values.
+   The selected group's settings button opens **Groups**, where configuration, simulation
+   status and profile actions live.
+
+Hover over the timeline to preview mixer values. Click to pin the transport, or drag to
+scrub. Preview meters are read-only. Missing samples show **—**; future values are marked
+as forecasts. Scroll horizontally to pan, pinch or Ctrl-scroll to zoom, or use the zoom
+buttons. The **−7d / −3d / −1d / Now / +1d / +3d / +7d** buttons move the transport;
+**Now** restores live values and the default view.
 
 Keyboard, in the mixer row: **←/→** moves the selection along the visible tracks
 (wrapping), **Enter** or **Space** opens and closes the selected group's band,
@@ -504,7 +504,7 @@ likely rooms are adjacent and both still plausible). Per device:
 *object* is, which is the entity that answers "where did I leave my phone". Per room:
 `sensor.<room>_occupants`, plus a `presence` channel folded
 into that room's mix — silent, starting when the room fills and ending when it empties,
-tuned in the mixer's controls row exactly like any other channel (gain, envelope, and it
+tuned in Groups exactly like any other channel (gain, envelope, and it
 mutes the same way).
 
 **Setting it up.**

@@ -143,6 +143,7 @@ export class AlStripControls extends LitElement {
   @property({ attribute: false }) errors: ValidationError[] = [];
   @property({ attribute: false }) live: LiveState | null = null;
   @property({ attribute: false }) profileState: ProfileState | null = null;
+  @property({ type: Boolean }) statusOnly = false;
   @property({ attribute: false }) simLog: SimulationLog | null = null;
 
   private emitChange(next: Config, coalesceKey: string): void {
@@ -195,6 +196,7 @@ export class AlStripControls extends LitElement {
   private renderBus(config: Config, path: Path): TemplateResult {
     const group = groupAt(config, path);
     if (!group) return html`<ha-card><span class="muted">This group no longer exists.</span></ha-card>`;
+    if (this.statusOnly) return html`<ha-card>${this.renderStatus(config, group)}</ha-card>`;
     const isRoot = path.length === 2;
     const own = this.errors.filter((e) => e.path === pathKey(path));
     const fields: Record<string, string> = fieldErrors(this.errors, path);

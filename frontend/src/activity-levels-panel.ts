@@ -14,10 +14,12 @@ import { DEFAULT_MIN_DAYS } from "./constants";
 import { simSwitchId } from "./entities";
 import { ensureHaElements } from "./ha-elements";
 import { groupAt, groupPathFor } from "./model";
-import { expandTo, reduce, restoreNav, saveExpanded } from "./navigation";
+import { expandTo, reduce, restoreNav, saveExpanded, visibleTracks } from "./navigation";
 import { runSave } from "./save-flow";
 import { Draft } from "./store";
 import { sharedStyles } from "./styles";
+import { PreviewData } from "./mixer-preview";
+import type { TransportDetail } from "./transport";
 import type { AlChangeEvent, CodeStatus, TimelineRangeDetail } from "./events";
 import type { MixerNav, NavAction } from "./navigation";
 import type { Banner } from "./save-flow";
@@ -87,6 +89,68 @@ export class ActivityLevelsPanel extends LitElement {
   @state() private profileState: ProfileState | null = null;
   @state() private simLog: SimulationLog | null = null;
   @state() private timeline: TimelineRangeDetail = DEFAULT_TIMELINE;
+  @state() private preview: {time: number; values: Record<string, number | null>; mode: "history" | "forecast"} | null = null;
+  @state() private previewError = false;
+  private previewData = new PreviewData();
+  private previewSeq = 0;
+  private transportWindow: TransportDetail["window"] = null;
+  private get previewResolution(): "5m" | "1h" {
+    const end = Math.min(this.live?.now ?? Date.now() / 1000, this.transportWindow?.end ?? Infinity);
+    const span = this.transportWindow ? end - Math.min(this.transportWindow.start, end - 3600) : (this.timeline.range === "24h" ? 86400 : 7 * 86400);
+    return span <= 86400 ? "5m" : "1h";
+  }
+  private previewTimer?: ReturnType<typeof setTimeout>;
+
+  private onTransport = (event: CustomEvent<TransportDetail>): void => {
+    const time = event.detail.time;
+    this.transportWindow = event.detail.window;
+    this.previewSeq++;
+    this.previewError = false;
+    if (time === null || !Number.isFinite(time)) {
+      this.previewData.cancel(); clearTimeout(this.previewTimer); this.previewTimer = undefined;
+      this.preview = null; return;
+    }
+    const now = this.live?.now ?? Date.now() / 1000;
+    const ids = this.previewIds(time, now);
+    const cached = this.previewData.peek(ids, time, now, this.previewResolution);
+    this.preview = {time, values: cached.values, mode: time > now ? "forecast" : "history"};
+    if (!cached.complete && this.previewTimer === undefined) this.previewTimer = setTimeout(() => {
+      this.previewTimer = undefined;
+      if (this.preview) void this.loadPreview(this.preview.time, this.live?.now ?? Date.now() / 1000, this.previewSeq);
+    }, 100);
+  };
+
+  private previewIds(time: number, now: number): string[] {
+    const config = this.draft?.config;
+    if (!config) return [];
+    const ids = visibleTracks(config, this.nav).map((track) => track.id);
+    return time > now ? ids.filter((id) => this.profileState?.trained &&
+      Object.keys(this.profileState.profile.groups[id]?.expected ?? {}).length > 0) : ids;
+  }
+
+  private async loadPreview(time: number, now: number, seq: number): Promise<void> {
+    const config = this.draft?.config;
+    if (!config || seq !== this.previewSeq || !this.isConnected) return;
+    const ids = this.previewIds(time, now);
+    const result = await this.previewData.load(this.hass, ids, time, now, this.previewResolution);
+    if (seq !== this.previewSeq || !this.isConnected) return;
+    this.preview = {time, values: result.values, mode: time > now ? "forecast" : "history"};
+    this.previewError = result.failed;
+  }
+
+  private openMixerGroup = (event: CustomEvent<Path>): void => {
+    this.select(event.detail);
+    this.selectTab(this.tabs.indexOf("groups"));
+  };
+
+  private get timelineLabels(): Record<string, string> {
+    const labels: Record<string, string> = {};
+    const walk = (groups: Config["groups"]): void => {
+      for (const group of groups) { labels[group.id] = group.name ?? group.id; walk(group.children); }
+    };
+    walk(this.draft?.config.groups ?? []);
+    return labels;
+  }
   /**
    * The Code tab's last verdict on the draft, or null when nothing has one. It is separate
    * from {@link errors} because it is the only thing that may *disable* Save: the shared
@@ -131,6 +195,10 @@ export class ActivityLevelsPanel extends LitElement {
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.clearLiveTimer();
     this.clearSimTimer();
+    clearTimeout(this.previewTimer);
+    this.previewTimer = undefined;
+    this.previewSeq++;
+    this.previewData.cancel();
   }
 
   private async load(): Promise<void> {
@@ -235,6 +303,7 @@ export class ActivityLevelsPanel extends LitElement {
     if (nav.expanded !== this.nav.expanded) saveExpanded(nav.expanded);
     this.nav = nav;
     this.selection = nav.selection;
+    if (this.preview) this.onTransport(new CustomEvent("al-transport", {detail: {time: this.preview.time, window: this.transportWindow}}));
   };
 
   private async save(): Promise<void> {
@@ -291,9 +360,9 @@ export class ActivityLevelsPanel extends LitElement {
     this.updatePolling();
   }
 
-  /** The Mixer and Patterns tabs both read the profile and the simulation log. */
+  /** Mixer, Groups and Patterns read the profile and simulation log. */
   private get patternsVisible(): boolean {
-    return this.tab === "mixer" || this.tab === "patterns";
+    return this.tab === "mixer" || this.tab === "patterns" || this.tab === "groups";
   }
 
   private updatePolling(): void {
@@ -428,6 +497,13 @@ export class ActivityLevelsPanel extends LitElement {
     // The Mixer polls whether or not Live is on, so leaving it with Live off would strand
     // the last frame on the other tabs' meters, where it would read as current.
     if (next !== "mixer" && !this.liveOn) this.live = null;
+    if (next !== "mixer") {
+      clearTimeout(this.previewTimer);
+      this.previewTimer = undefined;
+      this.previewSeq++;
+      this.previewData.cancel();
+      this.preview = null;
+    }
     this.tab = next;
     this.tabFocus = index;
     this.updatePolling();
@@ -648,9 +724,8 @@ export class ActivityLevelsPanel extends LitElement {
   }
 
   /**
-   * The mixer page, three rows deep: the selected group's history and forecast on top, the
-   * whole tree as one row of track strips in the middle, and everything that does not fit
-   * on a strip below it. A stimulus is charted as its group - it has no series of its own.
+   * The mixer page pairs the timeline transport with the visible track strips.
+   * Settings and simulation status live in Groups. A stimulus is charted as its group - it has no series of its own.
    */
   private renderMixer(d: Draft) {
     const config = d.config;
@@ -672,9 +747,14 @@ export class ActivityLevelsPanel extends LitElement {
         .minDays=${config.defaults.patterns?.min_days ?? DEFAULT_MIN_DAYS}
         .paused=${this.busy}
         .narrow=${this.narrow}
+        .labels=${this.timelineLabels}
+        @al-transport=${this.onTransport}
         @al-timeline-range=${this.onTimelineRange}
       ></al-timeline>
+      ${this.previewError ? html`<ha-alert alert-type="warning">Some preview data could not be loaded. Missing values are shown as —.</ha-alert>` : nothing}
       <al-mixer
+        .preview=${this.preview}
+        @al-open-group=${this.openMixerGroup}
         .hass=${this.hass}
         .config=${config}
         .nav=${this.nav}
@@ -686,18 +766,7 @@ export class ActivityLevelsPanel extends LitElement {
         @al-sim-toggle=${this.onSimToggle}
         @al-live-refresh=${this.onLiveRefresh}
       ></al-mixer>
-      <al-strip-controls
-        .hass=${this.hass}
-        .config=${config}
-        .path=${this.nav.selection}
-        .errors=${this.errors}
-        .live=${this.live}
-        .profileState=${this.profileState}
-        .simLog=${this.simLog}
-        @al-change=${this.onChange}
-        @al-rebuild=${this.onRebuild}
-        @al-sim-toggle=${this.onSimToggle}
-      ></al-strip-controls>
+
     </div>`;
   }
 
@@ -724,14 +793,18 @@ export class ActivityLevelsPanel extends LitElement {
           .live=${this.live}
           @al-change=${this.onChange}
         ></al-stimulus-editor>`
-      : html`<al-group-editor
+      : html`<div><al-group-editor
           .hass=${this.hass}
           .config=${d.config}
           .path=${selection}
           .errors=${this.errors}
           @al-change=${this.onChange}
           @al-select=${(e: CustomEvent<Path | null>) => this.select(e.detail)}
-        ></al-group-editor>`;
+        ></al-group-editor>
+        <al-strip-controls .statusOnly=${true} .hass=${this.hass} .config=${d.config}
+          .path=${selection} .live=${this.live} .profileState=${this.profileState} .simLog=${this.simLog}
+          @al-rebuild=${this.onRebuild} @al-sim-toggle=${this.onSimToggle}></al-strip-controls>
+        </div>`;
   }
 }
 
