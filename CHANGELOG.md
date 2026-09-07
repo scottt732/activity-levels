@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/scottt732/activity-levels/compare/v0.10.0...v0.11.0) (2026-09-07)
+
+
+### Added
+
+* **presence:** add dashboard avatars and location feedback ([#33](https://github.com/scottt732/activity-levels/issues/33)) ([77e9502](https://github.com/scottt732/activity-levels/commit/77e9502bdca0cfca836648948490c7ffcc694983))
+
+
+### Fixed
+
+* **panel:** organize Presence settings and device details ([#31](https://github.com/scottt732/activity-levels/issues/31)) ([6425ee4](https://github.com/scottt732/activity-levels/commit/6425ee4dae2e87e7c723d237a327f2201d1474f3))
+
 ## [0.10.0](https://github.com/scottt732/activity-levels/compare/v0.9.2...v0.10.0) (2026-09-07)
 
 
