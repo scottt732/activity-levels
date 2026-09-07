@@ -355,13 +355,16 @@ describe("mixerLayout", () => {
     expect(layout.kinds).toEqual(["strip", "strip", "strip"]);
     expect(layout.bands).toEqual([
       { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 4, expanded: true },
+      { id: "living_room", label: "Living Room", depth: 1, colStart: 3, colEnd: 4, expanded: false },
     ]);
-    expect(layout.rows).toBe(1);
+    expect(layout.rows).toBe(2);
   });
 
-  it("has no band rows when every group is closed", () => {
+  it("keeps the root header above its strip when closed", () => {
     expect(mixerLayout(houseConfig(), navOf([], null))).toEqual({
-      columns: [1], kinds: ["strip"], bands: [], rows: 0,
+      columns: [1], kinds: ["strip"], bands: [
+        { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 2, expanded: false },
+      ], rows: 1,
     });
   });
 
@@ -369,6 +372,7 @@ describe("mixerLayout", () => {
     const layout = mixerLayout(twoRoots(), navOf(["house", "shed"], null));
     expect(layout.bands).toEqual([
       { id: "house", label: "House", depth: 0, colStart: 1, colEnd: 4, expanded: true },
+      { id: "living_room", label: "Living Room", depth: 1, colStart: 3, colEnd: 4, expanded: false },
       { id: "shed", label: "shed", depth: 0, colStart: 4, colEnd: 6, expanded: true },
     ]);
   });

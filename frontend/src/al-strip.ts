@@ -92,13 +92,8 @@ export class AlStrip extends LitElement {
     al-fader {
       align-self: center;
     }
-    .missing {
-      height: 120px;
-      display: grid;
-      place-items: center;
-      color: var(--secondary-text-color);
-    }
     .readout {
+      min-height: 1.2em;
       text-align: center;
       font-size: 0.85em;
       font-variant-numeric: tabular-nums;
@@ -150,7 +145,6 @@ export class AlStrip extends LitElement {
   /** The group's live level, and what it would be without a simulated stimulus holding it. */
   @property({ attribute: false }) value: number | null = 0;
   @property({ attribute: false }) realValue: number | null = 0;
-  @property({ type: Boolean }) expandable = false;
   @property({ type: Number }) maxValue = 5;
   @property({ type: Number }) precision = 1;
 
@@ -275,32 +269,22 @@ export class AlStrip extends LitElement {
     return html`
       <div class="strip" @click=${this.select}>
         <div class="head">
-          ${this.expandable ? html`<button
-            class="expand" type="button" tabindex=${this.stop} aria-expanded="false"
-            aria-label=${`Expand ${this.label}`} title=${`Expand ${this.label}`}
-            @click=${(event: Event) => {
-              event.stopPropagation();
-              this.dispatchEvent(new CustomEvent("al-expand-strip", { bubbles: true, composed: true }));
-            }}
-            @keydown=${(event: KeyboardEvent) => {
-              if (event.key === "Enter" || event.key === " ") event.stopPropagation();
-            }}
-          >▸</button>` : nothing}
           <span class="name" title=${this.label}>${this.label}</span>
         </div>
-        ${shown === null ? html`<div class="missing" aria-label="No data" title="No data at this time">—</div>` : html`<al-fader
+        <al-fader
           mode="level"
           .showValue=${false}
-          ?readonly=${!this.editable}
-          .value=${shown}
+          ?readonly=${!this.editable || shown === null}
+          .unavailable=${shown === null}
+          .value=${shown ?? 0}
           .max=${this.maxValue}
           .precision=${this.precision}
           .tick=${this.realValue}
           .focusable=${this.selected}
           label=${`${this.label} level`}
           @value-changed=${this.onFader}
-        ></al-fader>`}
-        <div class="readout" title=${shown === null ? "No data at this time" : nothing}>${shown === null ? "No data" : formatLevel(shown, this.precision)}</div>
+        ></al-fader>
+        <div class="readout" title=${shown === null ? "No data at this time" : nothing}>${shown === null ? "" : formatLevel(shown, this.precision)}</div>
         ${this.editable
           ? html`<div class="buttons">
               <button

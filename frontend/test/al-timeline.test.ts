@@ -643,9 +643,27 @@ describe("al-timeline cursor", () => {
   it("formats each tooltip value with its group precision", async () => {
     el.precisions = { [gid]: 1, [`${gid}_child`]: 2 };
     await hover(el, 32);
-    expect(qa(el, ".tt-value").map((node) => node.textContent)).toEqual(["0.0", "0.00"]);
+    expect(qa(el, ".tt-value").map((node) => node.textContent)).toEqual([]);
     await hover(el, 32 + 384);
     expect(qa(el, ".tt-value").map((node) => node.textContent)).toEqual(["4.5", "0.80"]);
+  });
+
+  it("filters rounded-zero readings before limiting and counting active channels", async () => {
+    const id = nextGid();
+    const response = makeResponse(id);
+    response.series = {
+      [id]: [[NOW, 0.04]],
+      tiny: [[NOW, 0.004]],
+      ...Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`active${i}`, [[NOW, 0.01]]])),
+    };
+    el.remove();
+    el = await mount({ groupId: id, range: "24h", precisions: { [id]: 1, tiny: 2,
+      ...Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`active${i}`, 2])),
+    } }, hassStub(async () => response));
+    await hover(el, 32 + 384);
+    expect(qa(el, ".tt-value").map((node) => node.textContent)).toEqual(Array(5).fill("0.01"));
+    expect(q(el, ".tooltip")?.textContent).toContain("+2 channels");
+    expect(q(el, ".tooltip")?.textContent).not.toContain("tiny");
   });
 
   it("has no cursor until the pointer arrives", () => {
@@ -926,7 +944,7 @@ describe("timeline transport", () => {
     el.addEventListener("al-transport", (event) => events.push((event as CustomEvent).detail));
     await hover(el, 700);
     expect(events.at(-1)?.time).toBeGreaterThan(NOW);
-    expect(q(el, ".tt-value")?.textContent).toBe("—");
+    expect(q(el, ".tt-value")).toBeNull();
     expect(q(el, "path.p50")).toBeNull();
     svgOf(el).dispatchEvent(new MouseEvent("mouseleave"));
     await settle(el);

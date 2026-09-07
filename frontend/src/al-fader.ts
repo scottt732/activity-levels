@@ -52,6 +52,14 @@ export class AlFader extends LitElement {
       background: var(--primary-color);
       opacity: 0.35;
     }
+    :host([readonly]) .fill {
+      transition: height 100ms ease-out;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      :host([readonly]) .fill {
+        transition: none;
+      }
+    }
     .knob {
       position: absolute;
       left: -3px;
@@ -109,6 +117,8 @@ export class AlFader extends LitElement {
   @property({ type: String }) label = "Gain";
   /** The host can supply its own readout while the accessible value stays on the control. */
   @property({ type: Boolean }) showValue = true;
+  /** Keep the meter track mounted while a historical sample is unavailable. */
+  @property({ type: Boolean }) unavailable = false;
 
   /** Which quantity the fader is holding: a gain into a parent, or a group's own level. */
   @property({ type: String }) mode: "gain" | "level" = "gain";
@@ -247,10 +257,10 @@ export class AlFader extends LitElement {
           aria-label=${this.label}
           aria-valuemin=${scale.min}
           aria-valuemax=${scale.max}
-          aria-valuenow=${value}
-          aria-valuetext=${scale.format(value)}
+          aria-valuenow=${this.unavailable ? nothing : value}
+          aria-valuetext=${this.unavailable ? "Value unavailable" : scale.format(value)}
         >
-          <div class="track">${marks}</div>
+          <div class="track">${this.unavailable ? nothing : marks}</div>
           ${this.showValue ? html`<div class="value">${scale.format(value)}</div>` : nothing}
         </div>
       `;
@@ -263,8 +273,8 @@ export class AlFader extends LitElement {
         aria-orientation="vertical"
         aria-valuemin=${scale.min}
         aria-valuemax=${scale.max}
-        aria-valuenow=${value}
-        aria-valuetext=${scale.format(value)}
+        aria-valuenow=${this.unavailable ? nothing : value}
+        aria-valuetext=${this.unavailable ? "Value unavailable" : scale.format(value)}
         aria-disabled=${this.disabled ? "true" : "false"}
         @keydown=${this.onKeyDown}
         @dblclick=${this.onDoubleClick}

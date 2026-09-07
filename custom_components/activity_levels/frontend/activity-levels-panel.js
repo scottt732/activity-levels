@@ -1083,21 +1083,18 @@ function On(e, t) {
 	};
 	for (let t of n) {
 		if (c(t.depth), i.push("strip"), r.push(i.length), !t.hasChildren) continue;
-		let n = O(e, t.path)?.name ?? t.id;
-		if (t.expanded) {
-			let e = {
-				id: t.id,
-				label: n,
-				depth: t.depth,
-				colStart: i.length,
-				colEnd: 0,
-				expanded: !0
-			};
-			a.push(e), o.push({
-				band: e,
-				depth: t.depth
-			}), s = Math.max(s, t.depth + 1);
-		}
+		let n = O(e, t.path)?.name ?? t.id, l = {
+			id: t.id,
+			label: n,
+			depth: t.depth,
+			colStart: i.length,
+			colEnd: i.length + 1,
+			expanded: t.expanded
+		};
+		a.push(l), t.expanded && o.push({
+			band: l,
+			depth: t.depth
+		}), s = Math.max(s, t.depth + 1);
 	}
 	return c(0), {
 		columns: r,
@@ -4796,7 +4793,7 @@ function so(e, t) {
 //#region src/al-fader.ts
 var co = 12, lo = (e) => `${Math.round(e * 1e3) / 10}%`, W = class extends x {
 	constructor(...e) {
-		super(...e), this.value = 1, this.disabled = !1, this.focusable = !0, this.readOnly = !1, this.label = "Gain", this.showValue = !0, this.mode = "gain", this.max = 5, this.precision = 1, this.tick = null, this.dragValue = null, this.dragging = !1;
+		super(...e), this.value = 1, this.disabled = !1, this.focusable = !0, this.readOnly = !1, this.label = "Gain", this.showValue = !0, this.unavailable = !1, this.mode = "gain", this.max = 5, this.precision = 1, this.tick = null, this.dragValue = null, this.dragging = !1;
 	}
 	static {
 		this.styles = o`
@@ -4830,6 +4827,14 @@ var co = 12, lo = (e) => `${Math.round(e * 1e3) / 10}%`, W = class extends x {
       border-radius: 9px;
       background: var(--primary-color);
       opacity: 0.35;
+    }
+    :host([readonly]) .fill {
+      transition: height 100ms ease-out;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      :host([readonly]) .fill {
+        transition: none;
+      }
     }
     .knob {
       position: absolute;
@@ -4956,10 +4961,10 @@ var co = 12, lo = (e) => `${Math.round(e * 1e3) / 10}%`, W = class extends x {
           aria-label=${this.label}
           aria-valuemin=${e.min}
           aria-valuemax=${e.max}
-          aria-valuenow=${t}
-          aria-valuetext=${e.format(t)}
+          aria-valuenow=${this.unavailable ? y : t}
+          aria-valuetext=${this.unavailable ? "Value unavailable" : e.format(t)}
         >
-          <div class="track">${i}</div>
+          <div class="track">${this.unavailable ? y : i}</div>
           ${this.showValue ? g`<div class="value">${e.format(t)}</div>` : y}
         </div>
       ` : g`
@@ -4971,8 +4976,8 @@ var co = 12, lo = (e) => `${Math.round(e * 1e3) / 10}%`, W = class extends x {
         aria-orientation="vertical"
         aria-valuemin=${e.min}
         aria-valuemax=${e.max}
-        aria-valuenow=${t}
-        aria-valuetext=${e.format(t)}
+        aria-valuenow=${this.unavailable ? y : t}
+        aria-valuetext=${this.unavailable ? "Value unavailable" : e.format(t)}
         aria-disabled=${this.disabled ? "true" : "false"}
         @keydown=${this.onKeyDown}
         @dblclick=${this.onDoubleClick}
@@ -4999,7 +5004,7 @@ j([C({ type: Number })], W.prototype, "value", void 0), j([C({
 	type: Boolean,
 	reflect: !0,
 	attribute: "readonly"
-})], W.prototype, "readOnly", void 0), j([C({ type: String })], W.prototype, "label", void 0), j([C({ type: Boolean })], W.prototype, "showValue", void 0), j([C({ type: String })], W.prototype, "mode", void 0), j([C({ type: Number })], W.prototype, "max", void 0), j([C({ type: Number })], W.prototype, "precision", void 0), j([C({ type: Number })], W.prototype, "tick", void 0), j([w()], W.prototype, "dragValue", void 0), W = j([S("al-fader")], W);
+})], W.prototype, "readOnly", void 0), j([C({ type: String })], W.prototype, "label", void 0), j([C({ type: Boolean })], W.prototype, "showValue", void 0), j([C({ type: Boolean })], W.prototype, "unavailable", void 0), j([C({ type: String })], W.prototype, "mode", void 0), j([C({ type: Number })], W.prototype, "max", void 0), j([C({ type: Number })], W.prototype, "precision", void 0), j([C({ type: Number })], W.prototype, "tick", void 0), j([w()], W.prototype, "dragValue", void 0), W = j([S("al-fader")], W);
 //#endregion
 //#region node_modules/.pnpm/lit-html@3.3.3/node_modules/lit-html/directive.js
 var uo = {
@@ -5111,7 +5116,7 @@ var uo = {
 j([C({ type: Number })], go.prototype, "value", void 0), j([C({ type: Number })], go.prototype, "max", void 0), j([C({ type: Boolean })], go.prototype, "gated", void 0), go = j([S("al-meter")], go);
 var G = class extends x {
 	constructor(...e) {
-		super(...e), this.label = "", this.editable = !1, this.value = 0, this.realValue = 0, this.expandable = !1, this.maxValue = 5, this.precision = 1, this.liveNow = 0, this.muted = !1, this.selected = !1, this.errors = 0, this.pending = null, this.dragging = !1;
+		super(...e), this.label = "", this.editable = !1, this.value = 0, this.realValue = 0, this.maxValue = 5, this.precision = 1, this.liveNow = 0, this.muted = !1, this.selected = !1, this.errors = 0, this.pending = null, this.dragging = !1;
 	}
 	static {
 		this.styles = o`
@@ -5177,13 +5182,8 @@ var G = class extends x {
     al-fader {
       align-self: center;
     }
-    .missing {
-      height: 120px;
-      display: grid;
-      place-items: center;
-      color: var(--secondary-text-color);
-    }
     .readout {
+      min-height: 1.2em;
       text-align: center;
       font-size: 0.85em;
       font-variant-numeric: tabular-nums;
@@ -5273,34 +5273,22 @@ var G = class extends x {
 		return g`
       <div class="strip" @click=${this.select}>
         <div class="head">
-          ${this.expandable ? g`<button
-            class="expand" type="button" tabindex=${this.stop} aria-expanded="false"
-            aria-label=${`Expand ${this.label}`} title=${`Expand ${this.label}`}
-            @click=${(e) => {
-			e.stopPropagation(), this.dispatchEvent(new CustomEvent("al-expand-strip", {
-				bubbles: !0,
-				composed: !0
-			}));
-		}}
-            @keydown=${(e) => {
-			(e.key === "Enter" || e.key === " ") && e.stopPropagation();
-		}}
-          >▸</button>` : y}
           <span class="name" title=${this.label}>${this.label}</span>
         </div>
-        ${e === null ? g`<div class="missing" aria-label="No data" title="No data at this time">—</div>` : g`<al-fader
+        <al-fader
           mode="level"
           .showValue=${!1}
-          ?readonly=${!this.editable}
-          .value=${e}
+          ?readonly=${!this.editable || e === null}
+          .unavailable=${e === null}
+          .value=${e ?? 0}
           .max=${this.maxValue}
           .precision=${this.precision}
           .tick=${this.realValue}
           .focusable=${this.selected}
           label=${`${this.label} level`}
           @value-changed=${this.onFader}
-        ></al-fader>`}
-        <div class="readout" title=${e === null ? "No data at this time" : y}>${e === null ? "No data" : ln(e, this.precision)}</div>
+        ></al-fader>
+        <div class="readout" title=${e === null ? "No data at this time" : y}>${e === null ? "" : ln(e, this.precision)}</div>
         ${this.editable ? g`<div class="buttons">
               <button
                 class="mute"
@@ -5334,7 +5322,7 @@ var G = class extends x {
 j([C({ type: String })], G.prototype, "label", void 0), j([C({
 	type: Boolean,
 	reflect: !0
-})], G.prototype, "editable", void 0), j([C({ attribute: !1 })], G.prototype, "value", void 0), j([C({ attribute: !1 })], G.prototype, "realValue", void 0), j([C({ type: Boolean })], G.prototype, "expandable", void 0), j([C({ type: Number })], G.prototype, "maxValue", void 0), j([C({ type: Number })], G.prototype, "precision", void 0), j([C({ type: Number })], G.prototype, "liveNow", void 0), j([C({
+})], G.prototype, "editable", void 0), j([C({ attribute: !1 })], G.prototype, "value", void 0), j([C({ attribute: !1 })], G.prototype, "realValue", void 0), j([C({ type: Number })], G.prototype, "maxValue", void 0), j([C({ type: Number })], G.prototype, "precision", void 0), j([C({ type: Number })], G.prototype, "liveNow", void 0), j([C({
 	type: Boolean,
 	reflect: !0
 })], G.prototype, "muted", void 0), j([C({
@@ -5390,7 +5378,7 @@ var _o = 8e3, vo = (e) => e instanceof Error ? e.message : String(e), K = class 
         font-size: 0.9em;
         color: var(--secondary-text-color);
       }
-      /* The strips share one row below the expanded group headers. */
+      /* The strips share one row below the hierarchy headers. */
       .grid {
         display: grid;
         gap: 8px;
@@ -5425,6 +5413,12 @@ var _o = 8e3, vo = (e) => e instanceof Error ? e.message : String(e), K = class 
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
+      }
+      .band-value {
+        margin-left: auto;
+        flex-shrink: 0;
+        font-size: 0.8em;
+        font-variant-numeric: tabular-nums;
       }
       .caret {
         flex: 0 0 auto;
@@ -5584,7 +5578,6 @@ var _o = 8e3, vo = (e) => e instanceof Error ? e.message : String(e), K = class 
         style="grid-column: ${r.columns[n]}; grid-row: ${r.rows + 1};"
         tabindex=${o ? 0 : -1}
         ?editable=${this.editing && !this.preview}
-        .expandable=${t.hasChildren && !t.expanded}
         .label=${i.name ?? i.id}
         .value=${this.preview ? this.preview.values[i.id] ?? null : a?.value ?? 0}
         .liveNow=${this.live?.now ?? 0}
@@ -5597,29 +5590,30 @@ var _o = 8e3, vo = (e) => e instanceof Error ? e.message : String(e), K = class 
       ></al-strip>
     `;
 	}
-	renderBand(e) {
-		let t = `grid-column: ${e.colStart} / ${e.colEnd}; grid-row: ${e.depth + 1};`, n = e.id === this.selectedId ? 0 : -1;
+	renderBand(e, t) {
+		let n = `grid-column: ${e.colStart} / ${e.colEnd}; grid-row: ${e.depth + 1};`, r = e.id === this.selectedId ? 0 : -1, i = this.live?.groups[e.id], a = this.preview ? this.preview.values[e.id] : i?.value, o = i?.precision ?? (t && this.config ? cn(this.config, t) : 1), s = e.expanded ? "Collapse" : "Expand";
 		return g`
-      <div class="band" role="group" aria-label=${e.label} style=${t}>
+      <div class="band" role="group" aria-label=${e.label} style=${n}>
         <button
           class="caret"
           type="button"
           data-band=${e.id}
-          tabindex=${n}
-          aria-expanded="true"
-          aria-label=${`Collapse ${e.label}`}
-          title=${`Collapse ${e.label}`}
+          tabindex=${r}
+          aria-expanded=${e.expanded ? "true" : "false"}
+          aria-label=${`${s} ${e.label}`}
+          title=${`${s} ${e.label}`}
           @click=${this.onBandToggle}
           @keydown=${this.onBandKey}
-        >▾</button>
+        >${e.expanded ? "▾" : "▸"}</button>
         <span class="label" title=${e.label}>${e.label}</span>
+        <span class="band-value">${a == null ? "" : ln(a, o)}</span>
       </div>
     `;
 	}
 	render() {
 		let e = this.config;
 		if (!e || e.groups.length === 0) return g`<div class="empty muted">Nothing to mix: add a group first.</div>`;
-		let t = On(e, this.nav), n = t.kinds.map(() => "var(--al-strip-w)").join(" "), r = t.rows > 0 ? `repeat(${t.rows}, auto) auto` : "auto";
+		let t = On(e, this.nav), n = this.tracks, r = new Map(n.map((t) => [t.id, O(e, t.path)])), i = t.kinds.map(() => "var(--al-strip-w)").join(" "), a = t.rows > 0 ? `repeat(${t.rows}, auto) auto` : "auto";
 		return g`
       ${this.commandError === null ? y : g`<ha-alert
             class="command-error"
@@ -5647,22 +5641,15 @@ var _o = 8e3, vo = (e) => e instanceof Error ? e.message : String(e), K = class 
         class="grid"
         role="group"
         aria-label="Mixer"
-        style="grid-template-columns: ${n}; grid-template-rows: ${r};"
+        style="grid-template-columns: ${i}; grid-template-rows: ${a};"
         @keydown=${this.onKeyDown}
         @al-select-strip=${this.onStripSelect}
-        @al-expand-strip=${(e) => {
-			let t = this.trackOf(e);
-			t?.hasChildren && this.navigate({
-				type: "toggle",
-				id: t.id
-			});
-		}}
         @al-level-override=${this.onLevelOverride}
         @al-mute-toggle=${this.onMuteToggle}
         @al-reset=${this.onReset}
       >
-        ${t.bands.map((e) => this.renderBand(e))}
-        ${this.tracks.map((n, r) => this.renderTrack(e, n, r, t))}
+        ${t.bands.map((e) => this.renderBand(e, r.get(e.id)))}
+        ${n.map((n, r) => this.renderTrack(e, n, r, t))}
       </div>
     `;
 	}
@@ -6317,26 +6304,33 @@ var J = class extends x {
 	renderTooltip(e) {
 		let t = this.cursorTime;
 		if (t === null || t < e.t0 || t > e.t1) return y;
-		let n = this.forecastReady ? this.loaded?.data.forecast : null, r = this.loaded?.q.resolution === "5m" ? 600 : 7200, i = t > this.nowAt() ? n ? $n(Kn(n, "p50"), t) : null : $n(e.bus.points, t, r), a = (yo + e.x(t)) / this.width * 100, o = this.loaded?.data.day_types.find(([e, n]) => t >= e && t < n)?.[2];
+		let n = this.forecastReady ? this.loaded?.data.forecast : null, r = this.loaded?.q.resolution === "5m" ? 600 : 7200, i = t > this.nowAt() ? n ? $n(Kn(n, "p50"), t) : null : $n(e.bus.points, t, r), a = (yo + e.x(t)) / this.width * 100, o = this.loaded?.data.day_types.find(([e, n]) => t >= e && t < n)?.[2], s = (e, t) => {
+			if (t === null) return null;
+			let n = ln(t, this.precisions[e] ?? this.live?.groups[e]?.precision ?? 1);
+			return Number(n) === 0 ? null : n;
+		}, c = s(e.busId, i), l = e.children.flatMap((e) => {
+			let n = s(e.id, $n(e.points, t, r));
+			return n === null ? [] : [{
+				...e,
+				formatted: n
+			}];
+		});
 		return g`
       <div class="tooltip ${a > 60 ? "flip" : ""}" style="left: ${a}%">
         <div class="tt-time">${(/* @__PURE__ */ new Date(t * 1e3)).toLocaleString()}</div>
-        <div class="tt-row">
+        ${c === null ? y : g`<div class="tt-row">
           <span class="tt-swatch" style="background: var(--primary-color)"></span>
           <span class="tt-name">${this.heading || e.busId}</span>
-          <span class="tt-value">${i === null ? "—" : ln(i, this.precisions[e.busId] ?? this.live?.groups[e.busId]?.precision ?? 1)}</span>
-        </div>
-        ${e.children.slice(0, 5).map((e) => {
-			let n = $n(e.points, t, r);
-			return n === null ? y : g`
-                <div class="tt-row">
-                  <span class="tt-swatch" style="background: ${e.color}"></span>
-                  <span class="tt-name">${this.labels[e.id] ?? e.id.replaceAll("_", " ")}</span>
-                  <span class="tt-value">${ln(n, this.precisions[e.id] ?? this.live?.groups[e.id]?.precision ?? 1)}</span>
-                </div>
-              `;
-		})}
-        ${e.children.length > 5 ? g`<div class="muted">+${e.children.length - 5} channels</div>` : y}
+          <span class="tt-value">${c}</span>
+        </div>`}
+        ${l.slice(0, 5).map((e) => g`
+          <div class="tt-row">
+            <span class="tt-swatch" style="background: ${e.color}"></span>
+            <span class="tt-name">${this.labels[e.id] ?? e.id.replaceAll("_", " ")}</span>
+            <span class="tt-value">${e.formatted}</span>
+          </div>
+        `)}
+        ${l.length > 5 ? g`<div class="muted">+${l.length - 5} channels</div>` : y}
         ${o ? g`<div class="tt-daytype muted">${o}</div>` : y}
       </div>
     `;
