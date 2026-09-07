@@ -35,7 +35,7 @@ export class AlStrip extends LitElement {
       box-sizing: border-box;
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 6px;
-      padding: 6px;
+      padding: 10px 8px;
       background: var(--card-background-color, var(--primary-background-color));
       color: var(--primary-text-color);
       cursor: pointer;
@@ -56,7 +56,7 @@ export class AlStrip extends LitElement {
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 6px;
+      gap: 12px;
       min-width: 0;
       height: 100%;
     }
@@ -93,7 +93,7 @@ export class AlStrip extends LitElement {
       align-self: center;
     }
     .missing {
-      height: 138px;
+      height: 120px;
       display: grid;
       place-items: center;
       color: var(--secondary-text-color);
@@ -123,8 +123,10 @@ export class AlStrip extends LitElement {
       display: flex;
       align-items: center;
       gap: 4px;
-      min-height: 20px;
       margin-top: auto;
+    }
+    .foot:empty {
+      display: none;
     }
     .badge {
       background: var(--error-color, #db4437);
@@ -286,8 +288,9 @@ export class AlStrip extends LitElement {
           >▸</button>` : nothing}
           <span class="name" title=${this.label}>${this.label}</span>
         </div>
-        ${shown === null ? html`<div class="missing" aria-label="No data">—</div>` : html`<al-fader
+        ${shown === null ? html`<div class="missing" aria-label="No data" title="No data at this time">—</div>` : html`<al-fader
           mode="level"
+          .showValue=${false}
           ?readonly=${!this.editable}
           .value=${shown}
           .max=${this.maxValue}
@@ -297,7 +300,7 @@ export class AlStrip extends LitElement {
           label=${`${this.label} level`}
           @value-changed=${this.onFader}
         ></al-fader>`}
-        <div class="readout">${shown === null ? "—" : formatLevel(shown, this.precision)}</div>
+        <div class="readout" title=${shown === null ? "No data at this time" : nothing}>${shown === null ? "No data" : formatLevel(shown, this.precision)}</div>
         ${this.editable
           ? html`<div class="buttons">
               <button

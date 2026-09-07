@@ -1,6 +1,7 @@
 import { LitElement, css, html, nothing, svg } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { getTimeseries } from "./api";
+import { formatLevel } from "./model";
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { alTimelineRange } from "./events";
 import { boundWindow, sampleAt, zoomWindow } from "./transport";
@@ -403,6 +404,11 @@ export class AlTimeline extends LitElement {
         align-items: center;
         gap: 4px;
       }
+      .tt-value {
+        margin-left: auto;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
       .tt-swatch {
         width: 8px;
         height: 8px;
@@ -424,6 +430,7 @@ export class AlTimeline extends LitElement {
   /** The bus this chart is of, named for the toolbar; `heading` so it is not the host's tooltip. */
   @property({ attribute: false }) heading = "";
   @property({ attribute: false }) labels: Record<string, string> = {};
+  @property({ attribute: false }) precisions: Record<string, number> = {};
   @state() private cursorTime: number | null = null;
   @state() private viewport: TransportWindow | null = null;
   private pinnedTime: number | null = null;
@@ -1061,7 +1068,7 @@ export class AlTimeline extends LitElement {
         <div class="tt-row">
           <span class="tt-swatch" style="background: var(--primary-color)"></span>
           <span class="tt-name">${this.heading || p.busId}</span>
-          <span class="tt-value">${v === null ? "—" : tick(v)}</span>
+          <span class="tt-value">${v === null ? "—" : formatLevel(v, this.precisions[p.busId] ?? this.live?.groups[p.busId]?.precision ?? 1)}</span>
         </div>
         ${p.children.slice(0, 5).map((c) => {
           const value = sampleAt(c.points, t, maxGap);
@@ -1070,7 +1077,7 @@ export class AlTimeline extends LitElement {
                 <div class="tt-row">
                   <span class="tt-swatch" style="background: ${c.color}"></span>
                   <span class="tt-name">${this.labels[c.id] ?? c.id.replaceAll("_", " ")}</span>
-                  <span class="tt-value">${tick(value)}</span>
+                  <span class="tt-value">${formatLevel(value, this.precisions[c.id] ?? this.live?.groups[c.id]?.precision ?? 1)}</span>
                 </div>
               `
             : nothing;

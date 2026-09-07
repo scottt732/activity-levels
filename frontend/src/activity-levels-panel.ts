@@ -13,7 +13,7 @@ import {
 import { DEFAULT_MIN_DAYS } from "./constants";
 import { simSwitchId } from "./entities";
 import { ensureHaElements } from "./ha-elements";
-import { groupAt, groupPathFor } from "./model";
+import { effectivePrecision, groupAt, groupPathFor } from "./model";
 import { expandTo, reduce, restoreNav, saveExpanded, visibleTracks } from "./navigation";
 import { runSave } from "./save-flow";
 import { Draft } from "./store";
@@ -142,6 +142,20 @@ export class ActivityLevelsPanel extends LitElement {
     this.select(event.detail);
     this.selectTab(this.tabs.indexOf("groups"));
   };
+
+  private get timelinePrecisions(): Record<string, number> {
+    const config = this.draft?.config;
+    const precisions: Record<string, number> = {};
+    if (!config) return precisions;
+    const walk = (groups: Config["groups"]): void => {
+      for (const group of groups) {
+        precisions[group.id] = this.live?.groups[group.id]?.precision ?? effectivePrecision(config, group);
+        walk(group.children);
+      }
+    };
+    walk(config.groups);
+    return precisions;
+  }
 
   private get timelineLabels(): Record<string, string> {
     const labels: Record<string, string> = {};
@@ -748,6 +762,7 @@ export class ActivityLevelsPanel extends LitElement {
         .paused=${this.busy}
         .narrow=${this.narrow}
         .labels=${this.timelineLabels}
+        .precisions=${this.timelinePrecisions}
         @al-transport=${this.onTransport}
         @al-timeline-range=${this.onTimelineRange}
       ></al-timeline>

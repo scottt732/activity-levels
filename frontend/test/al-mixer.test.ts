@@ -672,7 +672,7 @@ describe("al-mixer transport preview", () => {
     expect(strips()[0]?.value).toBe(2);
     expect(strips()[1]?.value).toBeNull();
     expect(strips().every((s) => !s.editable)).toBe(true);
-    expect(strips()[1]?.shadowRoot?.querySelector(".readout")?.textContent).toBe("—");
+    expect(strips()[1]?.shadowRoot?.querySelector(".readout")?.textContent).toBe("No data");
     expect(el.shadowRoot?.querySelector(".preview-status")?.textContent).toContain("History");
     for (const [type, detail] of [["al-level-override", { value: 2 }], ["al-mute-toggle", { muted: true }], ["al-reset", {}]] as const) {
       strips()[1]?.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));

@@ -640,6 +640,14 @@ describe("al-timeline cursor", () => {
     el = await mount({ groupId: gid, heading: "House", range: "24h", horizon: "24h" }, hassStub(async () => makeResponse(gid)));
   });
 
+  it("formats each tooltip value with its group precision", async () => {
+    el.precisions = { [gid]: 1, [`${gid}_child`]: 2 };
+    await hover(el, 32);
+    expect(qa(el, ".tt-value").map((node) => node.textContent)).toEqual(["0.0", "0.00"]);
+    await hover(el, 32 + 384);
+    expect(qa(el, ".tt-value").map((node) => node.textContent)).toEqual(["4.5", "0.80"]);
+  });
+
   it("has no cursor until the pointer arrives", () => {
     expect(el.cursorIndex).toBeNull();
     expect(q(el, ".tooltip")).toBeNull();
