@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.2](https://github.com/scottt732/activity-levels/compare/v0.9.1...v0.9.2) (2026-09-07)
+
+
+### Fixed
+
+* **mixer:** unify hierarchy headers and stabilize preview tracks ([#27](https://github.com/scottt732/activity-levels/issues/27)) ([b1f2710](https://github.com/scottt732/activity-levels/commit/b1f27107cd426a4e111927888cf75f46d534c287))
+
 ## [0.9.1](https://github.com/scottt732/activity-levels/compare/v0.9.0...v0.9.1) (2026-09-07)
 
 
