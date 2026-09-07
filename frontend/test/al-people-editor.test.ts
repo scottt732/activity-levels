@@ -67,6 +67,15 @@ beforeEach(async () => {
 });
 
 describe("al-people-editor", () => {
+  it("collapses configured devices and opens devices with validation errors", async () => {
+    const details = el.shadowRoot!.querySelector<HTMLDetailsElement>("details.device")!;
+    expect(details.open).toBe(false);
+    expect(details.querySelector("summary")?.textContent?.trim()).toBe("Phone");
+    el.errors = [{ path: "presence/people/0/devices/0/tracker", message: "Choose a tracker" }];
+    await el.updateComplete;
+    expect(details.open).toBe(true);
+  });
+
   it("shows a card per person with their devices", () => {
     expect(el.shadowRoot!.querySelectorAll(".person")).toHaveLength(1);
     expect(field(".person-name").value).toBe("Scott");

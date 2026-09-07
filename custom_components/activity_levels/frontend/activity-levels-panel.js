@@ -6949,6 +6949,12 @@ var Zo = o`
         padding-top: 8px;
         margin-top: 8px;
       }
+      .device summary { overflow-wrap: anywhere; cursor: pointer; padding: 10px 0; color: var(--primary-text-color); font-weight: 600; }
+      .device-kind { margin-left: 8px; font-weight: 400; color: var(--secondary-text-color); }
+      .device-body { padding: 8px 0 12px; }
+      .device .fields { gap: 16px; }
+      .device-head { justify-content: space-between; margin-bottom: 16px; }
+      .add-device { margin-top: 12px; }
       .fields {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
@@ -7066,12 +7072,11 @@ var Zo = o`
 			"devices",
 			t,
 			"signals"
-		]), o = this.found(n, r);
-		return _`<div class="device">
-      <div class="device-head">
-        <ha-icon icon=${es[r.kind]}></ha-icon>
-        <h5>${r.name ?? (r.tracker || "New device")}</h5>
-        <div class="resource-links">${Kr(this, this.hass, r.tracker, "Open tracker", Object.values(this.presence?.people?.[n.name ?? ""]?.devices ?? {}).find((e) => e.tracker === r.tracker)?.device_id, "Open Bermuda device", !0)}</div>
+		]), o = this.found(n, r), s = Object.values(this.presence?.people?.[n.name ?? ""]?.devices ?? {}).find((e) => e.tracker === r.tracker), c = r.name ?? s?.name ?? (r.tracker || "New device");
+		return _`<details class="device" ?open=${!r.tracker || Object.keys(i).length > 0 || Object.keys(a).length > 0}>
+      <summary>${c}${c === ts[r.kind] ? y : _`<span class="device-kind">${ts[r.kind]}</span>`}</summary>
+      <div class="device-body"><div class="device-head">
+        <div class="resource-links">${Kr(this, this.hass, r.tracker, "Open tracker", s?.device_id, "Open Bermuda device", !0)}</div>
         <button type="button"
           class="remove-device"
           aria-label="Remove device"
@@ -7119,8 +7124,8 @@ var Zo = o`
           @value-changed=${(n) => this.editDevice(e, t, { companion: n.detail.value ? n.detail.value : null }, "companion")}
         ></ha-selector>
         ${$o.map((n) => this.renderSignal(e, t, r, n, o, a))}
-      </div>
-    </div>`;
+      </div></div>
+    </details>`;
 	}
 	renderPerson(e, t) {
 		let n = I(this.errors, [
@@ -7304,47 +7309,100 @@ var hs = 2e3, gs = "away", _s = {
 	"moving",
 	"still_room_empty",
 	"jitter"
-], xs = { entity: {
+], xs = [
+	{
+		id: "tracking",
+		title: "Tracking",
+		hint: "Turn room estimation on and choose when a person counts as present.",
+		fields: [
+			"enabled",
+			"envelope",
+			"threshold"
+		]
+	},
+	{
+		id: "rooms",
+		title: "Room estimation",
+		hint: "Tune how quickly estimates move between rooms and recover from weak signals.",
+		fields: [
+			"stay",
+			"escape",
+			"scale",
+			"floor",
+			"stuck_after",
+			"activity_floor"
+		]
+	},
+	{
+		id: "carrying",
+		title: "Device carrying",
+		hint: "Tune how long carrying estimates persist and how parked devices affect room estimates.",
+		fields: [
+			"carried_prior",
+			"carried_flip",
+			"carried_recent",
+			"carried_nearby"
+		]
+	},
+	{
+		id: "evidence",
+		title: "Carrying evidence",
+		hint: "Advanced weights. Positive values favor carrying; negative values favor a parked device.",
+		fields: [
+			"carried_charging",
+			"carried_moving",
+			"carried_still_room_empty",
+			"carried_jitter"
+		]
+	}
+], Ss = (e) => {
+	if (e === "activity_floor") return "presence/activity/floor";
+	if (e.startsWith("carried_")) {
+		let t = e.slice(8);
+		return `presence/carried/${bs.includes(t) ? "weights/" : ""}${t}`;
+	}
+	return `presence/${e}`;
+}, Cs = { entity: {
 	multiple: !0,
 	filter: {
 		domain: "device_tracker",
 		integration: "bermuda"
 	}
-} }, Ss = { number: {
+} }, ws = { number: {
 	min: .01,
 	max: .99,
 	step: .01,
 	mode: "slider"
-} }, Cs = { number: {
+} }, Ts = { number: {
 	min: .01,
 	max: 1,
 	step: .01,
 	mode: "slider"
-} }, ws = { number: {
+} }, Es = { number: {
 	min: 0,
 	max: .1,
 	step: .001,
 	mode: "box"
-} }, Ts = { number: {
+} }, Ds = { number: {
 	min: .1,
 	step: .1,
 	mode: "box"
-} }, Es = { number: {
+} }, Os = { number: {
 	min: .01,
 	max: 1,
 	step: .01,
 	mode: "box"
-} }, Ds = { duration: {} }, Os = { number: {
+} }, ks = { duration: {} }, As = { number: {
 	min: .01,
 	max: .99,
 	step: .01,
 	mode: "slider"
-} }, ks = { number: {
+} }, js = { number: {
 	min: -10,
 	max: 10,
 	step: .5,
 	mode: "box"
-} }, As = " → ", js = "Give it an area that matches a room, or map it in Settings below.", Ms = "Enable these distance sensors in Settings → Devices & services → Bermuda, then reload Activity Levels:", Y = (e) => typeof e == "number" && Number.isFinite(e) ? e : null, X = class extends b {
+} }, Ms = " → ", Ns = "Give it an area that matches a room, or map it in Settings below.", Ps = "Enable these distance sensors in Settings → Devices & services → Bermuda, then reload Activity Levels:", Y = (e) => typeof e == "number" && Number.isFinite(e) ? e : null, X = class extends b {
 	constructor(...e) {
 		super(...e), this.errors = [], this.narrow = !1, this.topology = null, this.presence = null, this.correcting = null, this.correctingDevice = null, this.carryingChoices = {}, this.correctionPending = !1, this.correctionError = null, this.notice = null, this.computeLabel = (e) => _s[e.name] ?? e.name, this.computeHelper = (e) => vs[e.name] ?? "", this.onDevicesChanged = (e) => {
 			e.stopPropagation();
@@ -7404,6 +7462,14 @@ var hs = 2e3, gs = "away", _s = {
       .devices { min-width: 260px; }
       .confidence-label { display: block; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
       .settings-body { display: grid; gap: 20px; padding-top: 16px; }
+      .settings-section { border: 1px solid var(--al-control-border); border-radius: 6px; padding: 16px; min-width: 0; }
+      .settings-section h3 { margin: 0 0 8px; color: var(--primary-text-color); font-size: 1.05em; }
+      .settings-section p { color: var(--secondary-text-color); margin: 0 0 16px; line-height: 1.5; }
+      .settings-section summary { color: var(--primary-text-color); }
+      .settings-section summary + p { margin-top: 8px; }
+      .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; align-items: start; }
+      .settings-section ha-form { display: block; }
+
       summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
       .moving { display: block; font-size: 0.85em; margin-top: 4px; }
       .notice,
@@ -7530,7 +7596,7 @@ var hs = 2e3, gs = "away", _s = {
 		return e === null ? "—" : this.hass?.areas[e]?.name ?? e;
 	}
 	trail(e) {
-		return e.map((e) => this.roomName(e)).join(As);
+		return e.map((e) => this.roomName(e)).join(Ms);
 	}
 	schemaFor(e) {
 		return [
@@ -7547,51 +7613,51 @@ var hs = 2e3, gs = "away", _s = {
 			},
 			{
 				name: "threshold",
-				selector: Cs
-			},
-			{
-				name: "stay",
-				selector: Ss
-			},
-			{
-				name: "escape",
-				selector: ws
-			},
-			{
-				name: "scale",
 				selector: Ts
 			},
 			{
-				name: "floor",
+				name: "stay",
+				selector: ws
+			},
+			{
+				name: "escape",
 				selector: Es
+			},
+			{
+				name: "scale",
+				selector: Ds
+			},
+			{
+				name: "floor",
+				selector: Os
 			},
 			{
 				name: "stuck_after",
-				selector: Ds
+				selector: ks
 			},
 			{
 				name: "activity_floor",
-				selector: Es
+				selector: Os
 			},
 			{
 				name: "carried_prior",
-				selector: Os
+				selector: As
 			},
 			{
 				name: "carried_flip",
-				selector: Ds
+				selector: ks
 			},
 			{
 				name: "carried_recent",
-				selector: Ds
+				selector: ks
 			},
 			{
 				name: "carried_nearby",
-				selector: Os
+				selector: As
 			},
 			...bs.map((e) => ({
 				name: `carried_${e}`,
-				selector: ks
+				selector: js
 			}))
 		];
 	}
@@ -7688,7 +7754,7 @@ var hs = 2e3, gs = "away", _s = {
       <ha-selector
         class="setup-devices"
         .hass=${this.hass}
-        .selector=${xs}
+        .selector=${Cs}
         .label=${_s.devices}
         .helper=${vs.devices}
         .required=${!1}
@@ -7861,20 +7927,23 @@ var hs = 2e3, gs = "away", _s = {
 		return _`<tr class="scanner ${t ? "unmapped" : ""}">
       <td class="name">${Gr("device", e.device_id, e.name)}</td>
       <td class="area">${Gr("area", e.area_id, this.areaName(e.area_id))}</td>
-      <td class="room">${t ? js : this.roomName(e.group_id)}</td>
+      <td class="room">${t ? Ns : this.roomName(e.group_id)}</td>
     </tr>`;
 	}
 	renderDisabled() {
 		let e = this.presence?.disabled ?? [];
 		return e.length === 0 ? y : _`<div class="disabled-sensors">
-      ${Ms}
+      ${Ps}
       <ul>
         ${e.map((e) => _`<li>${e}</li>`)}
       </ul>
     </div>`;
 	}
 	renderSettings(e) {
-		let t = D(e), n = I(this.errors, ["presence"]), r = this.errors.filter((e) => e.path === "presence"), i = {
+		let t = D(e), n = Object.fromEntries(ys.flatMap((e) => {
+			let t = this.errors.find((t) => t.path === Ss(e));
+			return t ? [[e, t.message]] : [];
+		})), r = this.errors.filter((e) => e.path === "presence"), i = {
 			enabled: t.enabled,
 			envelope: t.envelope ?? "",
 			threshold: t.threshold,
@@ -7889,26 +7958,33 @@ var hs = 2e3, gs = "away", _s = {
 			carried_recent: M(t.carried.recent),
 			carried_nearby: t.carried.nearby,
 			...Object.fromEntries(bs.map((e) => [`carried_${e}`, t.carried.weights[e]]))
-		};
-		return _`<ha-card><details><summary>Presence settings</summary><div class="settings-body">
+		}, a = (t) => _`<ha-form
+      class="presence-settings" data-section=${t.id}
+      .hass=${this.hass}
+      .data=${Object.fromEntries(t.fields.map((e) => [e, i[e]]))}
+      .schema=${this.schemaFor(e).filter((e) => t.fields.includes(e.name))}
+      .error=${n}
+      .computeLabel=${this.computeLabel}
+      .computeHelper=${this.computeHelper}
+      @value-changed=${this.onFormChanged}
+    ></ha-form>`, o = xs[0];
+		return _`<ha-card><details class="settings" ?open=${this.errors.some((e) => e.path.startsWith("presence"))}>
+      <summary>Presence settings</summary><div class="settings-body">
       ${r.map((e) => _`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
-      <h3>People</h3>
-      <al-people-editor
-        .hass=${this.hass}
-        .config=${e}
-        .errors=${this.errors}
-        .presence=${this.presence}
-      ></al-people-editor>
-      <ha-form
-        class="presence-settings"
-        .hass=${this.hass}
-        .data=${i}
-        .schema=${this.schemaFor(e)}
-        .error=${n}
-        .computeLabel=${this.computeLabel}
-        .computeHelper=${this.computeHelper}
-        @value-changed=${this.onFormChanged}
-      ></ha-form>
+      <section class="settings-section">
+        <h3>People and devices</h3>
+        <p>Choose who to follow and the devices they carry. Open a device to edit its trackers and signals.</p>
+        <al-people-editor .hass=${this.hass} .config=${e} .errors=${this.errors} .presence=${this.presence}></al-people-editor>
+      </section>
+      <section class="settings-section">
+        <h3>${o.title}</h3><p>${o.hint}</p>${a(o)}
+      </section>
+      <div class="settings-grid">
+        ${xs.slice(1).map((e) => _`<details class="settings-section" data-section=${e.id}
+          ?open=${e.fields.some((e) => n[e] !== void 0)}>
+          <summary>${e.title}</summary><p>${e.hint}</p>${a(e)}
+        </details>`)}
+      </div>
     </div></details></ha-card>`;
 	}
 	render() {
@@ -7921,7 +7997,7 @@ var hs = 2e3, gs = "away", _s = {
 A([S({ attribute: !1 })], X.prototype, "hass", void 0), A([S({ attribute: !1 })], X.prototype, "config", void 0), A([S({ attribute: !1 })], X.prototype, "errors", void 0), A([S({ type: Boolean })], X.prototype, "narrow", void 0), A([C()], X.prototype, "topology", void 0), A([C()], X.prototype, "presence", void 0), A([C()], X.prototype, "correcting", void 0), A([C()], X.prototype, "correctingDevice", void 0), A([C()], X.prototype, "carryingChoices", void 0), A([C()], X.prototype, "correctionPending", void 0), A([C()], X.prototype, "correctionError", void 0), A([C()], X.prototype, "notice", void 0), X = A([x("al-presence")], X);
 //#endregion
 //#region src/al-graph-map.ts
-var Ns = 60, Ps = 27, Fs = 2, Is = 9, Ls = 7, Z = (e) => String(Math.round(e * 10) / 10), Q = class extends b {
+var Fs = 60, Is = 27, Ls = 2, Rs = 9, zs = 7, Z = (e) => String(Math.round(e * 10) / 10), Q = class extends b {
 	constructor(...e) {
 		super(...e), this.topology = null, this.presence = null, this.selected = [null, null], this.paths = [];
 	}
@@ -8037,7 +8113,7 @@ var Ns = 60, Ps = 27, Fs = 2, Is = 9, Ls = 7, Z = (e) => String(Math.round(e * 1
     ></line>`;
 	}
 	renderNode(e) {
-		let t = this.occupantsOf(e.id), n = t.slice(0, Fs), r = t.length - n.length, i = this.selected.includes(e.id), a = [...n, ...r > 0 ? [`+${r}`] : []].join(", "), o = [
+		let t = this.occupantsOf(e.id), n = t.slice(0, Ls), r = t.length - n.length, i = this.selected.includes(e.id), a = [...n, ...r > 0 ? [`+${r}`] : []].join(", "), o = [
 			e.label,
 			e.exit ? "an exit" : "",
 			t.length > 0 ? `${t.length} here: ${t.join(", ")}` : "empty"
@@ -8054,8 +8130,8 @@ var Ns = 60, Ps = 27, Fs = 2, Is = 9, Ls = 7, Z = (e) => String(Math.round(e * 1
     >
       <rect
         class="box"
-        x=${Z(e.x - Ns)}
-        y=${Z(e.y - Ps)}
+        x=${Z(e.x - Fs)}
+        y=${Z(e.y - Is)}
         width=${120}
         height=${54}
         rx="8"
@@ -8067,16 +8143,16 @@ var Ns = 60, Ps = 27, Fs = 2, Is = 9, Ls = 7, Z = (e) => String(Math.round(e * 1
     </g>`;
 	}
 	renderBadge(e, t) {
-		let n = e.x + Ns - Is - 3, r = e.y - Ps + Is + 3;
-		return v`<circle class="badge" cx=${Z(n)} cy=${Z(r)} r=${Is}></circle>
+		let n = e.x + Fs - Rs - 3, r = e.y - Is + Rs + 3;
+		return v`<circle class="badge" cx=${Z(n)} cy=${Z(r)} r=${Rs}></circle>
       <text class="count" x=${Z(n)} y=${Z(r + 3.5)} text-anchor="middle">${t}</text>`;
 	}
 	renderDoor(e) {
-		let t = e.x - Ns + 7, n = e.y + Ps - 7;
+		let t = e.x - Fs + 7, n = e.y + Is - 7;
 		return v`<path class="door" d=${`M ${Z(t)} ${Z(n)} v -14 h 10 v 14 z`}></path>`;
 	}
 	renderPerson(e) {
-		return v`<circle class="person" data-name=${e.name} cx=${Z(e.x)} cy=${Z(e.y)} r=${Ls}>
+		return v`<circle class="person" data-name=${e.name} cx=${Z(e.x)} cy=${Z(e.y)} r=${zs}>
       <title>${e.name} is on the move</title>
     </circle>`;
 	}
@@ -8237,12 +8313,12 @@ var $ = class extends b {
 A([S({ attribute: !1 })], $.prototype, "hass", void 0), A([S({ attribute: !1 })], $.prototype, "config", void 0), A([S({ type: Boolean })], $.prototype, "narrow", void 0), A([C()], $.prototype, "topology", void 0), A([C()], $.prototype, "selected", void 0), A([C()], $.prototype, "paths", void 0), A([C()], $.prototype, "pending", void 0), A([C()], $.prototype, "error", void 0), A([C()], $.prototype, "loading", void 0), $ = A([x("al-paths")], $);
 //#endregion
 //#region src/yaml-locate.ts
-var Rs = /^(?:"([^"]*)"|'([^']*)'|([^\s"'#][^:]*?))\s*:(?:\s|$)/, zs = (e) => e.dash >= 0 ? e.dash : e.indent;
-function Bs(e) {
-	let t = Rs.exec(e);
+var Bs = /^(?:"([^"]*)"|'([^']*)'|([^\s"'#][^:]*?))\s*:(?:\s|$)/, Vs = (e) => e.dash >= 0 ? e.dash : e.indent;
+function Hs(e) {
+	let t = Bs.exec(e);
 	return t ? t[1] ?? t[2] ?? t[3] ?? null : null;
 }
-function Vs(e) {
+function Us(e) {
 	let t = [];
 	return e.split("\n").forEach((e, n) => {
 		let r = e.replace(/\s+$/, ""), i = r.trimStart();
@@ -8261,38 +8337,38 @@ function Vs(e) {
 		});
 	}), t;
 }
-function Hs(e, t, n, r) {
-	for (let i = t + 1; i < n; i++) if (zs(e[i]) <= r) return i;
+function Ws(e, t, n, r) {
+	for (let i = t + 1; i < n; i++) if (Vs(e[i]) <= r) return i;
 	return n;
 }
-function Us(e, t, n, r) {
+function Gs(e, t, n, r) {
 	if (t >= n) return -1;
 	let i = e[t].indent;
 	for (let a = t; a < n; a++) {
 		let t = e[a];
-		if (t.indent === i && Bs(t.text) === r) return a;
+		if (t.indent === i && Hs(t.text) === r) return a;
 	}
 	return -1;
 }
-function Ws(e, t, n, r) {
+function Ks(e, t, n, r) {
 	if (t >= n || e[t].dash < 0) return -1;
 	let i = e[t].dash, a = -1;
 	for (let o = t; o < n; o++) if (e[o].dash === i && ++a === r) return o;
 	return -1;
 }
-function Gs(e, t) {
+function qs(e, t) {
 	let n = t.split("/").filter((e) => e !== "");
 	if (n.length === 0) return null;
-	let r = Vs(e), i = 0, a = r.length, o = null;
+	let r = Us(e), i = 0, a = r.length, o = null;
 	for (let e of n) {
-		let t = /^\d+$/.test(e) ? Ws(r, i, a, Number(e)) : Us(r, i, a, e);
+		let t = /^\d+$/.test(e) ? Ks(r, i, a, Number(e)) : Gs(r, i, a, e);
 		if (t < 0) return o;
 		let n = r[t];
-		o = n.line, a = Hs(r, t, a, zs(n)), i = n.dash >= 0 ? t : t + 1;
+		o = n.line, a = Ws(r, t, a, Vs(n)), i = n.dash >= 0 ? t : t + 1;
 	}
 	return o;
 }
-var Ks = class extends b {
+var Js = class extends b {
 	constructor(...e) {
 		super(...e), this.errors = [], this.available = !0, this.parseError = null, this.seq = 0, this.onYaml = (e) => {
 			e.stopPropagation(), window.clearTimeout(this.timer);
@@ -8375,7 +8451,7 @@ var Ks = class extends b {
 	jump(e) {
 		let t = this.editor, n = t?.codemirror, r = t?.yaml;
 		if (!n || typeof r != "string") return;
-		let i = Gs(r, e);
+		let i = qs(r, e);
 		if (i === null || i > n.state.doc.lines) return;
 		let a = n.state.doc.line(i).from;
 		n.dispatch({
@@ -8422,5 +8498,5 @@ var Ks = class extends b {
     ` : _`<div class="page">${this.renderUnavailable()}</div>`;
 	}
 };
-A([S({ attribute: !1 })], Ks.prototype, "hass", void 0), A([S({ attribute: !1 })], Ks.prototype, "config", void 0), A([S({ attribute: !1 })], Ks.prototype, "errors", void 0), A([S({ type: Boolean })], Ks.prototype, "available", void 0), A([C()], Ks.prototype, "parseError", void 0), Ks = A([x("al-code")], Ks);
+A([S({ attribute: !1 })], Js.prototype, "hass", void 0), A([S({ attribute: !1 })], Js.prototype, "config", void 0), A([S({ attribute: !1 })], Js.prototype, "errors", void 0), A([S({ type: Boolean })], Js.prototype, "available", void 0), A([C()], Js.prototype, "parseError", void 0), Js = A([x("al-code")], Js);
 //#endregion
