@@ -35,7 +35,7 @@ bundle.
 
 For a standalone 3D viewer fixture, open `/dev/floorplan.html` on the Vite server.
 It supplies an illustrative two-floor house and simulated readings, with controls for
-activity and stale-data checks; it does not require Home Assistant.
+activity, light color/brightness, alarm rules, below-grade geometry, and stale-data checks; it does not require Home Assistant.
 
 ## The bundle is committed
 
