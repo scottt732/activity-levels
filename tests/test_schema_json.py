@@ -15,6 +15,15 @@ from custom_components.activity_levels.schema_json import SCHEMA_FILE, json_sche
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "house.yaml"
 
 
+def test_geometry_schema_describes_dimensions_and_gps_ranges():
+    schema = json_schema()
+    gps = schema["properties"]["gps"]
+    assert gps["properties"]["latitude"]["minimum"] == -90
+    group = schema["$defs"]["group"]["properties"]
+    assert group["bounds"]["items"]["minItems"] == 3
+    assert group["points"]["items"]["maxItems"] == 2
+
+
 @pytest.fixture(scope="module")
 def schema() -> dict:
     return json_schema()

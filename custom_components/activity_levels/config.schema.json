@@ -4,6 +4,33 @@
   "description": "The options document for the Activity Levels Home Assistant integration. Paste this schema's URL into your editor with '# yaml-language-server: $schema=/activity_levels_panel/config.schema.json'.",
   "type": "object",
   "properties": {
+    "gps": {
+      "type": "object",
+      "properties": {
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "elevation": {
+          "type": "number"
+        },
+        "rotation": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude"
+      ],
+      "additionalProperties": false,
+      "description": "Optional ESPresense geographic origin and rotation; geometry remains in local meters."
+    },
     "version": {
       "type": "integer",
       "enum": [
@@ -743,6 +770,34 @@
     "group": {
       "type": "object",
       "properties": {
+        "bounds": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "number"
+            }
+          },
+          "description": "Two XYZ corners in meters, increasing along every axis."
+        },
+        "points": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 4096,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          },
+          "description": "XY polygon in meters with at least three distinct vertices and non-zero area."
+        },
         "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$",

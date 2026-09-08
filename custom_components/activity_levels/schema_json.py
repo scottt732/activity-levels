@@ -30,6 +30,7 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import SCHEMA_NAME
 from .duration import parse_duration
+from .geometry import MAX_POINTS, bounds, coordinate, points
 from .schema import (
     ADJACENT_SCHEMA,
     CONFIG_SCHEMA,
@@ -82,6 +83,23 @@ _STRING: JsonSchema = {"type": "string"}
 #: either a plain function (which carries no machine-readable shape at all) or a
 #: composite whose meaning is clearer stated than derived.
 _LEAVES: dict[Any, JsonSchema] = {
+    coordinate: {"type": "number"},
+    bounds: {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}},
+        "description": "Two XYZ corners in meters, increasing along every axis.",
+    },
+    points: {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": MAX_POINTS,
+        "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}},
+        "description": (
+            "XY polygon in meters with at least three distinct vertices and non-zero area."
+        ),
+    },
     _group_id: _GROUP_ID,
     _hhmm: {
         "type": "string",
@@ -127,6 +145,7 @@ _TYPES: dict[type, JsonSchema] = {
 
 #: What the README says each top-level key is for, in one sentence.
 _DESCRIPTIONS: dict[str, str] = {
+    "gps": "Optional ESPresense geographic origin and rotation; geometry remains in local meters.",
     "version": "Document version. Only 1 exists.",
     "defaults": (
         "Settings every group inherits unless it says otherwise, plus the pattern-learning "

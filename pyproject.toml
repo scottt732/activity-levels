@@ -23,6 +23,7 @@ dev = [
   # draft 2020-12 schema and that examples/house.yaml validates against it. Home
   # Assistant does not ship it, and nothing at runtime imports it.
   "jsonschema>=4.23",
+  "types-pyyaml>=6.0.12.20260906",
 ]
 
 [tool.pytest.ini_options]

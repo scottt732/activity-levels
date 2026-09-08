@@ -15,12 +15,15 @@ from .const import (
     ALLOWED_CHILDREN,
     BUILTIN_DAY_TYPES,
     CONF_AREA_ID,
+    CONF_BOUNDS,
     CONF_DEFAULTS,
     CONF_ENVELOPES,
     CONF_FLOOR_ID,
+    CONF_GPS,
     CONF_GROUPS,
     CONF_KIND,
     CONF_PATTERNS,
+    CONF_POINTS,
     CONF_PRESENCE,
     CONF_SIMULATION,
     CONF_VERSION,
@@ -48,6 +51,7 @@ from .const import (
 )
 from .duration import parse_duration
 from .engine import Mix, NullHandling, RetriggerWhen, Unavailable
+from .geometry import GPS_SCHEMA, bounds, points
 
 PRESENCE_CORRECTION_FIELDS: dict[Any, Any] = {
     vol.Required("person"): str,
@@ -487,6 +491,8 @@ def _group_schema(value: Any) -> dict[str, Any]:
 
 GROUP_SCHEMA = vol.Schema(
     {
+        vol.Optional(CONF_BOUNDS): bounds,
+        vol.Optional(CONF_POINTS): points,
         vol.Required("id"): _group_id,
         vol.Optional("name", default=None): vol.Any(None, str),
         vol.Optional(CONF_KIND, default=None): vol.Any(None, vol.In(KINDS)),
@@ -512,6 +518,7 @@ GROUP_SCHEMA = vol.Schema(
 
 CONFIG_SCHEMA = vol.Schema(
     {
+        vol.Optional(CONF_GPS): GPS_SCHEMA,
         vol.Required(CONF_VERSION): vol.All(int, vol.In([1])),
         vol.Optional(CONF_DEFAULTS, default=dict): DEFAULTS_SCHEMA,
         vol.Optional(CONF_ENVELOPES, default=list): [ENVELOPE_SCHEMA],

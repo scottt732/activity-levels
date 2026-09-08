@@ -63,7 +63,18 @@ export interface PresenceOverrides extends EnvelopeOverrides {
   activity_floor: number | null;
 }
 
+/** Coordinates are absolute meters in the floorplan frame, independent of tree nesting. */
+export type Bounds = [[number, number, number], [number, number, number]];
+export interface Gps {
+  latitude: number;
+  longitude: number;
+  elevation?: number;
+  rotation?: number;
+}
+
 export interface Group {
+  bounds?: Bounds;
+  points?: [number, number][];
   id: string;
   name: string | null;
   /** What this group is on the property. Null only in a document the backend refused. */
@@ -149,6 +160,7 @@ export interface PresenceSettings {
 }
 
 export interface Config {
+  gps?: Gps;
   version: 1;
   defaults: Defaults;
   envelopes: EnvelopePreset[];
