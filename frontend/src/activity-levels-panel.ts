@@ -370,8 +370,12 @@ export class ActivityLevelsPanel extends LitElement {
 
   private toggleLive(on: boolean): void {
     this.liveOn = on;
-    if (!on && this.tab !== "mixer") this.live = null;
+    if (!on && !this.liveRequired) this.live = null;
     this.updatePolling();
+  }
+
+  private get liveRequired(): boolean {
+    return this.tab === "mixer" || this.tab === "floorplans";
   }
 
   /** Mixer, Groups and Patterns read the profile and simulation log. */
@@ -387,13 +391,13 @@ export class ActivityLevelsPanel extends LitElement {
 
   /**
    * Starts or pauses the live poll to match the current conditions. It runs while the
-   * toggle is on - or unconditionally on the Mixer tab, whose meters are the point of the
+   * toggle is on - or unconditionally on Mixer and Floorplans, whose readings are the point of the
    * page - as long as no save is in flight (a reload is about to replace the config the
    * frame describes) and the tab is actually on screen. Pausing keeps the last frame, so
    * resuming redraws immediately rather than blanking the meters.
    */
   private updateLivePolling(awake: boolean): void {
-    if (!((this.liveOn || this.tab === "mixer") && awake)) {
+    if (!((this.liveOn || this.liveRequired) && awake)) {
       this.clearLiveTimer();
       return;
     }
@@ -508,9 +512,9 @@ export class ActivityLevelsPanel extends LitElement {
   private selectTab(index: number): void {
     const next = this.tabs[index];
     if (next === undefined) return;
-    // The Mixer polls whether or not Live is on, so leaving it with Live off would strand
+    // Mixer and Floorplans poll whether or not Live is on, so leaving with Live off would strand
     // the last frame on the other tabs' meters, where it would read as current.
-    if (next !== "mixer" && !this.liveOn) this.live = null;
+    if (next !== "mixer" && next !== "floorplans" && !this.liveOn) this.live = null;
     if (next !== "mixer") {
       clearTimeout(this.previewTimer);
       this.previewTimer = undefined;
@@ -602,9 +606,9 @@ export class ActivityLevelsPanel extends LitElement {
     `;
   }
 
-  /** The Mixer polls regardless, so offering a switch that changes nothing would be a lie. */
+  /** These views poll regardless, so offering a switch that changes nothing would be a lie. */
   private renderLiveToggle() {
-    if (this.tab === "mixer") return nothing;
+    if (this.liveRequired) return nothing;
     return html`
       <span class="muted">Live</span>
       <ha-switch
@@ -727,8 +731,8 @@ export class ActivityLevelsPanel extends LitElement {
           @al-code-status=${this.onCodeStatus}
         ></al-code>`;
       case "floorplans":
-        return html`<al-floorplan-import .hass=${this.hass} .config=${d.config}
-          .disabled=${this.busy} @al-change=${this.onChange}></al-floorplan-import>`;
+        return html`<al-floorplans .hass=${this.hass} .config=${d.config} .live=${this.live}
+          .disabled=${this.busy} @al-change=${this.onChange} @al-open-group=${this.openMixerGroup}></al-floorplans>`;
       case "paths":
         return html`<al-paths .hass=${this.hass} .config=${d.config} .narrow=${this.narrow}></al-paths>`;
       case "presence":

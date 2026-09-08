@@ -527,7 +527,7 @@ count.
 
 ## Importing floorplans
 
-Open **Floorplans** in the Activity Levels panel and paste an ESPresense configuration,
+Open **Floorplans → Import or update floorplan** in the Activity Levels panel and paste an ESPresense configuration,
 or choose a YAML/JSON file. You can import the whole file: only root `gps` and `floors`
 are used. MQTT settings, scanners, devices and other root sections are ignored. Ordinary
 YAML is the primary format; encoded line breaks from an editor paste are also recognized.
@@ -571,8 +571,22 @@ bounds on the destination are cleared. Repeated consecutive/closing polygon poin
 normalized. Malformed YAML, invalid coordinates and degenerate outlines are reported
 instead of guessed. Imports are limited to 1 MB of text, 128 floors and 2,048 rooms.
 
-The import preserves geometry for a future rotatable activity wireframe. This version
-imports measurements; it does not yet render a 3D house or infer doors and adjacency.
+### Viewing live activity in 3D
+
+The **Floorplans** tab renders supplied room outlines and heights as a rotatable house
+wireframe. Drag to orbit, scroll to zoom, or use the camera buttons, **Top** and **Reset**.
+Choose a property, structure or floor to isolate its current descendants. Geometry keeps
+its imported coordinates; GPS and changes to the group hierarchy do not reposition it.
+
+Room shading follows each group's own live activity relative to its maximum. Select a
+room in the drawing or the accessible group list to see its reading and open its existing
+group settings. Missing or stale readings are explicitly labeled. Live updates preserve
+your camera and selection. Floors and other containers remain outlines so rooms stay visible.
+
+Footprints without vertical bounds remain listed as unplaced until heights are supplied.
+If WebGL is unavailable, the group list and readings still work. The 3D renderer downloads
+only when geometry is displayed (about 158 KB compressed); other tabs do not load it.
+The viewer does not infer doors or adjacency.
 
 ## Configuration reference
 

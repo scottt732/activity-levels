@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Floorplan viewer — browser fixture</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    font-family: system-ui, sans-serif; color-scheme: dark;
+    --primary-text-color: #e4edf3; --secondary-text-color: #9fb2bf;
+    --card-background-color: #172631; --secondary-background-color: #263d4c;
+    --divider-color: #344b5b; --primary-color: #69c8e0;
+  }
+  body { margin: 0; background: #0c1821; color: var(--primary-text-color); }
+  header { padding: 16px 32px; border-bottom: 1px solid var(--divider-color); display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  label { display: inline-flex; align-items: center; gap: 8px; }
+  main { max-width: 1400px; margin: 16px auto; }
+</style>
+<header>
+  <strong>Floorplan browser fixture · simulated readings</strong>
+  <label>Kitchen activity <input id="level" type="range" min="0" max="10" value="8"></label>
+  <label><input id="updates" type="checkbox" checked> Send live updates</label>
+  <span id="selection" role="status"></span>
+</header>
+<main><al-floorplan-viewer></al-floorplan-viewer></main>
+<script type="module">
+  import "../src/al-floorplan-viewer.ts";
+  import { newGroup } from "../src/model.ts";
+  import { roomsConfig } from "../test/fixtures.ts";
+  const room = (id, name, points, z) => ({ ...newGroup(id, "area"), name, points,
+    bounds: [[Math.min(...points.map(p => p[0])), Math.min(...points.map(p => p[1])), z],
+             [Math.max(...points.map(p => p[0])), Math.max(...points.map(p => p[1])), z + 2.5]] });
+  const config = roomsConfig();
+  config.groups = [{ ...newGroup("home", "property"), name: "Home", children: [
+    { ...newGroup("house", "structure"), name: "House", children: [
+      { ...newGroup("ground", "floor"), name: "Ground floor", bounds: [[0,0,0],[10,8,2.5]], children: [
+        room("kitchen", "Kitchen", [[0,0],[4,0],[4,3],[2,3],[2,4],[0,4]], 0),
+        room("living", "Living room", [[4,0],[10,0],[10,4],[4,4]], 0),
+        room("studio", "Studio", [[0,4],[6,4],[6,8],[0,8]], 0),
+        room("hall", "Hall", [[6,4],[10,4],[10,8],[6,8]], 0),
+      ] },
+      { ...newGroup("upper", "floor"), name: "Upper floor", bounds: [[0,0,3],[10,8,5.5]], children: [
+        room("bedroom", "Bedroom", [[0,0],[6,0],[6,4],[0,4]], 3),
+        room("bath", "Bathroom", [[6,0],[10,0],[10,4],[6,4]], 3),
+        room("office", "Office", [[0,4],[5,4],[5,8],[0,8]], 3),
+        room("guest", "Guest room", [[5,4],[10,4],[10,8],[5,8]], 3),
+      ] },
+    ] },
+  ] }];
+  const viewer = document.querySelector("al-floorplan-viewer");
+  viewer.config = config;
+  const update = () => {
+    if (!document.querySelector("#updates").checked) return;
+    const levels = { home: 8, house: 8, ground: 8, upper: 3, kitchen: Number(document.querySelector("#level").value),
+      living: 2, studio: 0, hall: 0, bedroom: 0, bath: 0, office: 3, guest: 0 };
+    viewer.live = { now: Date.now() / 1000, voices: {}, groups: Object.fromEntries(
+      Object.entries(levels).map(([id, value]) => [id, { value, max_value: 10, active: value > 0 }])) };
+  };
+  update(); setInterval(update, 1000);
+  document.querySelector("#level").addEventListener("input", update);
+  viewer.addEventListener("al-open-group", event => {
+    document.querySelector("#selection").textContent = `Open settings: ${event.detail.join("/")}`;
+  });
+</script>
+</html>

@@ -1,7 +1,6 @@
 # The panel — agent guide
 
-A [Lit](https://lit.dev) sidebar panel for Home Assistant, bundled by Vite into a single
-ES module. `README.md` here covers `pnpm dev` against a live Home Assistant; the root
+A [Lit](https://lit.dev) sidebar panel for Home Assistant, bundled by Vite into ES modules. `README.md` here covers `pnpm dev` against a live Home Assistant; the root
 `AGENTS.md` covers the repository as a whole.
 
 ## Commands
@@ -21,8 +20,8 @@ pnpm dev         # Vite on :5173
 
 `vite.config.ts` builds `src/main.ts` as a library into
 `../custom_components/activity_levels/frontend/activity-levels-panel.js`, with
-`emptyOutDir` on and dynamic imports inlined — one minified ES2022 file, which the
-integration serves through `panel_custom`. **That file is checked into git**, because
+`emptyOutDir` on, shared chunks, and a lazy 3D renderer. The integration serves the panel
+through `panel_custom`. **All generated files are checked into git**, because
 HACS installs the integration from the repository with no build step.
 
 So: change anything under `src/` and rebuild, then commit the bundle alongside the
@@ -42,6 +41,6 @@ is a red build. The `panel-bundle` pre-commit hook catches it before you push.
   measured over `src/**` and reported to Codecov under the `frontend` flag.
 - **eslint** runs `@eslint/js` + `typescript-eslint` recommended, plus the `lit` and `wc`
   plugin recommended sets on `src/**/*.ts`.
-- **Dependencies ship to users.** The bundle is a single file downloaded by every
-  installation, so a new runtime dependency is a real decision — `lit` is currently the
-  only one. Dev dependencies are free; runtime ones are not.
+- **Dependencies ship to users.** Runtime dependencies are `lit` and lazy-loaded `three`.
+  Keep the 3D renderer behind its dynamic import so other tabs and cards avoid its download.
+  New runtime dependencies need a size assessment; dev dependencies do not ship.
