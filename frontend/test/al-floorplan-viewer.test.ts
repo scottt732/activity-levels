@@ -41,9 +41,33 @@ const mount = async (config = modelConfig()) => {
   return el;
 };
 beforeEach(() => { scene.fail = false; vi.clearAllMocks(); });
-afterEach(() => { document.body.innerHTML = ""; vi.useRealTimers(); });
+afterEach(() => { document.body.innerHTML = ""; vi.useRealTimers(); delete (document as unknown as Record<string,unknown>).fullscreenElement; delete (document as unknown as Record<string,unknown>).exitFullscreen; });
 
 describe("floorplan viewer", () => {
+  it("exits ambient directly and publishes the preference without opening settings", async () => {
+    const el=await mount();el.settings={ambient:true,ground_z:12.886};await settle(el);
+    const changed=vi.fn();el.addEventListener("al-viewer-settings",changed);
+    const exit=el.shadowRoot!.querySelector<HTMLButtonElement>("#exit-view")!;
+    expect(exit).not.toBeNull();exit.click();await settle(el);
+    expect(el.hasAttribute("ambient")).toBe(false);
+    expect(changed.mock.calls[0]![0].detail).toEqual({ambient:false,ground_z:12.886});
+  });
+  it("exits owned fullscreen and handles the browser's native Escape exit", async () => {
+    const el=await mount();el.settings={ambient:true};await settle(el);
+    const fullscreen=vi.fn(()=>el as Element | null);Object.defineProperty(document,"fullscreenElement",{configurable:true,get:fullscreen});
+    const exit=vi.fn().mockResolvedValue(undefined);Object.defineProperty(document,"exitFullscreen",{configurable:true,value:exit});
+    document.dispatchEvent(new Event("fullscreenchange"));await settle(el);
+    el.shadowRoot!.querySelector<HTMLButtonElement>("#exit-view")!.click();await settle(el);
+    expect(exit).toHaveBeenCalledOnce();expect(el.settings.ambient).toBe(false);
+    el.settings={ambient:true};await settle(el);
+    fullscreen.mockReturnValue(null);document.dispatchEvent(new Event("fullscreenchange"));await settle(el);
+    expect(el.settings.ambient).toBe(false);delete (document as unknown as Record<string,unknown>).fullscreenElement;
+  });
+  it("handles Escape within the viewer without requiring browser fullscreen", async () => {
+    const el=await mount();el.settings={ambient:true};await settle(el);
+    el.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));await settle(el);
+    expect(el.settings.ambient).toBe(false);
+  });
   it("applies a ground setting, presets, and light fills without changing the model", async () => {
     const el=await mount(); const settings=vi.fn();el.addEventListener("al-viewer-settings",settings);
     const input=el.shadowRoot!.querySelector<HTMLInputElement>('input[type="number"]')!;

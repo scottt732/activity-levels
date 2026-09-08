@@ -45,14 +45,17 @@ export class AlFloorplanViewer extends LitElement {
     .selection h3 { margin-bottom: 6px; } .selection p { margin: 8px 0; }
     .issues { margin-top: 12px; } .help { font-size: 13px; }
     .settings { margin-top:16px; } .settings label { margin:10px 0; } textarea { width:100%; box-sizing:border-box; font:inherit; }
-    .ambient-toggle { display:none; } .alert { color:#ff7365; font-weight:600; }
+    .ambient-toggle { display:none; }
+    .view-actions { position:absolute; z-index:3; right:12px; top:12px; display:flex; gap:8px; flex-wrap:wrap; max-width:calc(100% - 24px); }
+    #exit-view { min-height:44px; }
+    :host(:fullscreen) { overflow:auto; background:var(--card-background-color,#020304); } .alert { color:#ff7365; font-weight:600; }
     :host([ambient]) .stale {position:absolute; z-index:2; bottom:60px; left:20px; color:#bec8ce;}
     :host([ambient]) .sensor-status { position:absolute; z-index:2; bottom:32px; left:20px; color:#a7b2b9; }
     :host([scheme="night"]) .viewport, :host([scheme="security"]) .viewport { background:#020304; }
     :host([ambient]) { position:relative; padding:0; background:#020304; min-height:100%; }
     :host([ambient]) .viewer { display:block; }
     :host([ambient]) .viewport { height:100dvh; border:0; border-radius:0; }
-    :host([ambient]) .ambient-toggle { display:block; position:absolute; z-index:3; right:12px; top:12px; opacity:.65; }
+    :host([ambient]) .ambient-toggle { display:block; }
     :host([ambient]) .alert { position:absolute; z-index:2; top:12px; left:20px; }
     :host([ambient]:not([show-controls])) h2, :host([ambient]:not([show-controls])) > p:not(.alert):not(.sensor-status):not(.stale),
     :host([ambient]:not([show-controls])) .toolbar, :host([ambient]:not([show-controls])) aside,
@@ -67,6 +70,7 @@ export class AlFloorplanViewer extends LitElement {
   @property({ attribute: false }) settings: ViewerSettings = {};
   @property({type:Boolean}) dashboard = false;
   @state() private controlsVisible = false;
+  @state() private fullscreen = false;
   @state() private settingsError = "";
   private groundZ?: number;
   private options: ViewerOptions = viewerOptions();
@@ -83,6 +87,8 @@ export class AlFloorplanViewer extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
+    document.addEventListener("fullscreenchange",this.fullscreenChanged);
+    this.addEventListener("keydown",this.escapeView);
     this.now = Date.now() / 1000;
     this.timer = setInterval(() => { if (document.visibilityState === "visible") this.now = Date.now() / 1000; }, 1000);
     this.requestUpdate();
@@ -90,8 +96,38 @@ export class AlFloorplanViewer extends LitElement {
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener("fullscreenchange",this.fullscreenChanged);
+    this.removeEventListener("keydown",this.escapeView);
     clearInterval(this.timer);
     this.stopRenderer();
+  }
+
+  /** Fullscreen is retargeted at shadow boundaries, so inspect the viewer's own root. */
+  private ownsFullscreen(): boolean {
+    return (this.getRootNode() as Document | ShadowRoot).fullscreenElement === this;
+  }
+  private readonly fullscreenChanged = (): void => {
+    const wasFullscreen=this.fullscreen;
+    this.fullscreen=this.ownsFullscreen();
+    if(wasFullscreen && !this.fullscreen && this.settings.ambient) this.leaveAmbient();
+  };
+  private readonly escapeView = (event: KeyboardEvent): void => {
+    if(event.key === "Escape" && (this.settings.ambient || this.ownsFullscreen())) {
+      event.preventDefault();void this.exitView();
+    }
+  };
+  private leaveAmbient(): void {
+    this.controlsVisible=false;this.removeAttribute("show-controls");
+    this.changeSettings({...this.settings,ambient:false});
+  }
+  private async exitView(): Promise<void> {
+    this.leaveAmbient();
+    if(this.ownsFullscreen()) {
+      try {await document.exitFullscreen();}
+      catch {this.settingsError="Could not exit browser fullscreen. Try Escape or your device's Back control.";}
+    }
+    await this.updateComplete;
+    this.renderRoot.querySelector<HTMLButtonElement>('[data-camera="reset"]')?.focus({preventScroll:true});
   }
 
   protected override willUpdate(changed: PropertyValues): void {
@@ -109,6 +145,8 @@ export class AlFloorplanViewer extends LitElement {
 
   protected override updated(changed: PropertyValues): void {
     if (!this.isConnected) return;
+    if(changed.has("settings") && this.options.ambient && !(changed.get("settings") as ViewerSettings | undefined)?.ambient)
+      this.renderRoot.querySelector<HTMLButtonElement>("#exit-view")?.focus({preventScroll:true});
     const parts = inScope(this.model.parts, this.scope);
     if (!parts.length) { this.stopRenderer(); return; }
     if (!this.renderer && !this.loading && !this.error) {
@@ -202,7 +240,10 @@ export class AlFloorplanViewer extends LitElement {
     const alert = activeRule(this.options.rules,this.hass?.states ?? {});
     const stale = this.live && this.now - this.live.now > STALE_SECONDS;
     return html`
+      <div class="view-actions">
+      ${this.options.ambient || this.fullscreen ? html`<button id="exit-view" type="button" @click=${()=>void this.exitView()}>${this.options.ambient ? "Exit ambient" : "Exit fullscreen"}</button>` : nothing}
       <button class="ambient-toggle" type="button" @click=${()=>{this.controlsVisible=!this.controlsVisible;this.toggleAttribute("show-controls",this.controlsVisible);}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
+      </div>
       <h2>Your home, live</h2>
       <p class="muted">Room outlines show activity. Room fills show the color and brightness of your lights.</p>
       <div class="toolbar">

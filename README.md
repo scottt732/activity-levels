@@ -659,7 +659,10 @@ for 30 seconds. Reduced-motion preferences disable automatic movement, and anima
 stops when the document is hidden or the card is removed. This is not a burn-in guarantee.
 
 Ambient mode hides routine controls behind **Show controls** and keeps alarm/stale notices
-visible. Card controls are temporary experiments; put lasting settings in dashboard YAML.
+visible. **Exit ambient** is always available at the top and also leaves browser fullscreen.
+Escape exits while the viewer has keyboard focus; the browser's native fullscreen exit
+also returns to the normal viewer. **Exit fullscreen** is available when fullscreen is
+used without ambient mode. Card controls are temporary experiments; put lasting settings in dashboard YAML.
 Unlike the admin editor, the card supports authenticated read-only dashboard users.
 
 
