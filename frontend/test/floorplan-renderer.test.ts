@@ -32,6 +32,21 @@ const frame = (value: number): LiveState => ({ now: 1000, voices: {}, groups: {
 afterEach(() => { vi.clearAllMocks(); document.body.innerHTML = ""; });
 
 describe("floorplan renderer", () => {
+  it("rotates half as far when the configured period doubles", async () => {
+    vi.useFakeTimers();
+    const angleAfterSecond=async(rotation_period:number)=>{
+      const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn());renderer.setParts([part()]);
+      const camera=gpu.render.mock.calls.at(-1)![1] as PerspectiveCamera;
+      const before=Math.atan2(camera.position.x,camera.position.z);
+      renderer.setActivity(frame(0),1000,"",viewerOptions({auto_rotate:true,rotation_period}));
+      await vi.advanceTimersByTimeAsync(1000);
+      const angle=Math.abs(Math.atan2(camera.position.x,camera.position.z)-before);
+      renderer.dispose();return angle;
+    };
+    const normal=await angleAfterSecond(180), slow=await angleAfterSecond(360);
+    expect(normal).toBeGreaterThan(0);expect(slow/normal).toBeCloseTo(0.5,5);
+    vi.useRealTimers();
+  });
   it("moves the camera closer for Zoom in and farther for Zoom out", () => {
     const renderer = new FloorplanRenderer(host(), vi.fn(), vi.fn());
     renderer.setParts([part()]);

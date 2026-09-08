@@ -623,6 +623,7 @@ light_fill: true
 fill_brightness: 0.12         # maximum opacity, 0–1
 ground_z: 12.886              # example: adjust for your coordinate system
 auto_rotate: true
+rotation_period: 180         # seconds per revolution; larger is slower
 focus_activity: true
 color_thresholds:
   - value: 5
@@ -652,7 +653,10 @@ red from 3. Rules match exact `on`/`off` states; highest priority wins, with con
 order breaking ties. A rule without a group applies to the whole visible house. Unknown
 sensor states produce a notice and never match `off`. Rules only change presentation.
 
-Slow orbit and activity focus are separate opt-ins. Fresh room activity briefly draws
+Slow orbit and activity focus are separate opt-ins. Set **Seconds per rotation** or
+`rotation_period` to control orbit speed: 180 (default) takes three minutes, 360 takes
+six minutes, and 90 takes ninety seconds. Values must be at least one second. Speed
+changes preserve the camera position. Fresh room activity briefly draws
 focus, then returns to overview; sustained activity does not repeatedly interrupt it.
 An active rule takes priority. Camera gestures, buttons or room selection pause automation
 for 30 seconds. Reduced-motion preferences disable automatic movement, and animation

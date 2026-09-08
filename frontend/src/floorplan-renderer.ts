@@ -223,7 +223,7 @@ export class FloorplanRenderer {
         this.camera.position.copy(this.controls.target).add(offset);
         if (returning && this.controls.target.length()<0.01 && Math.abs(offset.length()-distance)<0.01) this.focusTarget=undefined;
       }
-      if (this.options.auto_rotate) this.controls.rotateLeft(delta*Math.PI/90);
+      if (this.options.auto_rotate) this.controls.rotateLeft(delta*2*Math.PI/this.options.rotation_period);
       this.controls.update(); this.draw();
     }
     if (this.options.auto_rotate || this.focusTarget) this.animation=setTimeout(this.animate,1000/30);

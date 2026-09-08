@@ -215,6 +215,9 @@ export class AlFloorplanViewer extends LitElement {
       <button type="button" @click=${()=>{const lowest=[...inScope(this.model.parts,this.scope)].sort((a,b)=>a.low-b.low)[0];if(lowest)this.changeSettings({...this.settings,ground_z:Number((lowest.high-0.9144).toFixed(3))});}}>Basement top 3 ft above ground</button>
       ${(["light_fill","ambient","auto_rotate","focus_activity"] as const).map(key=>html`<label><input type="checkbox" .checked=${this.options[key]}
         @change=${(e:Event)=>this.changeSettings({...this.settings,[key]:(e.target as HTMLInputElement).checked})}>${{light_fill:"Fill rooms from lights",ambient:"Ambient fullscreen layout",auto_rotate:"Slow orbit",focus_activity:"Focus on new activity"}[key]}</label>`)}
+      <label>Seconds per rotation <input id="rotation-period" type="number" min="1" step="any" .value=${String(this.options.rotation_period)}
+        @change=${(e:Event)=>this.changeSettings({...this.settings,rotation_period:Number((e.target as HTMLInputElement).value)})}></label>
+      <p class="help muted">Larger values rotate more slowly. Default: 180 seconds per revolution.</p>
       <label>Maximum fill brightness <input type="range" min="0" max="1" step="0.01" .value=${String(this.options.fill_brightness)} @input=${(e:Event)=>this.changeSettings({...this.settings,fill_brightness:Number((e.target as HTMLInputElement).value)})}></label>
       <details><summary>Advanced settings (JSON)</summary><p>Configure color_thresholds and binary-sensor rules here.</p>
         <textarea aria-label="Viewer settings JSON" rows="12" .value=${JSON.stringify(this.settings,null,2)}></textarea>

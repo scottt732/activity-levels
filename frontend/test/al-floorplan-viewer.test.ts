@@ -44,6 +44,15 @@ beforeEach(() => { scene.fail = false; vi.clearAllMocks(); });
 afterEach(() => { document.body.innerHTML = ""; vi.useRealTimers(); delete (document as unknown as Record<string,unknown>).fullscreenElement; delete (document as unknown as Record<string,unknown>).exitFullscreen; });
 
 describe("floorplan viewer", () => {
+  it("publishes rotation speed changes without rebuilding the scene", async () => {
+    const el=await mount();const builds=scene.setParts.mock.calls.length;
+    const changed=vi.fn();el.addEventListener("al-viewer-settings",changed);
+    const input=el.shadowRoot!.querySelector<HTMLInputElement>("#rotation-period")!;
+    expect(input.value).toBe("180");input.value="360";input.dispatchEvent(new Event("change"));await settle(el);
+    expect(changed.mock.calls[0]![0].detail.rotation_period).toBe(360);
+    expect(scene.setActivity.mock.calls.at(-1)![3].rotation_period).toBe(360);
+    expect(scene.setParts).toHaveBeenCalledTimes(builds);
+  });
   it("exits ambient directly and publishes the preference without opening settings", async () => {
     const el=await mount();el.settings={ambient:true,ground_z:12.886};await settle(el);
     const changed=vi.fn();el.addEventListener("al-viewer-settings",changed);

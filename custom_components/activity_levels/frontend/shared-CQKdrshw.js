@@ -1,4 +1,4 @@
-import { i as e, n as t, r as n } from "./shared-CTeUtp13.js";
+import { i as e, n as t, r as n } from "./shared-B8G7llwa.js";
 import { $ as r, B as i, G as a, Ht as o, N as s, P as c, Ut as l, V as u, W as d, an as f, d as p, en as m, et as h, in as g, k as _, nn as v, nt as y, r as b, tt as x, vn as S, w as C, x as w, yn as T } from "./shared-BezvItqW.js";
 import { t as E } from "./shared-By8JNv_U.js";
 //#region node_modules/.pnpm/three@0.185.1/node_modules/three/examples/jsm/controls/OrbitControls.js
@@ -467,7 +467,7 @@ var Z = class {
 					let e = Date.now() > this.focusUntil, n = e ? new T() : this.focusTarget, r = this.camera.position.clone().sub(this.controls.target), i = e ? this.fitDistance() : this.focusDistance;
 					r.setLength(r.length() + (i - r.length()) * Math.min(1, t * 2)), this.controls.target.lerp(n, Math.min(1, t * 2)), this.camera.position.copy(this.controls.target).add(r), e && this.controls.target.length() < .01 && Math.abs(r.length() - i) < .01 && (this.focusTarget = void 0);
 				}
-				this.options.auto_rotate && this.controls.rotateLeft(t * Math.PI / 90), this.controls.update(), this.draw();
+				this.options.auto_rotate && this.controls.rotateLeft(t * 2 * Math.PI / this.options.rotation_period), this.controls.update(), this.draw();
 			}
 			(this.options.auto_rotate || this.focusTarget) && (this.animation = setTimeout(this.animate, 1e3 / 30));
 		}, this.onPointerDown = (e) => {
