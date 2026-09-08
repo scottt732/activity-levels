@@ -1242,12 +1242,17 @@ var pt = [
 	["out", "Zoom out"]
 ], mt = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends V {
 	constructor(...e) {
-		super(...e), this.lights = {}, this.settings = {}, this.dashboard = !1, this.controlsVisible = !1, this.settingsError = "", this.options = J(), this.live = null, this.scope = "", this.selected = "", this.now = Date.now() / 1e3, this.loading = !1, this.error = "", this.model = {
+		super(...e), this.lights = {}, this.settings = {}, this.dashboard = !1, this.controlsVisible = !1, this.fullscreen = !1, this.settingsError = "", this.options = J(), this.live = null, this.scope = "", this.selected = "", this.now = Date.now() / 1e3, this.loading = !1, this.error = "", this.model = {
 			parts: [],
 			groups: [],
 			scopes: [],
 			issues: []
-		}, this.sequence = 0;
+		}, this.sequence = 0, this.fullscreenChanged = () => {
+			let e = this.fullscreen;
+			this.fullscreen = this.ownsFullscreen(), e && !this.fullscreen && this.settings.ambient && this.leaveAmbient();
+		}, this.escapeView = (e) => {
+			e.key === "Escape" && (this.settings.ambient || this.ownsFullscreen()) && (e.preventDefault(), this.exitView());
+		};
 	}
 	static {
 		this.styles = [nt, o`
@@ -1277,14 +1282,17 @@ var pt = [
     .selection h3 { margin-bottom: 6px; } .selection p { margin: 8px 0; }
     .issues { margin-top: 12px; } .help { font-size: 13px; }
     .settings { margin-top:16px; } .settings label { margin:10px 0; } textarea { width:100%; box-sizing:border-box; font:inherit; }
-    .ambient-toggle { display:none; } .alert { color:#ff7365; font-weight:600; }
+    .ambient-toggle { display:none; }
+    .view-actions { position:absolute; z-index:3; right:12px; top:12px; display:flex; gap:8px; flex-wrap:wrap; max-width:calc(100% - 24px); }
+    #exit-view { min-height:44px; }
+    :host(:fullscreen) { overflow:auto; background:var(--card-background-color,#020304); } .alert { color:#ff7365; font-weight:600; }
     :host([ambient]) .stale {position:absolute; z-index:2; bottom:60px; left:20px; color:#bec8ce;}
     :host([ambient]) .sensor-status { position:absolute; z-index:2; bottom:32px; left:20px; color:#a7b2b9; }
     :host([scheme="night"]) .viewport, :host([scheme="security"]) .viewport { background:#020304; }
     :host([ambient]) { position:relative; padding:0; background:#020304; min-height:100%; }
     :host([ambient]) .viewer { display:block; }
     :host([ambient]) .viewport { height:100dvh; border:0; border-radius:0; }
-    :host([ambient]) .ambient-toggle { display:block; position:absolute; z-index:3; right:12px; top:12px; opacity:.65; }
+    :host([ambient]) .ambient-toggle { display:block; }
     :host([ambient]) .alert { position:absolute; z-index:2; top:12px; left:20px; }
     :host([ambient]:not([show-controls])) h2, :host([ambient]:not([show-controls])) > p:not(.alert):not(.sensor-status):not(.stale),
     :host([ambient]:not([show-controls])) .toolbar, :host([ambient]:not([show-controls])) aside,
@@ -1294,12 +1302,29 @@ var pt = [
   `];
 	}
 	connectedCallback() {
-		super.connectedCallback(), this.now = Date.now() / 1e3, this.timer = setInterval(() => {
+		super.connectedCallback(), document.addEventListener("fullscreenchange", this.fullscreenChanged), this.addEventListener("keydown", this.escapeView), this.now = Date.now() / 1e3, this.timer = setInterval(() => {
 			document.visibilityState === "visible" && (this.now = Date.now() / 1e3);
 		}, 1e3), this.requestUpdate();
 	}
 	disconnectedCallback() {
-		super.disconnectedCallback(), clearInterval(this.timer), this.stopRenderer();
+		super.disconnectedCallback(), document.removeEventListener("fullscreenchange", this.fullscreenChanged), this.removeEventListener("keydown", this.escapeView), clearInterval(this.timer), this.stopRenderer();
+	}
+	ownsFullscreen() {
+		return this.getRootNode().fullscreenElement === this;
+	}
+	leaveAmbient() {
+		this.controlsVisible = !1, this.removeAttribute("show-controls"), this.changeSettings({
+			...this.settings,
+			ambient: !1
+		});
+	}
+	async exitView() {
+		if (this.leaveAmbient(), this.ownsFullscreen()) try {
+			await document.exitFullscreen();
+		} catch {
+			this.settingsError = "Could not exit browser fullscreen. Try Escape or your device's Back control.";
+		}
+		await this.updateComplete, this.renderRoot.querySelector("[data-camera=\"reset\"]")?.focus({ preventScroll: !0 });
 	}
 	willUpdate(e) {
 		this.options = J(this.settings);
@@ -1316,6 +1341,7 @@ var pt = [
 	}
 	updated(e) {
 		if (!this.isConnected) return;
+		e.has("settings") && this.options.ambient && !e.get("settings")?.ambient && this.renderRoot.querySelector("#exit-view")?.focus({ preventScroll: !0 });
 		let t = q(this.model.parts, this.scope);
 		if (!t.length) {
 			this.stopRenderer();
@@ -1337,7 +1363,7 @@ var pt = [
 		let e = ++this.sequence;
 		this.loading = !0;
 		try {
-			let { FloorplanRenderer: t } = await import("./shared-wHNY6zq9.js");
+			let { FloorplanRenderer: t } = await import("./shared-DniDHBie.js");
 			if (e !== this.sequence || !this.isConnected) return;
 			let n = this.renderRoot.querySelector("#scene");
 			this.renderer = new t(n, (e) => {
@@ -1446,9 +1472,12 @@ var pt = [
 	render() {
 		let e = q(this.model.parts, this.scope), t = q(this.model.groups, this.scope), n = this.model.groups.find((e) => e.id === this.selected), r = Y(this.options.rules, this.hass?.states ?? {}), i = this.live && this.now - this.live.now > 10;
 		return j`
+      <div class="view-actions">
+      ${this.options.ambient || this.fullscreen ? j`<button id="exit-view" type="button" @click=${() => void this.exitView()}>${this.options.ambient ? "Exit ambient" : "Exit fullscreen"}</button>` : N}
       <button class="ambient-toggle" type="button" @click=${() => {
 			this.controlsVisible = !this.controlsVisible, this.toggleAttribute("show-controls", this.controlsVisible);
 		}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
+      </div>
       <h2>Your home, live</h2>
       <p class="muted">Room outlines show activity. Room fills show the color and brightness of your lights.</p>
       <div class="toolbar">
@@ -1504,7 +1533,7 @@ var pt = [
     `;
 	}
 };
-G([H({ attribute: !1 })], $.prototype, "config", void 0), G([H({ attribute: !1 })], $.prototype, "hass", void 0), G([H({ attribute: !1 })], $.prototype, "lights", void 0), G([H({ attribute: !1 })], $.prototype, "settings", void 0), G([H({ type: Boolean })], $.prototype, "dashboard", void 0), G([U()], $.prototype, "controlsVisible", void 0), G([U()], $.prototype, "settingsError", void 0), G([H({ attribute: !1 })], $.prototype, "live", void 0), G([U()], $.prototype, "scope", void 0), G([U()], $.prototype, "selected", void 0), G([U()], $.prototype, "now", void 0), G([U()], $.prototype, "loading", void 0), G([U()], $.prototype, "error", void 0), $ = G([Ee("al-floorplan-viewer")], $);
+G([H({ attribute: !1 })], $.prototype, "config", void 0), G([H({ attribute: !1 })], $.prototype, "hass", void 0), G([H({ attribute: !1 })], $.prototype, "lights", void 0), G([H({ attribute: !1 })], $.prototype, "settings", void 0), G([H({ type: Boolean })], $.prototype, "dashboard", void 0), G([U()], $.prototype, "controlsVisible", void 0), G([U()], $.prototype, "fullscreen", void 0), G([U()], $.prototype, "settingsError", void 0), G([H({ attribute: !1 })], $.prototype, "live", void 0), G([U()], $.prototype, "scope", void 0), G([U()], $.prototype, "selected", void 0), G([U()], $.prototype, "now", void 0), G([U()], $.prototype, "loading", void 0), G([U()], $.prototype, "error", void 0), $ = G([Ee("al-floorplan-viewer")], $);
 //#endregion
 //#region src/floorplan-store.ts
 var ht = /* @__PURE__ */ new WeakMap(), gt = class {
