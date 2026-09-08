@@ -22,6 +22,7 @@ await import("../src/al-presence");
 await import("../src/al-paths");
 await import("../src/al-code");
 await import("../src/al-floorplan-import");
+await import("../src/al-floorplans");
 
 const {
   alChange,
@@ -991,16 +992,39 @@ describe("activity-levels-panel floorplan import", () => {
   it("connects imported geometry to the existing draft and undo controls", async () => {
     await mount(roomsConfig());
     await selectTab(7);
-    const importer = el.shadowRoot!.querySelector("al-floorplan-import")!;
+    const importer = el.shadowRoot!.querySelector("al-floorplans")!.shadowRoot!.querySelector("al-floorplan-import")!;
     expect(importer).toBeTruthy();
     expect(importer.config).toEqual(current);
     const imported = structuredClone(current);
     imported.gps = { latitude: 0, longitude: 0 };
     importer.dispatchEvent(alChange(imported));
     await settle();
-    expect(el.shadowRoot!.querySelector("al-floorplan-import")!.config!.gps).toEqual(imported.gps);
+    expect(el.shadowRoot!.querySelector("al-floorplans")!.shadowRoot!.querySelector("al-floorplan-import")!.config!.gps).toEqual(imported.gps);
     el.shadowRoot!.querySelector('[title="Undo"]')!.dispatchEvent(new MouseEvent("click"));
     await settle();
-    expect(el.shadowRoot!.querySelector("al-floorplan-import")!.config!.gps).toBeUndefined();
+    expect(el.shadowRoot!.querySelector("al-floorplans")!.shadowRoot!.querySelector("al-floorplan-import")!.config!.gps).toBeUndefined();
+  });
+});
+
+
+describe("activity-levels-panel 3D viewer", () => {
+  it("polls live state on Floorplans with Live off, and opens selected group settings", async () => {
+    await selectTab(1);
+    vi.useFakeTimers();
+    try {
+      const before = wsCalls("activity_levels/state").length;
+      await selectTab(7);
+      expect(wsCalls("activity_levels/state").length).toBe(before + 1);
+      await vi.advanceTimersByTimeAsync(2000); await settle();
+      expect(wsCalls("activity_levels/state").length).toBe(before + 2);
+      const floorplans = el.shadowRoot!.querySelector("al-floorplans")!;
+      expect(floorplans.live).not.toBeNull();
+      floorplans.dispatchEvent(new CustomEvent("al-open-group", { detail: ["groups", 0], bubbles: true }));
+      await settle();
+      expect(el.shadowRoot!.querySelector(".tab.active")!.textContent!.trim()).toBe("Groups");
+      const stopped = wsCalls("activity_levels/state").length;
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(wsCalls("activity_levels/state").length).toBe(stopped);
+    } finally { vi.useRealTimers(); }
   });
 });

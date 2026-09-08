@@ -33,6 +33,10 @@ view — `localhost` only works when both run on the same host. The panel is the
 by Vite with hot module replacement. Unset the variable and restart to go back to the
 bundle.
 
+For a standalone 3D viewer fixture, open `/dev/floorplan.html` on the Vite server.
+It supplies an illustrative two-floor house and simulated readings, with controls for
+activity and stale-data checks; it does not require Home Assistant.
+
 ## The bundle is committed
 
 `pnpm build` writes into `custom_components/activity_levels/frontend/`, and that output is
