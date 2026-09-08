@@ -35,7 +35,7 @@ describe("runSave", () => {
     const outcome = await runSave(config, { validate: () => Promise.resolve(ok), save: () => Promise.resolve(ok) });
     expect(outcome).toEqual({
       errors: [],
-      banner: { kind: "info", text: "Saved. Activity Levels is reloading." },
+      banner: { kind: "info", text: "Saved. Configuration updates automatically." },
       reload: true,
     });
   });

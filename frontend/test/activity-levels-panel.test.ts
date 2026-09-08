@@ -919,6 +919,20 @@ describe("activity-levels-panel code tab", () => {
     expect(saveDisabled()).toBe(false);
   });
 
+  it("ignores Save clicks while current Code validation is pending", async () => {
+    await mount(houseConfig());
+    await selectTab(8);
+    await dirty();
+    await report(false, []);
+    const button = Array.from(el.shadowRoot!.querySelectorAll("ha-button")).find(
+      (b) => b.textContent?.trim() === "Save",
+    );
+    const callsBefore = (el.hass as { callWS: Mock }).callWS.mock.calls.length;
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await settle();
+    expect((el.hass as { callWS: Mock }).callWS.mock.calls.length).toBe(callsBefore);
+  });
+
   it("disables Save while the backend reports problems, and shares them with the other tabs", async () => {
     await mount(houseConfig());
     await selectTab(8);

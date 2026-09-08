@@ -331,6 +331,12 @@ class SimulationRuntime:
         self.evaluate_all()
 
     @callback
+    def light_membership_changed(self) -> None:
+        """Replace pending plans so excluded lights cannot receive later actions."""
+        self._replan()
+        self.evaluate_all()
+
+    @callback
     def _replan(self) -> None:
         for gid in list(self._plans):
             forced = gid in self._forced

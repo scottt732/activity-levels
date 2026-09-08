@@ -322,7 +322,7 @@ export class ActivityLevelsPanel extends LitElement {
 
   private async save(): Promise<void> {
     const draft = this.draft;
-    if (!draft) return;
+    if (!draft || this.busy || this.blocked) return;
     this.busy = true;
     this.updatePolling();
     try {

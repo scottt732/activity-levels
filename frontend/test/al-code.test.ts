@@ -128,7 +128,7 @@ beforeEach(async () => {
 describe("al-code", () => {
   it("seeds the editor from the draft and validates what it opened on", async () => {
     expect(editor().seeded).toEqual([el.config]);
-    expect(statuses).toEqual([{ valid: true, errors: [] }]);
+    expect(statuses.at(-1)).toEqual({ valid: true, errors: [] });
   });
 
   it("sends a parsed edit into the draft, once, after the debounce", async () => {
@@ -190,7 +190,7 @@ describe("al-code", () => {
     validateResult = { ok: false, errors: [{ path: "groups/0/id", message: "duplicate group id" }] };
     editor().emit({ value: config(), isValid: true });
     await settle();
-    expect(statuses.at(-1)).toEqual({ valid: true, errors: validateResult.errors });
+    expect(statuses.at(-1)).toEqual({ valid: false, errors: validateResult.errors });
     el.errors = validateResult.errors;
     await el.updateComplete;
     const rows = el.shadowRoot?.querySelectorAll("ul.errors li");
@@ -199,11 +199,25 @@ describe("al-code", () => {
     expect(rows?.[0]?.textContent).toContain("duplicate group id");
   });
 
-  it("keeps the last verdict when the websocket call fails", async () => {
+  it("blocks Save when the websocket call fails", async () => {
     validateError = new Error("disconnected");
     editor().emit({ value: config(), isValid: true });
     await settle();
-    expect(statuses).toHaveLength(1);
+    expect(statuses.at(-1)).toEqual({ valid: false, errors: [] });
+  });
+
+  it("blocks Save immediately and ignores an older success while invalid YAML is pending", async () => {
+    let resolve!: (value: unknown) => void;
+    (el.hass as { callWS: Mock }).callWS = vi.fn(() => new Promise((r) => { resolve = r; }));
+    editor().emit({ value: config(), isValid: true });
+    await settle();
+    editor().emit({ value: undefined, isValid: false });
+    expect(statuses.at(-1)?.valid).toBe(false);
+    resolve({ ok: true, errors: [] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(statuses.at(-1)?.valid).toBe(false);
+    await settle();
+    expect(statuses.at(-1)?.valid).toBe(false);
   });
 
   it("drops a stale validation answer that resolves after a newer one", async () => {

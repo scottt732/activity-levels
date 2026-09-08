@@ -105,10 +105,13 @@ export class AlCode extends LitElement {
   private timer?: number;
   /** Which validation is the current one; an older answer resolving late is dropped. */
   private seq = 0;
+  @state() private validating = false;
+  @state() private validationFailure: string | null = null;
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     window.clearTimeout(this.timer);
+    this.seq++;
   }
 
   protected override firstUpdated(): void {
@@ -118,7 +121,12 @@ export class AlCode extends LitElement {
   }
 
   protected override updated(changed: PropertyValues<this>): void {
-    if (changed.has("config") && this.config !== this.mine) this.seed();
+    if (changed.has("config") && this.config !== this.mine) {
+      window.clearTimeout(this.timer);
+      this.parseError = null;
+      this.seed();
+      void this.validate(this.config);
+    }
   }
 
   private get editor(): HaYamlEditor | null {
@@ -134,6 +142,10 @@ export class AlCode extends LitElement {
   private onYaml = (ev: CustomEvent<YamlChange>): void => {
     ev.stopPropagation();
     window.clearTimeout(this.timer);
+    this.seq++;
+    this.validating = true;
+    this.validationFailure = null;
+    this.dispatchEvent(alCodeStatus(false, []));
     const detail = ev.detail;
     this.timer = window.setTimeout(() => void this.settle(detail), DEBOUNCE_MS);
   };
@@ -145,6 +157,7 @@ export class AlCode extends LitElement {
    */
   private async settle(detail: YamlChange): Promise<void> {
     if (!detail.isValid) {
+      this.validating = false;
       this.parseError = detail.errorMsg ?? "This is not valid YAML.";
       this.dispatchEvent(alCodeStatus(false, []));
       return;
@@ -158,15 +171,21 @@ export class AlCode extends LitElement {
   }
 
   private async validate(config: Config | undefined): Promise<void> {
-    const hass = this.hass;
-    if (!hass || !config) return;
     const seq = ++this.seq;
+    this.validating = true;
+    this.validationFailure = null;
+    this.dispatchEvent(alCodeStatus(false, []));
     try {
-      const { errors } = await validateConfig(hass, config);
-      if (seq === this.seq) this.dispatchEvent(alCodeStatus(true, errors));
+      if (!this.hass || !config) throw new Error("No configuration or connection available.");
+      const result = await validateConfig(this.hass, config);
+      if (seq !== this.seq) return;
+      this.validating = false;
+      this.dispatchEvent(alCodeStatus(result.ok, result.errors));
     } catch {
-      // A transient websocket failure is not a verdict: keep the last one rather than
-      // inventing a problem, or clearing one that is really there. Save asks again.
+      if (seq !== this.seq) return;
+      this.validating = false;
+      this.validationFailure = "Could not validate this document. Edit again to retry; Save remains disabled.";
+      this.dispatchEvent(alCodeStatus(false, []));
     }
   }
 
@@ -186,6 +205,9 @@ export class AlCode extends LitElement {
   private renderProblems(): TemplateResult {
     if (this.parseError !== null)
       return html`<ha-alert class="parse-error" alert-type="error">${this.parseError}</ha-alert>`;
+    if (this.validationFailure)
+      return html`<ha-alert alert-type="error">${this.validationFailure}</ha-alert>`;
+    if (this.validating) return html`<p class="muted">Validating…</p>`;
     if (this.errors.length === 0)
       return html`<p class="muted no-problems">No problems. Save applies this document.</p>`;
     return html`

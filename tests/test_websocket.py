@@ -367,3 +367,38 @@ async def test_floorplan_dashboard_reports_unloaded(hass, hass_ws_client, entry)
     response = await client.receive_json()
     assert not response["success"]
     assert response["error"]["code"] == "not_found"
+
+
+async def test_invalid_light_exclusion_save_preserves_running_config(hass, hass_ws_client, entry):
+    original = dict(entry.options)
+    runtime = entry.runtime_data
+    config = validate_config(house_config())
+    config["groups"][0]["children"][1]["simulation"]["lights"]["exclude"] = ["sensor.wrong_domain"]
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/config/save", "config": config})
+    response = await client.receive_json()
+    assert response["success"] and not response["result"]["ok"]
+    assert response["result"]["errors"]
+    await hass.async_block_till_done()
+    assert entry.options == original
+    assert entry.runtime_data is runtime
+
+
+async def test_light_exclusion_save_updates_floorplan_without_reload(hass, hass_ws_client, entry):
+    config = validate_config(house_config())
+    config["groups"][0]["children"][1]["simulation"]["lights"]["include"] = ["light.kitchen"]
+    hass.config_entries.async_update_entry(entry, options=config)
+    await hass.async_block_till_done()
+    runtime = entry.runtime_data
+    config = validate_config(config)
+    config["groups"][0]["children"][1]["simulation"]["lights"]["exclude"] = ["light.kitchen"]
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/config/save", "config": config})
+    response = await client.receive_json()
+    assert response["success"] and response["result"]["ok"]
+    await hass.async_block_till_done()
+    assert entry.runtime_data is runtime
+    await client.send_json_auto_id({"type": "activity_levels/floorplan/dashboard"})
+    response = await client.receive_json()
+    assert response["success"]
+    assert response["result"]["lights"]["kitchen"] == []
