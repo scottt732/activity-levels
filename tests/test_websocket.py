@@ -342,3 +342,28 @@ async def test_config_get_reports_what_the_document_lost_on_the_way_in(
         "groups/0: 'kitchen' declares doors but is a root group; every root is a property, "
         "so it is not a room. Wrap your rooms in a property."
     ]
+
+
+async def test_floorplan_dashboard_is_read_only(
+    hass, hass_ws_client, entry, hass_read_only_access_token
+):
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json_auto_id({"type": "activity_levels/floorplan/dashboard"})
+    response = await client.receive_json()
+    assert response["success"]
+    data = response["result"]
+    assert data["entry_id"] == entry.entry_id
+    assert data["live"]["groups"]
+    assert data["lights"] == entry.runtime_data.patterns.lights
+    assert set(data["config"]) == {"groups"}
+    assert "stimuli" not in str(data["config"])
+    assert "defaults" not in data["config"]
+
+
+async def test_floorplan_dashboard_reports_unloaded(hass, hass_ws_client, entry):
+    await hass.config_entries.async_unload(entry.entry_id)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/floorplan/dashboard"})
+    response = await client.receive_json()
+    assert not response["success"]
+    assert response["error"]["code"] == "not_found"

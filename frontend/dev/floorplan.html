@@ -20,6 +20,9 @@
   <strong>Floorplan browser fixture · simulated readings</strong>
   <label>Kitchen activity <input id="level" type="range" min="0" max="10" value="8"></label>
   <label><input id="updates" type="checkbox" checked> Send live updates</label>
+  <label>Light color <input id="light-color" type="color" value="#ffba66"></label>
+  <label>Light brightness <input id="brightness" type="range" min="0" max="255" value="190"></label>
+  <label><input id="alarm" type="checkbox"> Alarm</label>
   <span id="selection" role="status"></span>
 </header>
 <main><al-floorplan-viewer></al-floorplan-viewer></main>
@@ -48,7 +51,28 @@
     ] },
   ] }];
   const viewer = document.querySelector("al-floorplan-viewer");
+  // Use the supplied basement elevation and a two-meter basement ceiling.
+  for (const floor of config.groups[0].children[0].children) {
+    const basement=floor.id === "ground";
+    if (basement) floor.name="Basement";
+    for (const group of [floor,...floor.children]) {
+      group.bounds[0][2]+=11.8; group.bounds[1][2]+=basement?11.3:11.8;
+    }
+  }
   viewer.config = config;
+  viewer.settings={ground_z:12.886,scheme:"night",auto_rotate:true,focus_activity:true,rules:[{entity:"binary_sensor.alarm",state:"on",label:"Alarm triggered",scheme:"security",color:"#d31400",group:"kitchen"}]};
+  viewer.lights={kitchen:["light.kitchen"],office:["light.office"]};
+  const updateLights=()=>{
+    const hex=document.querySelector("#light-color").value;
+    const rgb=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16));
+    viewer.hass={states:{
+      "light.kitchen":{state:"on",attributes:{rgb_color:rgb,brightness:Number(document.querySelector("#brightness").value)}},
+      "light.office":{state:"on",attributes:{rgb_color:[100,160,255],brightness:100}},
+      "binary_sensor.alarm":{state:document.querySelector("#alarm").checked?"on":"off",attributes:{}}
+    }};
+  };
+  for(const id of ["light-color","brightness","alarm"]) document.querySelector(`#${id}`).addEventListener("input",updateLights);
+  updateLights();
   const update = () => {
     if (!document.querySelector("#updates").checked) return;
     const levels = { home: 8, house: 8, ground: 8, upper: 3, kitchen: Number(document.querySelector("#level").value),

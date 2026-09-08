@@ -578,15 +578,90 @@ wireframe. Drag to orbit, scroll to zoom, or use the camera buttons, **Top** and
 Choose a property, structure or floor to isolate its current descendants. Geometry keeps
 its imported coordinates; GPS and changes to the group hierarchy do not reposition it.
 
-Room shading follows each group's own live activity relative to its maximum. Select a
-room in the drawing or the accessible group list to see its reading and open its existing
-group settings. Missing or stale readings are explicitly labeled. Live updates preserve
-your camera and selection. Floors and other containers remain outlines so rooms stay visible.
+Room outlines follow each group's absolute live activity, with defaults of blue
+`#2189EF` below 3, amber `#f39c12` from 3, and red `#d31400` from 5. Room fills use the
+actual colors and brightness of the room's lights. Multiple lights blend by brightness;
+off lights contribute nothing. The brightest light sets the fill strength, capped by the
+viewer brightness setting. This is an illustrative tint, not a lighting simulation.
 
-Footprints without vertical bounds remain listed as unplaced until heights are supplied.
-If WebGL is unavailable, the group list and readings still work. The 3D renderer downloads
-only when geometry is displayed (about 158 KB compressed); other tabs do not load it.
+Select a room or a group to see its activity and light reading. Missing/stale activity
+and unavailable lights are identified explicitly. Selection emphasizes outlines without
+replacing their activity color. Floors and other containers remain outlines.
+
+**Viewer settings** offers Standard, Night and Security schemes, fill brightness,
+slow orbit, activity focus, ambient layout, fullscreen, and an advanced JSON editor.
+Panel settings are saved in this browser for this integration; importing a floorplan does
+not change them. Geometry without vertical bounds stays listed as unplaced. A WebGL
+fallback preserves the group list. The 3D renderer loads only when geometry is shown.
 The viewer does not infer doors or adjacency.
+
+### Ground level and basements
+
+Set `ground_z` to outdoor ground height in the **same coordinates as your floor bounds**.
+A transparent plane and grid mark that elevation while basement geometry remains visible
+below it. Without this setting, the grid is only a reference beneath the house and does
+not claim to represent outdoor ground. GPS elevation does not position the ground plane.
+
+For a basement spanning Z = 11.8–13.8 with its top three feet above ground, use
+`ground_z: 12.886` (13.8 minus 0.9144 meters, rounded). The **Basement top 3 ft above ground**
+button calculates this from the lowest visible geometry. Ground is a horizontal reference;
+sloping terrain is not modeled.
+
+### Ambient floorplan dashboard
+
+Add an **Activity Levels Floorplan** custom card to a dedicated dashboard. Its existing
+Activity Levels cards resource registers it automatically. A panel view containing this
+single card works well as a kiosk destination; Fully Kiosk or your dashboard configuration
+controls browser/navigation chrome and when to enter screensaver mode. **Enter fullscreen**
+can also expand the viewer after a user gesture where the browser permits it.
+
+```yaml
+type: custom:activity-levels-floorplan-card
+ambient: true
+scheme: night                 # standard, night, security
+light_fill: true
+fill_brightness: 0.12         # maximum opacity, 0–1
+ground_z: 12.886              # example: adjust for your coordinate system
+auto_rotate: true
+focus_activity: true
+color_thresholds:
+  - value: 5
+    color: '#d31400'
+  - value: 3
+    color: '#f39c12'
+  - value: 0
+    color: '#2189EF'
+rules:
+  - entity: binary_sensor.alarm_triggered
+    state: 'on'
+    label: Alarm triggered
+    priority: 10
+    scheme: security
+    color: '#d31400'
+  - entity: binary_sensor.doors_opened
+    state: 'on'
+    label: Door open
+    group: entryway           # your Activity Levels group ID
+    priority: 5
+    color: '#d31400'
+```
+
+Thresholds are sorted and applied as steps using absolute activity, not percentages;
+custom thresholds override a scheme's defaults. Security defaults to gray below 3 and
+red from 3. Rules match exact `on`/`off` states; highest priority wins, with configuration
+order breaking ties. A rule without a group applies to the whole visible house. Unknown
+sensor states produce a notice and never match `off`. Rules only change presentation.
+
+Slow orbit and activity focus are separate opt-ins. Fresh room activity briefly draws
+focus, then returns to overview; sustained activity does not repeatedly interrupt it.
+An active rule takes priority. Camera gestures, buttons or room selection pause automation
+for 30 seconds. Reduced-motion preferences disable automatic movement, and animation
+stops when the document is hidden or the card is removed. This is not a burn-in guarantee.
+
+Ambient mode hides routine controls behind **Show controls** and keeps alarm/stale notices
+visible. Card controls are temporary experiments; put lasting settings in dashboard YAML.
+Unlike the admin editor, the card supports authenticated read-only dashboard users.
+
 
 ## Configuration reference
 

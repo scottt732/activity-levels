@@ -44,6 +44,16 @@ beforeEach(() => { scene.fail = false; vi.clearAllMocks(); });
 afterEach(() => { document.body.innerHTML = ""; vi.useRealTimers(); });
 
 describe("floorplan viewer", () => {
+  it("applies a ground setting, presets, and light fills without changing the model", async () => {
+    const el=await mount(); const settings=vi.fn();el.addEventListener("al-viewer-settings",settings);
+    const input=el.shadowRoot!.querySelector<HTMLInputElement>('input[type="number"]')!;
+    input.value="12.886";input.dispatchEvent(new Event("change"));await settle(el);
+    expect(el.settings.ground_z).toBe(12.886);expect(settings).toHaveBeenCalledOnce();
+    expect(scene.setParts.mock.calls.at(-1)![1]).toBe(12.886);
+    el.settings={...el.settings,scheme:"security",ambient:true};await settle(el);
+    expect(el.hasAttribute("ambient")).toBe(true);
+    expect(scene.setActivity.mock.calls.at(-1)![3].scheme).toBe("security");
+  });
   it("loads the renderer for geometry, isolates floors and wires camera controls", async () => {
     const el = await mount();
     expect(scene.setParts.mock.calls.at(-1)![0]).toHaveLength(2);

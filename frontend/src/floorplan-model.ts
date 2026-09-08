@@ -1,6 +1,9 @@
-import { walkGroups } from "./model";
 import type { Kind } from "./kinds";
-import type { Config, LiveState, Path } from "./types";
+import type { Bounds, GroupLive, Path } from "./types";
+
+export interface ActivityFrame { now: number; groups: Record<string, Pick<GroupLive,"value" | "max_value"> & Partial<Pick<GroupLive,"last_activity">>> }
+export interface FloorplanNode { id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[] }
+export interface FloorplanConfig { groups: FloorplanNode[] }
 
 export interface FloorplanGroup {
   id: string;
@@ -30,7 +33,7 @@ export interface ActivityReading {
 export const STALE_SECONDS = 10;
 
 /** Missing/stale readings have no color intensity; zero is reserved for known inactivity. */
-export function activityReading(live: LiveState | null, id: string, now: number): ActivityReading {
+export function activityReading(live: ActivityFrame | null, id: string, now: number): ActivityReading {
   const group = live?.groups[id];
   const unknown = { value: null, max: null, ratio: null };
   if (!live || !group || !Number.isFinite(live.now) || !Number.isFinite(group.value) ||
@@ -62,10 +65,14 @@ function polygon(value: unknown): [number, number][] | null {
   return Number.isFinite(area) && area !== 0 ? result : null;
 }
 
-export function floorplanModel(config: Config): FloorplanModel {
+export function floorplanModel(config: FloorplanConfig): FloorplanModel {
   const parts: ScenePart[] = [];
   const issues: FloorplanModel["issues"] = [];
-  const entries = walkGroups(config);
+  const entries: {group: FloorplanNode; path: Path; parent: FloorplanNode | null}[] = [];
+  const visit = (groups: FloorplanNode[], path: Path, parent: FloorplanNode | null) => {
+    groups.forEach((group, i) => { const here = [...path, i]; entries.push({group,path:here,parent}); visit(group.children, [...here,"children"], group); });
+  };
+  visit(config.groups, ["groups"], null);
   const all = new Map<string, FloorplanGroup>();
   const relevant = new Set<string>();
   for (const { group, path, parent } of entries) {

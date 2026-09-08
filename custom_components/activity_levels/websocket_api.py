@@ -47,6 +47,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_config_validate)
     websocket_api.async_register_command(hass, ws_config_save)
     websocket_api.async_register_command(hass, ws_floorplan_parse)
+    websocket_api.async_register_command(hass, ws_floorplan_dashboard)
     websocket_api.async_register_command(hass, ws_state)
     websocket_api.async_register_command(hass, ws_profile_get)
     websocket_api.async_register_command(hass, ws_profile_save)
@@ -613,3 +614,56 @@ def ws_presence_signatures_save(
     presence = runtime.presence
     ok = presence is not None and presence.save_signatures(msg["document"], force=msg["force"])
     connection.send_result(msg["id"], {"ok": ok})
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/floorplan/dashboard"})
+@callback
+def ws_floorplan_dashboard(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Read-only geometry and room readings for authenticated kiosk/dashboard users.
+
+    Never expose the editable document or stimulus configuration through this endpoint.
+    Light membership reuses the registry-aware mapping maintained by the learner.
+    """
+    runtime = _loaded(hass, connection, msg)
+    if runtime is None:
+        return
+    entry = next(iter(hass.config_entries.async_loaded_entries(DOMAIN)))
+
+    def geometry(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            {
+                **{
+                    key: node[key]
+                    for key in ("id", "name", "kind", "bounds", "points")
+                    if key in node
+                },
+                "children": geometry(node.get("children", [])),
+            }
+            for node in nodes
+        ]
+
+    coordinator = runtime.coordinator
+    now = coordinator.now()
+    details = coordinator.group_details(now)
+    connection.send_result(
+        msg["id"],
+        {
+            "entry_id": entry.entry_id,
+            "config": {"groups": geometry(entry.options.get("groups", []))},
+            "lights": runtime.patterns.lights,
+            "live": {
+                "now": now,
+                "voices": {},
+                "groups": {
+                    gid: {
+                        "value": state.value,
+                        "max_value": details[gid]["max_value"],
+                        "last_activity": state.last_activity,
+                    }
+                    for gid, state in coordinator.data.items()
+                },
+            },
+        },
+    )

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BufferGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3 } from "three";
+import { viewerOptions } from "../src/floorplan-style";
 import type { ScenePart } from "../src/floorplan-model";
 import type { GroupLive, LiveState } from "../src/types";
 
@@ -42,6 +43,51 @@ describe("floorplan renderer", () => {
     expect(camera.position.length()).toBeCloseTo(before);
     renderer.dispose();
   });
+  it("places ground at 12.886 while the basement ceiling stays 0.914 m above it", () => {
+    const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn()); renderer.setParts([part()],12.886);
+    const scene=gpu.render.mock.calls.at(-1)![0] as Scene;
+    const meshes=scene.children.filter(n=>n instanceof Mesh) as Mesh[];
+    const room=meshes.find(m=>m.geometry.type==="ExtrudeGeometry")!;
+    const ground=meshes.find(m=>m.geometry.type==="PlaneGeometry")!;
+    room.geometry.computeBoundingBox();
+    expect(room.geometry.boundingBox!.max.y-ground.position.y).toBeCloseTo(.914,3);
+    expect(room.geometry.boundingBox!.min.y).toBeLessThan(ground.position.y);
+    renderer.dispose();
+  });
+  it("keeps threshold outlines independent of light color and selection", () => {
+    const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn());renderer.setParts([part()]);
+    renderer.setActivity(frame(3),1000,"room",viewerOptions(),{room:{rgb:[0,0,1],brightness:1,unknown:false}});
+    const scene=gpu.render.mock.calls.at(-1)![0] as Scene;
+    const mesh=scene.children.find(n=>n instanceof Mesh) as Mesh<BufferGeometry,MeshBasicMaterial>;
+    expect(mesh.material.color.b).toBe(1);expect(mesh.material.color.r).toBe(0);
+    const edges=scene.children.find(n=>n.type==="LineSegments") as import("three").LineSegments<BufferGeometry,import("three").LineBasicMaterial>;
+    expect(edges.material.color.getHexString()).toBe("f39c12");renderer.dispose();
+  });
+  it("moves automatically, pauses for interaction, and clears animation on dispose", async () => {
+    vi.useFakeTimers();const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn());renderer.setParts([part()]);
+    renderer.setActivity(frame(0),1000,"",viewerOptions({auto_rotate:true}));
+    const camera=gpu.render.mock.calls.at(-1)![1] as PerspectiveCamera;
+    const before=camera.position.clone();await vi.advanceTimersByTimeAsync(1000);
+    expect(camera.position.equals(before)).toBe(false);
+    renderer.cameraAction("left");const paused=camera.position.clone();await vi.advanceTimersByTimeAsync(1000);
+    expect(camera.position.equals(paused)).toBe(true);
+    renderer.dispose();expect(vi.getTimerCount()).toBe(0);vi.useRealTimers();
+  });
+  it("focuses once for fresh room activity and returns to overview", async () => {
+    vi.useFakeTimers();vi.setSystemTime(1000000);
+    const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn());renderer.setParts([part()]);
+    renderer.setParts([part(),{...part(),id:"other",footprint:part().footprint.map(([x,y])=>[x+20,y])}]);
+    const options=viewerOptions({focus_activity:true});const initial=frame(0);initial.groups.room!.last_activity=990;
+    renderer.setActivity(initial,1000,"",options);
+    const camera=gpu.render.mock.calls.at(-1)![1] as PerspectiveCamera;const distance=camera.position.length();
+    const event=frame(3);event.groups.room!.last_activity=1000;renderer.setActivity(event,1000,"",options);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(camera.position.length()).toBeLessThan(distance);
+    renderer.setActivity(event,1002.5,"",options);
+    await vi.advanceTimersByTimeAsync(14000);
+    expect(camera.position.length()).toBeCloseTo(distance,1);
+    renderer.dispose();vi.useRealTimers();
+  });
   it("extrudes a nonrectangular footprint with Z elevation mapped to world Y", () => {
     const geometry = volumeGeometry(part(), new Vector3());
     geometry.computeBoundingBox();
@@ -59,9 +105,9 @@ describe("floorplan renderer", () => {
     let mesh!: Mesh<BufferGeometry, MeshBasicMaterial>;
     scene.traverse((node) => { if (node instanceof Mesh) mesh = node as typeof mesh; });
     const geometry = mesh.geometry;
-    renderer.setActivity(frame(0), 1000, "");
+    renderer.setActivity(frame(0), 1000, "",viewerOptions(),{room:{rgb:[1,0,0],brightness:0.1,unknown:false}});
     const quiet = mesh.material.opacity;
-    renderer.setActivity(frame(5), 1000, "");
+    renderer.setActivity(frame(5), 1000, "",viewerOptions(),{room:{rgb:[1,0,0],brightness:1,unknown:false}});
     expect(mesh.material.opacity).toBeGreaterThan(quiet);
     expect(mesh.geometry).toBe(geometry);
     renderer.setActivity(frame(5), 1011, "");

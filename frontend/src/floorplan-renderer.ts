@@ -1,12 +1,13 @@
 import {
-  Box3, Color, DoubleSide, EdgesGeometry, ExtrudeGeometry, GridHelper, LineBasicMaterial,
+  Box3, DoubleSide, EdgesGeometry, ExtrudeGeometry, GridHelper, LineBasicMaterial,
   LineSegments, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Scene, Shape,
-  Vector2, Vector3, WebGLRenderer,
+  Vector2, Vector3, WebGLRenderer, PlaneGeometry,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { activityReading } from "./floorplan-model";
-import type { ScenePart } from "./floorplan-model";
-import type { LiveState } from "./types";
+import type { ScenePart, ActivityFrame } from "./floorplan-model";
+import { viewerOptions, thresholdColor } from "./floorplan-style";
+import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
 
 export type CameraAction = "reset" | "top" | "left" | "right" | "up" | "down" | "in" | "out";
 
@@ -36,6 +37,19 @@ export class FloorplanRenderer {
   private volumes: Volume[] = [];
   private grid?: GridHelper;
   private radius = 1;
+  private ground?: Mesh<PlaneGeometry, MeshBasicMaterial>;
+  private options = viewerOptions();
+  private animation?: ReturnType<typeof setTimeout>;
+  private lastTick = 0;
+  private pauseUntil = 0;
+  private focusUntil = 0;
+  private focusTarget?: Vector3;
+  private focusDistance = 0;
+  private focusEvents = new Map<string, number>();
+  private alertKey = "";
+  private lastSelected = "";
+  private lastFocus = 0;
+  private readonly reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)");
   private disposed = false;
   private lost = false;
   private pointer: { id: number; x: number; y: number; moved: boolean } | null = null;
@@ -59,6 +73,9 @@ export class FloorplanRenderer {
     this.controls.enableDamping = false;
     this.controls.maxPolarAngle = Math.PI * 0.49;
     this.controls.addEventListener("change", this.draw);
+    this.controls.addEventListener("start", this.pauseMotion);
+    document.addEventListener("visibilitychange", this.scheduleMotion);
+    this.reduced?.addEventListener("change", this.scheduleMotion);
     canvas.addEventListener("pointerdown", this.onPointerDown);
     canvas.addEventListener("pointermove", this.onPointerMove);
     canvas.addEventListener("pointerup", this.onPointerUp);
@@ -84,13 +101,18 @@ export class FloorplanRenderer {
       this.renderer.render(this.scene, this.camera);
   };
 
-  setParts(parts: ScenePart[]): void {
+  setParts(parts: ScenePart[], groundZ?: number): void {
     this.clearParts();
+    this.focusTarget=undefined; this.focusEvents.clear();
     if (!parts.length) { this.draw(); return; }
     const box = new Box3();
     for (const part of parts) for (const [x, y] of part.footprint) {
       box.expandByPoint(new Vector3(x, part.low, -y));
       box.expandByPoint(new Vector3(x, part.high, -y));
+    }
+    if (groundZ !== undefined) {
+      box.expandByPoint(new Vector3(box.min.x, groundZ, box.min.z));
+      box.expandByPoint(new Vector3(box.max.x, groundZ, box.max.z));
     }
     const origin = box.getCenter(new Vector3());
     this.radius = Math.max(box.getSize(new Vector3()).length() / 2, 0.1);
@@ -107,7 +129,13 @@ export class FloorplanRenderer {
       this.volumes.push({ part, mesh, edges });
     }
     this.grid = new GridHelper(this.radius * 2.8, 16, 0x69818e, 0x69818e);
-    this.grid.position.y = box.min.y - origin.y - this.radius * 0.015;
+    this.grid.position.y = (groundZ ?? box.min.y - this.radius * 0.015) - origin.y;
+    if (groundZ !== undefined) {
+      this.ground = new Mesh(new PlaneGeometry(this.radius * 2.8, this.radius * 2.8), new MeshBasicMaterial({color:0x75818a,transparent:true,opacity:0.045,side:DoubleSide,depthWrite:false}));
+      this.ground.rotation.x = -Math.PI / 2;
+      this.ground.position.y = this.grid.position.y;
+      this.scene.add(this.ground);
+    }
     this.grid.material.transparent = true;
     this.grid.material.opacity = 0.14;
     this.scene.add(this.grid);
@@ -116,22 +144,97 @@ export class FloorplanRenderer {
     this.controls.minDistance = this.radius * 0.1;
     this.controls.maxDistance = this.radius * 30;
     this.cameraAction("reset");
+    this.pauseUntil=0;
   }
 
-  setActivity(live: LiveState | null, now: number, selected: string): void {
+  setActivity(live: ActivityFrame | null, now: number, selected: string, options: ViewerOptions = viewerOptions(), fills: Record<string,RoomLight> = {}, alert?: AlertRule): void {
+    if (selected !== this.lastSelected) { this.pauseMotion(); this.lastSelected=selected; }
+    this.options = options;
+    if (!options.focus_activity) this.focusTarget=undefined;
     for (const { part, mesh, edges } of this.volumes) {
-      const ratio = activityReading(live, part.id, now).ratio;
+      const reading = activityReading(live, part.id, now);
       const highlighted = part.id === selected || part.ancestors.includes(selected);
-      const color = ratio === null ? new Color(0x8596a1) : new Color(0x5fbad2).lerp(new Color(0xffbc66), ratio);
-      mesh.material.color.copy(color);
-      mesh.material.opacity = part.container ? 0 : ratio === null ? 0.008 : 0.025 + ratio * 0.28;
-      edges.material.color.copy(highlighted ? new Color(0xffffff) : color);
-      edges.material.opacity = highlighted ? 1 : (part.container ? 0.18 : 0.35) + (ratio ?? 0) * 0.55;
+      const alerted = alert && (!alert.group || part.id === alert.group || part.ancestors.includes(alert.group));
+      const color = reading.ratio === null ? "#8596a1" : thresholdColor(reading.value!, options);
+      edges.material.color.set(alerted && alert.color ? alert.color : color);
+      edges.material.opacity = highlighted || alerted ? 1 : part.container ? 0.3 : 0.75;
+      const fill = fills[part.id];
+      if (options.light_fill) {
+        mesh.material.color.setRGB(...(fill?.rgb ?? [0,0,0]));
+        mesh.material.opacity = part.container ? 0 : (fill?.brightness ?? 0) * options.fill_brightness;
+      } else {
+        mesh.material.color.set(color);
+        mesh.material.opacity = part.container || reading.ratio === null ? 0 : reading.ratio * options.fill_brightness;
+      }
     }
+    const key = alert ? `${alert.entity}:${alert.state}:${alert.group ?? ""}` : "";
+    let candidate = key && key !== this.alertKey ? this.volumes.find(v=>v.part.id === alert?.group) : undefined;
+    const fresh: {volume: Volume; event: number}[] = [];
+    for (const volume of this.volumes) {
+      const event = live?.groups[volume.part.id]?.last_activity;
+      if (event != null && Number.isFinite(event)) {
+        const previous = this.focusEvents.get(volume.part.id);
+        this.focusEvents.set(volume.part.id,event);
+        if (!volume.part.container && previous !== undefined && event > previous && now-event < 10 && activityReading(live,volume.part.id,now).status === "live") fresh.push({volume,event});
+      }
+    }
+    if (!alert) candidate ??= fresh.sort((a,b)=>b.event-a.event)[0]?.volume;
+    let alertBox: Box3 | undefined;
+    if (key && key !== this.alertKey) {
+      const members=this.volumes.filter(v=>!alert?.group || v.part.id===alert.group || v.part.ancestors.includes(alert.group));
+      if (members.length) {
+        alertBox=new Box3();
+        for (const {mesh} of members) {mesh.geometry.computeBoundingBox();alertBox.union(mesh.geometry.boundingBox!);}
+      }
+    }
+    this.alertKey = key;
+    if ((candidate || alertBox) && options.focus_activity && !this.reduced?.matches && Date.now() >= this.pauseUntil && (key || now-this.lastFocus >= 12)) {
+      candidate?.mesh.geometry.computeBoundingBox();
+      const box = alertBox ?? candidate!.mesh.geometry.boundingBox!;
+      this.focusTarget = box.getCenter(new Vector3());
+      this.focusDistance = Math.min(this.fitDistance(), Math.max(box.getSize(new Vector3()).length()*2, this.radius));
+      this.focusUntil = Date.now()+8000; this.lastFocus=now;
+    }
+    this.scheduleMotion();
     this.draw();
   }
 
+  private readonly pauseMotion = (): void => {
+    this.pauseUntil = Date.now()+30000; this.focusTarget=undefined;
+  };
+  private readonly scheduleMotion = (): void => {
+    clearTimeout(this.animation);
+    this.animation=undefined;
+    if (this.disposed || this.lost || this.reduced?.matches || document.visibilityState !== "visible" || (!this.options.auto_rotate && !this.focusTarget)) return;
+    this.lastTick=performance.now();
+    this.animation=setTimeout(this.animate, 1000/30);
+  };
+  private readonly animate = (): void => {
+    if (this.disposed || this.lost || document.visibilityState !== "visible" || this.reduced?.matches) return;
+    const time=performance.now(), delta=Math.min((time-this.lastTick)/1000,0.1); this.lastTick=time;
+    if (Date.now() >= this.pauseUntil) {
+      if (this.focusTarget) {
+        const returning=Date.now() > this.focusUntil;
+        const destination=returning ? new Vector3() : this.focusTarget;
+        const offset=this.camera.position.clone().sub(this.controls.target);
+        const distance=returning ? this.fitDistance() : this.focusDistance;
+        offset.setLength(offset.length()+(distance-offset.length())*Math.min(1,delta*2));
+        this.controls.target.lerp(destination,Math.min(1,delta*2));
+        this.camera.position.copy(this.controls.target).add(offset);
+        if (returning && this.controls.target.length()<0.01 && Math.abs(offset.length()-distance)<0.01) this.focusTarget=undefined;
+      }
+      if (this.options.auto_rotate) this.controls.rotateLeft(delta*Math.PI/90);
+      this.controls.update(); this.draw();
+    }
+    if (this.options.auto_rotate || this.focusTarget) this.animation=setTimeout(this.animate,1000/30);
+  };
+  private fitDistance(): number {
+    const vertical=this.camera.fov*Math.PI/360;
+    return this.radius/Math.sin(Math.min(vertical,Math.atan(Math.tan(vertical)*this.camera.aspect)))*1.2;
+  }
+
   cameraAction(action: CameraAction): void {
+    this.pauseMotion();
     if (action === "reset" || action === "top") {
       const vertical = this.camera.fov * Math.PI / 360;
       const angle = Math.min(vertical, Math.atan(Math.tan(vertical) * this.camera.aspect));
@@ -181,6 +284,7 @@ export class FloorplanRenderer {
   };
 
   private clearParts(): void {
+    if (this.ground) { this.scene.remove(this.ground); this.ground.geometry.dispose(); this.ground.material.dispose(); this.ground=undefined; }
     for (const { mesh, edges } of this.volumes) {
       this.scene.remove(mesh, edges);
       mesh.geometry.dispose(); mesh.material.dispose();
@@ -196,6 +300,10 @@ export class FloorplanRenderer {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    clearTimeout(this.animation);
+    document.removeEventListener("visibilitychange", this.scheduleMotion);
+    this.reduced?.removeEventListener("change", this.scheduleMotion);
+    this.controls.removeEventListener("start", this.pauseMotion);
     this.observer.disconnect();
     this.controls.removeEventListener("change", this.draw);
     this.controls.dispose();
