@@ -5,11 +5,11 @@ export interface AlertRule { entity: string; state: string; label?: string; grou
 export interface ViewerSettings {
   scheme?: Scheme; color_thresholds?: Threshold[]; ground_z?: number;
   light_fill?: boolean; fill_brightness?: number; ambient?: boolean;
-  auto_rotate?: boolean; focus_activity?: boolean; rules?: AlertRule[];
+  auto_rotate?: boolean; rotation_period?: number; focus_activity?: boolean; rules?: AlertRule[];
 }
 export interface ViewerOptions extends ViewerSettings {
   scheme: Scheme; color_thresholds: Threshold[]; light_fill: boolean; fill_brightness: number;
-  ambient: boolean; auto_rotate: boolean; focus_activity: boolean; rules: AlertRule[];
+  ambient: boolean; auto_rotate: boolean; rotation_period: number; focus_activity: boolean; rules: AlertRule[];
 }
 const COLORS: Threshold[] = [{value:0,color:"#2189EF"},{value:3,color:"#f39c12"},{value:5,color:"#d31400"}];
 const schemes = ["standard", "night", "security"];
@@ -26,12 +26,14 @@ export function viewerOptions(settings: ViewerSettings = {}): ViewerOptions {
   if (!Number.isFinite(brightness) || brightness < 0 || brightness > 1) throw new Error("fill_brightness must be between 0 and 1.");
   for (const key of ["light_fill","ambient","auto_rotate","focus_activity"] as const)
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") throw new Error(`${key} must be true or false.`);
+  const rotationPeriod=settings.rotation_period ?? 180;
+  if (!Number.isFinite(rotationPeriod) || rotationPeriod < 1) throw new Error("rotation_period must be at least 1 second per revolution.");
   const rules = settings.rules ?? [];
   if (!Array.isArray(rules) || rules.length > 64 || rules.some(r=>!r || !/^binary_sensor\.[a-z0-9_]+$/.test(r.entity) || !["on","off"].includes(r.state) ||
     (r.priority !== undefined && !Number.isFinite(r.priority)) || (r.scheme !== undefined && !schemes.includes(r.scheme)) || (r.color !== undefined && !isColor(r.color)) ||
     (r.group !== undefined && typeof r.group !== "string") || (r.label !== undefined && typeof r.label !== "string"))) throw new Error("Invalid binary sensor rule (maximum 64).");
   return {...settings,scheme,color_thresholds:[...thresholds].sort((a,b)=>a.value-b.value),light_fill:settings.light_fill ?? true,
-    fill_brightness:brightness,ambient:settings.ambient ?? false,auto_rotate:settings.auto_rotate ?? false,focus_activity:settings.focus_activity ?? false,rules};
+    fill_brightness:brightness,ambient:settings.ambient ?? false,auto_rotate:settings.auto_rotate ?? false,rotation_period:rotationPeriod,focus_activity:settings.focus_activity ?? false,rules};
 }
 export function thresholdColor(value: number, options: ViewerOptions): string {
   return options.color_thresholds.filter(t=>t.value<=value).at(-1)?.color ?? options.color_thresholds[0]!.color;

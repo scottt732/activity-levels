@@ -3,6 +3,11 @@ import { viewerOptions, thresholdColor, roomLight, activeRule } from "../src/flo
 import type { HassEntity } from "../src/types";
 const light = (attributes = {}, state = "on"): HassEntity => ({entity_id:"light.a",state,attributes,last_changed:""});
 describe("floorplan presentation", () => {
+  it("defaults to a three-minute orbit and validates periods in seconds", () => {
+    expect(viewerOptions().rotation_period).toBe(180);
+    expect(viewerOptions({rotation_period:360}).rotation_period).toBe(360);
+    for(const rotation_period of [0,-1,0.5,NaN,Infinity]) expect(()=>viewerOptions({rotation_period})).toThrow("rotation_period");
+  });
   it("sorts absolute thresholds and rejects ambiguous settings", () => {
     const o = viewerOptions({color_thresholds:[{value:5,color:"#d31400"},{value:0,color:"#2189EF"},{value:3,color:"#f39c12"}]});
     expect([0,2.9,3,4.99,5,100].map(v=>thresholdColor(v,o))).toEqual(["#2189EF","#2189EF","#f39c12","#f39c12","#d31400","#d31400"]);

@@ -1150,8 +1150,10 @@ function J(e = {}) {
 		"auto_rotate",
 		"focus_activity"
 	]) if (e[t] !== void 0 && typeof e[t] != "boolean") throw Error(`${t} must be true or false.`);
-	let i = e.rules ?? [];
-	if (!Array.isArray(i) || i.length > 64 || i.some((e) => !e || !/^binary_sensor\.[a-z0-9_]+$/.test(e.entity) || !["on", "off"].includes(e.state) || e.priority !== void 0 && !Number.isFinite(e.priority) || e.scheme !== void 0 && !ct.includes(e.scheme) || e.color !== void 0 && !lt(e.color) || e.group !== void 0 && typeof e.group != "string" || e.label !== void 0 && typeof e.label != "string")) throw Error("Invalid binary sensor rule (maximum 64).");
+	let i = e.rotation_period ?? 180;
+	if (!Number.isFinite(i) || i < 1) throw Error("rotation_period must be at least 1 second per revolution.");
+	let a = e.rules ?? [];
+	if (!Array.isArray(a) || a.length > 64 || a.some((e) => !e || !/^binary_sensor\.[a-z0-9_]+$/.test(e.entity) || !["on", "off"].includes(e.state) || e.priority !== void 0 && !Number.isFinite(e.priority) || e.scheme !== void 0 && !ct.includes(e.scheme) || e.color !== void 0 && !lt(e.color) || e.group !== void 0 && typeof e.group != "string" || e.label !== void 0 && typeof e.label != "string")) throw Error("Invalid binary sensor rule (maximum 64).");
 	return {
 		...e,
 		scheme: t,
@@ -1160,8 +1162,9 @@ function J(e = {}) {
 		fill_brightness: r,
 		ambient: e.ambient ?? !1,
 		auto_rotate: e.auto_rotate ?? !1,
+		rotation_period: i,
 		focus_activity: e.focus_activity ?? !1,
-		rules: i
+		rules: a
 	};
 }
 function ut(e, t) {
@@ -1363,7 +1366,7 @@ var pt = [
 		let e = ++this.sequence;
 		this.loading = !0;
 		try {
-			let { FloorplanRenderer: t } = await import("./shared-DniDHBie.js");
+			let { FloorplanRenderer: t } = await import("./shared-CQKdrshw.js");
 			if (e !== this.sequence || !this.isConnected) return;
 			let n = this.renderRoot.querySelector("#scene");
 			this.renderer = new t(n, (e) => {
@@ -1442,6 +1445,12 @@ var pt = [
 			auto_rotate: "Slow orbit",
 			focus_activity: "Focus on new activity"
 		}[e]}</label>`)}
+      <label>Seconds per rotation <input id="rotation-period" type="number" min="1" step="any" .value=${String(this.options.rotation_period)}
+        @change=${(e) => this.changeSettings({
+			...this.settings,
+			rotation_period: Number(e.target.value)
+		})}></label>
+      <p class="help muted">Larger values rotate more slowly. Default: 180 seconds per revolution.</p>
       <label>Maximum fill brightness <input type="range" min="0" max="1" step="0.01" .value=${String(this.options.fill_brightness)} @input=${(e) => this.changeSettings({
 			...this.settings,
 			fill_brightness: Number(e.target.value)
