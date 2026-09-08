@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/scottt732/activity-levels/compare/v0.13.0...v0.14.0) (2026-09-08)
+
+
+### Added
+
+* **panel:** add ambient floorplan dashboard and light-driven fills ([#38](https://github.com/scottt732/activity-levels/issues/38)) ([3d8ee46](https://github.com/scottt732/activity-levels/commit/3d8ee4656a577c178edcaf7705b62873d4520707))
+
 ## [0.13.0](https://github.com/scottt732/activity-levels/compare/v0.12.0...v0.13.0) (2026-09-08)
 
 
