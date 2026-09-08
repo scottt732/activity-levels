@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/scottt732/activity-levels/compare/v0.11.0...v0.12.0) (2026-09-08)
+
+
+### Added
+
+* **panel:** import ESPresense floorplan geometry into groups ([#34](https://github.com/scottt732/activity-levels/issues/34)) ([cce302c](https://github.com/scottt732/activity-levels/commit/cce302c1c5801da93b1528cfd75e012637b4a872))
+
 ## [0.11.0](https://github.com/scottt732/activity-levels/compare/v0.10.0...v0.11.0) (2026-09-07)
 
 
