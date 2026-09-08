@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/scottt732/activity-levels/compare/v0.14.0...v0.14.1) (2026-09-08)
+
+
+### Fixed
+
+* **panel:** provide a direct exit from ambient fullscreen ([#40](https://github.com/scottt732/activity-levels/issues/40)) ([9bd155e](https://github.com/scottt732/activity-levels/commit/9bd155ef53fe3b3cb425747805fe7f92c1585837))
+
 ## [0.14.0](https://github.com/scottt732/activity-levels/compare/v0.13.0...v0.14.0) (2026-09-08)
 
 
