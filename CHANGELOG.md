@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/scottt732/activity-levels/compare/v0.12.0...v0.13.0) (2026-09-08)
+
+
+### Added
+
+* **panel:** add live 3D floorplan viewer ([#36](https://github.com/scottt732/activity-levels/issues/36)) ([abc6689](https://github.com/scottt732/activity-levels/commit/abc6689521a6b1c60106d1c5066a74dd043ab70c))
+
 ## [0.12.0](https://github.com/scottt732/activity-levels/compare/v0.11.0...v0.12.0) (2026-09-08)
 
 
