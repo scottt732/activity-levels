@@ -26,10 +26,9 @@ export function alChange(config: Config, coalesceKey?: string, structural?: true
 }
 
 /**
- * What the Code tab last made of the draft. `valid` is whether the text parsed as YAML at
- * all; `errors` is what the backend said about the document it parsed to. They are apart
- * because they disable Save for different reasons and only one of them has anything to
- * list: unparseable text has no paths to attach a problem to.
+ * Whether the current Code document has passed validation. Pending requests, parse
+ * failures and schema errors all keep Save disabled. `errors` contains path-specific
+ * backend problems; connection and parse failures are displayed by the Code editor.
  */
 export interface CodeStatus {
   valid: boolean;

@@ -12,6 +12,7 @@ import asyncio
 import logging
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, tzinfo
 from functools import partial
@@ -211,6 +212,20 @@ def _group_lights(hass: HomeAssistant, config: Mapping[str, Any]) -> dict[str, l
     for group in config.get("groups") or []:
         walk(group)
     return lights
+
+
+def _without_light_overrides(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Compare everything except the group light lists that can be applied in place."""
+    result = deepcopy(dict(config))
+
+    def walk(node: dict[str, Any]) -> None:
+        node.get(CONF_SIMULATION, {}).pop("lights", None)
+        for child in node.get("children", []):
+            walk(child)
+
+    for group in result.get("groups", []):
+        walk(group)
+    return result
 
 
 class PatternsCoordinator:
@@ -472,6 +487,28 @@ class PatternsCoordinator:
         self._light_unsub = async_track_state_change_event(
             self.hass, entity_ids, self._handle_light_event
         )
+
+    @callback
+    def try_update_light_overrides(self, config: Mapping[str, Any]) -> bool:
+        """Apply validated light-only edits without resetting the activity engine.
+
+        Other edits still need the normal entry reload. Adding a group's first lights
+        also reloads, since the switch platform must create its simulation entity.
+        """
+        if self._stopped or _without_light_overrides(config) != _without_light_overrides(
+            self._config
+        ):
+            return False
+        lights = _group_lights(self.hass, config)
+        if any(members and gid not in self._with_lights for gid, members in lights.items()):
+            return False
+        self._config = config
+        if lights != self.lights:
+            self.lights = lights
+            self._subscribe_lights()
+            self.simulation.light_membership_changed()
+            self._notify()
+        return True
 
     @callback
     def _registry_changed(self, _event: Event[Any]) -> None:

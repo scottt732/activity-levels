@@ -259,3 +259,14 @@ def test_every_file_carrying_the_version_agrees() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+async def test_first_light_override_reloads_to_create_simulation_switch(hass, entry):
+    runtime = entry.runtime_data
+    config = validate_config(house_config())
+    config["groups"][0]["children"][1]["simulation"]["lights"]["include"] = ["light.kitchen"]
+    hass.config_entries.async_update_entry(entry, options=config)
+    await hass.async_block_till_done()
+    assert entry.runtime_data is not runtime
+    assert entry.runtime_data.patterns.lights["kitchen"] == ["light.kitchen"]
+    assert er.async_get(hass).async_get("switch.kitchen_presence_simulation") is not None

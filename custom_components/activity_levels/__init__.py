@@ -132,7 +132,10 @@ async def async_remove_entry(hass: HomeAssistant, entry: ActivityLevelsConfigEnt
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ActivityLevelsConfigEntry) -> None:
-    """Reload the entry whenever its options change."""
+    """Apply light-only edits in place; reload for changes to the engine or entities."""
+    config = validate_config(entry.options)
+    if entry.runtime_data.patterns.try_update_light_overrides(config):
+        return
     await hass.config_entries.async_reload(entry.entry_id)
 
 

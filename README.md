@@ -172,7 +172,8 @@ Every change is validated against the running integration as you type. Problems 
 listed under the editor as `path — message`; clicking one jumps the cursor to that line
 where the path can be found in the text. While anything is listed — or while the YAML
 does not parse at all, in which case the parser's own complaint is what you get — **Save**
-is disabled, because the document would be refused anyway.
+is disabled. Save also stays disabled while validation is pending or the validation
+request fails. The server validates again before storing or applying any configuration.
 
 To edit the same document in an editor outside Home Assistant, the integration publishes
 a [JSON Schema](https://json-schema.org) for it at `/activity_levels_panel/config.schema.json`.
@@ -190,6 +191,17 @@ voluptuous definition the integration validates with, so it is never a second op
 though it is deliberately the more permissive of the two, because the rules that need to
 see the whole document (a doorway pointing at a group that exists, an envelope somebody
 actually defined) are checked on Save rather than in your editor.
+
+Home Assistant's embedded Code editor does not run `yaml-language-server`; the schema
+comment enables completion in external editors, not in the embedded editor. The Code
+tab uses server validation and lists errors below the document.
+
+After **Save**, changes limited to group `simulation.lights.include` and `exclude` take
+effect without resetting activity levels. Pending simulation actions are rebuilt using
+the new membership. Other edits, including adding a group's first lights (which creates
+its simulation switch), automatically reload the integration. Unsaved text is never
+applied. Exclusions belong to the group containing the `simulation` block; settings on
+a child such as Den do not apply to its parent Kitchen.
 
 ### Known limitations
 

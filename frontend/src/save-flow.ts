@@ -15,7 +15,7 @@ export interface SaveOutcome {
   /** New validation errors to show, or `null` to leave the current ones alone. */
   errors: ValidationError[] | null;
   banner: Banner;
-  /** True when the save landed and the integration is reloading. */
+  /** True when the save landed and the panel should refresh its configuration. */
   reload: boolean;
 }
 
@@ -42,7 +42,7 @@ export async function runSave(config: Config, deps: SaveDeps): Promise<SaveOutco
         reload: false,
       };
     }
-    return { errors: [], banner: { kind: "info", text: "Saved. Activity Levels is reloading." }, reload: true };
+    return { errors: [], banner: { kind: "info", text: "Saved. Configuration updates automatically." }, reload: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { errors: null, banner: { kind: "error", text: `Save failed: ${message}` }, reload: false };

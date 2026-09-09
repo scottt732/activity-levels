@@ -706,3 +706,26 @@ async def test_a_forced_plan_does_not_survive_midnight(
 
     assert simulation.is_active("kitchen") is False
     assert simulation.blocked_reason("kitchen") == "the presence simulation switches are off"
+
+
+async def test_light_exclusions_hot_reload_and_cancel_pending_actions(hass, freezer):
+    calls = async_mock_service(hass, "light", "turn_on")
+    entry = await _setup(hass, freezer)
+    runtime = entry.runtime_data
+    await hass.services.async_call(DOMAIN, "simulate_now", {"group_id": "kitchen"}, blocking=True)
+    assert runtime.patterns.simulation.is_active("kitchen")
+    config = copy.deepcopy(dict(entry.options))
+    config["groups"][0]["children"][1]["simulation"]["lights"]["exclude"] = [LIGHT]
+    hass.config_entries.async_update_entry(entry, options=config)
+    await hass.async_block_till_done()
+    assert entry.runtime_data is runtime
+    assert runtime.patterns.lights["kitchen"] == []
+    await _advance(hass, freezer, AFTER_ON)
+    assert calls == []
+
+    config = copy.deepcopy(config)
+    config["groups"][0]["children"][1]["simulation"]["lights"]["exclude"] = []
+    hass.config_entries.async_update_entry(entry, options=config)
+    await hass.async_block_till_done()
+    assert entry.runtime_data is runtime
+    assert runtime.patterns.lights["kitchen"] == [LIGHT]
