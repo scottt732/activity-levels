@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.0](https://github.com/scottt732/activity-levels/compare/v0.14.1...v0.15.0) (2026-09-09)
+
+
+### Added
+
+* **panel:** make floorplan rotation speed configurable ([#42](https://github.com/scottt732/activity-levels/issues/42)) ([73bb1a1](https://github.com/scottt732/activity-levels/commit/73bb1a1d911a098491a588d59ea0ef73ea4e67ef))
+
+
+### Fixed
+
+* **config:** validate before saving and hot reload light overrides ([#44](https://github.com/scottt732/activity-levels/issues/44)) ([a6d478f](https://github.com/scottt732/activity-levels/commit/a6d478f82f0c331784f5c494673fff704bccb59f))
+
 ## [0.14.1](https://github.com/scottt732/activity-levels/compare/v0.14.0...v0.14.1) (2026-09-08)
 
 
