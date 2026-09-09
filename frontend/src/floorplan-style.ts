@@ -11,7 +11,8 @@ export interface ViewerOptions extends ViewerSettings {
   scheme: Scheme; color_thresholds: Threshold[]; light_fill: boolean; fill_brightness: number;
   ambient: boolean; auto_rotate: boolean; rotation_period: number; focus_activity: boolean; rules: AlertRule[];
 }
-const COLORS: Threshold[] = [{value:0,color:"#2189EF"},{value:3,color:"#f39c12"},{value:5,color:"#d31400"}];
+const COLORS: Threshold[] = [{value:0,color:"#2189EF"},{value:1.25,color:"#35cddd"},
+  {value:2.5,color:"#f5df62"},{value:3.75,color:"#f39c12"},{value:5,color:"#ef493e"}];
 const schemes = ["standard", "night", "security"];
 const isColor = (s: unknown): s is string => typeof s === "string" && /^#[0-9a-f]{6}$/i.test(s);
 export function viewerOptions(settings: ViewerSettings = {}): ViewerOptions {
@@ -36,7 +37,18 @@ export function viewerOptions(settings: ViewerSettings = {}): ViewerOptions {
     fill_brightness:brightness,ambient:settings.ambient ?? false,auto_rotate:settings.auto_rotate ?? false,rotation_period:rotationPeriod,focus_activity:settings.focus_activity ?? false,rules};
 }
 export function thresholdColor(value: number, options: ViewerOptions): string {
-  return options.color_thresholds.filter(t=>t.value<=value).at(-1)?.color ?? options.color_thresholds[0]!.color;
+  const stops = options.color_thresholds;
+  const upper = stops.findIndex(t => t.value > value);
+  if (upper === 0) return stops[0]!.color;
+  if (upper === -1) return stops.at(-1)!.color;
+  const a = stops[upper - 1]!, b = stops[upper]!;
+  const fraction = (value - a.value) / (b.value - a.value);
+  // Interpolate display RGB just like the legend's CSS gradient.
+  return "#" + [1, 3, 5].map(offset => {
+    const start = parseInt(a.color.slice(offset, offset + 2), 16);
+    const end = parseInt(b.color.slice(offset, offset + 2), 16);
+    return Math.round(start + (end - start) * fraction).toString(16).padStart(2, "0");
+  }).join("");
 }
 export function activeRule(rules: AlertRule[], states: Record<string,HassEntity>): AlertRule | undefined {
   return rules.filter(r=>states[r.entity]?.state === r.state).sort((a,b)=>(b.priority ?? 0)-(a.priority ?? 0))[0];

@@ -590,15 +590,22 @@ wireframe. Drag to orbit, scroll to zoom, or use the camera buttons, **Top** and
 Choose a property, structure or floor to isolate its current descendants. Geometry keeps
 its imported coordinates; GPS and changes to the group hierarchy do not reposition it.
 
-Room outlines follow each group's absolute live activity, with defaults of blue
-`#2189EF` below 3, amber `#f39c12` from 3, and red `#d31400` from 5. Room fills use the
-actual colors and brightness of the room's lights. Multiple lights blend by brightness;
-off lights contribute nothing. The brightest light sets the fill strength, capped by the
-viewer brightness setting. This is an illustrative tint, not a lighting simulation.
+Room activity colors a fixed floor-to-ceiling translucent volume. Only the color changes:
+the default continuous gradient runs from blue at 0 through cyan (1.25), yellow (2.5),
+orange (3.75) and red (5). Color follows absolute activity, with consistent opacity at
+all levels. Changes ease smoothly, unless reduced motion is requested. Activity stays
+visible independently of the lights.
 
-Select a room or a group to see its activity and light reading. Missing/stale activity
-and unavailable lights are identified explicitly. Selection emphasizes outlines without
-replacing their activity color. Floors and other containers remain outlines.
+Ceilings glow with the actual colors and brightness of the room's lights, with a faint
+wash down the walls. Multiple lights blend by brightness; off lights contribute nothing.
+The brightest light sets the glow strength, capped by the viewer brightness setting.
+This is an illustrative tint, not a lighting simulation. `light_fill: false` disables
+ceiling lighting without hiding activity.
+
+Select a room or a group to see its activity and light reading. Expired activity returns to blue at zero; never-received activity hides the fill.
+Connection status and unavailable lights are identified separately in the readings.
+Selection and alerts emphasize the otherwise quiet room outlines. Floors and other
+containers remain faint outlines.
 
 **Viewer settings** offers Standard, Night and Security schemes, fill brightness,
 slow orbit, activity focus, ambient layout, fullscreen, and an advanced JSON editor.
@@ -659,9 +666,8 @@ rules:
     color: '#d31400'
 ```
 
-Thresholds are sorted and applied as steps using absolute activity, not percentages;
-custom thresholds override a scheme's defaults. Security defaults to gray below 3 and
-red from 3. Rules match exact `on`/`off` states; highest priority wins, with configuration
+Thresholds are sorted and interpolated continuously using absolute activity, not percentages;
+custom thresholds override a scheme's defaults. Security defaults to a gray-to-red gradient between 0 and 3. Rules match exact `on`/`off` states; highest priority wins, with configuration
 order breaking ties. A rule without a group applies to the whole visible house. Unknown
 sensor states produce a notice and never match `off`. Rules only change presentation.
 

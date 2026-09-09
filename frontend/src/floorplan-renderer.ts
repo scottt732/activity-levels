@@ -1,7 +1,7 @@
 import {
   Box3, DoubleSide, EdgesGeometry, ExtrudeGeometry, GridHelper, LineBasicMaterial,
   LineSegments, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Scene, Shape,
-  Vector2, Vector3, WebGLRenderer, PlaneGeometry,
+  Vector2, Vector3, WebGLRenderer, PlaneGeometry, ShapeGeometry, Float32BufferAttribute, Color, DataTexture, LinearFilter,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { activityReading } from "./floorplan-model";
@@ -24,6 +24,34 @@ interface Volume {
   part: ScenePart;
   mesh: Mesh<ExtrudeGeometry, MeshBasicMaterial>;
   edges: LineSegments<EdgesGeometry, LineBasicMaterial>;
+  liquid?: Mesh<ExtrudeGeometry, MeshBasicMaterial>;
+  ceiling?: Mesh<ShapeGeometry, MeshBasicMaterial>;
+  wash?: Mesh<ExtrudeGeometry, MeshBasicMaterial>;
+  targetColor: Color;
+}
+
+/** Surfaces follow the actual polygon, including concave rooms. */
+function surfaceGeometry(part: ScenePart, origin: Vector3): ShapeGeometry {
+  const geometry = new ShapeGeometry(new Shape(part.footprint.map(
+    ([x, y]) => new Vector2(x - origin.x, y + origin.z),
+  )));
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
+
+/** A soft ceiling patch suggests a light source without per-room real lights or shadows. */
+function ceilingGlow(): DataTexture {
+  const size = 32;
+  const pixels = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const distance = Math.hypot((x + 0.5) / size * 2 - 1, (y + 0.5) / size * 2 - 1);
+    const offset = (y * size + x) * 4;
+    pixels.set([255, 255, 255, Math.round(255 * Math.max(0, 1 - distance) ** 2)], offset);
+  }
+  const texture = new DataTexture(pixels, size, size);
+  texture.magFilter = texture.minFilter = LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 /** Owns only presentation resources. The host owns live data, selection, and navigation. */
@@ -126,7 +154,47 @@ export class FloorplanRenderer {
       }));
       if (part.container) mesh.material.opacity = 0;
       this.scene.add(mesh, edges);
-      this.volumes.push({ part, mesh, edges });
+      const floor = part.low - origin.y;
+      const volume: Volume = { part, mesh, edges, targetColor: new Color() };
+      mesh.material.opacity = 0;
+      if (!part.container) {
+        // Activity changes only the color of this fixed, full-height room volume.
+        // The separate invisible mesh continues to own picking and camera bounds.
+        volume.liquid = new Mesh(geometry.clone(), new MeshBasicMaterial({
+          transparent: true, opacity: 0.16, side: DoubleSide, depthWrite: false,
+        }));
+        volume.ceiling = new Mesh(surfaceGeometry(part, origin), new MeshBasicMaterial({
+          transparent: true, opacity: 0, side: DoubleSide, depthWrite: false,
+        }));
+        volume.ceiling.position.y = part.high - origin.y;
+        const ceilingGeometry = volume.ceiling.geometry;
+        ceilingGeometry.computeBoundingBox();
+        const bounds = ceilingGeometry.boundingBox!;
+        const ceilingPositions = ceilingGeometry.getAttribute("position");
+        const uv = ceilingGeometry.getAttribute("uv");
+        for (let i = 0; i < uv.count; i++) uv.setXY(i,
+          (ceilingPositions.getX(i) - bounds.min.x) / (bounds.max.x - bounds.min.x),
+          (ceilingPositions.getZ(i) - bounds.min.z) / (bounds.max.z - bounds.min.z));
+        volume.ceiling.material.map = ceilingGlow();
+        const washGeometry = geometry.clone();
+        const positions = washGeometry.getAttribute("position");
+        const colors: number[] = [];
+        for (let i = 0; i < positions.count; i++) {
+          const intensity = Math.max(0, Math.min(1, (positions.getY(i) - floor) / (part.high - part.low)));
+          // Vertex alpha fades the light down the walls without tinting the liquid.
+          colors.push(1, 1, 1, intensity * intensity);
+        }
+        washGeometry.setAttribute("color", new Float32BufferAttribute(colors, 4));
+        volume.wash = new Mesh(washGeometry, new MeshBasicMaterial({
+          transparent: true, opacity: 0, side: DoubleSide, depthWrite: false, vertexColors: true,
+        }));
+        volume.liquid.name = "activity-volume";
+        volume.ceiling.name = "light-ceiling";
+        volume.wash.name = "light-wash";
+        volume.liquid.visible = false;
+        this.scene.add(volume.liquid, volume.ceiling, volume.wash);
+      }
+      this.volumes.push(volume);
     }
     this.grid = new GridHelper(this.radius * 2.8, 16, 0x69818e, 0x69818e);
     this.grid.position.y = (groundZ ?? box.min.y - this.radius * 0.015) - origin.y;
@@ -151,21 +219,32 @@ export class FloorplanRenderer {
     if (selected !== this.lastSelected) { this.pauseMotion(); this.lastSelected=selected; }
     this.options = options;
     if (!options.focus_activity) this.focusTarget=undefined;
-    for (const { part, mesh, edges } of this.volumes) {
+    for (const volume of this.volumes) {
+      const { part, edges, liquid, ceiling, wash } = volume;
       const reading = activityReading(live, part.id, now);
       const highlighted = part.id === selected || part.ancestors.includes(selected);
       const alerted = alert && (!alert.group || part.id === alert.group || part.ancestors.includes(alert.group));
-      const color = reading.ratio === null ? "#8596a1" : thresholdColor(reading.value!, options);
-      edges.material.color.set(alerted && alert.color ? alert.color : color);
-      edges.material.opacity = highlighted || alerted ? 1 : part.container ? 0.3 : 0.75;
-      const fill = fills[part.id];
-      if (options.light_fill) {
-        mesh.material.color.setRGB(...(fill?.rgb ?? [0,0,0]));
-        mesh.material.opacity = part.container ? 0 : (fill?.brightness ?? 0) * options.fill_brightness;
-      } else {
-        mesh.material.color.set(color);
-        mesh.material.opacity = part.container || reading.ratio === null ? 0 : reading.ratio * options.fill_brightness;
+      edges.material.color.set(alerted && alert.color ? alert.color : highlighted ? "#d7e8f1" : "#8596a1");
+      edges.material.opacity = highlighted || alerted ? 0.9 : part.container ? 0.07 : 0.24;
+      if (!liquid || !ceiling || !wash) continue;
+      const wasVisible = liquid.visible;
+      // Expired activity returns to blue; never-received data stays unknown.
+      const ratio = reading.status === "stale" ? 0 : reading.ratio;
+      liquid.visible = ratio !== null;
+      if (ratio !== null) {
+        volume.targetColor.set(thresholdColor(reading.status === "stale" ? 0 : reading.value!, options));
+        if (!wasVisible || this.reduced?.matches) {
+          liquid.material.color.copy(volume.targetColor);
+        }
+        this.updateColor(volume, 0);
       }
+      const fill = fills[part.id];
+      const strength = options.light_fill ? (fill?.brightness ?? 0) * options.fill_brightness : 0;
+      ceiling.material.color.setRGB(...(fill?.rgb ?? [0, 0, 0]));
+      wash.material.color.copy(ceiling.material.color);
+      ceiling.material.opacity = Math.min(1, strength * 3);
+      wash.material.opacity = strength * 0.25;
+      ceiling.visible = wash.visible = strength > 0;
     }
     const key = alert ? `${alert.entity}:${alert.state}:${alert.group ?? ""}` : "";
     let candidate = key && key !== this.alertKey ? this.volumes.find(v=>v.part.id === alert?.group) : undefined;
@@ -199,19 +278,39 @@ export class FloorplanRenderer {
     this.draw();
   }
 
+  private updateColor(volume: Volume, blend: number): void {
+    if (!volume.liquid?.visible) return;
+    const color = volume.liquid.material.color;
+    color.lerp(volume.targetColor, blend);
+    if (!this.colorPending(volume)) color.copy(volume.targetColor);
+  }
+
+  private colorPending(volume: Volume): boolean {
+    const color = volume.liquid?.material.color;
+    return !!volume.liquid?.visible && !!color &&
+      Math.abs(color.r - volume.targetColor.r) + Math.abs(color.g - volume.targetColor.g) +
+      Math.abs(color.b - volume.targetColor.b) > 0.001;
+  }
+
+  private colorChanging(): boolean {
+    return this.volumes.some(volume => this.colorPending(volume));
+  }
+
   private readonly pauseMotion = (): void => {
     this.pauseUntil = Date.now()+30000; this.focusTarget=undefined;
   };
   private readonly scheduleMotion = (): void => {
     clearTimeout(this.animation);
     this.animation=undefined;
-    if (this.disposed || this.lost || this.reduced?.matches || document.visibilityState !== "visible" || (!this.options.auto_rotate && !this.focusTarget)) return;
+    if (this.disposed || this.lost || this.reduced?.matches || document.visibilityState !== "visible" || (!this.options.auto_rotate && !this.focusTarget && !this.colorChanging())) return;
     this.lastTick=performance.now();
     this.animation=setTimeout(this.animate, 1000/30);
   };
   private readonly animate = (): void => {
     if (this.disposed || this.lost || document.visibilityState !== "visible" || this.reduced?.matches) return;
     const time=performance.now(), delta=Math.min((time-this.lastTick)/1000,0.1); this.lastTick=time;
+    for (const volume of this.volumes) this.updateColor(volume, 1 - Math.exp(-delta * 8));
+    this.draw();
     if (Date.now() >= this.pauseUntil) {
       if (this.focusTarget) {
         const returning=Date.now() > this.focusUntil;
@@ -226,7 +325,7 @@ export class FloorplanRenderer {
       if (this.options.auto_rotate) this.controls.rotateLeft(delta*2*Math.PI/this.options.rotation_period);
       this.controls.update(); this.draw();
     }
-    if (this.options.auto_rotate || this.focusTarget) this.animation=setTimeout(this.animate,1000/30);
+    if (this.options.auto_rotate || this.focusTarget || this.colorChanging()) this.animation=setTimeout(this.animate,1000/30);
   };
   private fitDistance(): number {
     const vertical=this.camera.fov*Math.PI/360;
@@ -285,7 +384,14 @@ export class FloorplanRenderer {
 
   private clearParts(): void {
     if (this.ground) { this.scene.remove(this.ground); this.ground.geometry.dispose(); this.ground.material.dispose(); this.ground=undefined; }
-    for (const { mesh, edges } of this.volumes) {
+    for (const { mesh, edges, liquid, ceiling, wash } of this.volumes) {
+      ceiling?.material.map?.dispose();
+      for (const layer of [liquid, ceiling, wash]) {
+        if (layer) {
+          this.scene.remove(layer);
+          layer.geometry.dispose(); layer.material.dispose();
+        }
+      }
       this.scene.remove(mesh, edges);
       mesh.geometry.dispose(); mesh.material.dispose();
       edges.geometry.dispose(); edges.material.dispose();

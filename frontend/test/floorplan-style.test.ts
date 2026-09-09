@@ -10,10 +10,17 @@ describe("floorplan presentation", () => {
   });
   it("sorts absolute thresholds and rejects ambiguous settings", () => {
     const o = viewerOptions({color_thresholds:[{value:5,color:"#d31400"},{value:0,color:"#2189EF"},{value:3,color:"#f39c12"}]});
-    expect([0,2.9,3,4.99,5,100].map(v=>thresholdColor(v,o))).toEqual(["#2189EF","#2189EF","#f39c12","#f39c12","#d31400","#d31400"]);
+    expect([0,3,5,100].map(v=>thresholdColor(v,o))).toEqual(["#2189ef","#f39c12","#d31400","#d31400"]);
+    expect(thresholdColor(4, o)).toBe("#e35809");
+    expect(thresholdColor(-1, o)).toBe("#2189EF");
+    expect(thresholdColor(2, viewerOptions({color_thresholds:[{value:0,color:"#123456"}]}))).toBe("#123456");
     expect(()=>viewerOptions({color_thresholds:[{value:0,color:"red"}]})).toThrow();
     expect(()=>viewerOptions({ground_z:Infinity})).toThrow();
     expect(viewerOptions({ground_z:12.886}).ground_z).toBe(12.886);
+  });
+  it("uses the blue to red activity gradient with cyan and yellow anchors", () => {
+    expect([0,1.25,2.5,3.75,5].map(v => thresholdColor(v, viewerOptions())))
+      .toEqual(["#2189ef", "#35cddd", "#f5df62", "#f39c12", "#ef493e"]);
   });
   it("uses security defaults unless thresholds override them", () => {
     expect(thresholdColor(0,viewerOptions({scheme:"security"}))).toBe("#697780");

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BufferGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3 } from "three";
-import { viewerOptions } from "../src/floorplan-style";
+import { thresholdColor, viewerOptions } from "../src/floorplan-style";
 import type { ScenePart } from "../src/floorplan-model";
 import type { GroupLive, LiveState } from "../src/types";
 
@@ -69,14 +69,69 @@ describe("floorplan renderer", () => {
     expect(room.geometry.boundingBox!.min.y).toBeLessThan(ground.position.y);
     renderer.dispose();
   });
-  it("keeps threshold outlines independent of light color and selection", () => {
-    const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn());renderer.setParts([part()]);
-    renderer.setActivity(frame(3),1000,"room",viewerOptions(),{room:{rgb:[0,0,1],brightness:1,unknown:false}});
-    const scene=gpu.render.mock.calls.at(-1)![0] as Scene;
-    const mesh=scene.children.find(n=>n instanceof Mesh) as Mesh<BufferGeometry,MeshBasicMaterial>;
-    expect(mesh.material.color.b).toBe(1);expect(mesh.material.color.r).toBe(0);
-    const edges=scene.children.find(n=>n.type==="LineSegments") as import("three").LineSegments<BufferGeometry,import("three").LineBasicMaterial>;
-    expect(edges.material.color.getHexString()).toBe("f39c12");renderer.dispose();
+  it("keeps full-height activity volumes independent of ceiling light color and selection", () => {
+    const renderer = new FloorplanRenderer(host(), vi.fn(), vi.fn());
+    renderer.setParts([part()]);
+    renderer.setActivity(frame(3), 1000, "room", viewerOptions(), {room:{rgb:[0,0,1],brightness:1,unknown:false}});
+    const scene = gpu.render.mock.calls.at(-1)![0] as Scene;
+    const ceiling = scene.getObjectByName("light-ceiling") as Mesh<BufferGeometry, MeshBasicMaterial>;
+    const liquid = scene.getObjectByName("activity-volume") as Mesh<BufferGeometry, MeshBasicMaterial>;
+    expect(ceiling.material.color.b).toBe(1);
+    expect(ceiling.material.color.r).toBe(0);
+    expect(liquid.material.color.getHexString()).toBe(thresholdColor(3, viewerOptions()).slice(1));
+    expect(liquid.scale.y).toBe(1);
+    liquid.geometry.computeBoundingBox();
+    expect(liquid.geometry.boundingBox!.max.y - liquid.geometry.boundingBox!.min.y).toBeCloseTo(2);
+    renderer.setActivity(frame(3), 1000, "", viewerOptions({light_fill:false}));
+    expect(ceiling.visible).toBe(false);
+    expect(liquid.visible).toBe(true);
+    expect(liquid.material.color.getHexString()).toBe(thresholdColor(3, viewerOptions()).slice(1));
+    renderer.dispose();
+  });
+  it("changes only color and returns expired activity to blue", async () => {
+    vi.useFakeTimers();
+    const renderer = new FloorplanRenderer(host(), vi.fn(), vi.fn());
+    renderer.setParts([part()]);
+    renderer.setActivity(frame(0), 1000, "");
+    const scene = gpu.render.mock.calls.at(-1)![0] as Scene;
+    const liquid = scene.getObjectByName("activity-volume") as Mesh<BufferGeometry, MeshBasicMaterial>;
+    const geometry = liquid.geometry;
+    const opacity = liquid.material.opacity;
+    expect(liquid.material.color.getHexString()).toBe("2189ef");
+    renderer.setActivity(frame(5), 1000, "");
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(liquid.material.color.getHexString()).toBe("ef493e");
+    expect(liquid.geometry).toBe(geometry);
+    expect(liquid.scale.toArray()).toEqual([1, 1, 1]);
+    expect(liquid.material.opacity).toBe(opacity);
+    expect(scene.getObjectByName("activity-surface")).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+    renderer.setActivity(frame(5), 1011, "");
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(liquid.visible).toBe(true);
+    expect(liquid.material.color.getHexString()).toBe("2189ef");
+    renderer.setActivity(null, 1011, "");
+    expect(liquid.visible).toBe(false);
+    renderer.dispose();
+    vi.useRealTimers();
+  });
+  it("keeps containers empty and snaps activity when reduced motion is requested", () => {
+    const previous = window.matchMedia;
+    window.matchMedia = vi.fn().mockReturnValue({matches:true, addEventListener:vi.fn(), removeEventListener:vi.fn()});
+    try {
+      const renderer = new FloorplanRenderer(host(), vi.fn(), vi.fn());
+      renderer.setParts([part(), {...part(), id:"floor", container:true}]);
+      renderer.setActivity(frame(0), 1000, "");
+      const scene = gpu.render.mock.calls.at(-1)![0] as Scene;
+      expect(scene.children.filter(n => n.name === "activity-volume")).toHaveLength(1);
+      renderer.setActivity(frame(5), 1000, "");
+      const liquid = scene.getObjectByName("activity-volume") as Mesh<BufferGeometry, MeshBasicMaterial>;
+      expect(liquid.material.color.getHexString()).toBe("ef493e");
+      const ceiling = scene.getObjectByName("light-ceiling") as Mesh<BufferGeometry, MeshBasicMaterial>;
+      const disposeTexture = vi.spyOn(ceiling.material.map!, "dispose");
+      renderer.dispose();
+      expect(disposeTexture).toHaveBeenCalledOnce();
+    } finally { window.matchMedia = previous; }
   });
   it("moves automatically, pauses for interaction, and clears animation on dispose", async () => {
     vi.useFakeTimers();const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn());renderer.setParts([part()]);
