@@ -590,11 +590,11 @@ wireframe. Drag to orbit, scroll to zoom, or use the camera buttons, **Top** and
 Choose a property, structure or floor to isolate its current descendants. Geometry keeps
 its imported coordinates; GPS and changes to the group hierarchy do not reposition it.
 
-Room activity appears as a calm liquid surface: height follows the fraction of the
-room's maximum activity, while color follows absolute activity. The default continuous
-gradient runs from blue at 0 through cyan (1.25), yellow (2.5), orange (3.75) and red (5).
-A thin blue surface remains at zero. Changes ease smoothly, unless reduced motion is
-requested. Activity stays visible independently of the lights.
+Room activity colors a fixed floor-to-ceiling translucent volume. Only the color changes:
+the default continuous gradient runs from blue at 0 through cyan (1.25), yellow (2.5),
+orange (3.75) and red (5). Color follows absolute activity, with consistent opacity at
+all levels. Changes ease smoothly, unless reduced motion is requested. Activity stays
+visible independently of the lights.
 
 Ceilings glow with the actual colors and brightness of the room's lights, with a faint
 wash down the walls. Multiple lights blend by brightness; off lights contribute nothing.
@@ -602,7 +602,7 @@ The brightest light sets the glow strength, capped by the viewer brightness sett
 This is an illustrative tint, not a lighting simulation. `light_fill: false` disables
 ceiling lighting without hiding activity.
 
-Select a room or a group to see its activity and light reading. Expired activity settles to blue at zero; never-received activity hides the liquid.
+Select a room or a group to see its activity and light reading. Expired activity returns to blue at zero; never-received activity hides the fill.
 Connection status and unavailable lights are identified separately in the readings.
 Selection and alerts emphasize the otherwise quiet room outlines. Floors and other
 containers remain faint outlines.

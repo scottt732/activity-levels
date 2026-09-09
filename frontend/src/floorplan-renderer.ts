@@ -9,8 +9,6 @@ import type { ScenePart, ActivityFrame } from "./floorplan-model";
 import { viewerOptions, thresholdColor } from "./floorplan-style";
 import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
 
-const SURFACE_HIGHLIGHT = new Color("#ffffff");
-
 export type CameraAction = "reset" | "top" | "left" | "right" | "up" | "down" | "in" | "out";
 
 /** Recenter before uploading float32 vertices; the geographic origin never moves a room. */
@@ -27,13 +25,8 @@ interface Volume {
   mesh: Mesh<ExtrudeGeometry, MeshBasicMaterial>;
   edges: LineSegments<EdgesGeometry, LineBasicMaterial>;
   liquid?: Mesh<ExtrudeGeometry, MeshBasicMaterial>;
-  surface?: Mesh<ShapeGeometry, MeshBasicMaterial>;
   ceiling?: Mesh<ShapeGeometry, MeshBasicMaterial>;
   wash?: Mesh<ExtrudeGeometry, MeshBasicMaterial>;
-  rim?: LineSegments<EdgesGeometry, LineBasicMaterial>;
-  floor: number;
-  level: number;
-  target: number;
   targetColor: Color;
 }
 
@@ -162,18 +155,13 @@ export class FloorplanRenderer {
       if (part.container) mesh.material.opacity = 0;
       this.scene.add(mesh, edges);
       const floor = part.low - origin.y;
-      const volume: Volume = { part, mesh, edges, floor, level: 0, target: 0, targetColor: new Color() };
+      const volume: Volume = { part, mesh, edges, targetColor: new Color() };
       mesh.material.opacity = 0;
       if (!part.container) {
-        // Keep the full-height mesh for picking and camera bounds. Scale a separate
-        // floor-relative volume so changing activity never moves the floor itself.
-        const liquidGeometry = geometry.clone().translate(0, -floor, 0);
-        volume.liquid = new Mesh(liquidGeometry, new MeshBasicMaterial({
-          transparent: true, opacity: 0.09, side: DoubleSide, depthWrite: false,
-        }));
-        volume.liquid.position.y = floor;
-        volume.surface = new Mesh(surfaceGeometry(part, origin), new MeshBasicMaterial({
-          transparent: true, opacity: 0.65, side: DoubleSide, depthWrite: false,
+        // Activity changes only the color of this fixed, full-height room volume.
+        // The separate invisible mesh continues to own picking and camera bounds.
+        volume.liquid = new Mesh(geometry.clone(), new MeshBasicMaterial({
+          transparent: true, opacity: 0.16, side: DoubleSide, depthWrite: false,
         }));
         volume.ceiling = new Mesh(surfaceGeometry(part, origin), new MeshBasicMaterial({
           transparent: true, opacity: 0, side: DoubleSide, depthWrite: false,
@@ -188,10 +176,6 @@ export class FloorplanRenderer {
           (ceilingPositions.getX(i) - bounds.min.x) / (bounds.max.x - bounds.min.x),
           (ceilingPositions.getZ(i) - bounds.min.z) / (bounds.max.z - bounds.min.z));
         volume.ceiling.material.map = ceilingGlow();
-        volume.rim = new LineSegments(new EdgesGeometry(volume.surface.geometry), new LineBasicMaterial({
-          transparent: true, opacity: 0.65, depthWrite: false,
-        }));
-        volume.rim.visible = false;
         const washGeometry = geometry.clone();
         const positions = washGeometry.getAttribute("position");
         const colors: number[] = [];
@@ -205,11 +189,10 @@ export class FloorplanRenderer {
           transparent: true, opacity: 0, side: DoubleSide, depthWrite: false, vertexColors: true,
         }));
         volume.liquid.name = "activity-volume";
-        volume.surface.name = "activity-surface";
         volume.ceiling.name = "light-ceiling";
         volume.wash.name = "light-wash";
-        volume.liquid.visible = volume.surface.visible = false;
-        this.scene.add(volume.liquid, volume.surface, volume.ceiling, volume.wash, volume.rim);
+        volume.liquid.visible = false;
+        this.scene.add(volume.liquid, volume.ceiling, volume.wash);
       }
       this.volumes.push(volume);
     }
@@ -237,26 +220,23 @@ export class FloorplanRenderer {
     this.options = options;
     if (!options.focus_activity) this.focusTarget=undefined;
     for (const volume of this.volumes) {
-      const { part, edges, liquid, surface, ceiling, wash } = volume;
+      const { part, edges, liquid, ceiling, wash } = volume;
       const reading = activityReading(live, part.id, now);
       const highlighted = part.id === selected || part.ancestors.includes(selected);
       const alerted = alert && (!alert.group || part.id === alert.group || part.ancestors.includes(alert.group));
       edges.material.color.set(alerted && alert.color ? alert.color : highlighted ? "#d7e8f1" : "#8596a1");
       edges.material.opacity = highlighted || alerted ? 0.9 : part.container ? 0.07 : 0.24;
-      if (!liquid || !surface || !ceiling || !wash) continue;
-      const wasVisible = surface.visible;
-      // Expired activity settles to zero; never-received data stays unknown.
+      if (!liquid || !ceiling || !wash) continue;
+      const wasVisible = liquid.visible;
+      // Expired activity returns to blue; never-received data stays unknown.
       const ratio = reading.status === "stale" ? 0 : reading.ratio;
-      liquid.visible = surface.visible = ratio !== null;
-      if (volume.rim) volume.rim.visible = surface.visible;
+      liquid.visible = ratio !== null;
       if (ratio !== null) {
-        volume.target = Math.max(0.004, ratio);
         volume.targetColor.set(thresholdColor(reading.status === "stale" ? 0 : reading.value!, options));
         if (!wasVisible || this.reduced?.matches) {
-          volume.level = volume.target;
-          surface.material.color.copy(volume.targetColor);
+          liquid.material.color.copy(volume.targetColor);
         }
-        this.updateLiquid(volume, 0);
+        this.updateColor(volume, 0);
       }
       const fill = fills[part.id];
       const strength = options.light_fill ? (fill?.brightness ?? 0) * options.fill_brightness : 0;
@@ -298,26 +278,22 @@ export class FloorplanRenderer {
     this.draw();
   }
 
-  private updateLiquid(volume: Volume, blend: number): void {
-    const { liquid, surface, part } = volume;
-    if (!liquid || !surface || !surface.visible) return;
-    volume.level += (volume.target - volume.level) * blend;
-    surface.material.color.lerp(volume.targetColor, blend);
-    liquid.material.color.copy(surface.material.color);
-    liquid.scale.y = volume.level;
-    surface.position.y = volume.floor + (part.high - part.low) * volume.level;
-    if (volume.rim) {
-      volume.rim.position.y = surface.position.y;
-      volume.rim.material.color.copy(surface.material.color).lerp(SURFACE_HIGHLIGHT, 0.25);
-    }
+  private updateColor(volume: Volume, blend: number): void {
+    if (!volume.liquid?.visible) return;
+    const color = volume.liquid.material.color;
+    color.lerp(volume.targetColor, blend);
+    if (!this.colorPending(volume)) color.copy(volume.targetColor);
   }
 
-  private liquidMoving(): boolean {
-    return this.volumes.some(v => v.surface?.visible &&
-      (Math.abs(v.target - v.level) > 0.0001 ||
-       Math.abs(v.surface.material.color.r - v.targetColor.r) +
-       Math.abs(v.surface.material.color.g - v.targetColor.g) +
-       Math.abs(v.surface.material.color.b - v.targetColor.b) > 0.001));
+  private colorPending(volume: Volume): boolean {
+    const color = volume.liquid?.material.color;
+    return !!volume.liquid?.visible && !!color &&
+      Math.abs(color.r - volume.targetColor.r) + Math.abs(color.g - volume.targetColor.g) +
+      Math.abs(color.b - volume.targetColor.b) > 0.001;
+  }
+
+  private colorChanging(): boolean {
+    return this.volumes.some(volume => this.colorPending(volume));
   }
 
   private readonly pauseMotion = (): void => {
@@ -326,14 +302,14 @@ export class FloorplanRenderer {
   private readonly scheduleMotion = (): void => {
     clearTimeout(this.animation);
     this.animation=undefined;
-    if (this.disposed || this.lost || this.reduced?.matches || document.visibilityState !== "visible" || (!this.options.auto_rotate && !this.focusTarget && !this.liquidMoving())) return;
+    if (this.disposed || this.lost || this.reduced?.matches || document.visibilityState !== "visible" || (!this.options.auto_rotate && !this.focusTarget && !this.colorChanging())) return;
     this.lastTick=performance.now();
     this.animation=setTimeout(this.animate, 1000/30);
   };
   private readonly animate = (): void => {
     if (this.disposed || this.lost || document.visibilityState !== "visible" || this.reduced?.matches) return;
     const time=performance.now(), delta=Math.min((time-this.lastTick)/1000,0.1); this.lastTick=time;
-    for (const volume of this.volumes) this.updateLiquid(volume, 1 - Math.exp(-delta * 8));
+    for (const volume of this.volumes) this.updateColor(volume, 1 - Math.exp(-delta * 8));
     this.draw();
     if (Date.now() >= this.pauseUntil) {
       if (this.focusTarget) {
@@ -349,7 +325,7 @@ export class FloorplanRenderer {
       if (this.options.auto_rotate) this.controls.rotateLeft(delta*2*Math.PI/this.options.rotation_period);
       this.controls.update(); this.draw();
     }
-    if (this.options.auto_rotate || this.focusTarget || this.liquidMoving()) this.animation=setTimeout(this.animate,1000/30);
+    if (this.options.auto_rotate || this.focusTarget || this.colorChanging()) this.animation=setTimeout(this.animate,1000/30);
   };
   private fitDistance(): number {
     const vertical=this.camera.fov*Math.PI/360;
@@ -408,9 +384,9 @@ export class FloorplanRenderer {
 
   private clearParts(): void {
     if (this.ground) { this.scene.remove(this.ground); this.ground.geometry.dispose(); this.ground.material.dispose(); this.ground=undefined; }
-    for (const { mesh, edges, liquid, surface, ceiling, wash, rim } of this.volumes) {
+    for (const { mesh, edges, liquid, ceiling, wash } of this.volumes) {
       ceiling?.material.map?.dispose();
-      for (const layer of [liquid, surface, ceiling, wash, rim]) {
+      for (const layer of [liquid, ceiling, wash]) {
         if (layer) {
           this.scene.remove(layer);
           layer.geometry.dispose(); layer.material.dispose();

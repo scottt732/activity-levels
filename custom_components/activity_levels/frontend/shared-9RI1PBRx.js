@@ -1385,7 +1385,7 @@ var pt = [
 		let e = ++this.sequence;
 		this.loading = !0;
 		try {
-			let { FloorplanRenderer: t } = await import("./shared-BXQ-Q6Ij.js");
+			let { FloorplanRenderer: t } = await import("./shared-CmeQ9Q3T.js");
 			if (e !== this.sequence || !this.isConnected) return;
 			let n = this.renderRoot.querySelector("#scene");
 			this.renderer = new t(n, (e) => {
@@ -1507,7 +1507,7 @@ var pt = [
 		}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
       </div>
       <h2>Your home, live</h2>
-      <p class="muted">Liquid height shows activity relative to each room’s maximum; blue-to-red color shows its value. Ceiling glow shows your lights.</p>
+      <p class="muted">Room color shows activity from blue (0) to red (5). Ceiling glow shows your lights.</p>
       <div class="toolbar">
         <label>Floor or building <select id="scope" .value=${this.scope} @change=${(e) => {
 			this.scope = e.target.value, this.selected = "";
@@ -1530,7 +1530,7 @@ var pt = [
               <button id="retry" type="button" @click=${() => {
 			this.error = "";
 		}}>Retry 3D view</button></div>` : this.loading ? j`<div class="overlay"><p role="status">Loading 3D view…</p></div>` : N : j`<div class="overlay"><p>${this.model.groups.length ? "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>`}
-          ${e.length && !this.error ? j`<div class="legend">${this.options.color_thresholds.map((e) => j`<span style=${`color:${e.color};margin-right:12px`}>● ${e.value}</span>`)} · no liquid = unknown
+          ${e.length && !this.error ? j`<div class="legend">${this.options.color_thresholds.map((e) => j`<span style=${`color:${e.color};margin-right:12px`}>● ${e.value}</span>`)} · no fill = unknown
             <br>${this.options.ground_z === void 0 ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z} m`}</div>` : N}
         </div>
         <aside aria-label="Floorplan groups">

@@ -248,7 +248,7 @@ export class AlFloorplanViewer extends LitElement {
       <button class="ambient-toggle" type="button" @click=${()=>{this.controlsVisible=!this.controlsVisible;this.toggleAttribute("show-controls",this.controlsVisible);}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
       </div>
       <h2>Your home, live</h2>
-      <p class="muted">Liquid height shows activity relative to each room’s maximum; blue-to-red color shows its value. Ceiling glow shows your lights.</p>
+      <p class="muted">Room color shows activity from blue (0) to red (5). Ceiling glow shows your lights.</p>
       <div class="toolbar">
         <label>Floor or building <select id="scope" .value=${this.scope} @change=${(event: Event) => {
           this.scope = (event.target as HTMLSelectElement).value; this.selected = "";
@@ -273,7 +273,7 @@ export class AlFloorplanViewer extends LitElement {
             this.error ? html`<div class="overlay"><p role="alert">${this.error}</p>
               <button id="retry" type="button" @click=${() => { this.error = ""; }}>Retry 3D view</button></div>` :
               this.loading ? html`<div class="overlay"><p role="status">Loading 3D view…</p></div>` : nothing}
-          ${parts.length && !this.error ? html`<div class="legend">${this.options.color_thresholds.map(t=>html`<span style=${`color:${t.color};margin-right:12px`}>● ${t.value}</span>`)} · no liquid = unknown
+          ${parts.length && !this.error ? html`<div class="legend">${this.options.color_thresholds.map(t=>html`<span style=${`color:${t.color};margin-right:12px`}>● ${t.value}</span>`)} · no fill = unknown
             <br>${this.options.ground_z === undefined ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z} m`}</div>` : nothing}
         </div>
         <aside aria-label="Floorplan groups">
