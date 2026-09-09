@@ -5142,16 +5142,75 @@ var Wa = class e extends wr {
 	static fromJSON(t) {
 		return new e(t.width, t.height, t.widthSegments, t.heightSegments);
 	}
+}, Ga = class e extends wr {
+	constructor(e = new ia([
+		new B(0, .5),
+		new B(-.5, -.5),
+		new B(.5, -.5)
+	]), t = 12) {
+		super(), this.type = "ShapeGeometry", this.parameters = {
+			shapes: e,
+			curveSegments: t
+		};
+		let n = [], r = [], i = [], a = [], o = 0, s = 0;
+		if (Array.isArray(e) === !1) c(e);
+		else for (let t = 0; t < e.length; t++) c(e[t]), this.addGroup(o, s, t), o += s, s = 0;
+		this.setIndex(n), this.setAttribute("position", new J(r, 3)), this.setAttribute("normal", new J(i, 3)), this.setAttribute("uv", new J(a, 2));
+		function c(e) {
+			let o = r.length / 3, c = e.extractPoints(t), l = c.shape, u = c.holes;
+			Ra.isClockWise(l) === !1 && (l = l.reverse());
+			for (let e = 0, t = u.length; e < t; e++) {
+				let t = u[e];
+				Ra.isClockWise(t) === !0 && (u[e] = t.reverse());
+			}
+			let d = Ra.triangulateShape(l, u);
+			for (let e = 0, t = u.length; e < t; e++) {
+				let t = u[e];
+				l = l.concat(t);
+			}
+			for (let e = 0, t = l.length; e < t; e++) {
+				let t = l[e];
+				r.push(t.x, t.y, 0), i.push(0, 0, 1), a.push(t.x, t.y);
+			}
+			for (let e = 0, t = d.length; e < t; e++) {
+				let t = d[e], r = t[0] + o, i = t[1] + o, a = t[2] + o;
+				n.push(r, i, a), s += 3;
+			}
+		}
+	}
+	copy(e) {
+		return super.copy(e), this.parameters = Object.assign({}, e.parameters), this;
+	}
+	toJSON() {
+		let e = super.toJSON(), t = this.parameters.shapes;
+		return Ka(t, e);
+	}
+	static fromJSON(t, n) {
+		let r = [];
+		for (let e = 0, i = t.shapes.length; e < i; e++) {
+			let i = n[t.shapes[e]];
+			r.push(i);
+		}
+		return new e(r, t.curveSegments);
+	}
 };
-function Ga(e) {
+function Ka(e, t) {
+	if (t.shapes = [], Array.isArray(e)) for (let n = 0, r = e.length; n < r; n++) {
+		let r = e[n];
+		t.shapes.push(r.uuid);
+	}
+	else t.shapes.push(e.uuid);
+	return t;
+}
+function qa(e) {
 	let t = {};
 	for (let n in e) {
 		t[n] = {};
 		for (let r in e[n]) {
 			let i = e[n][r];
-			if (qa(i)) i.isRenderTargetTexture ? (F("UniformsUtils: Textures of render targets cannot be cloned via cloneUniforms() or mergeUniforms()."), t[n][r] = null) : t[n][r] = i.clone();
+			if (Ya(i)) i.isRenderTargetTexture ? (F("UniformsUtils: Textures of render targets cannot be cloned via cloneUniforms() or mergeUniforms()."), t[n][r] = null) : t[n][r] = i.clone();
 			else if (Array.isArray(i)) {
-				if (qa(i[0])) {
+				if (Ya(i[0])) {
 					let e = [];
 					for (let t = 0, n = i.length; t < n; t++) e[t] = i[t].clone();
 					t[n][r] = e;
@@ -5161,32 +5220,32 @@ function Ga(e) {
 	}
 	return t;
 }
-function Ka(e) {
+function Ja(e) {
 	let t = {};
 	for (let n = 0; n < e.length; n++) {
-		let r = Ga(e[n]);
+		let r = qa(e[n]);
 		for (let e in r) t[e] = r[e];
 	}
 	return t;
 }
-function qa(e) {
+function Ya(e) {
 	return e && (e.isColor || e.isMatrix3 || e.isMatrix4 || e.isVector2 || e.isVector3 || e.isVector4 || e.isTexture || e.isQuaternion);
 }
-function Ja(e) {
+function Xa(e) {
 	let t = [];
 	for (let n = 0; n < e.length; n++) t.push(e[n].clone());
 	return t;
 }
-function Ya(e) {
+function Za(e) {
 	let t = e.getRenderTarget();
 	return t === null ? e.outputColorSpace : t.isXRRenderTarget === !0 ? t.texture.colorSpace : H.workingColorSpace;
 }
-var Xa = {
-	clone: Ga,
-	merge: Ka
-}, Za = "void main() {\n	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\n}", Qa = "void main() {\n	gl_FragColor = vec4( 1.0, 0.0, 0.0, 1.0 );\n}", $a = class extends Er {
+var Qa = {
+	clone: qa,
+	merge: Ja
+}, $a = "void main() {\n	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );\n}", eo = "void main() {\n	gl_FragColor = vec4( 1.0, 0.0, 0.0, 1.0 );\n}", to = class extends Er {
 	constructor(e) {
-		super(), this.isShaderMaterial = !0, this.type = "ShaderMaterial", this.defines = {}, this.uniforms = {}, this.uniformsGroups = [], this.vertexShader = Za, this.fragmentShader = Qa, this.linewidth = 1, this.wireframe = !1, this.wireframeLinewidth = 1, this.fog = !1, this.lights = !1, this.clipping = !1, this.forceSinglePass = !0, this.extensions = {
+		super(), this.isShaderMaterial = !0, this.type = "ShaderMaterial", this.defines = {}, this.uniforms = {}, this.uniformsGroups = [], this.vertexShader = $a, this.fragmentShader = eo, this.linewidth = 1, this.wireframe = !1, this.wireframeLinewidth = 1, this.fog = !1, this.lights = !1, this.clipping = !1, this.forceSinglePass = !0, this.extensions = {
 			clipCullDistance: !1,
 			multiDraw: !1
 		}, this.defaultAttributeValues = {
@@ -5200,7 +5259,7 @@ var Xa = {
 		}, this.index0AttributeName = void 0, this.uniformsNeedUpdate = !1, this.glslVersion = null, e !== void 0 && this.setValues(e);
 	}
 	copy(e) {
-		return super.copy(e), this.fragmentShader = e.fragmentShader, this.vertexShader = e.vertexShader, this.uniforms = Ga(e.uniforms), this.uniformsGroups = Ja(e.uniformsGroups), this.defines = Object.assign({}, e.defines), this.wireframe = e.wireframe, this.wireframeLinewidth = e.wireframeLinewidth, this.fog = e.fog, this.lights = e.lights, this.clipping = e.clipping, this.extensions = Object.assign({}, e.extensions), this.glslVersion = e.glslVersion, this.defaultAttributeValues = Object.assign({}, e.defaultAttributeValues), this.index0AttributeName = e.index0AttributeName, this.uniformsNeedUpdate = e.uniformsNeedUpdate, this;
+		return super.copy(e), this.fragmentShader = e.fragmentShader, this.vertexShader = e.vertexShader, this.uniforms = qa(e.uniforms), this.uniformsGroups = Xa(e.uniformsGroups), this.defines = Object.assign({}, e.defines), this.wireframe = e.wireframe, this.wireframeLinewidth = e.wireframeLinewidth, this.fog = e.fog, this.lights = e.lights, this.clipping = e.clipping, this.extensions = Object.assign({}, e.extensions), this.glslVersion = e.glslVersion, this.defaultAttributeValues = Object.assign({}, e.defaultAttributeValues), this.index0AttributeName = e.index0AttributeName, this.uniformsNeedUpdate = e.uniformsNeedUpdate, this;
 	}
 	toJSON(e) {
 		let t = super.toJSON(e);
@@ -5266,18 +5325,18 @@ var Xa = {
 		if (e.defines !== void 0 && (this.defines = e.defines), e.vertexShader !== void 0 && (this.vertexShader = e.vertexShader), e.fragmentShader !== void 0 && (this.fragmentShader = e.fragmentShader), e.glslVersion !== void 0 && (this.glslVersion = e.glslVersion), e.extensions !== void 0) for (let t in e.extensions) this.extensions[t] = e.extensions[t];
 		return e.lights !== void 0 && (this.lights = e.lights), e.clipping !== void 0 && (this.clipping = e.clipping), this;
 	}
-}, eo = class extends $a {
+}, no = class extends to {
 	constructor(e) {
 		super(e), this.isRawShaderMaterial = !0, this.type = "RawShaderMaterial";
 	}
-}, to = class extends Er {
+}, ro = class extends Er {
 	constructor(e) {
 		super(), this.isMeshDepthMaterial = !0, this.type = "MeshDepthMaterial", this.depthPacking = He, this.map = null, this.alphaMap = null, this.displacementMap = null, this.displacementScale = 1, this.displacementBias = 0, this.wireframe = !1, this.wireframeLinewidth = 1, this.setValues(e);
 	}
 	copy(e) {
 		return super.copy(e), this.depthPacking = e.depthPacking, this.map = e.map, this.alphaMap = e.alphaMap, this.displacementMap = e.displacementMap, this.displacementScale = e.displacementScale, this.displacementBias = e.displacementBias, this.wireframe = e.wireframe, this.wireframeLinewidth = e.wireframeLinewidth, this;
 	}
-}, no = class extends Er {
+}, io = class extends Er {
 	constructor(e) {
 		super(), this.isMeshDistanceMaterial = !0, this.type = "MeshDistanceMaterial", this.map = null, this.alphaMap = null, this.displacementMap = null, this.displacementScale = 1, this.displacementBias = 0, this.setValues(e);
 	}
@@ -5285,10 +5344,10 @@ var Xa = {
 		return super.copy(e), this.map = e.map, this.alphaMap = e.alphaMap, this.displacementMap = e.displacementMap, this.displacementScale = e.displacementScale, this.displacementBias = e.displacementBias, this;
 	}
 };
-function ro(e, t) {
+function ao(e, t) {
 	return !e || e.constructor === t ? e : typeof t.BYTES_PER_ELEMENT == "number" ? new t(e) : Array.prototype.slice.call(e);
 }
-var io = class {
+var oo = class {
 	constructor(e, t, n, r) {
 		this.parameterPositions = e, this._cachedIndex = 0, this.resultBuffer = r === void 0 ? new t.constructor(n) : r, this.sampleValues = t, this.valueSize = n, this.settings = null, this.DefaultSettings_ = {};
 	}
@@ -5346,7 +5405,7 @@ var io = class {
 		throw Error("THREE.Interpolant: Call to abstract method.");
 	}
 	intervalChanged_() {}
-}, ao = class extends io {
+}, so = class extends oo {
 	constructor(e, t, n, r) {
 		super(e, t, n, r), this._weightPrev = -0, this._offsetPrev = -0, this._weightNext = -0, this._offsetNext = -0, this.DefaultSettings_ = {
 			endingStart: ze,
@@ -5381,7 +5440,7 @@ var io = class {
 		for (let e = 0; e !== o; ++e) i[e] = g * a[l + e] + _ * a[c + e] + v * a[s + e] + y * a[u + e];
 		return i;
 	}
-}, oo = class extends io {
+}, co = class extends oo {
 	constructor(e, t, n, r) {
 		super(e, t, n, r);
 	}
@@ -5390,14 +5449,14 @@ var io = class {
 		for (let e = 0; e !== o; ++e) i[e] = a[c + e] * u + a[s + e] * l;
 		return i;
 	}
-}, so = class extends io {
+}, lo = class extends oo {
 	constructor(e, t, n, r) {
 		super(e, t, n, r);
 	}
 	interpolate_(e) {
 		return this.copySampleValue_(e - 1);
 	}
-}, co = class extends io {
+}, uo = class extends oo {
 	interpolate_(e, t, n, r) {
 		let i = this.resultBuffer, a = this.sampleValues, o = this.valueSize, s = e * o, c = s - o, l = this.inTangents, u = this.outTangents;
 		if (!l || !u) {
@@ -5420,11 +5479,11 @@ var io = class {
 		}
 		return i;
 	}
-}, lo = class {
+}, fo = class {
 	constructor(e, t, n, r) {
 		if (e === void 0) throw Error("THREE.KeyframeTrack: track name is undefined");
 		if (t === void 0 || t.length === 0) throw Error("THREE.KeyframeTrack: no keyframes in track named " + e);
-		this.name = e, this.times = ro(t, this.TimeBufferType), this.values = ro(n, this.ValueBufferType), this.setInterpolation(r || this.DefaultInterpolation);
+		this.name = e, this.times = ao(t, this.TimeBufferType), this.values = ao(n, this.ValueBufferType), this.setInterpolation(r || this.DefaultInterpolation);
 	}
 	static toJSON(e) {
 		let t = e.constructor, n;
@@ -5432,8 +5491,8 @@ var io = class {
 		else {
 			n = {
 				name: e.name,
-				times: ro(e.times, Array),
-				values: ro(e.values, Array)
+				times: ao(e.times, Array),
+				values: ao(e.values, Array)
 			};
 			let t = e.getInterpolation();
 			t !== e.DefaultInterpolation && (n.interpolation = t);
@@ -5441,16 +5500,16 @@ var io = class {
 		return n.type = e.ValueTypeName, n;
 	}
 	InterpolantFactoryMethodDiscrete(e) {
-		return new so(this.times, this.values, this.getValueSize(), e);
+		return new lo(this.times, this.values, this.getValueSize(), e);
 	}
 	InterpolantFactoryMethodLinear(e) {
-		return new oo(this.times, this.values, this.getValueSize(), e);
+		return new co(this.times, this.values, this.getValueSize(), e);
 	}
 	InterpolantFactoryMethodSmooth(e) {
-		return new ao(this.times, this.values, this.getValueSize(), e);
+		return new so(this.times, this.values, this.getValueSize(), e);
 	}
 	InterpolantFactoryMethodBezier(e) {
-		let t = new co(this.times, this.values, this.getValueSize(), e);
+		let t = new uo(this.times, this.values, this.getValueSize(), e);
 		return this.settings && (t.inTangents = this.settings.inTangents, t.outTangents = this.settings.outTangents), t;
 	}
 	setInterpolation(e) {
@@ -5578,26 +5637,26 @@ var io = class {
 		return r.createInterpolant = this.createInterpolant, r;
 	}
 };
-lo.prototype.ValueTypeName = "", lo.prototype.TimeBufferType = Float32Array, lo.prototype.ValueBufferType = Float32Array, lo.prototype.DefaultInterpolation = Ie;
-var uo = class extends lo {
+fo.prototype.ValueTypeName = "", fo.prototype.TimeBufferType = Float32Array, fo.prototype.ValueBufferType = Float32Array, fo.prototype.DefaultInterpolation = Ie;
+var po = class extends fo {
 	constructor(e, t, n) {
 		super(e, t, n);
 	}
 };
-uo.prototype.ValueTypeName = "bool", uo.prototype.ValueBufferType = Array, uo.prototype.DefaultInterpolation = Fe, uo.prototype.InterpolantFactoryMethodLinear = void 0, uo.prototype.InterpolantFactoryMethodSmooth = void 0;
-var fo = class extends lo {
+po.prototype.ValueTypeName = "bool", po.prototype.ValueBufferType = Array, po.prototype.DefaultInterpolation = Fe, po.prototype.InterpolantFactoryMethodLinear = void 0, po.prototype.InterpolantFactoryMethodSmooth = void 0;
+var mo = class extends fo {
 	constructor(e, t, n, r) {
 		super(e, t, n, r);
 	}
 };
-fo.prototype.ValueTypeName = "color";
-var po = class extends lo {
+mo.prototype.ValueTypeName = "color";
+var ho = class extends fo {
 	constructor(e, t, n, r) {
 		super(e, t, n, r);
 	}
 };
-po.prototype.ValueTypeName = "number";
-var mo = class extends io {
+ho.prototype.ValueTypeName = "number";
+var go = class extends oo {
 	constructor(e, t, n, r) {
 		super(e, t, n, r);
 	}
@@ -5606,28 +5665,28 @@ var mo = class extends io {
 		for (let e = c + o; c !== e; c += 4) Mt.slerpFlat(i, 0, a, c - o, a, c, s);
 		return i;
 	}
-}, ho = class extends lo {
+}, _o = class extends fo {
 	constructor(e, t, n, r) {
 		super(e, t, n, r);
 	}
 	InterpolantFactoryMethodLinear(e) {
-		return new mo(this.times, this.values, this.getValueSize(), e);
+		return new go(this.times, this.values, this.getValueSize(), e);
 	}
 };
-ho.prototype.ValueTypeName = "quaternion", ho.prototype.InterpolantFactoryMethodSmooth = void 0;
-var go = class extends lo {
+_o.prototype.ValueTypeName = "quaternion", _o.prototype.InterpolantFactoryMethodSmooth = void 0;
+var vo = class extends fo {
 	constructor(e, t, n) {
 		super(e, t, n);
 	}
 };
-go.prototype.ValueTypeName = "string", go.prototype.ValueBufferType = Array, go.prototype.DefaultInterpolation = Fe, go.prototype.InterpolantFactoryMethodLinear = void 0, go.prototype.InterpolantFactoryMethodSmooth = void 0;
-var _o = class extends lo {
+vo.prototype.ValueTypeName = "string", vo.prototype.ValueBufferType = Array, vo.prototype.DefaultInterpolation = Fe, vo.prototype.InterpolantFactoryMethodLinear = void 0, vo.prototype.InterpolantFactoryMethodSmooth = void 0;
+var yo = class extends fo {
 	constructor(e, t, n, r) {
 		super(e, t, n, r);
 	}
 };
-_o.prototype.ValueTypeName = "vector";
-var vo = /*@__PURE__*/ new V(), yo = /*@__PURE__*/ new Mt(), bo = /*@__PURE__*/ new V(), xo = class extends En {
+yo.prototype.ValueTypeName = "vector";
+var bo = /*@__PURE__*/ new V(), xo = /*@__PURE__*/ new Mt(), So = /*@__PURE__*/ new V(), Co = class extends En {
 	constructor() {
 		super(), this.isCamera = !0, this.type = "Camera", this.matrixWorldInverse = new W(), this.projectionMatrix = new W(), this.projectionMatrixInverse = new W(), this.coordinateSystem = Xe, this._reversedDepth = !1;
 	}
@@ -5641,15 +5700,15 @@ var vo = /*@__PURE__*/ new V(), yo = /*@__PURE__*/ new Mt(), bo = /*@__PURE__*/ 
 		return super.getWorldDirection(e).negate();
 	}
 	updateMatrixWorld(e) {
-		super.updateMatrixWorld(e), this.matrixWorld.decompose(vo, yo, bo), bo.x === 1 && bo.y === 1 && bo.z === 1 ? this.matrixWorldInverse.copy(this.matrixWorld).invert() : this.matrixWorldInverse.compose(vo, yo, bo.set(1, 1, 1)).invert();
+		super.updateMatrixWorld(e), this.matrixWorld.decompose(bo, xo, So), So.x === 1 && So.y === 1 && So.z === 1 ? this.matrixWorldInverse.copy(this.matrixWorld).invert() : this.matrixWorldInverse.compose(bo, xo, So.set(1, 1, 1)).invert();
 	}
 	updateWorldMatrix(e, t, n = !1) {
-		super.updateWorldMatrix(e, t, n), this.matrixWorld.decompose(vo, yo, bo), bo.x === 1 && bo.y === 1 && bo.z === 1 ? this.matrixWorldInverse.copy(this.matrixWorld).invert() : this.matrixWorldInverse.compose(vo, yo, bo.set(1, 1, 1)).invert();
+		super.updateWorldMatrix(e, t, n), this.matrixWorld.decompose(bo, xo, So), So.x === 1 && So.y === 1 && So.z === 1 ? this.matrixWorldInverse.copy(this.matrixWorld).invert() : this.matrixWorldInverse.compose(bo, xo, So.set(1, 1, 1)).invert();
 	}
 	clone() {
 		return new this.constructor().copy(this);
 	}
-}, So = /*@__PURE__*/ new V(), Co = /*@__PURE__*/ new B(), wo = /*@__PURE__*/ new B(), To = class extends xo {
+}, wo = /*@__PURE__*/ new V(), To = /*@__PURE__*/ new B(), Eo = /*@__PURE__*/ new B(), Do = class extends Co {
 	constructor(e = 50, t = 1, n = .1, r = 2e3) {
 		super(), this.isPerspectiveCamera = !0, this.type = "PerspectiveCamera", this.fov = e, this.zoom = 1, this.near = n, this.far = r, this.focus = 10, this.aspect = t, this.view = null, this.filmGauge = 35, this.filmOffset = 0, this.updateProjectionMatrix();
 	}
@@ -5674,10 +5733,10 @@ var vo = /*@__PURE__*/ new V(), yo = /*@__PURE__*/ new Mt(), bo = /*@__PURE__*/ 
 		return this.filmGauge / Math.max(this.aspect, 1);
 	}
 	getViewBounds(e, t, n) {
-		So.set(-1, -1, .5).applyMatrix4(this.projectionMatrixInverse), t.set(So.x, So.y).multiplyScalar(-e / So.z), So.set(1, 1, .5).applyMatrix4(this.projectionMatrixInverse), n.set(So.x, So.y).multiplyScalar(-e / So.z);
+		wo.set(-1, -1, .5).applyMatrix4(this.projectionMatrixInverse), t.set(wo.x, wo.y).multiplyScalar(-e / wo.z), wo.set(1, 1, .5).applyMatrix4(this.projectionMatrixInverse), n.set(wo.x, wo.y).multiplyScalar(-e / wo.z);
 	}
 	getViewSize(e, t) {
-		return this.getViewBounds(e, Co, wo), t.subVectors(wo, Co);
+		return this.getViewBounds(e, To, Eo), t.subVectors(Eo, To);
 	}
 	setViewOffset(e, t, n, r, i, a) {
 		this.aspect = e / t, this.view === null && (this.view = {
@@ -5706,7 +5765,7 @@ var vo = /*@__PURE__*/ new V(), yo = /*@__PURE__*/ new Mt(), bo = /*@__PURE__*/ 
 		let t = super.toJSON(e);
 		return t.object.fov = this.fov, t.object.zoom = this.zoom, t.object.near = this.near, t.object.far = this.far, t.object.focus = this.focus, t.object.aspect = this.aspect, this.view !== null && (t.object.view = Object.assign({}, this.view)), t.object.filmGauge = this.filmGauge, t.object.filmOffset = this.filmOffset, t;
 	}
-}, Eo = class extends xo {
+}, Oo = class extends Co {
 	constructor(e = -1, t = 1, n = 1, r = -1, i = .1, a = 2e3) {
 		super(), this.isOrthographicCamera = !0, this.type = "OrthographicCamera", this.zoom = 1, this.view = null, this.left = e, this.right = t, this.top = n, this.bottom = r, this.near = i, this.far = a, this.updateProjectionMatrix();
 	}
@@ -5739,20 +5798,20 @@ var vo = /*@__PURE__*/ new V(), yo = /*@__PURE__*/ new Mt(), bo = /*@__PURE__*/ 
 		let t = super.toJSON(e);
 		return t.object.zoom = this.zoom, t.object.left = this.left, t.object.right = this.right, t.object.top = this.top, t.object.bottom = this.bottom, t.object.near = this.near, t.object.far = this.far, this.view !== null && (t.object.view = Object.assign({}, this.view)), t;
 	}
-}, Do = -90, Oo = 1, ko = class extends En {
+}, ko = -90, Ao = 1, jo = class extends En {
 	constructor(e, t, n) {
 		super(), this.type = "CubeCamera", this.renderTarget = n, this.coordinateSystem = null, this.activeMipmapLevel = 0;
-		let r = new To(Do, Oo, e, t);
+		let r = new Do(ko, Ao, e, t);
 		r.layers = this.layers, this.add(r);
-		let i = new To(Do, Oo, e, t);
+		let i = new Do(ko, Ao, e, t);
 		i.layers = this.layers, this.add(i);
-		let a = new To(Do, Oo, e, t);
+		let a = new Do(ko, Ao, e, t);
 		a.layers = this.layers, this.add(a);
-		let o = new To(Do, Oo, e, t);
+		let o = new Do(ko, Ao, e, t);
 		o.layers = this.layers, this.add(o);
-		let s = new To(Do, Oo, e, t);
+		let s = new Do(ko, Ao, e, t);
 		s.layers = this.layers, this.add(s);
-		let c = new To(Do, Oo, e, t);
+		let c = new Do(ko, Ao, e, t);
 		c.layers = this.layers, this.add(c);
 	}
 	updateCoordinateSystem() {
@@ -5774,16 +5833,16 @@ var vo = /*@__PURE__*/ new V(), yo = /*@__PURE__*/ new Mt(), bo = /*@__PURE__*/ 
 		let h = !1;
 		h = e.isWebGLRenderer === !0 ? e.state.buffers.depth.getReversed() : e.reversedDepthBuffer, e.setRenderTarget(n, 0, r), h && e.autoClear === !1 && e.clearDepth(), e.render(t, i), e.setRenderTarget(n, 1, r), h && e.autoClear === !1 && e.clearDepth(), e.render(t, a), e.setRenderTarget(n, 2, r), h && e.autoClear === !1 && e.clearDepth(), e.render(t, o), e.setRenderTarget(n, 3, r), h && e.autoClear === !1 && e.clearDepth(), e.render(t, s), e.setRenderTarget(n, 4, r), h && e.autoClear === !1 && e.clearDepth(), e.render(t, c), n.texture.generateMipmaps = m, e.setRenderTarget(n, 5, r), h && e.autoClear === !1 && e.clearDepth(), e.render(t, l), e.setRenderTarget(u, d, f), e.xr.enabled = p, n.texture.needsPMREMUpdate = !0;
 	}
-}, Ao = class extends To {
+}, Mo = class extends Do {
 	constructor(e = []) {
 		super(), this.isArrayCamera = !0, this.isMultiViewCamera = !1, this.cameras = e;
 	}
-}, jo = "\\[\\]\\.:\\/", Mo = /* @__PURE__ */ RegExp("[\\[\\]\\.:\\/]", "g"), No = "[^\\[\\]\\.:\\/]", Po = "[^" + jo.replace("\\.", "") + "]", Fo = /*@__PURE__*/ "((?:WC+[\\/:])*)".replace("WC", No), Io = /*@__PURE__*/ "(WCOD+)?".replace("WCOD", Po), Lo = /*@__PURE__*/ "(?:\\.(WC+)(?:\\[(.+)\\])?)?".replace("WC", No), Ro = /*@__PURE__*/ "\\.(WC+)(?:\\[(.+)\\])?".replace("WC", No), zo = RegExp("^" + Fo + Io + Lo + Ro + "$"), Bo = [
+}, No = "\\[\\]\\.:\\/", Po = /* @__PURE__ */ RegExp("[\\[\\]\\.:\\/]", "g"), Fo = "[^\\[\\]\\.:\\/]", Io = "[^" + No.replace("\\.", "") + "]", Lo = /*@__PURE__*/ "((?:WC+[\\/:])*)".replace("WC", Fo), Ro = /*@__PURE__*/ "(WCOD+)?".replace("WCOD", Io), zo = /*@__PURE__*/ "(?:\\.(WC+)(?:\\[(.+)\\])?)?".replace("WC", Fo), Bo = /*@__PURE__*/ "\\.(WC+)(?:\\[(.+)\\])?".replace("WC", Fo), Vo = RegExp("^" + Lo + Ro + zo + Bo + "$"), Ho = [
 	"material",
 	"materials",
 	"bones",
 	"map"
-], Vo = class {
+], Uo = class {
 	constructor(e, t, n) {
 		let r = n || $.parseTrackName(t);
 		this._targetGroup = e, this._bindings = e.subscribe_(t, r);
@@ -5813,10 +5872,10 @@ var vo = /*@__PURE__*/ new V(), yo = /*@__PURE__*/ new Mt(), bo = /*@__PURE__*/ 
 		return t && t.isAnimationObjectGroup ? new e.Composite(t, n, r) : new e(t, n, r);
 	}
 	static sanitizeNodeName(e) {
-		return e.replace(/\s/g, "_").replace(Mo, "");
+		return e.replace(/\s/g, "_").replace(Po, "");
 	}
 	static parseTrackName(e) {
-		let t = zo.exec(e);
+		let t = Vo.exec(e);
 		if (t === null) throw Error("THREE.PropertyBinding: Cannot parse trackName: " + e);
 		let n = {
 			nodeName: t[2],
@@ -5827,7 +5886,7 @@ var vo = /*@__PURE__*/ new V(), yo = /*@__PURE__*/ new Mt(), bo = /*@__PURE__*/ 
 		}, r = n.nodeName && n.nodeName.lastIndexOf(".");
 		if (r !== void 0 && r !== -1) {
 			let e = n.nodeName.substring(r + 1);
-			Bo.indexOf(e) !== -1 && (n.nodeName = n.nodeName.substring(0, r), n.objectName = e);
+			Ho.indexOf(e) !== -1 && (n.nodeName = n.nodeName.substring(0, r), n.objectName = e);
 		}
 		if (n.propertyName === null || n.propertyName.length === 0) throw Error("THREE.PropertyBinding: can not parse propertyName from trackName: " + e);
 		return n;
@@ -6004,7 +6063,7 @@ var vo = /*@__PURE__*/ new V(), yo = /*@__PURE__*/ new Mt(), bo = /*@__PURE__*/ 
 		this.node = null, this.getValue = this._getValue_unbound, this.setValue = this._setValue_unbound;
 	}
 };
-$.Composite = Vo, $.prototype.BindingType = {
+$.Composite = Uo, $.prototype.BindingType = {
 	Direct: 0,
 	EntireArray: 1,
 	ArrayElement: 2,
@@ -6040,7 +6099,7 @@ $.Composite = Vo, $.prototype.BindingType = {
 		$.prototype._setValue_fromArray_setMatrixWorldNeedsUpdate
 	]
 ];
-var Ho = /*@__PURE__*/ new W(), Uo = class {
+var Wo = /*@__PURE__*/ new W(), Go = class {
 	constructor(e, t, n = 0, r = Infinity) {
 		this.ray = new Pr(e, t), this.near = n, this.far = r, this.camera = null, this.layers = new un(), this.params = {
 			Mesh: {},
@@ -6057,27 +6116,27 @@ var Ho = /*@__PURE__*/ new W(), Uo = class {
 		t.isPerspectiveCamera ? (this.ray.origin.setFromMatrixPosition(t.matrixWorld), this.ray.direction.set(e.x, e.y, .5).unproject(t).sub(this.ray.origin).normalize(), this.camera = t) : t.isOrthographicCamera ? (this.ray.origin.set(e.x, e.y, t.projectionMatrix.elements[14]).unproject(t), this.ray.direction.set(0, 0, -1).transformDirection(t.matrixWorld), this.camera = t) : I("Raycaster: Unsupported camera type: " + t.type);
 	}
 	setFromXRController(e) {
-		return Ho.identity().extractRotation(e.matrixWorld), this.ray.origin.setFromMatrixPosition(e.matrixWorld), this.ray.direction.set(0, 0, -1).applyMatrix4(Ho), this;
+		return Wo.identity().extractRotation(e.matrixWorld), this.ray.origin.setFromMatrixPosition(e.matrixWorld), this.ray.direction.set(0, 0, -1).applyMatrix4(Wo), this;
 	}
 	intersectObject(e, t = !0, n = []) {
-		return Go(e, this, n, t), n.sort(Wo), n;
+		return qo(e, this, n, t), n.sort(Ko), n;
 	}
 	intersectObjects(e, t = !0, n = []) {
-		for (let r = 0, i = e.length; r < i; r++) Go(e[r], this, n, t);
-		return n.sort(Wo), n;
+		for (let r = 0, i = e.length; r < i; r++) qo(e[r], this, n, t);
+		return n.sort(Ko), n;
 	}
 };
-function Wo(e, t) {
+function Ko(e, t) {
 	return e.distance - t.distance;
 }
-function Go(e, t, n, r) {
+function qo(e, t, n, r) {
 	let i = !0;
 	if (e.layers.test(t.layers) && e.raycast(t, n) === !1 && (i = !1), i === !0 && r === !0) {
 		let r = e.children;
-		for (let e = 0, i = r.length; e < i; e++) Go(r[e], t, n, !0);
+		for (let e = 0, i = r.length; e < i; e++) qo(r[e], t, n, !0);
 	}
 }
-var Ko = class {
+var Jo = class {
 	constructor(e = 1, t = 0, n = 0) {
 		this.radius = e, this.phi = t, this.theta = n;
 	}
@@ -6125,7 +6184,7 @@ var Ko = class {
 		return i[0] = e, i[2] = t, i[1] = n, i[3] = r, this;
 	}
 });
-var qo = class extends _i {
+var Yo = class extends _i {
 	constructor(e = 10, t = 10, n = 4473924, r = 8947848) {
 		n = new Pn(n), r = new Pn(r);
 		let i = t / 2, a = e / t, o = e / 2, s = [], c = [];
@@ -6145,7 +6204,7 @@ var qo = class extends _i {
 	dispose() {
 		this.geometry.dispose(), this.material.dispose();
 	}
-}, Jo = class extends st {
+}, Xo = class extends st {
 	constructor(e, t = null) {
 		super(), this.object = e, this.domElement = t, this.enabled = !0, this.state = -1, this.keys = {}, this.mouseButtons = {
 			LEFT: null,
@@ -6167,8 +6226,8 @@ var qo = class extends _i {
 	dispose() {}
 	update() {}
 };
-function Yo(e, t, n, r) {
-	let i = Xo(r);
+function Zo(e, t, n, r) {
+	let i = Qo(r);
 	switch (n) {
 		case w: return e * t;
 		case k: return e * t / i.components * i.byteLength;
@@ -6217,7 +6276,7 @@ function Yo(e, t, n, r) {
 	}
 	throw Error(`Unable to determine texture byte length for ${n} format.`);
 }
-function Xo(e) {
+function Qo(e) {
 	switch (e) {
 		case d:
 		case f: return {
@@ -6251,4 +6310,4 @@ function Xo(e) {
 }
 typeof __THREE_DEVTOOLS__ < "u" && __THREE_DEVTOOLS__.dispatchEvent(new CustomEvent("register", { detail: { revision: "185" } })), typeof window < "u" && (window.__THREE__ ? F("WARNING: Multiple instances of Three.js being imported.") : window.__THREE__ = "185");
 //#endregion
-export { To as $, Ke as $t, v as A, nt as An, ie as At, e as B, te as Bt, xi as C, kn as Cn, xe as Ct, ii as D, I as Dn, se as Dt, _ as E, $e as En, ce as Et, c as F, ue as Ft, Fr as G, A as Gt, Ft as H, Pr as Ht, u as I, oe as It, i as J, de as Jt, to as K, n as Kt, l as L, ae as Lt, un as M, at as Mn, ke as Mt, ai as N, F as Nn, Ae as Nt, Ye as O, Yo as On, M as Ot, _i as P, it as Pn, le as Pt, Eo as Q, Ue as Qt, We as R, ne as Rt, st as S, Zt as Sn, be as St, J as T, et as Tn, N as Tt, W as U, Uo as Ut, jt as V, eo as Vt, qr as W, k as Wt, s as X, Me as Xt, a as Y, Pe as Yt, o as Z, pe as Zt, Xr as _, m as _n, he as _t, pr as a, t as an, Ne as at, yi as b, Yt as bn, ve as bt, r as c, hr as cn, E as ct, Jo as d, C as dn, Se as dt, Fn as en, ei as et, ko as f, x as fn, Ce as ft, Qt as g, b as gn, me as gt, $t as h, y as hn, De as ht, Si as i, Ko as in, ut as it, h as j, Ka as jn, T as jt, qo as k, Ya as kn, re as kt, Pn as l, Xa as ln, j as lt, vi as m, g as mn, Ee as mt, Ao as n, ia as nn, Mt as nt, wr as o, U as on, je as ot, bi as p, S as pn, we as pt, no as q, ot as qt, Xn as r, p as rn, P as rt, f as s, mr as sn, fe as st, w as t, $a as tn, Wa as tt, H as u, d as un, Te as ut, D as v, B as vn, ge as vt, Va as w, Ga as wn, Oe as wt, Di as x, Xe as xn, ye as xt, O as y, V as yn, _e as yt, Ge as z, ee as zt };
+export { Do as $, Ke as $t, v as A, Za as An, ie as At, e as B, te as Bt, xi as C, Zt as Cn, xe as Ct, ii as D, $e as Dn, se as Dt, _ as E, et as En, ce as Et, c as F, it as Fn, ue as Ft, Fr as G, A as Gt, Ft as H, Pr as Ht, u as I, oe as It, i as J, de as Jt, ro as K, n as Kt, l as L, ae as Lt, un as M, Ja as Mn, ke as Mt, ai as N, at as Nn, Ae as Nt, Ye as O, I as On, M as Ot, _i as P, F as Pn, le as Pt, Oo as Q, Ue as Qt, We as R, ne as Rt, st as S, Xe as Sn, be as St, J as T, qa as Tn, N as Tt, W as U, Go as Ut, jt as V, no as Vt, qr as W, k as Wt, s as X, Me as Xt, a as Y, Pe as Yt, o as Z, pe as Zt, Xr as _, b as _n, he as _t, pr as a, Jo as an, Ne as at, yi as b, V as bn, ve as bt, r as c, mr as cn, E as ct, Xo as d, d as dn, Se as dt, Fn as en, ei as et, jo as f, C as fn, Ce as ft, Qt as g, y as gn, me as gt, $t as h, g as hn, De as ht, Si as i, p as in, ut as it, h as j, nt as jn, T as jt, Yo as k, Zo as kn, re as kt, Pn as l, hr as ln, j as lt, vi as m, S as mn, Ee as mt, Mo as n, ia as nn, Mt as nt, wr as o, t as on, je as ot, bi as p, x as pn, we as pt, io as q, ot as qt, Xn as r, Ga as rn, P as rt, f as s, U as sn, fe as st, w as t, to as tn, Wa as tt, H as u, Qa as un, Te as ut, D as v, m as vn, ge as vt, Va as w, kn as wn, Oe as wt, Di as x, Yt as xn, ye as xt, O as y, B as yn, _e as yt, Ge as z, ee as zt };

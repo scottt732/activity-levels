@@ -214,11 +214,11 @@ export class AlFloorplanViewer extends LitElement {
         @change=${(e:Event)=>{const v=(e.target as HTMLInputElement).value;this.changeSettings({...this.settings,ground_z:v===""?undefined:Number(v)});}}></label>
       <button type="button" @click=${()=>{const lowest=[...inScope(this.model.parts,this.scope)].sort((a,b)=>a.low-b.low)[0];if(lowest)this.changeSettings({...this.settings,ground_z:Number((lowest.high-0.9144).toFixed(3))});}}>Basement top 3 ft above ground</button>
       ${(["light_fill","ambient","auto_rotate","focus_activity"] as const).map(key=>html`<label><input type="checkbox" .checked=${this.options[key]}
-        @change=${(e:Event)=>this.changeSettings({...this.settings,[key]:(e.target as HTMLInputElement).checked})}>${{light_fill:"Fill rooms from lights",ambient:"Ambient fullscreen layout",auto_rotate:"Slow orbit",focus_activity:"Focus on new activity"}[key]}</label>`)}
+        @change=${(e:Event)=>this.changeSettings({...this.settings,[key]:(e.target as HTMLInputElement).checked})}>${{light_fill:"Ceiling glow from lights",ambient:"Ambient fullscreen layout",auto_rotate:"Slow orbit",focus_activity:"Focus on new activity"}[key]}</label>`)}
       <label>Seconds per rotation <input id="rotation-period" type="number" min="1" step="any" .value=${String(this.options.rotation_period)}
         @change=${(e:Event)=>this.changeSettings({...this.settings,rotation_period:Number((e.target as HTMLInputElement).value)})}></label>
       <p class="help muted">Larger values rotate more slowly. Default: 180 seconds per revolution.</p>
-      <label>Maximum fill brightness <input type="range" min="0" max="1" step="0.01" .value=${String(this.options.fill_brightness)} @input=${(e:Event)=>this.changeSettings({...this.settings,fill_brightness:Number((e.target as HTMLInputElement).value)})}></label>
+      <label>Maximum ceiling brightness <input type="range" min="0" max="1" step="0.01" .value=${String(this.options.fill_brightness)} @input=${(e:Event)=>this.changeSettings({...this.settings,fill_brightness:Number((e.target as HTMLInputElement).value)})}></label>
       <details><summary>Advanced settings (JSON)</summary><p>Configure color_thresholds and binary-sensor rules here.</p>
         <textarea aria-label="Viewer settings JSON" rows="12" .value=${JSON.stringify(this.settings,null,2)}></textarea>
         <button type="button" @click=${()=>{try{this.changeSettings(JSON.parse(this.renderRoot.querySelector<HTMLTextAreaElement>("textarea")!.value) as ViewerSettings);}catch(error){this.settingsError=String(error);}}}>Apply viewer settings</button>
@@ -248,7 +248,7 @@ export class AlFloorplanViewer extends LitElement {
       <button class="ambient-toggle" type="button" @click=${()=>{this.controlsVisible=!this.controlsVisible;this.toggleAttribute("show-controls",this.controlsVisible);}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
       </div>
       <h2>Your home, live</h2>
-      <p class="muted">Room outlines show activity. Room fills show the color and brightness of your lights.</p>
+      <p class="muted">Liquid height shows activity relative to each room’s maximum; blue-to-red color shows its value. Ceiling glow shows your lights.</p>
       <div class="toolbar">
         <label>Floor or building <select id="scope" .value=${this.scope} @change=${(event: Event) => {
           this.scope = (event.target as HTMLSelectElement).value; this.selected = "";
@@ -273,7 +273,7 @@ export class AlFloorplanViewer extends LitElement {
             this.error ? html`<div class="overlay"><p role="alert">${this.error}</p>
               <button id="retry" type="button" @click=${() => { this.error = ""; }}>Retry 3D view</button></div>` :
               this.loading ? html`<div class="overlay"><p role="status">Loading 3D view…</p></div>` : nothing}
-          ${parts.length && !this.error ? html`<div class="legend">${this.options.color_thresholds.map(t=>html`<span style=${`color:${t.color};margin-right:12px`}>● ≥${t.value}</span>`)} · gray = unknown
+          ${parts.length && !this.error ? html`<div class="legend">${this.options.color_thresholds.map(t=>html`<span style=${`color:${t.color};margin-right:12px`}>● ${t.value}</span>`)} · no liquid = unknown
             <br>${this.options.ground_z === undefined ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z} m`}</div>` : nothing}
         </div>
         <aside aria-label="Floorplan groups">

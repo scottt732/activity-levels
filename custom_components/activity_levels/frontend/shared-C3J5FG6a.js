@@ -1117,12 +1117,20 @@ var q = (e, t) => t ? e.filter((e) => e.id === t || e.ancestors.includes(t)) : e
 		color: "#2189EF"
 	},
 	{
-		value: 3,
+		value: 1.25,
+		color: "#35cddd"
+	},
+	{
+		value: 2.5,
+		color: "#f5df62"
+	},
+	{
+		value: 3.75,
 		color: "#f39c12"
 	},
 	{
 		value: 5,
-		color: "#d31400"
+		color: "#ef493e"
 	}
 ], ct = [
 	"standard",
@@ -1168,7 +1176,18 @@ function J(e = {}) {
 	};
 }
 function ut(e, t) {
-	return t.color_thresholds.filter((t) => t.value <= e).at(-1)?.color ?? t.color_thresholds[0].color;
+	let n = t.color_thresholds, r = n.findIndex((t) => t.value > e);
+	if (r === 0) return n[0].color;
+	if (r === -1) return n.at(-1).color;
+	let i = n[r - 1], a = n[r], o = (e - i.value) / (a.value - i.value);
+	return "#" + [
+		1,
+		3,
+		5
+	].map((e) => {
+		let t = parseInt(i.color.slice(e, e + 2), 16), n = parseInt(a.color.slice(e, e + 2), 16);
+		return Math.round(t + (n - t) * o).toString(16).padStart(2, "0");
+	}).join("");
 }
 function Y(e, t) {
 	return e.filter((e) => t[e.entity]?.state === e.state).sort((e, t) => (t.priority ?? 0) - (e.priority ?? 0))[0];
@@ -1366,7 +1385,7 @@ var pt = [
 		let e = ++this.sequence;
 		this.loading = !0;
 		try {
-			let { FloorplanRenderer: t } = await import("./shared-CQKdrshw.js");
+			let { FloorplanRenderer: t } = await import("./shared-BXQ-Q6Ij.js");
 			if (e !== this.sequence || !this.isConnected) return;
 			let n = this.renderRoot.querySelector("#scene");
 			this.renderer = new t(n, (e) => {
@@ -1440,7 +1459,7 @@ var pt = [
 			...this.settings,
 			[e]: t.target.checked
 		})}>${{
-			light_fill: "Fill rooms from lights",
+			light_fill: "Ceiling glow from lights",
 			ambient: "Ambient fullscreen layout",
 			auto_rotate: "Slow orbit",
 			focus_activity: "Focus on new activity"
@@ -1451,7 +1470,7 @@ var pt = [
 			rotation_period: Number(e.target.value)
 		})}></label>
       <p class="help muted">Larger values rotate more slowly. Default: 180 seconds per revolution.</p>
-      <label>Maximum fill brightness <input type="range" min="0" max="1" step="0.01" .value=${String(this.options.fill_brightness)} @input=${(e) => this.changeSettings({
+      <label>Maximum ceiling brightness <input type="range" min="0" max="1" step="0.01" .value=${String(this.options.fill_brightness)} @input=${(e) => this.changeSettings({
 			...this.settings,
 			fill_brightness: Number(e.target.value)
 		})}></label>
@@ -1488,7 +1507,7 @@ var pt = [
 		}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
       </div>
       <h2>Your home, live</h2>
-      <p class="muted">Room outlines show activity. Room fills show the color and brightness of your lights.</p>
+      <p class="muted">Liquid height shows activity relative to each room’s maximum; blue-to-red color shows its value. Ceiling glow shows your lights.</p>
       <div class="toolbar">
         <label>Floor or building <select id="scope" .value=${this.scope} @change=${(e) => {
 			this.scope = e.target.value, this.selected = "";
@@ -1511,7 +1530,7 @@ var pt = [
               <button id="retry" type="button" @click=${() => {
 			this.error = "";
 		}}>Retry 3D view</button></div>` : this.loading ? j`<div class="overlay"><p role="status">Loading 3D view…</p></div>` : N : j`<div class="overlay"><p>${this.model.groups.length ? "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>`}
-          ${e.length && !this.error ? j`<div class="legend">${this.options.color_thresholds.map((e) => j`<span style=${`color:${e.color};margin-right:12px`}>● ≥${e.value}</span>`)} · gray = unknown
+          ${e.length && !this.error ? j`<div class="legend">${this.options.color_thresholds.map((e) => j`<span style=${`color:${e.color};margin-right:12px`}>● ${e.value}</span>`)} · no liquid = unknown
             <br>${this.options.ground_z === void 0 ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z} m`}</div>` : N}
         </div>
         <aside aria-label="Floorplan groups">
