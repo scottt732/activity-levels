@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/scottt732/activity-levels/compare/v0.15.0...v0.16.0) (2026-09-09)
+
+
+### Added
+
+* **panel:** color full-height room volumes by activity ([#45](https://github.com/scottt732/activity-levels/issues/45)) ([cbb7a9f](https://github.com/scottt732/activity-levels/commit/cbb7a9f82d345ac47cbda80b9b801ae6062a2925))
+
 ## [0.15.0](https://github.com/scottt732/activity-levels/compare/v0.14.1...v0.15.0) (2026-09-09)
 
 
