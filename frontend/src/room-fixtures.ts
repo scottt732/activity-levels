@@ -86,6 +86,7 @@ export function readFixture(value: unknown): RoomFixture | null {
     Math.abs(fixture.yaw)>360 || Math.abs(fixture.pitch)>90 || fixture.fov<1 || fixture.fov>170 ||
     fixture.vertical_fov<1 || fixture.vertical_fov>170 || fixture.range<0 || fixture.range>100 ||
     typeof fixture.name!=="string" || typeof fixture.mount!=="string" || typeof fixture.technology!=="string") return null;
+  if(fixture.look_down!==undefined && typeof fixture.look_down!=="boolean")return null;
   if([fixture.width,fixture.height].some(v=>v!==undefined && (typeof v!=="number" || !Number.isFinite(v) || v<0.1 || v>20)))return null;
   return fixture;
 }

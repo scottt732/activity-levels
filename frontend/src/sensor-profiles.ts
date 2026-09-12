@@ -11,7 +11,7 @@ export function matchesProfile(profile:SensorProfile,device:RoomDevice):boolean 
     : norm(device[key] ?? "")===norm(profile.match[key]!));
 }
 export function applyProfile(fixture:RoomFixture,profile:SensorProfile):RoomFixture {
-  return {...fixture,profile_id:profile.id,kind:profile.kind,fov:profile.fov,vertical_fov:profile.vertical_fov,
+  return {...fixture,look_down:profile.look_down ?? false,profile_id:profile.id,kind:profile.kind,fov:profile.fov,vertical_fov:profile.vertical_fov,
     range:profile.range,technology:profile.technology,mount:profile.mount};
 }
 export function parseProfiles(text:string):SensorProfile[] {
@@ -27,13 +27,14 @@ export function parseProfiles(text:string):SensorProfile[] {
       const field=p[key as keyof typeof textFields];
       if(typeof field!=="string" || field.length>max || ((key==="id" || key==="name") && !field.trim()))throw new Error(`Invalid profile ${key}.`);
     }
+    if(p.look_down!==undefined && typeof p.look_down!=="boolean")throw new Error("Invalid look-down flag.");
     if(!["motion","occupancy","light","window"].includes(p.kind) || ![p.fov,p.vertical_fov,p.range].every(v=>typeof v==="number" && Number.isFinite(v)))throw new Error("Profile kind and coverage fields are required.");
     if(!readFixture({...newFixture(p.kind==="light"?"light.profile":"binary_sensor.profile"),...p}) || ids.has(p.id))throw new Error("Invalid coverage or duplicate profile id.");
     if(!p.match || typeof p.match!=="object" || Array.isArray(p.match))throw new Error("Invalid identification rules.");
     for(const [key,value] of Object.entries(p.match))if(!matchKeys.includes(key as typeof matchKeys[number]) || typeof value!=="string" || !value.trim() || value.length>200)throw new Error("Invalid identification rule.");
     ids.add(p.id);
     // Export/import only characteristics and identification rules, never installation data.
-    return {id:p.id,name:p.name,kind:p.kind,fov:p.fov,vertical_fov:p.vertical_fov,range:p.range,
+    return {...(p.look_down===undefined?{}:{look_down:p.look_down}),id:p.id,name:p.name,kind:p.kind,fov:p.fov,vertical_fov:p.vertical_fov,range:p.range,
       technology:p.technology,mount:p.mount,notes:p.notes,source:p.source,match:{...p.match}};
   });
 }

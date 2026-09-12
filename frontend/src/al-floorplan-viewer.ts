@@ -11,12 +11,9 @@ import type { ViewerSettings, ViewerOptions } from "./floorplan-style";
 import type { HomeAssistant } from "./types";
 
 import "./al-room-hud";
+import "./al-camera-control";
 import type { FloorplanTelemetry } from "./floorplan-store";
 
-const CAMERA_ACTIONS: [CameraAction, string][] = [
-  ["reset", "Reset view"], ["top", "Top view"], ["left", "Rotate left"], ["right", "Rotate right"],
-  ["up", "Tilt up"], ["down", "Tilt down"], ["in", "Zoom in"], ["out", "Zoom out"],
-];
 const format = (value: number): string => Number(value.toFixed(2)).toLocaleString();
 
 @customElement("al-floorplan-viewer")
@@ -28,6 +25,7 @@ export class AlFloorplanViewer extends LitElement {
     :host([editing-preview]) h2, :host([editing-preview]) > p, :host([editing-preview]) .legend, :host([editing-preview]) .issues { display:none; }
     :host([editing-preview]) .viewport { border:0; border-radius:0; }
     :host([editing-preview]) .toolbar { position:absolute; bottom:10px; left:280px; right:12px; z-index:2; margin:0; justify-content:center; }
+    :host([editing-preview]) al-camera-control { margin-left:auto; }
     :host([editing-preview]) .toolbar button { padding:5px; font-size:12px; }
     @media(max-width:1100px) { :host([editing-preview]) .toolbar { left:12px; } }
     h2 { margin: 0 0 6px; }
@@ -78,6 +76,7 @@ export class AlFloorplanViewer extends LitElement {
   `];
 
   @property({ attribute: false }) telemetry?: FloorplanTelemetry;
+  @property({type:Boolean}) context=false;
   @property({type:String,reflect:true}) room = "";
   @property({attribute:false}) placementHeight?: number;
   @state() private hovered = "";
@@ -144,7 +143,7 @@ export class AlFloorplanViewer extends LitElement {
       catch {this.settingsError="Could not exit browser fullscreen. Try Escape or your device's Back control.";}
     }
     await this.updateComplete;
-    this.renderRoot.querySelector<HTMLButtonElement>('[data-camera="reset"]')?.focus({preventScroll:true});
+    this.renderRoot.querySelector("al-camera-control")?.shadowRoot?.querySelector<HTMLButtonElement>("button")?.focus({preventScroll:true});
   }
 
   protected override willUpdate(changed: PropertyValues): void {
@@ -164,19 +163,23 @@ export class AlFloorplanViewer extends LitElement {
     if (!this.isConnected) return;
     if(changed.has("settings") && this.options.ambient && !(changed.get("settings") as ViewerSettings | undefined)?.ambient)
       this.renderRoot.querySelector<HTMLButtonElement>("#exit-view")?.focus({preventScroll:true});
-    const parts = inScope(this.model.parts, this.room || this.scope);
+    const parts = this.visibleParts;
     if (!parts.length && !this.config?.site?.features.length) { this.stopRenderer(); return; }
     if (!this.renderer && !this.loading && !this.error) {
       // Start outside Lit's update transaction; loading changes need their own render.
       queueMicrotask(() => { void this.startRenderer(); });
       return;
     }
-    if (changed.has("config") || changed.has("scope") || changed.has("room") || this.groundZ !== this.options.ground_z) {
-      this.renderer?.setParts(parts,this.options.ground_z,this.config?.site); this.groundZ=this.options.ground_z;
+    if (changed.has("config") || changed.has("scope") || changed.has("room") || changed.has("context") || this.groundZ !== this.options.ground_z) {
+      this.renderer?.setParts(parts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined); this.groundZ=this.options.ground_z;
     }
     this.updateAppearance();
   }
 
+  private get visibleParts() {
+    const selected=this.model.parts.find(p=>p.id===this.room);
+    return this.context && selected ? this.model.parts.filter(p=>!p.container && p.low<selected.high-0.01 && p.high>selected.low+0.01) : inScope(this.model.parts,this.room || this.scope);
+  }
   private stopRenderer(): void {
     this.sequence++;
     this.renderer?.dispose();
@@ -185,7 +188,7 @@ export class AlFloorplanViewer extends LitElement {
   }
 
   private async startRenderer(): Promise<void> {
-    if (!this.isConnected || this.renderer || this.loading || this.error || (!inScope(this.model.parts, this.room || this.scope).length && !this.config?.site?.features.length)) return;
+    if (!this.isConnected || this.renderer || this.loading || this.error || (!this.visibleParts.length && !this.config?.site?.features.length)) return;
     const sequence = ++this.sequence;
     this.loading = true;
     try {
@@ -195,7 +198,7 @@ export class AlFloorplanViewer extends LitElement {
       this.renderer = new FloorplanRenderer(host, (id) => { this.selected = id; }, (message) => {
         this.stopRenderer(); this.error = message;
       }, (id)=>{this.hovered=id;}, (position)=>{this.dispatchEvent(new CustomEvent("al-fixture-position",{detail:position,bubbles:true,composed:true}));});
-      this.renderer.setParts(inScope(this.model.parts, this.room || this.scope),this.options.ground_z,this.config?.site);
+      this.renderer.setParts(this.visibleParts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined);
       this.groundZ=this.options.ground_z;
       this.updateAppearance();
     } catch {
@@ -255,7 +258,7 @@ export class AlFloorplanViewer extends LitElement {
   }
 
   protected override render() {
-    const parts = inScope(this.model.parts, this.room || this.scope);
+    const parts = this.visibleParts;
     const groups = inScope(this.model.groups, this.scope);
     const selected = this.model.groups.find((group) => group.id === this.selected);
     const alert = activeRule(this.options.rules,this.hass?.states ?? {});
@@ -276,8 +279,7 @@ export class AlFloorplanViewer extends LitElement {
             ${group.label} (${KIND_DEFS[group.kind]?.label ?? "Group"})
           </option>`)}
         </select></label>
-        ${CAMERA_ACTIONS.map(([action, label]) => html`<button type="button" data-camera=${action}
-          ?disabled=${!this.renderer || !!this.error} @click=${() => this.renderer?.cameraAction(action)}>${label}</button>`)}
+        <al-camera-control .disabled=${!this.renderer || !!this.error} @al-camera-action=${(e:CustomEvent<CameraAction>)=>this.renderer?.cameraAction(e.detail)}></al-camera-control>
       </div>
       <p role="status" class=${`muted live-status ${stale || !this.live ? "stale" : ""}`}>${stale ? "Activity readings are stale. Waiting for a fresh update…" :
         this.live ? "Live activity · updates every 2 seconds" : "Waiting for live activity readings…"}</p>

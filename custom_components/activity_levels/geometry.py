@@ -102,6 +102,7 @@ def position(value: Any) -> list[float]:
 
 FIXTURE_SCHEMA = vol.Schema(
     {
+        vol.Optional("look_down"): bool,
         vol.Optional("profile_id"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Required("entity"): vol.Match(r"^(binary_sensor|light)\.[a-z0-9_]+$"),
         vol.Required("kind"): vol.In(["motion", "occupancy", "light", "window"]),
@@ -141,6 +142,7 @@ SENSOR_PROFILE_SCHEMA = vol.Schema(
         vol.Required("id"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Required("name"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Required("kind"): vol.In(["motion", "occupancy", "light", "window"]),
+        vol.Optional("look_down"): bool,
         vol.Required("fov"): vol.All(coordinate, vol.Range(min=1, max=170)),
         vol.Required("vertical_fov"): vol.All(coordinate, vol.Range(min=1, max=170)),
         vol.Required("range"): vol.All(coordinate, vol.Range(min=0, max=100)),
@@ -154,3 +156,31 @@ SENSOR_PROFILE_SCHEMA = vol.Schema(
         },
     }
 )
+
+
+OPENING_SCHEMA = vol.Schema(
+    {
+        vol.Required("id"): vol.All(str, vol.Length(min=1, max=100)),
+        vol.Optional("name", default=""): vol.All(str, vol.Length(max=100)),
+        vol.Required("kind"): vol.In(["interior_door", "exterior_door", "open_wall"]),
+        vol.Required("position"): position,
+        vol.Optional("yaw", default=0): vol.All(coordinate, vol.Range(min=-360, max=360)),
+        vol.Optional("width", default=0.9): vol.All(coordinate, vol.Range(min=0.1, max=20)),
+        vol.Optional("height", default=2): vol.All(coordinate, vol.Range(min=0.1, max=20)),
+        vol.Optional("hinge", default="left"): vol.In(["left", "right"]),
+        vol.Optional("swing", default="in"): vol.In(["in", "out"]),
+        vol.Optional("open", default=False): bool,
+        vol.Optional("entity"): vol.Match(r"^binary_sensor\.[a-z0-9_]+$"),
+    }
+)
+
+
+def openings(value: Any) -> list[dict[str, Any]]:
+    """Keep editable architectural openings independent of optional contact sensors."""
+    result: list[dict[str, Any]] = vol.All([OPENING_SCHEMA], vol.Length(max=128))(value)
+    ids: set[str] = set()
+    for item in result:
+        if item["id"] in ids:
+            raise vol.Invalid("an opening id can only occur once per room")
+        ids.add(item["id"])
+    return result

@@ -73,6 +73,7 @@ export interface Gps {
 }
 
 export interface SensorProfile {
+  look_down?:boolean;
   id:string; name:string; kind:RoomFixture["kind"]; fov:number; vertical_fov:number; range:number;
   technology:string; mount:string; notes:string; source:string;
   match:Partial<Record<"manufacturer"|"model"|"platform"|"device_class"|"entity_name",string>>;
@@ -82,13 +83,20 @@ export interface RoomDevice {
   platform:string; device_class:string|null; entity_name:string;
 }
 export interface RoomFixture {
+  look_down?:boolean;
   profile_id?: string;
   width?: number; height?: number;
   entity: string; kind: "motion" | "occupancy" | "light" | "window"; name: string;
   position: [number, number, number]; yaw: number; pitch: number;
   fov: number; vertical_fov: number; range: number; mount: string; technology: string;
 }
+export interface RoomOpening {
+  id:string; name:string; kind:"interior_door"|"exterior_door"|"open_wall";
+  position:[number,number,number]; yaw:number; width:number; height:number;
+  hinge:"left"|"right"; swing:"in"|"out"; open:boolean; entity?:string;
+}
 export interface Group {
+  openings?:RoomOpening[];
   fixtures?: RoomFixture[];
   bounds?: Bounds;
   points?: [number, number][];
@@ -339,6 +347,7 @@ export interface HaDuration { days?: number; hours: number; minutes: number; sec
 
 export interface HassEntity { entity_id: string; state: string; attributes: Record<string, unknown>; last_changed: string }
 export interface HomeAssistant {
+  config?: {unit_system?:{length?:string}};
   states: Record<string, HassEntity>;
   areas: Record<string, { area_id: string; name: string }>;
   /** Optional: an older frontend has no floor registry, and a home need not use one. */

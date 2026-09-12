@@ -1,9 +1,10 @@
+import { readOpening } from "./room-openings";
 import { readFixture } from "./room-fixtures";
 import type { Kind } from "./kinds";
-import type { Bounds, GroupLive, Path, SiteLayout, RoomFixture } from "./types";
+import type { Bounds, GroupLive, Path, SiteLayout, RoomOpening, RoomFixture } from "./types";
 
 export interface ActivityFrame { now: number; groups: Record<string, Pick<GroupLive,"value" | "max_value"> & Partial<Pick<GroupLive,"last_activity">>> }
-export interface FloorplanNode { id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[]; fixtures?: RoomFixture[] }
+export interface FloorplanNode { id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[]; fixtures?: RoomFixture[]; openings?:RoomOpening[] }
 export interface FloorplanConfig { site?: SiteLayout; groups: FloorplanNode[] }
 
 export interface FloorplanGroup {
@@ -18,6 +19,7 @@ export interface ScenePart extends FloorplanGroup {
   low: number;
   high: number;
   container: boolean;
+  openings?:RoomOpening[];
   fixtures?: RoomFixture[];
 }
 export interface FloorplanModel {
@@ -95,7 +97,8 @@ export function floorplanModel(config: FloorplanConfig): FloorplanModel {
     const fixtures=Array.isArray(group.fixtures) ? group.fixtures.slice(0,128).map(readFixture).filter(f=>f!==null) : [];
     if(group.fixtures!==undefined && (!Array.isArray(group.fixtures) || fixtures.length!==group.fixtures.length))
       invalid("Some device placements are invalid and could not be displayed.");
-    parts.push({ ...info, fixtures, footprint, low: b[0][2], high: b[1][2],
+    const openings=Array.isArray(group.openings)?group.openings.slice(0,128).map(readOpening).filter(o=>o!==null):[];
+    parts.push({ ...info, openings, fixtures, footprint, low: b[0][2], high: b[1][2],
       container: ["property", "structure", "floor"].includes(group.kind) });
   }
   const groups = [...all.values()].filter((group) => relevant.has(group.id));

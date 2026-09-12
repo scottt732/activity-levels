@@ -94,7 +94,7 @@ describe("floorplan viewer", () => {
     const select = el.shadowRoot!.querySelector<HTMLSelectElement>("#scope")!;
     select.value = "upper"; select.dispatchEvent(new Event("change")); await settle(el);
     expect(scene.setParts.mock.calls.at(-1)![0].map((p: { id: string }) => p.id)).toEqual(["bedroom"]);
-    el.shadowRoot!.querySelector<HTMLButtonElement>('[data-camera="top"]')!.click();
+    el.shadowRoot!.querySelector("al-camera-control")!.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Top view"]')!.click();
     expect(scene.cameraAction).toHaveBeenCalledWith("top");
   });
 
