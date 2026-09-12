@@ -998,19 +998,28 @@ shows the same placement and neighboring rooms on the same level, centered on th
 selected room. Use the orbit pad, zoom buttons, Top, and reset to inspect coverage;
 automatic activity focus stays disabled while editing. Add the placement to the draft, then use the panel's **Save**.
 
-Window contacts use the **window** type (automatically suggested for HA window/opening
-sensors). Click near a wall to snap and align the window; set its width, height, and
-center above the floor. Windows show red when open, blue when closed, and gray when
-unavailable. They have no motion coverage cone. On smaller screens, controls and
-views stack vertically.
+The room tree lists **defined objects**, grouped as Windows, Doors, Openings, Motion
+sensors, Occupancy sensors, and Lights. Available Home Assistant entities are kept in
+a separate add list; they do not become placed objects until saved to the draft.
 
-Use **Add door** for an interior or exterior door, or **Add open wall** for a permanent
-opening. Click near a wall to snap its position, then set width and height. Hinge left/right
-is viewed from inside the selected room facing the doorway; swing can be inward or outward.
-Windows and doors that do not fit remain visible in red in both previews; adjust
-them before saving. A door can use a room contact sensor or a manual open/closed state. Unknown contact
-states block coverage. Open walls always pass coverage; closed doors and windows block it.
-The sampled projection illustrates room visibility, not material penetration or exact PIR optics.
+Windows and doors are independent architectural objects. They can have zero, one, or
+many associated binary-sensor entities. Link a shared alarm circuit to every window or
+door it covers: if any linked entity is on, all associated objects turn red. If none is
+on but a contact is unavailable, the object is unknown; all linked entities must be
+off to show closed. No alarm-zone hierarchy or wired/wireless distinction is required.
+The picker starts with room sensors; enable **Include sensors outside this room** for
+central alarm-panel circuits or shared zones. Unlinked objects support a manual state.
+Existing single-entity window placements retain their geometry and contact when edited
+and saved as independent windows.
+
+Use **Add door**, **Add window**, or **Add open wall**, then click near a wall to snap
+its position. Set width, height, and bottom elevation. Door hinge left/right is viewed
+from inside the selected room facing the doorway; swing can be inward or outward.
+Out-of-bounds objects remain visible in red in both previews; adjust them before saving.
+Open walls always pass coverage; closed doors and windows block it. A shared circuit's
+open indication is ambiguous and does not prove which particular opening is open.
+The sampled projection illustrates room visibility, not material penetration or exact
+PIR optics. On smaller screens, controls and views stack vertically.
 
 The list includes devices in the room's Home Assistant area, explicit activity inputs
 in the room's subtree, and saved placements. Entity area assignments override their

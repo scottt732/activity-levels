@@ -5,23 +5,24 @@ type Room = Pick<Group,"points"|"bounds">;
 type XY = [number,number];
 export function newOpening(kind:RoomOpening["kind"]="interior_door"):RoomOpening {
   return {id:crypto.randomUUID(),name:"",kind,position:[0,0,0],yaw:0,
-    width:kind==="open_wall"?2:0.9,height:kind==="open_wall"?2.4:2,
+    width:kind==="open_wall"?2:kind==="window"?1:0.9,height:kind==="open_wall"?2.4:kind==="window"?1.2:2,
     hinge:"left",swing:"in",open:kind==="open_wall"};
 }
 export function readOpening(value:unknown):RoomOpening|null {
   if(!value || typeof value!=="object")return null;
   const item={name:"",yaw:0,width:0.9,height:2,hinge:"left",swing:"in",open:false,...value} as RoomOpening;
   if(typeof item.id!=="string" || !item.id.length || item.id.length>100 || typeof item.name!=="string" || item.name.length>100 ||
-    !["interior_door","exterior_door","open_wall"].includes(item.kind) || !["left","right"].includes(item.hinge) ||
+    !["interior_door","exterior_door","open_wall","window"].includes(item.kind) || !["left","right"].includes(item.hinge) ||
     !["in","out"].includes(item.swing) || typeof item.open!=="boolean" ||
     !Array.isArray(item.position) || item.position.length!==3 ||
     ![...item.position,item.yaw,item.width,item.height].every(v=>typeof v==="number" && Number.isFinite(v)) ||
     Math.abs(item.yaw)>360 || item.width<0.1 || item.width>20 || item.height<0.1 || item.height>20 ||
     (item.entity!==undefined && (typeof item.entity!=="string" || !/^binary_sensor\.[a-z0-9_]+$/.test(item.entity))))return null;
+  if(item.entities!==undefined && (!Array.isArray(item.entities) || item.entities.length>128 || new Set(item.entities).size!==item.entities.length || item.entities.some(e=>typeof e!=="string" || !/^binary_sensor\.[a-z0-9_]+$/.test(e))))return null;
   return item;
 }
 export function openingIsOpen(opening:RoomOpening,states:Record<string,{state:string}>):boolean {
-  return opening.kind==="open_wall" || (opening.entity ? states[opening.entity]?.state==="on" : opening.open);
+  return opening.kind==="open_wall" || (opening.kind!=="window" && openingState(opening,states)==="on");
 }
 function walls(room:Room) {
   const b=room.bounds;
@@ -84,4 +85,15 @@ export function saveOpening(config:Config,room:string,opening:RoomOpening,origin
 
 export function openingFitsRoom(room:Room,opening:RoomOpening):boolean {
   return !!room.bounds && !!alignedWall(room,opening) && opening.position[2]>=room.bounds[0][2]-1e-6 && opening.position[2]+opening.height<=room.bounds[1][2]+1e-6;
+}
+
+export function openingEntities(opening:RoomOpening):string[] {
+  return [...new Set([...(opening.entities ?? []),...(opening.entity?[opening.entity]:[])])];
+}
+/** Any open contact implicates every linked object; we cannot localize a shared circuit. */
+export function openingState(opening:RoomOpening,states:Record<string,{state:string}>):"on"|"off"|"unknown" {
+  const entities=openingEntities(opening);
+  if(!entities.length)return opening.open?"on":"off";
+  if(entities.some(e=>states[e]?.state==="on"))return "on";
+  return entities.every(e=>states[e]?.state==="off")?"off":"unknown";
 }

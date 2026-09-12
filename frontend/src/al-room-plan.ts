@@ -3,7 +3,7 @@ import type { TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { Group, HomeAssistant, RoomOpening, RoomFixture } from "./types";
 import { footprint } from "./property-layout";
-import {openingIsOpen,openingSwing,openingFitsRoom} from "./room-openings";
+import {openingIsOpen,openingSwing,openingFitsRoom,openingState} from "./room-openings";
 import {coverageFootprint} from "./sensor-coverage";
 import { fixtureAppearance, insideRoom, snapWindow, windowFitsRoom } from "./room-fixtures";
 
@@ -76,15 +76,15 @@ export class AlRoomPlan extends LitElement {
       <polygon class="outline" points=${points.map(([x,y])=>`${x},${-y}`).join(" ")} />
       ${coverage}
       ${(this.neighbors.length?this.neighbors:[group]).flatMap(g=>(g.openings ?? []).filter(o=>o.id!==this.opening?.id).map(o=>({g,o}))).concat(this.opening?[{g:group,o:this.opening}]:[]).map(({g,o})=>{
-        const valid=openingFitsRoom(g,o),color=valid?"#87eac8":"#ff3535";
+        const valid=openingFitsRoom(g,o),state=openingState(o,this.hass?.states ?? {}),color=!valid || state==="on"?"#ff3535":state==="unknown"?"#7a8790":"#53b6ce";
         const shape=openingSwing(g,o),opened=openingIsOpen(o,this.hass?.states ?? {}),end=opened?shape.open:shape.closed;
         const a=Math.atan2(shape.closed[1]-shape.hinge[1],shape.closed[0]-shape.hinge[0]),b=Math.atan2(shape.open[1]-shape.hinge[1],shape.open[0]-shape.hinge[0]);
         const delta=Math.atan2(Math.sin(b-a),Math.cos(b-a));
         const arc=Array.from({length:17},(_,i)=>`${shape.hinge[0]+o.width*Math.cos(a+delta*i/16)},${-shape.hinge[1]-o.width*Math.sin(a+delta*i/16)}`).join(" ");
         return svg`<g><line x1=${shape.hinge[0]} y1=${-shape.hinge[1]} x2=${shape.closed[0]} y2=${-shape.closed[1]} stroke="#102330" stroke-width="8" vector-effect="non-scaling-stroke"/>
           <line x1=${shape.hinge[0]} y1=${-shape.hinge[1]} x2=${o.kind==="open_wall"?shape.closed[0]:end[0]} y2=${-(o.kind==="open_wall"?shape.closed[1]:end[1])} stroke=${color} stroke-width="3" stroke-dasharray=${o.kind==="open_wall"?"4 4":"none"} vector-effect="non-scaling-stroke"/>
-          ${o.kind!=="open_wall"?svg`<polyline points=${arc} fill="none" stroke=${color} stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`:nothing}
-          ${g.id===group.id?svg`<circle class="opening-marker" cx=${o.position[0]} cy=${-o.position[1]} r=${radius} fill=${valid?(o.id===this.opening?.id?"#ffcd69":color):color} role="button" tabindex=${this.disabled?-1:0} aria-label=${`Select ${o.name || o.kind}`} @pointerdown=${(e:PointerEvent)=>{if(this.disabled)return;e.stopPropagation();this.emit("al-opening-select",o.id);this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}} @click=${(e:Event)=>{e.stopPropagation();if(!this.disabled)this.emit("al-opening-select",o.id);}} @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-opening-select",o.id);}}}/>`:nothing}</g>`;
+          ${o.kind!=="open_wall" && o.kind!=="window"?svg`<polyline points=${arc} fill="none" stroke=${color} stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`:nothing}
+          ${g.id===group.id?svg`<circle class="opening-marker" cx=${o.position[0]} cy=${-o.position[1]} r=${radius} fill=${color} role="button" tabindex=${this.disabled?-1:0} aria-label=${`Select ${o.name || o.kind}`} @pointerdown=${(e:PointerEvent)=>{if(this.disabled)return;e.stopPropagation();this.emit("al-opening-select",o.id);this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}} @click=${(e:Event)=>{e.stopPropagation();if(!this.disabled)this.emit("al-opening-select",o.id);}} @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-opening-select",o.id);}}}/>`:nothing}</g>`;
       })}
       ${fixtures.filter(item=>item.position.every(Number.isFinite)).map(item=>svg`<g>
         ${item.kind==="window"?svg`<line class="window" stroke=${windowFitsRoom(group,item)?fixtureAppearance(item.kind,this.hass?.states[item.entity]?.state).color:"#ff3535"} stroke-width="7" vector-effect="non-scaling-stroke"

@@ -8,7 +8,7 @@ import { activityReading } from "./floorplan-model";
 import type { ScenePart, ActivityFrame } from "./floorplan-model";
 import { viewerOptions, thresholdColor, roomLight } from "./floorplan-style";
 import {coverageRays} from "./sensor-coverage";
-import {openingIsOpen,openingSwing,openingFitsRoom} from "./room-openings";
+import {openingIsOpen,openingSwing,openingFitsRoom,openingState} from "./room-openings";
 import { fixtureAppearance, fixtureDirection, windowFitsRoom } from "./room-fixtures";
 import type { SiteLayout, RoomOpening, RoomFixture, HassEntity } from "./types";
 import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
@@ -74,7 +74,7 @@ export class FloorplanRenderer {
   private placementHeight?: number;
   private markers: {room:string; fixture:RoomFixture; marker:Mesh<BufferGeometry,MeshBasicMaterial>; coverage?:Mesh<BufferGeometry,MeshBasicMaterial>; boundary?:LineSegments<BufferGeometry,LineDashedMaterial>; previous?:string;coverageKey?:string;invalid?:boolean}[] = [];
   private coverageRooms:ScenePart[]=[];
-  private doors:{part:ScenePart;opening:RoomOpening;leaf:Mesh<BufferGeometry,MeshBasicMaterial>;frame:LineSegments<BufferGeometry,LineBasicMaterial>;arc:LineSegments<BufferGeometry,LineBasicMaterial>;key?:boolean}[]=[];
+  private doors:{part:ScenePart;opening:RoomOpening;leaf:Mesh<BufferGeometry,MeshBasicMaterial>;frame:LineSegments<BufferGeometry,LineBasicMaterial>;arc:LineSegments<BufferGeometry,LineBasicMaterial>;key?:string}[]=[];
   private siteMeshes: Mesh<ShapeGeometry, MeshBasicMaterial>[] = [];
   private radius = 1;
   private ground?: Mesh<PlaneGeometry, MeshBasicMaterial>;
@@ -389,10 +389,10 @@ export class FloorplanRenderer {
   }
 
   private updateDoor(door:typeof this.doors[number],states:Record<string,HassEntity>):void {
-    const open=openingIsOpen(door.opening,states);if(door.key===open)return;door.key=open;
+    const open=openingIsOpen(door.opening,states),state=openingState(door.opening,states),key=`${open}:${state}`;if(door.key===key)return;door.key=key;
     const p=door.part,o=door.opening;
     const group={points:p.footprint,bounds:[[Math.min(...p.footprint.map(v=>v[0])),Math.min(...p.footprint.map(v=>v[1])),p.low],[Math.max(...p.footprint.map(v=>v[0])),Math.max(...p.footprint.map(v=>v[1])),p.high]] as [[number,number,number],[number,number,number]]};
-    const color=openingFitsRoom(group,o)?0x87eac8:0xff3535;
+    const color=!openingFitsRoom(group,o) || state==="on"?0xff3535:state==="unknown"?0x7a8790:0x53b6ce;
     door.frame.material.color.setHex(color);door.leaf.material.color.setHex(color);door.arc.material.color.setHex(color);
     const swing=openingSwing(group,o),end=open?swing.open:swing.closed;
     const point=(v:[number,number],z:number)=>[v[0]-this.origin.x,z-this.origin.y,-v[1]-this.origin.z];
@@ -405,7 +405,7 @@ export class FloorplanRenderer {
     const target=Math.atan2(swing.open[1]-swing.hinge[1],swing.open[0]-swing.hinge[0]),delta=Math.atan2(Math.sin(target-angle),Math.cos(target-angle));
     const lines:number[]=[];
     for(let i=0;i<16;i++)for(const t of [i/16,(i+1)/16])lines.push(...point([swing.hinge[0]+o.width*Math.cos(angle+delta*t),swing.hinge[1]+o.width*Math.sin(angle+delta*t)],bottom+0.01));
-    door.arc.geometry=new BufferGeometry().setAttribute("position",new Float32BufferAttribute(lines,3));door.arc.visible=o.kind!=="open_wall";
+    door.arc.geometry=new BufferGeometry().setAttribute("position",new Float32BufferAttribute(lines,3));door.arc.visible=o.kind!=="open_wall" && o.kind!=="window";
   }
 
   setPlacement(height?: number): void { this.placementHeight=height; }

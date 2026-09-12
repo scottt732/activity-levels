@@ -162,7 +162,7 @@ OPENING_SCHEMA = vol.Schema(
     {
         vol.Required("id"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Optional("name", default=""): vol.All(str, vol.Length(max=100)),
-        vol.Required("kind"): vol.In(["interior_door", "exterior_door", "open_wall"]),
+        vol.Required("kind"): vol.In(["interior_door", "exterior_door", "open_wall", "window"]),
         vol.Required("position"): position,
         vol.Optional("yaw", default=0): vol.All(coordinate, vol.Range(min=-360, max=360)),
         vol.Optional("width", default=0.9): vol.All(coordinate, vol.Range(min=0.1, max=20)),
@@ -171,6 +171,9 @@ OPENING_SCHEMA = vol.Schema(
         vol.Optional("swing", default="in"): vol.In(["in", "out"]),
         vol.Optional("open", default=False): bool,
         vol.Optional("entity"): vol.Match(r"^binary_sensor\.[a-z0-9_]+$"),
+        vol.Optional("entities"): vol.All(
+            [vol.Match(r"^binary_sensor\.[a-z0-9_]+$")], vol.Length(max=128), vol.Unique()
+        ),
     }
 )
 

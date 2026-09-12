@@ -108,11 +108,62 @@ def test_openings_and_look_down_round_trip():
     assert validate_config(config) == config
 
 
+def test_opening_contacts_support_shared_zones_and_independent_contacts():
+    source = house_config()
+    source["groups"][0]["openings"] = [
+        {
+            "id": f"bay_{index}",
+            "kind": "window",
+            "position": [index, 0, 1],
+            "entities": ["binary_sensor.bay_zone"],
+        }
+        for index in range(4)
+    ] + [
+        {
+            "id": "patio",
+            "kind": "exterior_door",
+            "position": [0, 1, 0],
+            "entities": ["binary_sensor.patio_left", "binary_sensor.patio_right"],
+        },
+        {"id": "unmonitored", "kind": "window", "position": [0, 2, 1], "entities": []},
+        {
+            "id": "legacy",
+            "kind": "interior_door",
+            "position": [0, 3, 0],
+            "entity": "binary_sensor.legacy",
+        },
+        {
+            "id": "mixed",
+            "kind": "interior_door",
+            "position": [0, 4, 0],
+            "entity": "binary_sensor.legacy",
+            "entities": ["binary_sensor.additional"],
+        },
+    ]
+    config = validate_config(source)
+    placed = config["groups"][0]["openings"]
+    assert all(item["entities"] == ["binary_sensor.bay_zone"] for item in placed[:4])
+    assert placed[4]["entities"] == ["binary_sensor.patio_left", "binary_sensor.patio_right"]
+    assert placed[5]["entities"] == []
+    assert placed[6]["entity"] == "binary_sensor.legacy"
+    assert "entities" not in placed[6]
+    assert placed[7]["entity"] == "binary_sensor.legacy"
+    assert placed[7]["entities"] == ["binary_sensor.additional"]
+    assert validate_config(config) == config
+
+
 @pytest.mark.parametrize(
     "changes",
     [
         {"id": ""},
         {"entity": "light.invalid"},
+        {"entities": ["light.invalid"]},
+        {"entities": ["binary_sensor."]},
+        {"entities": ["binary_sensor.Uppercase"]},
+        {"entities": ["binary_sensor.zone", "binary_sensor.zone"]},
+        {"entities": [f"binary_sensor.zone_{index}" for index in range(129)]},
+        {"entities": "binary_sensor.zone"},
+        {"entities": [None]},
         {"width": 0},
         {"height": float("inf")},
         {"yaw": 361},

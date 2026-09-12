@@ -6,7 +6,7 @@ import { alChange } from "./events";
 import { walkGroups } from "./model";
 import { newFixture, saveFixture, snapWindow, initialFixturePosition, insideRoom, readFixture } from "./room-fixtures";
 import { applyProfile, matchesProfile, parseProfiles, roomCandidates } from "./sensor-profiles";
-import {newOpening,saveOpening,snapOpening,readOpening} from "./room-openings";
+import {newOpening,saveOpening,snapOpening,readOpening,openingEntities,openingState} from "./room-openings";
 import {defaultLengthUnit,formatLengthInput,parseLength} from "./measurement-units";
 import type {LengthUnit} from "./measurement-units";
 import "./al-orientation-control";
@@ -42,6 +42,9 @@ export class AlRoomDeviceEditor extends LitElement {
   @property({type:Boolean}) disabled=false;
   @property({type:String}) room="";
   @state() private unitChoice:"auto"|LengthUnit="auto";
+  @state() private contactSearch="";
+  @state() private allContacts=false;
+  @state() private legacyWindow?:string;
   @state() private addKind:RoomFixture["kind"]|""="";
   @state() private opening?:RoomOpening;
   @state() private originalOpening?:string;
@@ -85,14 +88,14 @@ export class AlRoomDeviceEditor extends LitElement {
     if(changed.has("room"))this.reset();
     // Live telemetry must not recreate every mesh or discard sensor state transitions.
     if(this.config && ["config","fixture","room","original","opening","originalOpening"].some(key=>changed.has(key))) {
-      let preview=this.config;this.previewError="";
-      try{if(this.opening)preview=saveOpening(this.config,this.room,this.opening,this.originalOpening);else if(this.fixture.entity)preview=saveFixture(this.config,this.room,this.fixture,this.original);}
+      let preview=this.opening?this.openingConfig():this.config;this.previewError="";
+      try{if(this.opening)preview=saveOpening(this.openingConfig(),this.room,this.opening,this.originalOpening);else if(this.fixture.entity)preview=saveFixture(this.config,this.room,this.fixture,this.original);}
       catch(error){
         this.previewError=(error as Error).message;
         // Valid finite geometry remains visible while it is being fitted to the room.
         // This copy only feeds the previews; Save still runs full placement validation.
         const opening=this.opening && readOpening(this.opening),fixture=readFixture(this.fixture);
-        if(opening || fixture){preview=structuredClone(this.config);const room=walkGroups(preview).find(e=>e.group.id===this.room)?.group;
+        if(opening || fixture){preview=structuredClone(this.opening?this.openingConfig():this.config);const room=walkGroups(preview).find(e=>e.group.id===this.room)?.group;
           if(room && opening)room.openings=[...(room.openings ?? []).filter(o=>o.id!==(this.originalOpening ?? opening.id)),opening];
           else if(room && fixture)room.fixtures=[...(room.fixtures ?? []).filter(f=>f.entity!==(this.original ?? fixture.entity)),fixture];
         }
@@ -117,20 +120,22 @@ export class AlRoomDeviceEditor extends LitElement {
     finally {if(sequence===this.sequence)this.loading=false;}
   }
   private reset():void {
-    this.addKind="";
+    this.legacyWindow=undefined;this.addKind="";
     this.fixture={...newFixture(),position:this.group?initialFixturePosition(this.group):[0,0,0]};
     this.opening=undefined;this.originalOpening=undefined;this.original=undefined;this.error="";this.notice="";this.mode="place";this.profile="";this.profileName="";this.search="";
   }
   private select(entity:string):void {
     if(this.disabled)return;
     if(entity===this.fixture.entity && !this.opening)return;
-    this.opening=undefined;this.originalOpening=undefined;
+    this.opening=undefined;this.originalOpening=undefined;this.legacyWindow=undefined;
     const saved=this.group?.fixtures?.find(f=>f.entity===entity);
+    if(saved?.kind==="window"){this.editLegacyWindow(saved);return;}
     if(saved){this.fixture=structuredClone(saved);this.original=entity;this.profile=saved.profile_id ?? "";}
     else {
       const candidate=this.candidates.find(d=>d.entity===entity);if(!candidate)return;
       const position=this.group?initialFixturePosition(this.group):[0,0,0] as [number,number,number];
       const kind=this.addKind || (entity.startsWith("light.")?"light":candidate.device_class==="window" || candidate.device_class==="opening"?"window":candidate.device_class==="occupancy" || candidate.device_class==="presence"?"occupancy":"motion");
+      if(kind==="window"){this.editOpening(undefined,"window");this.patchOpening({entities:[entity],name:candidate.name});return;}
       this.fixture={...newFixture(entity,kind),position,name:candidate.name};this.original=undefined;
       this.profile="";
     }
@@ -190,33 +195,62 @@ export class AlRoomDeviceEditor extends LitElement {
   }
   private editOpening(value?:RoomOpening,kind:RoomOpening["kind"]="interior_door"):void {
     if(this.disabled || !this.group?.bounds)return;
-    this.addKind="";this.fixture=newFixture();this.original=undefined;this.mode="place";this.error="";
+    this.legacyWindow=undefined;this.contactSearch="";this.allContacts=false;this.addKind="";this.fixture=newFixture();this.original=undefined;this.mode="place";this.error="";
     const b=this.group.bounds;
     const opening=value?structuredClone(value):newOpening(kind);
-    if(!value)Object.assign(opening,snapOpening(this.group,[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,b[0][2]],opening.width));
+    if(!value)Object.assign(opening,snapOpening(this.group,[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,b[0][2]+(kind==="window"?Math.max(0,(b[1][2]-b[0][2]-opening.height)/2):0)],opening.width));
     this.opening=opening;this.originalOpening=value?.id;
+  }
+  private openingConfig():Config {
+    const config=structuredClone(this.config!);
+    if(this.legacyWindow){const group=walkGroups(config).find(e=>e.group.id===this.room)?.group;if(group)group.fixtures=group.fixtures?.filter(f=>f.entity!==this.legacyWindow);}
+    return config;
+  }
+  private editLegacyWindow(f:RoomFixture):void {
+    this.editOpening({...newOpening("window"),name:f.name,entities:[f.entity],position:[f.position[0],f.position[1],f.position[2]-(f.height ?? 1.2)/2],yaw:f.yaw,width:f.width ?? 1,height:f.height ?? 1.2});
+    this.legacyWindow=f.entity;
+  }
+  private objectTree() {
+    const g=this.group;if(!g)return nothing;
+    return ([ ["Windows",["window"]],["Doors",["interior_door","exterior_door"]],["Openings",["open_wall"]],["Motion sensors",["motion"]],["Occupancy sensors",["occupancy"]],["Lights",["light"]] ] as [string,string[]][]).map(([label,kinds])=>{
+      const openings=(g.openings ?? []).filter(o=>kinds.includes(o.kind)),fixtures=(g.fixtures ?? []).filter(f=>kinds.includes(f.kind));
+      return html`<details open class="object-category"><summary>${label} (${openings.length+fixtures.length})</summary>
+        ${openings.map(o=>html`<button class="device" type="button" data-object=${o.id} aria-pressed=${this.opening?.id===o.id} @click=${()=>this.editOpening(o)}>${o.name || o.kind.replaceAll("_"," ")}<small>${openingEntities(o).length} linked sensors · ${openingState(o,this.hass?.states ?? {})}</small></button>`)}
+        ${fixtures.map(f=>html`<button class="device" type="button" data-entity=${f.entity} aria-pressed=${this.fixture.entity===f.entity || this.legacyWindow===f.entity} @click=${()=>this.select(f.entity)}>${f.name || f.entity}<small>${f.entity}</small></button>`)}
+      </details>`;
+    });
+  }
+  private contactsControl(o:RoomOpening) {
+    const selected=openingEntities(o),roomIds=new Set(this.candidates.map(d=>d.entity));
+    const ids=[...new Set([...selected,...this.registry.map(d=>d.entity),...Object.keys(this.hass?.states ?? {})])].filter(id=>id.startsWith("binary_sensor.") && (this.allContacts || roomIds.has(id) || selected.includes(id)) && (!this.contactSearch || `${id} ${this.hass?.states[id]?.attributes.friendly_name ?? ""}`.toLowerCase().includes(this.contactSearch.toLowerCase())));
+    return html`<h4>Associated sensors / alarm circuits (${selected.length})</h4>
+      <p class="muted">Link none, one, or several entities. Shared alarm circuits can be linked to every window or door they cover. Any active entity tints all linked objects red; it cannot tell us which one opened.</p>
+      <label><input type="checkbox" .checked=${this.allContacts} @change=${(e:Event)=>{this.allContacts=(e.target as HTMLInputElement).checked;}}>Include sensors outside this room</label>
+      <input aria-label="Find associated sensor" placeholder="Find a contact or alarm circuit…" .value=${this.contactSearch} @input=${(e:Event)=>{this.contactSearch=(e.target as HTMLInputElement).value;}}>
+      <div class="devices">${ids.map(id=>html`<label><input type="checkbox" data-contact=${id} .checked=${selected.includes(id)} @change=${(e:Event)=>this.patchOpening({entity:undefined,entities:(e.target as HTMLInputElement).checked?[...selected,id]:selected.filter(v=>v!==id)})}>${this.hass?.states[id]?.attributes.friendly_name ?? id}<small>${id} · ${this.hass?.states[id]?.state ?? "unavailable"}</small></label>`)}</div>
+      ${!selected.length?html`<label><input type="checkbox" .checked=${o.open} @change=${(e:Event)=>this.patchOpening({open:(e.target as HTMLInputElement).checked})}>Manually open</label>`:html`<p class="muted">State: ${openingState(o,this.hass?.states ?? {})}. All contacts must be off to show closed; unavailable contacts leave the state unknown.</p>`}`;
   }
   private patchOpening(patch:Partial<RoomOpening>):void {if(this.opening && !this.disabled){this.opening={...this.opening,...patch};this.error="";}}
   private saveDoor():void {
     if(!this.config || !this.opening || this.disabled || !this.validLengths())return;
-    try{this.dispatchEvent(alChange(saveOpening(this.config,this.room,this.opening,this.originalOpening)));this.originalOpening=this.opening.id;this.notice="Opening added to draft. Use the panel's Save to persist it.";this.error="";}
+    try{this.dispatchEvent(alChange(saveOpening(this.openingConfig(),this.room,this.opening,this.originalOpening)));this.legacyWindow=undefined;this.originalOpening=this.opening.id;this.notice="Opening added to draft. Use the panel's Save to persist it.";this.error="";}
     catch(error){this.error=(error as Error).message;}
   }
   private openingControl() {
     const o=this.opening;if(!o)return nothing;
-    return html`<h3>${o.kind==="open_wall"?"Open wall":"Door"}</h3>
+    return html`<h3>${o.kind==="open_wall"?"Open wall":o.kind==="window"?"Window":"Door"}</h3>
       <label>Name<input aria-label="Opening name" .value=${o.name} @input=${(e:Event)=>this.patchOpening({name:(e.target as HTMLInputElement).value})}></label>
-      <label>Opening type<select aria-label="Opening type" .value=${o.kind} @change=${(e:Event)=>this.patchOpening({kind:(e.target as HTMLSelectElement).value as RoomOpening["kind"]})}>${["interior_door","exterior_door","open_wall"].map(kind=>html`<option value=${kind} .selected=${o.kind===kind}>${kind.replaceAll("_"," ")}</option>`)}</select></label>
+      <label>Opening type<select aria-label="Opening type" .value=${o.kind} @change=${(e:Event)=>this.patchOpening({kind:(e.target as HTMLSelectElement).value as RoomOpening["kind"]})}>${["interior_door","exterior_door","open_wall","window"].map(kind=>html`<option value=${kind} .selected=${o.kind===kind}>${kind.replaceAll("_"," ")}</option>`)}</select></label>
       ${(["width","height"] as const).map(key=>html`<label>${key} (${this.unit})${this.lengthInput(`Opening ${key}`,o[key],v=>this.patchOpening({[key]:v}),.1,20)}</label>`)}
       <label>Bottom above floor (${this.unit})${this.lengthInput("Opening elevation",o.position[2]-(this.group?.bounds?.[0][2] ?? 0),v=>this.patchOpening({position:[o.position[0],o.position[1],(this.group?.bounds?.[0][2] ?? 0)+v]}),0)}</label>
-      ${o.kind!=="open_wall"?html`<p class="muted">Hinge left/right is viewed from inside this room facing the doorway.</p>
+      ${o.kind!=="open_wall" && o.kind!=="window"?html`<p class="muted">Hinge left/right is viewed from inside this room facing the doorway.</p>
         <label>Hinge<select aria-label="Door hinge" .value=${o.hinge} @change=${(e:Event)=>this.patchOpening({hinge:(e.target as HTMLSelectElement).value as RoomOpening["hinge"]})}>${["left","right"].map(v=>html`<option .selected=${o.hinge===v} value=${v}>${v}</option>`)}</select></label>
         <label>Swing<select aria-label="Door swing" .value=${o.swing} @change=${(e:Event)=>this.patchOpening({swing:(e.target as HTMLSelectElement).value as RoomOpening["swing"]})}>${["in","out"].map(v=>html`<option .selected=${o.swing===v} value=${v}>${v}</option>`)}</select></label>
-        <label>Contact sensor (optional)<select aria-label="Door contact" .value=${o.entity ?? ""} @change=${(e:Event)=>this.patchOpening({entity:(e.target as HTMLSelectElement).value || undefined})}><option value="">Manual open / closed</option>${this.candidates.filter(d=>d.entity.startsWith("binary_sensor.")).map(d=>html`<option value=${d.entity} .selected=${o.entity===d.entity}>${d.name}</option>`)}</select></label>
-        ${!o.entity?html`<label><input type="checkbox" .checked=${o.open} @change=${(e:Event)=>this.patchOpening({open:(e.target as HTMLInputElement).checked})}>Door is open</label>`:html`<p class="muted">Door state: ${this.hass?.states[o.entity]?.state ?? "unavailable"}. Unknown contacts block coverage.</p>`}`:nothing}
+        `:nothing}
+      ${o.kind!=="open_wall"?this.contactsControl(o):nothing}
       <p class="muted">Click near a wall to place and align the opening. An open wall always lets coverage pass.</p>
       <button id="save-opening" type="button" @click=${()=>this.saveDoor()}>${this.originalOpening?"Update":"Add"} opening to draft</button>
-      ${this.originalOpening?html`<button type="button" @click=${()=>{if(!this.config || this.disabled)return;const next=structuredClone(this.config),g=walkGroups(next).find(e=>e.group.id===this.room)?.group;if(g)g.openings=g.openings?.filter(v=>v.id!==this.originalOpening);this.dispatchEvent(alChange(next));this.opening=undefined;this.originalOpening=undefined;}}>Remove opening</button>`:nothing}`;
+      ${this.originalOpening || this.legacyWindow?html`<button type="button" @click=${()=>{if(!this.config || this.disabled)return;const next=this.openingConfig(),g=walkGroups(next).find(e=>e.group.id===this.room)?.group;if(g)g.openings=g.openings?.filter(v=>v.id!==this.originalOpening);this.dispatchEvent(alChange(next));this.opening=undefined;this.originalOpening=undefined;this.legacyWindow=undefined;}}>Remove opening</button>`:nothing}`;
   }
   protected override render() {
     if(!this.config)return nothing;
@@ -224,7 +258,7 @@ export class AlRoomDeviceEditor extends LitElement {
     const group=this.group,b=group?.bounds;
     const contextGroups=this.preview?walkGroups(this.preview).map(e=>e.group).filter(g=>g.bounds && !["property","structure","floor"].includes(g.kind) && (!b || (g.bounds[0][2]<b[1][2]-0.01 && g.bounds[1][2]>b[0][2]+0.01))):[];
     const previewGroup=contextGroups.find(g=>g.id===this.room) ?? group;
-    const candidates=this.candidates.filter(d=>(!this.addKind || (!d.placed && (this.addKind==="light")===d.entity.startsWith("light.")))).filter(d=>`${d.name} ${d.entity}`.toLowerCase().includes(this.search.toLowerCase()));
+    const candidates=this.candidates.filter(d=>!d.placed && (!this.addKind || (this.addKind==="light")===d.entity.startsWith("light."))).filter(d=>`${d.name} ${d.entity}`.toLowerCase().includes(this.search.toLowerCase()));
     const device=this.candidates.find(d=>d.entity===this.fixture.entity);
     const suggestions=device?this.profiles.filter(p=>matchesProfile(p,device)):[];
     const profile=this.profiles.find(p=>p.id===this.profile);
@@ -248,16 +282,19 @@ export class AlRoomDeviceEditor extends LitElement {
         <h3>Devices & windows</h3>
         <details class="add-menu"><summary>Add…</summary>
           <button id="new-door" type="button" @click=${()=>this.editOpening()}>Add door</button><button id="new-open-wall" type="button" @click=${()=>this.editOpening(undefined,"open_wall")}>Add open wall</button>
-          ${(["window","motion","occupancy","light"] as const).map(kind=>html`<button type="button" data-add-kind=${kind} @click=${()=>{this.reset();this.addKind=kind;}}>Add ${kind==="motion"?"motion sensor":kind==="occupancy"?"occupancy sensor":kind}</button>`)}
+          <button type="button" data-add-window @click=${()=>this.editOpening(undefined,"window")}>Add window</button>
+          ${(["motion","occupancy","light"] as const).map(kind=>html`<button type="button" data-add-kind=${kind} @click=${()=>{this.reset();this.addKind=kind;}}>Add ${kind==="motion"?"motion sensor":kind==="occupancy"?"occupancy sensor":kind}</button>`)}
         </details>
         ${this.addKind?html`<p>Choose a room entity for the new ${this.addKind} placement.</p><button @click=${()=>{this.addKind="";}}>Show all devices</button>`:nothing}
-        ${!this.addKind?(group?.openings ?? []).map(o=>html`<button type="button" class="device" aria-pressed=${this.opening?.id===o.id} @click=${()=>this.editOpening(o)}>${o.name || o.kind.replaceAll("_"," ")}<small>${o.kind.replaceAll("_"," ")}</small></button>`):nothing}
+        ${this.objectTree()}
+        <details class="available-entities" ?open=${!!this.addKind}><summary>Available room entities to add</summary>
         <input aria-label="Find room device" placeholder="Find a sensor or light…" .value=${this.search} @input=${(e:Event)=>{this.search=(e.target as HTMLInputElement).value;}}>
         <p class="muted">Activity inputs first, then contributing now, then most recently changed.</p>
         <div class="devices">${candidates.map(d=>html`<button type="button" class="device" data-entity=${d.entity} aria-pressed=${this.fixture.entity===d.entity} @click=${()=>this.select(d.entity)}>
           ${d.name}<small>${group?.fixtures?.find(f=>f.entity===d.entity)?.kind ?? d.device_class ?? "device"} · ${d.entity}</small><small>${d.contributing?"Contributing now":d.input?"Activity input":"Room device"}${d.placed?" · placed":""} · ${this.hass?.states[d.entity]?.state ?? "unavailable"}</small>
           ${d.changed?html`<small>Changed ${new Date(d.changed*1000).toLocaleString()}</small>`:nothing}</button>`)}</div>
         ${!candidates.length?html`<p class="muted">No matching devices. Assign devices to this room's HA area or configure its activity inputs. No whole-home fallback is used.</p>`:nothing}
+        </details>
         ${this.registryError?html`<p class="error" role="alert">${this.registryError}</p>`:nothing}
         <button type="button" ?disabled=${this.loading} @click=${()=>void this.loadDevices()}>${this.loading?"Loading devices…":"Refresh room devices"}</button>
         ${this.openingControl()}
