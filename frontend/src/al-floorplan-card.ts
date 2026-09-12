@@ -36,7 +36,7 @@ export class ActivityLevelsFloorplanCard extends LitElement {
     const {data,error}=this.snapshot;
     return html`${error?html`<p class="error" role="alert">${error}</p>`:nothing}
       ${data?html`<al-floorplan-viewer .dashboard=${true} .config=${data.config} .live=${data.live}
-        .hass=${this.hass} .lights=${data.lights} .settings=${this.settings}
+        .telemetry=${error ? undefined : data.telemetry} .hass=${this.hass} .lights=${data.lights} .settings=${this.settings}
         @al-viewer-settings=${(e:CustomEvent<ViewerSettings>)=>{this.settings=e.detail;}}></al-floorplan-viewer>`:html`<p role="status">Loading floorplan…</p>`}`;
   }
 }

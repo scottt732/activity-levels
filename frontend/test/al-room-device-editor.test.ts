@@ -1,0 +1,23 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { AlRoomDeviceEditor } from "../src/al-room-device-editor";
+import { newGroup } from "../src/model";
+import { roomsConfig } from "./fixtures";
+vi.mock("../src/floorplan-renderer",()=>({FloorplanRenderer:class {setParts(){}setPlacement(){}setActivity(){}dispose(){}}}));
+afterEach(()=>document.body.replaceChildren());
+it("places a sensor in an immutable draft and respects read-only mode",async()=>{
+  const el=new AlRoomDeviceEditor();const config=roomsConfig();
+  config.groups=[{...newGroup("room","area"),bounds:[[0,0,10],[4,4,13]]}];el.config=config;
+  document.body.append(el);await el.updateComplete;
+  const room=el.shadowRoot!.querySelector<HTMLSelectElement>("#device-room")!;
+  room.value="room";room.dispatchEvent(new Event("change"));await el.updateComplete;
+  const entity=el.shadowRoot!.querySelector<HTMLInputElement>("#fixture-entity")!;
+  entity.value="binary_sensor.corner";entity.dispatchEvent(new Event("input"));await el.updateComplete;
+  const viewer=el.shadowRoot!.querySelector("al-floorplan-viewer")!;
+  viewer.dispatchEvent(new CustomEvent("al-fixture-position",{detail:[0,0,12],bubbles:true}));await el.updateComplete;
+  const changed=vi.fn();el.addEventListener("al-change",changed);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-fixture")!.click();await el.updateComplete;
+  expect(changed.mock.calls[0]![0].detail.groups[0].fixtures[0].position).toEqual([0,0,12]);
+  expect(config.groups[0]!.fixtures).toBeUndefined();
+  el.disabled=true;await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-fixture")!.click();expect(changed).toHaveBeenCalledOnce();
+});

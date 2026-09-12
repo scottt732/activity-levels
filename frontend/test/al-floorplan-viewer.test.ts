@@ -13,6 +13,7 @@ vi.mock("../src/floorplan-renderer", () => ({ FloorplanRenderer: class {
     if (scene.fail) throw new Error("No WebGL");
     scene.created(); scene.select = select; scene.contextLost = fail;
   }
+  setPlacement = vi.fn();
   setParts = scene.setParts; setActivity = scene.setActivity;
   cameraAction = scene.cameraAction; dispose = scene.dispose;
 } }));

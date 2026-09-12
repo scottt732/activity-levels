@@ -10,6 +10,9 @@ import { viewerOptions, roomLight, activeRule } from "./floorplan-style";
 import type { ViewerSettings, ViewerOptions } from "./floorplan-style";
 import type { HomeAssistant } from "./types";
 
+import "./al-room-hud";
+import type { FloorplanTelemetry } from "./floorplan-store";
+
 const CAMERA_ACTIONS: [CameraAction, string][] = [
   ["reset", "Reset view"], ["top", "Top view"], ["left", "Rotate left"], ["right", "Rotate right"],
   ["up", "Tilt up"], ["down", "Tilt down"], ["in", "Zoom in"], ["out", "Zoom out"],
@@ -26,9 +29,12 @@ export class AlFloorplanViewer extends LitElement {
     button, select { font: inherit; color: var(--primary-text-color); background: var(--card-background-color, white);
       border: 1px solid var(--divider-color, #aaa); border-radius: 6px; padding: 8px 10px; }
     button { cursor: pointer; } button:disabled { cursor: default; opacity: .5; }
+    :host([room]:not([room=""])) .viewer { display:block; }
+    :host([room]:not([room=""])) aside, :host([room]:not([room=""])) .settings, :host([room]:not([room=""])) .toolbar label, :host([room]:not([room=""])) .live-status { display:none; }
     .viewer { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; }
     .viewport { position: relative; min-width: 0; height: clamp(320px, 58vh, 680px); border-radius: 12px; overflow: hidden;
       background: radial-gradient(ellipse at 50% 35%, #263a49, #101c27 80%); border: 1px solid #425461; }
+    al-room-hud { position:absolute; top:64px; left:14px; width:min(280px,calc(100% - 28px)); max-height:calc(100% - 130px); overflow:auto; pointer-events:auto; }
     #scene { position: absolute; inset: 0; }
     .overlay { position: absolute; inset: 0; display: grid; place-content: center; padding: 28px; text-align: center;
       color: #e2edf3; background: #14212bc9; }
@@ -64,6 +70,10 @@ export class AlFloorplanViewer extends LitElement {
     @media (max-width: 760px) { .viewer { grid-template-columns: minmax(0, 1fr); } .groups { max-height: 220px; } }
   `];
 
+  @property({ attribute: false }) telemetry?: FloorplanTelemetry;
+  @property({type:String,reflect:true}) room = "";
+  @property({attribute:false}) placementHeight?: number;
+  @state() private hovered = "";
   @property({ attribute: false }) config?: FloorplanConfig;
   @property({ attribute: false }) hass?: HomeAssistant;
   @property({ attribute: false }) lights: Record<string,string[]> = {};
@@ -147,14 +157,14 @@ export class AlFloorplanViewer extends LitElement {
     if (!this.isConnected) return;
     if(changed.has("settings") && this.options.ambient && !(changed.get("settings") as ViewerSettings | undefined)?.ambient)
       this.renderRoot.querySelector<HTMLButtonElement>("#exit-view")?.focus({preventScroll:true});
-    const parts = inScope(this.model.parts, this.scope);
+    const parts = inScope(this.model.parts, this.room || this.scope);
     if (!parts.length && !this.config?.site?.features.length) { this.stopRenderer(); return; }
     if (!this.renderer && !this.loading && !this.error) {
       // Start outside Lit's update transaction; loading changes need their own render.
       queueMicrotask(() => { void this.startRenderer(); });
       return;
     }
-    if (changed.has("config") || changed.has("scope") || this.groundZ !== this.options.ground_z) {
+    if (changed.has("config") || changed.has("scope") || changed.has("room") || this.groundZ !== this.options.ground_z) {
       this.renderer?.setParts(parts,this.options.ground_z,this.config?.site); this.groundZ=this.options.ground_z;
     }
     this.updateAppearance();
@@ -168,7 +178,7 @@ export class AlFloorplanViewer extends LitElement {
   }
 
   private async startRenderer(): Promise<void> {
-    if (!this.isConnected || this.renderer || this.loading || this.error || (!inScope(this.model.parts, this.scope).length && !this.config?.site?.features.length)) return;
+    if (!this.isConnected || this.renderer || this.loading || this.error || (!inScope(this.model.parts, this.room || this.scope).length && !this.config?.site?.features.length)) return;
     const sequence = ++this.sequence;
     this.loading = true;
     try {
@@ -177,8 +187,8 @@ export class AlFloorplanViewer extends LitElement {
       const host = this.renderRoot.querySelector<HTMLElement>("#scene")!;
       this.renderer = new FloorplanRenderer(host, (id) => { this.selected = id; }, (message) => {
         this.stopRenderer(); this.error = message;
-      });
-      this.renderer.setParts(inScope(this.model.parts, this.scope),this.options.ground_z,this.config?.site);
+      }, (id)=>{this.hovered=id;}, (position)=>{this.dispatchEvent(new CustomEvent("al-fixture-position",{detail:position,bubbles:true,composed:true}));});
+      this.renderer.setParts(inScope(this.model.parts, this.room || this.scope),this.options.ground_z,this.config?.site);
       this.groundZ=this.options.ground_z;
       this.updateAppearance();
     } catch {
@@ -195,7 +205,8 @@ export class AlFloorplanViewer extends LitElement {
   private updateAppearance(): void {
     const states=this.hass?.states ?? {};
     const fills=Object.fromEntries(this.model.groups.map(g=>[g.id,roomLight(this.lights[g.id],states)]));
-    this.renderer?.setActivity(this.live,this.now,this.selected,this.options,fills,activeRule(this.options.rules,states));
+    this.renderer?.setPlacement(this.placementHeight);
+    this.renderer?.setActivity(this.live,this.now,this.room || this.selected,this.options,fills,activeRule(this.options.rules,states),states);
   }
   private changeSettings(settings: ViewerSettings): void {
     try {
@@ -237,7 +248,7 @@ export class AlFloorplanViewer extends LitElement {
   }
 
   protected override render() {
-    const parts = inScope(this.model.parts, this.scope);
+    const parts = inScope(this.model.parts, this.room || this.scope);
     const groups = inScope(this.model.groups, this.scope);
     const selected = this.model.groups.find((group) => group.id === this.selected);
     const alert = activeRule(this.options.rules,this.hass?.states ?? {});
@@ -247,7 +258,7 @@ export class AlFloorplanViewer extends LitElement {
       ${this.options.ambient || this.fullscreen ? html`<button id="exit-view" type="button" @click=${()=>void this.exitView()}>${this.options.ambient ? "Exit ambient" : "Exit fullscreen"}</button>` : nothing}
       <button class="ambient-toggle" type="button" @click=${()=>{this.controlsVisible=!this.controlsVisible;this.toggleAttribute("show-controls",this.controlsVisible);}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
       </div>
-      <h2>Your home, live</h2>
+      <h2>${this.room ? this.model.groups.find(g=>g.id===this.room)?.label ?? "Room preview" : "Your home, live"}</h2>
       <p class="muted">Room color shows activity from blue (0) to red (5). Ceiling glow shows your lights.</p>
       <div class="toolbar">
         <label>Floor or building <select id="scope" .value=${this.scope} @change=${(event: Event) => {
@@ -268,6 +279,7 @@ export class AlFloorplanViewer extends LitElement {
       <div class="viewer">
         <div class="viewport" aria-describedby="floorplan-help">
           <div id="scene"></div>
+          ${!this.room && (this.hovered || this.selected) ? html`<al-room-hud .room=${this.model.parts.find(p=>p.id===(this.hovered || this.selected))} .live=${this.live} .telemetry=${this.telemetry} .hass=${this.hass} .now=${this.now} @al-dismiss-hud=${()=>{this.selected="";this.hovered="";}}></al-room-hud>` : nothing}
           ${!parts.length && !this.config?.site?.features.length ? html`<div class="overlay"><p>${this.model.groups.length ?
             "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>` :
             this.error ? html`<div class="overlay"><p role="alert">${this.error}</p>

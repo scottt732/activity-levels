@@ -610,6 +610,25 @@ Connection status and unavailable lights are identified separately in the readin
 Selection and alerts emphasize the otherwise quiet room outlines. Floors and other
 containers remain faint outlines.
 
+**Room devices** opens a focused 3D editor for motion sensors, occupancy sensors, and
+lights. Link a Home Assistant entity, set its position and height above the room floor,
+then aim it with direction/tilt controls. Enable placement mode to click a position in
+3D; numeric coordinates also work with a keyboard. Add the placement to the draft,
+then use the panel's **Save**. Placements move and rotate with their building.
+Placement does not add an activity input: configure those in group settings.
+
+Sensor coverage is an approximate adjustable cone. Range 0 hides it until you specify
+coverage; walls do not clip it. Markers show on/off/unavailable state. With activity
+focus enabled, a sensor turning on can move the camera toward its configured coverage;
+this illustrates the detection area, not a tracked person's path. Reduced motion and
+manual camera interaction suppress automatic movement.
+
+Hover or select a room for a corner HUD showing activity, last activity, estimated
+people (with Home Assistant person portraits when available), estimated devices, and
+placed device states. The idle-by forecast assumes no further input; sustained activity
+shows **Held by ongoing input** instead. Forecasts use a copy of the activity engine and
+can be conservative for mixed inputs. Stale telemetry hides forecasts and estimates.
+
 **Viewer settings** offers Standard, Night and Security schemes, fill brightness,
 slow orbit, activity focus, ambient layout, fullscreen, and an advanced JSON editor.
 Panel settings are saved in this browser for this integration; importing a floorplan does

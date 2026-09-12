@@ -418,3 +418,50 @@ async def test_light_exclusion_save_updates_floorplan_without_reload(hass, hass_
     response = await client.receive_json()
     assert response["success"]
     assert response["result"]["lights"]["kitchen"] == []
+
+
+async def test_floorplan_dashboard_projects_fixtures_and_conditional_idle(
+    hass, hass_ws_client, entry
+):
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    options = deepcopy(dict(entry.options))
+    options["groups"][0]["fixtures"] = [
+        {"entity": "binary_sensor.front_door", "kind": "motion", "position": [1, 2, 3]}
+    ]
+    hass.config_entries.async_update_entry(entry, options=options)
+    await hass.async_block_till_done()
+    now = entry.runtime_data.coordinator.now()
+    presence = SimpleNamespace(
+        payload=lambda: {
+            "people": {
+                "Alex": {
+                    "room": "house",
+                    "moving": False,
+                    "t": now,
+                    "confidence": 0.9,
+                    "person": "person.alex",
+                    "devices": {
+                        "phone": {
+                            "room": "house",
+                            "name": "Phone",
+                            "tracker": "device_tracker.phone",
+                            "confidence": 0.8,
+                        }
+                    },
+                }
+            }
+        }
+    )
+    client = await hass_ws_client(hass)
+    with patch.object(entry.runtime_data, "presence", presence):
+        await client.send_json_auto_id({"type": "activity_levels/floorplan/dashboard"})
+        response = await client.receive_json()
+    result = response["result"]
+    assert result["config"]["groups"][0]["fixtures"][0]["entity"] == "binary_sensor.front_door"
+    room = result["telemetry"]["rooms"]["house"]
+    assert room["idle_by"] == result["telemetry"]["now"]
+    assert room["people"][0]["entity"] == "person.alex"
+    assert room["devices"][0]["name"] == "Phone"

@@ -30,7 +30,7 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import SCHEMA_NAME
 from .duration import parse_duration
-from .geometry import MAX_POINTS, bounds, coordinate, points
+from .geometry import FIXTURE_SCHEMA, MAX_POINTS, bounds, coordinate, fixtures, points, position
 from .schema import (
     ADJACENT_SCHEMA,
     CONFIG_SCHEMA,
@@ -84,6 +84,7 @@ _STRING: JsonSchema = {"type": "string"}
 #: composite whose meaning is clearer stated than derived.
 _LEAVES: dict[Any, JsonSchema] = {
     coordinate: {"type": "number"},
+    position: {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}},
     bounds: {
         "type": "array",
         "minItems": 2,
@@ -303,6 +304,10 @@ def _object(mapping: dict[Any, Any]) -> JsonSchema:
 
 def _translate(validator: Any) -> JsonSchema:
     """One voluptuous validator as one JSON Schema."""
+    if isinstance(validator, vol.Match):
+        return {"type": "string", "pattern": validator.pattern.pattern}
+    if validator is fixtures:
+        return {"type": "array", "maxItems": 128, "items": _translate(FIXTURE_SCHEMA)}
     if validator is None:
         return {"type": "null"}
     if isinstance(validator, vol.Schema):
