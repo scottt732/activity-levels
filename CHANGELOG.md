@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.0](https://github.com/scottt732/activity-levels/compare/v0.19.0...v0.20.0) (2026-09-12)
+
+
+### Added
+
+* **panel:** add Bosch Blue Line Gen2 sensor profiles ([#55](https://github.com/scottt732/activity-levels/issues/55)) ([20e1584](https://github.com/scottt732/activity-levels/commit/20e15841769976345db7b9b8bbf757858960a40b))
+* **panel:** add split room editor and window placements ([#56](https://github.com/scottt732/activity-levels/issues/56)) ([fd1cd98](https://github.com/scottt732/activity-levels/commit/fd1cd98a16f9bd62b2707c7bb9c4197baaebe738))
+
 ## [0.19.0](https://github.com/scottt732/activity-levels/compare/v0.18.0...v0.19.0) (2026-09-12)
 
 
