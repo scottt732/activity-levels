@@ -58,17 +58,43 @@ it("defaults to HA feet without moving geometry and saves a snapped exterior doo
   document.body.append(el);await el.updateComplete;
   [...el.shadowRoot!.querySelectorAll("button")].find(b=>b.textContent==="Add door")!.click();await el.updateComplete;
   const width=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
-  expect(Number(width.value)).toBeCloseTo(.9/.3048,3);
-  width.value="3";width.dispatchEvent(new Event("input"));await el.updateComplete;
+  expect(width.value).toBe('2\'11.4331"');
+  width.value="3";width.dispatchEvent(new Event("change"));await el.updateComplete;
   for(const [label,value] of [["Opening type","exterior_door"],["Door hinge","right"],["Door swing","out"]]){
     const select=el.shadowRoot!.querySelector<HTMLSelectElement>(`[aria-label="${label}"]`)!;
     select.value=value!;select.dispatchEvent(new Event("change"));await el.updateComplete;
   }
   el.shadowRoot!.querySelector("al-room-plan")!.dispatchEvent(new CustomEvent("al-opening-position",{detail:[4,2,0]}));await el.updateComplete;
   const units=el.shadowRoot!.querySelector<HTMLSelectElement>("#length-unit")!;units.value="m";units.dispatchEvent(new Event("change"));await el.updateComplete;
-  expect(Number(width.value)).toBeCloseTo(.9144);
+  expect(Number(el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!.value)).toBeCloseTo(.9144);
   const changed=vi.fn();el.addEventListener("al-change",changed);
   el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();
   expect(changed.mock.calls[0]![0].detail.groups[0].openings[0]).toMatchObject({kind:"exterior_door",width:.9144000000000001,hinge:"right",swing:"out",position:[4,2,0]});
   expect(config.groups[0]!.openings).toBeUndefined();
+});
+
+it("keeps partial imperial input out of geometry and refuses invalid lengths",async()=>{
+  const el=new AlRoomDeviceEditor();el.room="room";const config=roomsConfig();
+  config.groups=[{...newGroup("room","area"),bounds:[[0,0,0],[4,4,3]]}];el.config=config;
+  el.hass={config:{unit_system:{length:"mi"}},states:{},callWS:vi.fn().mockResolvedValue([])} as unknown as HomeAssistant;
+  document.body.append(el);await el.updateComplete;
+  [...el.shadowRoot!.querySelectorAll("button")].find(b=>b.textContent==="Add door")!.click();await el.updateComplete;
+  const width=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
+  const changed=vi.fn();el.addEventListener("al-change",changed);
+  width.value="2'6";width.dispatchEvent(new Event("input"));await el.updateComplete;
+  expect(width.value).toBe("2'6");expect(width.validity.valid).toBe(false);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();expect(changed).not.toHaveBeenCalled();
+  for(const text of ["2'6\"",'30"',"2.5"]){
+    width.value=text;width.dispatchEvent(new Event("input"));width.dispatchEvent(new Event("change"));await el.updateComplete;
+    expect(width.value).toBe("2'6\"");expect(width.validity.valid).toBe(true);
+    el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();
+    expect(changed.mock.calls.at(-1)![0].detail.groups[0].openings[0].width).toBeCloseTo(.762);
+  }
+  width.value='-30"';width.dispatchEvent(new Event("change"));await el.updateComplete;
+  expect(width.validity.valid).toBe(false);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();expect(changed).toHaveBeenCalledTimes(3);
+  const units=el.shadowRoot!.querySelector<HTMLSelectElement>("#length-unit")!;
+  units.value="m";units.dispatchEvent(new Event("change"));await el.updateComplete;
+  const metric=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
+  expect(metric.validity.valid).toBe(true);expect(Number(metric.value)).toBeCloseTo(.762);
 });

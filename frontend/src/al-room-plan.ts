@@ -14,7 +14,7 @@ export class AlRoomPlan extends LitElement {
     svg.aiming { cursor:crosshair; border-color:#ffcd69; box-shadow:0 0 0 2px #ffcd69; }
     .outline { fill:#2b536177; stroke:#8ed9ea; stroke-width:2; vector-effect:non-scaling-stroke; }
     .marker { fill:#8ed9ea; stroke:#102330; stroke-width:2; vector-effect:non-scaling-stroke; cursor:grab; }
-    .selected { fill:#ffcd69; } .marker:focus { stroke:white; outline:none; }
+    .selected { fill:#ffcd69; } .marker:focus, .opening-marker:focus { stroke:white; stroke-width:2; vector-effect:non-scaling-stroke; outline:none; }
     .coverage { fill:#ffcd6929; stroke:#ffcd6988; vector-effect:non-scaling-stroke; }
     .aim { stroke:#ffcd69; stroke-width:2; vector-effect:non-scaling-stroke; }
     p { color:var(--secondary-text-color); font-size:13px; } .error { color:var(--error-color,#f77); }
@@ -83,7 +83,7 @@ export class AlRoomPlan extends LitElement {
         return svg`<g><line x1=${shape.hinge[0]} y1=${-shape.hinge[1]} x2=${shape.closed[0]} y2=${-shape.closed[1]} stroke="#102330" stroke-width="8" vector-effect="non-scaling-stroke"/>
           <line x1=${shape.hinge[0]} y1=${-shape.hinge[1]} x2=${o.kind==="open_wall"?shape.closed[0]:end[0]} y2=${-(o.kind==="open_wall"?shape.closed[1]:end[1])} stroke="#87eac8" stroke-width="3" stroke-dasharray=${o.kind==="open_wall"?"4 4":"none"} vector-effect="non-scaling-stroke"/>
           ${o.kind!=="open_wall"?svg`<polyline points=${arc} fill="none" stroke="#87eac8" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`:nothing}
-          ${g.id===group.id?svg`<circle cx=${o.position[0]} cy=${-o.position[1]} r=${radius} fill=${o.id===this.opening?.id?"#ffcd69":"#87eac8"} role="button" tabindex=${this.disabled?-1:0} aria-label=${`Select ${o.name || o.kind}`} @pointerdown=${(e:PointerEvent)=>{if(this.disabled)return;e.stopPropagation();this.emit("al-opening-select",o.id);this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}} @click=${(e:Event)=>{e.stopPropagation();if(!this.disabled)this.emit("al-opening-select",o.id);}} @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-opening-select",o.id);}}}/>`:nothing}</g>`;
+          ${g.id===group.id?svg`<circle class="opening-marker" cx=${o.position[0]} cy=${-o.position[1]} r=${radius} fill=${o.id===this.opening?.id?"#ffcd69":"#87eac8"} role="button" tabindex=${this.disabled?-1:0} aria-label=${`Select ${o.name || o.kind}`} @pointerdown=${(e:PointerEvent)=>{if(this.disabled)return;e.stopPropagation();this.emit("al-opening-select",o.id);this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}} @click=${(e:Event)=>{e.stopPropagation();if(!this.disabled)this.emit("al-opening-select",o.id);}} @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-opening-select",o.id);}}}/>`:nothing}</g>`;
       })}
       ${fixtures.filter(item=>item.position.every(Number.isFinite)).map(item=>svg`<g>
         ${item.kind==="window"?svg`<line class="window" stroke=${fixtureAppearance(item.kind,this.hass?.states[item.entity]?.state).color} stroke-width="7" vector-effect="non-scaling-stroke"

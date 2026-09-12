@@ -984,7 +984,10 @@ live view and use its **Place devices & windows** button. Select a
 sensor or light from the room's device list, click inside the outline to place it, or
 drag a marker to move it. **Aim** updates direction continuously while pressing and dragging. A radial control
 also adjusts direction and tilt with touch, mouse, or keyboard. Measurements default to
-Home Assistant’s unit system; choose meters or feet without changing stored geometry.
+Home Assistant’s unit system; choose meters or feet and inches without changing stored
+geometry. Imperial fields accept `2'6"`, `30"`, or decimal feet such as `2.5` (all the
+same length), plus fractional inches such as `2'6 1/2"`. Finish editing a field to apply
+it; invalid or incomplete lengths cannot be saved.
 Height is measured above the room floor; **Adjust characteristics and precise position** provides
 keyboard-friendly coordinates, tilt, range and field of view. The adjacent 3D preview
 shows the same placement and neighboring rooms on the same level, centered on the

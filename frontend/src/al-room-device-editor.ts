@@ -1,12 +1,13 @@
 import { LitElement, css, html, nothing } from "lit";
 import type { PropertyValues } from "lit";
+import { keyed } from "lit/directives/keyed.js";
 import { customElement, property, state } from "lit/decorators.js";
 import { alChange } from "./events";
 import { walkGroups } from "./model";
 import { newFixture, saveFixture, snapWindow } from "./room-fixtures";
 import { applyProfile, matchesProfile, parseProfiles, roomCandidates } from "./sensor-profiles";
 import {newOpening,saveOpening,snapOpening} from "./room-openings";
-import {defaultLengthUnit,fromMeters,toMeters} from "./measurement-units";
+import {defaultLengthUnit,formatLengthInput,parseLength} from "./measurement-units";
 import type {LengthUnit} from "./measurement-units";
 import "./al-orientation-control";
 import { SENSOR_CATALOG } from "./sensor-catalog";
@@ -61,7 +62,21 @@ export class AlRoomDeviceEditor extends LitElement {
   private preview?:Config;
   private previewError="";
   private get unit():LengthUnit{return this.unitChoice==="auto"?defaultLengthUnit(this.hass):this.unitChoice;}
-  private length(value:number):string{return String(Number(fromMeters(value,this.unit).toFixed(4)));}
+  private length(value:number):string{return formatLengthInput(value,this.unit);}
+  private validLengths():boolean {
+    const invalid=this.renderRoot.querySelector<HTMLInputElement>('input[data-length]:invalid');
+    if(invalid){invalid.reportValidity();return false;}return true;
+  }
+  private lengthInput(label:string,value:number,apply:(meters:number)=>void,min=-Infinity,max=Infinity,id="",field="") {
+    const validate=(input:HTMLInputElement)=>{
+      const meters=parseLength(input.value,this.unit);
+      input.setCustomValidity(meters===null ? 'Enter a length, such as 2.5, 2′6″, or 30″.' : meters<min || meters>max ? 'Length is outside the allowed range.' : '');
+      return meters;
+    };
+    return keyed(JSON.stringify([this.room,this.fixture.entity,this.opening?.id,this.unit]),html`<input type="text" data-length aria-label=${label} id=${id} data-field=${field} .value=${this.length(value)}
+      @input=${(e:Event)=>validate(e.target as HTMLInputElement)}
+      @change=${(e:Event)=>{const input=e.target as HTMLInputElement,meters=validate(input);if(input.reportValidity() && meters!==null){apply(meters);input.value=this.length(meters);}}}>`);
+  }
   private get group() { return this.config && walkGroups(this.config).find(e=>e.group.id===this.room)?.group; }
   private get candidates() {return this.config?roomCandidates(this.config,this.room,this.registry,this.hass,this.live):[];}
   private get profiles() {return [...(this.config?.sensor_profiles ?? []),...SENSOR_CATALOG];}
@@ -119,7 +134,7 @@ export class AlRoomDeviceEditor extends LitElement {
   }
   private patch(patch:Partial<RoomFixture>):void {if(!this.disabled){this.fixture={...this.fixture,...patch};this.error="";this.notice="";}}
   private save():void {
-    if(!this.config || this.disabled)return;
+    if(!this.config || this.disabled || !this.validLengths())return;
     try {this.dispatchEvent(alChange(saveFixture(this.config,this.room,this.fixture,this.original)));this.original=this.fixture.entity;this.notice="Placement added to draft. Use Save in the panel to persist it.";this.error="";}
     catch(error){this.error=(error as Error).message;}
   }
@@ -160,8 +175,8 @@ export class AlRoomDeviceEditor extends LitElement {
   }
   private numeric(key:"yaw"|"pitch"|"fov"|"vertical_fov"|"range"|"width"|"height",label:string,min:number,max:number) {
     const length=["range","width","height"].includes(key),value=this.fixture[key] ?? (key==="height"?1.2:1);
-    return html`<label>${length?label.replace("(m",`(${this.unit}`):label}<input type="number" data-field=${key} min=${length?fromMeters(min,this.unit):min} max=${length?fromMeters(max,this.unit):max} step="any" .value=${length?this.length(value):String(value)}
-      @input=${(e:Event)=>{const v=(e.target as HTMLInputElement).valueAsNumber;this.patch({[key]:length?toMeters(v,this.unit):v});}}></label>`;
+    const title=length?label.replace("(m",`(${this.unit}`):label;
+    return html`<label>${title}${length?this.lengthInput(title,value,v=>this.patch({[key]:v}),min,max,"",key):html`<input type="number" data-field=${key} min=${min} max=${max} step="any" .value=${String(value)} @input=${(e:Event)=>this.patch({[key]:(e.target as HTMLInputElement).valueAsNumber})}>`}</label>`;
   }
   private editOpening(value?:RoomOpening,kind:RoomOpening["kind"]="interior_door"):void {
     if(this.disabled || !this.group?.bounds)return;
@@ -173,7 +188,7 @@ export class AlRoomDeviceEditor extends LitElement {
   }
   private patchOpening(patch:Partial<RoomOpening>):void {if(this.opening && !this.disabled){this.opening={...this.opening,...patch};this.error="";}}
   private saveDoor():void {
-    if(!this.config || !this.opening || this.disabled)return;
+    if(!this.config || !this.opening || this.disabled || !this.validLengths())return;
     try{this.dispatchEvent(alChange(saveOpening(this.config,this.room,this.opening,this.originalOpening)));this.originalOpening=this.opening.id;this.notice="Opening added to draft. Use the panel's Save to persist it.";this.error="";}
     catch(error){this.error=(error as Error).message;}
   }
@@ -182,8 +197,8 @@ export class AlRoomDeviceEditor extends LitElement {
     return html`<h3>${o.kind==="open_wall"?"Open wall":"Door"}</h3>
       <label>Name<input aria-label="Opening name" .value=${o.name} @input=${(e:Event)=>this.patchOpening({name:(e.target as HTMLInputElement).value})}></label>
       <label>Opening type<select aria-label="Opening type" .value=${o.kind} @change=${(e:Event)=>this.patchOpening({kind:(e.target as HTMLSelectElement).value as RoomOpening["kind"]})}>${["interior_door","exterior_door","open_wall"].map(kind=>html`<option value=${kind} .selected=${o.kind===kind}>${kind.replaceAll("_"," ")}</option>`)}</select></label>
-      ${(["width","height"] as const).map(key=>html`<label>${key} (${this.unit})<input aria-label=${`Opening ${key}`} type="number" step="any" .value=${this.length(o[key])} @input=${(e:Event)=>this.patchOpening({[key]:toMeters((e.target as HTMLInputElement).valueAsNumber,this.unit)})}></label>`)}
-      <label>Bottom above floor (${this.unit})<input aria-label="Opening elevation" type="number" step="any" .value=${this.length(o.position[2]-(this.group?.bounds?.[0][2] ?? 0))} @input=${(e:Event)=>this.patchOpening({position:[o.position[0],o.position[1],(this.group?.bounds?.[0][2] ?? 0)+toMeters((e.target as HTMLInputElement).valueAsNumber,this.unit)]})}></label>
+      ${(["width","height"] as const).map(key=>html`<label>${key} (${this.unit})${this.lengthInput(`Opening ${key}`,o[key],v=>this.patchOpening({[key]:v}),.1,20)}</label>`)}
+      <label>Bottom above floor (${this.unit})${this.lengthInput("Opening elevation",o.position[2]-(this.group?.bounds?.[0][2] ?? 0),v=>this.patchOpening({position:[o.position[0],o.position[1],(this.group?.bounds?.[0][2] ?? 0)+v]}),0)}</label>
       ${o.kind!=="open_wall"?html`<p class="muted">Hinge left/right is viewed from inside this room facing the doorway.</p>
         <label>Hinge<select aria-label="Door hinge" .value=${o.hinge} @change=${(e:Event)=>this.patchOpening({hinge:(e.target as HTMLSelectElement).value as RoomOpening["hinge"]})}>${["left","right"].map(v=>html`<option .selected=${o.hinge===v} value=${v}>${v}</option>`)}</select></label>
         <label>Swing<select aria-label="Door swing" .value=${o.swing} @change=${(e:Event)=>this.patchOpening({swing:(e.target as HTMLSelectElement).value as RoomOpening["swing"]})}>${["in","out"].map(v=>html`<option .selected=${o.swing===v} value=${v}>${v}</option>`)}</select></label>
@@ -204,7 +219,8 @@ export class AlRoomDeviceEditor extends LitElement {
     const suggestions=device?this.profiles.filter(p=>matchesProfile(p,device)):[];
     const profile=this.profiles.find(p=>p.id===this.profile);
     return html`<fieldset ?disabled=${this.disabled}>
-      <label>Measurements<select id="length-unit" .value=${this.unitChoice} @change=${(e:Event)=>{this.unitChoice=(e.target as HTMLSelectElement).value as "auto"|LengthUnit;}}><option value="auto" .selected=${this.unitChoice==="auto"}>Home Assistant (${defaultLengthUnit(this.hass)})</option><option value="m" .selected=${this.unitChoice==="m"}>Meters</option><option value="ft" .selected=${this.unitChoice==="ft"}>Feet</option></select></label>
+      <label>Measurements<select id="length-unit" .value=${this.unitChoice} @change=${(e:Event)=>{this.unitChoice=(e.target as HTMLSelectElement).value as "auto"|LengthUnit;}}><option value="auto" .selected=${this.unitChoice==="auto"}>Home Assistant (${defaultLengthUnit(this.hass)})</option><option value="m" .selected=${this.unitChoice==="m"}>Meters</option><option value="ft" .selected=${this.unitChoice==="ft"}>Feet & inches</option></select></label>
+      ${this.unit==="ft"?html`<p class="muted">Enter feet and inches (2′6″), inches (30″), or decimal feet (2.5).</p>`:nothing}
       <label>Room<select id="device-room" .value=${this.room} @change=${(e:Event)=>{this.room=(e.target as HTMLSelectElement).value;this.reset();}}>
         <option value="">Choose a room</option>${rooms.map(e=>html`<option value=${e.group.id} .selected=${e.group.id===this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
       ${b?html`<div class="workspace">
@@ -233,8 +249,7 @@ export class AlRoomDeviceEditor extends LitElement {
         ${device?html`<p class="muted">${[device.manufacturer,device.model,device.platform].filter(Boolean).join(" · ")}</p>`:nothing}
       ${this.fixture.entity?html`<h3>${this.fixture.name || this.fixture.entity}</h3>
         ${this.fixture.kind==="window"?html`<p class="muted">Click near a wall to snap the window onto it. Red = open; blue = closed; gray = unavailable.</p><div class="fields">${this.numeric("width","Window width (m)",0.1,20)}${this.numeric("height","Window height (m)",0.1,20)}</div>`:nothing}
-        <div class="fields"><label>${this.fixture.kind==="window"?`Window center above floor (${this.unit})`:`Height above floor (${this.unit})`}<input id="fixture-height" type="number" min="0" max=${fromMeters(b[1][2]-b[0][2],this.unit)} step="any" .value=${this.length(this.fixture.position[2]-b[0][2])}
-          @input=${(e:Event)=>this.patch({position:[this.fixture.position[0],this.fixture.position[1],b[0][2]+toMeters((e.target as HTMLInputElement).valueAsNumber,this.unit)]})}></label>
+        <div class="fields"><label>${this.fixture.kind==="window"?`Window center above floor (${this.unit})`:`Height above floor (${this.unit})`}${this.lengthInput("Height above floor",this.fixture.position[2]-b[0][2],v=>this.patch({position:[this.fixture.position[0],this.fixture.position[1],b[0][2]+v]}),0,b[1][2]-b[0][2],"fixture-height")}</label>
           <label>Sensor model profile<select id="sensor-profile" .value=${this.profile} @change=${(e:Event)=>{this.profile=(e.target as HTMLSelectElement).value;}}>
             <option value="">Choose a profile</option>${this.profiles.filter(p=>(p.kind==="light")===this.fixture.entity.startsWith("light.") && (p.kind==="window")===(this.fixture.kind==="window")).map(p=>html`<option value=${p.id} .selected=${p.id===this.profile}>${suggestions.includes(p)?"Suggested · ":""}${p.name}</option>`)}</select></label>
           <button type="button" ?disabled=${!profile} @click=${()=>this.useProfile()}>Apply profile</button></div>
@@ -247,7 +262,7 @@ export class AlRoomDeviceEditor extends LitElement {
           <label>Label<input maxlength="100" .value=${this.fixture.name} @input=${(e:Event)=>this.patch({name:(e.target as HTMLInputElement).value})}></label>
           <label>Mount<input maxlength="60" .value=${this.fixture.mount} @input=${(e:Event)=>this.patch({mount:(e.target as HTMLInputElement).value})}></label>
           <label>Model / technology<input maxlength="60" .value=${this.fixture.technology} @input=${(e:Event)=>this.patch({technology:(e.target as HTMLInputElement).value})}></label>
-          ${([0,1] as const).map(i=>html`<label>${i===0?"X":"Y"} (${this.unit})<input type="number" step="any" .value=${this.length(this.fixture.position[i])} @input=${(e:Event)=>{const p=[...this.fixture.position] as [number,number,number];p[i]=toMeters((e.target as HTMLInputElement).valueAsNumber,this.unit);this.patch({position:p});}}></label>`)}
+          ${([0,1] as const).map(i=>html`<label>${i===0?"X":"Y"} (${this.unit})${this.lengthInput(i===0?"X":"Y",this.fixture.position[i],v=>{const p=[...this.fixture.position] as [number,number,number];p[i]=v;this.patch({position:p});})}</label>`)}
           ${this.numeric("yaw","Direction (°)",-360,360)}${this.numeric("pitch","Tilt (°)",-90,90)}
           ${(this.fixture.kind==="motion" || this.fixture.kind==="occupancy")?html`${this.numeric("fov","Horizontal view (°)",1,170)}${this.numeric("vertical_fov","Vertical view (°)",1,170)}${this.numeric("range","Range (m; 0 = hidden)",0,100)}`:nothing}
         </div><p class="muted">Coverage is approximate and clipped by solid room boundaries. The top-down sector illustrates horizontal coverage; use 3D to inspect tilt.</p>
