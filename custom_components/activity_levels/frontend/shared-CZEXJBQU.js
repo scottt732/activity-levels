@@ -1385,7 +1385,7 @@ var pt = [
 		let e = ++this.sequence;
 		this.loading = !0;
 		try {
-			let { FloorplanRenderer: t } = await import("./shared-CmeQ9Q3T.js");
+			let { FloorplanRenderer: t } = await import("./shared-Bc3pg8z_.js");
 			if (e !== this.sequence || !this.isConnected) return;
 			let n = this.renderRoot.querySelector("#scene");
 			this.renderer = new t(n, (e) => {
