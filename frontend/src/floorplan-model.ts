@@ -1,9 +1,9 @@
 import type { Kind } from "./kinds";
-import type { Bounds, GroupLive, Path } from "./types";
+import type { Bounds, GroupLive, Path, SiteLayout } from "./types";
 
 export interface ActivityFrame { now: number; groups: Record<string, Pick<GroupLive,"value" | "max_value"> & Partial<Pick<GroupLive,"last_activity">>> }
 export interface FloorplanNode { id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[] }
-export interface FloorplanConfig { groups: FloorplanNode[] }
+export interface FloorplanConfig { site?: SiteLayout; groups: FloorplanNode[] }
 
 export interface FloorplanGroup {
   id: string;

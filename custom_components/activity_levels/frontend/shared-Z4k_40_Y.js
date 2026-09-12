@@ -1365,7 +1365,7 @@ var pt = [
 		if (!this.isConnected) return;
 		e.has("settings") && this.options.ambient && !e.get("settings")?.ambient && this.renderRoot.querySelector("#exit-view")?.focus({ preventScroll: !0 });
 		let t = q(this.model.parts, this.scope);
-		if (!t.length) {
+		if (!t.length && !this.config?.site?.features.length) {
 			this.stopRenderer();
 			return;
 		}
@@ -1375,24 +1375,24 @@ var pt = [
 			});
 			return;
 		}
-		(e.has("config") || e.has("scope") || this.groundZ !== this.options.ground_z) && (this.renderer?.setParts(t, this.options.ground_z), this.groundZ = this.options.ground_z), this.updateAppearance();
+		(e.has("config") || e.has("scope") || this.groundZ !== this.options.ground_z) && (this.renderer?.setParts(t, this.options.ground_z, this.config?.site), this.groundZ = this.options.ground_z), this.updateAppearance();
 	}
 	stopRenderer() {
 		this.sequence++, this.renderer?.dispose(), this.renderer = void 0, this.loading = !1;
 	}
 	async startRenderer() {
-		if (!this.isConnected || this.renderer || this.loading || this.error || !q(this.model.parts, this.scope).length) return;
+		if (!this.isConnected || this.renderer || this.loading || this.error || !q(this.model.parts, this.scope).length && !this.config?.site?.features.length) return;
 		let e = ++this.sequence;
 		this.loading = !0;
 		try {
-			let { FloorplanRenderer: t } = await import("./shared-Bc3pg8z_.js");
+			let { FloorplanRenderer: t } = await import("./shared-CULDY-3p.js");
 			if (e !== this.sequence || !this.isConnected) return;
 			let n = this.renderRoot.querySelector("#scene");
 			this.renderer = new t(n, (e) => {
 				this.selected = e;
 			}, (e) => {
 				this.stopRenderer(), this.error = e;
-			}), this.renderer.setParts(q(this.model.parts, this.scope), this.options.ground_z), this.groundZ = this.options.ground_z, this.updateAppearance();
+			}), this.renderer.setParts(q(this.model.parts, this.scope), this.options.ground_z, this.config?.site), this.groundZ = this.options.ground_z, this.updateAppearance();
 		} catch {
 			e === this.sequence && (this.renderer?.dispose(), this.renderer = void 0, this.renderRoot.querySelector("#scene")?.replaceChildren(), this.error = "The 3D view could not start. WebGL may be unavailable. Use the group list or retry.");
 		} finally {
@@ -1526,12 +1526,12 @@ var pt = [
       <div class="viewer">
         <div class="viewport" aria-describedby="floorplan-help">
           <div id="scene"></div>
-          ${e.length ? this.error ? j`<div class="overlay"><p role="alert">${this.error}</p>
+          ${!e.length && !this.config?.site?.features.length ? j`<div class="overlay"><p>${this.model.groups.length ? "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>` : this.error ? j`<div class="overlay"><p role="alert">${this.error}</p>
               <button id="retry" type="button" @click=${() => {
 			this.error = "";
-		}}>Retry 3D view</button></div>` : this.loading ? j`<div class="overlay"><p role="status">Loading 3D view…</p></div>` : N : j`<div class="overlay"><p>${this.model.groups.length ? "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>`}
+		}}>Retry 3D view</button></div>` : this.loading ? j`<div class="overlay"><p role="status">Loading 3D view…</p></div>` : N}
           ${e.length && !this.error ? j`<div class="legend">${this.options.color_thresholds.map((e) => j`<span style=${`color:${e.color};margin-right:12px`}>● ${e.value}</span>`)} · no fill = unknown
-            <br>${this.options.ground_z === void 0 ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z} m`}</div>` : N}
+            <br>${(this.options.ground_z ?? this.config?.site?.ground_z) === void 0 ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z ?? this.config?.site?.ground_z} m`}</div>` : N}
         </div>
         <aside aria-label="Floorplan groups">
           <div class="groups" aria-label="Select a group">

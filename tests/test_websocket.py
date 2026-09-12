@@ -360,6 +360,22 @@ async def test_floorplan_dashboard_is_read_only(
     assert "defaults" not in data["config"]
 
 
+async def test_floorplan_dashboard_includes_site_geometry(hass, hass_ws_client, entry):
+    site = {
+        "ground_z": 12.8,
+        "features": [
+            {"name": "Driveway", "kind": "driveway", "points": [[0, 0], [10, 0], [10, 4]]}
+        ],
+    }
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "site": site})
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/floorplan/dashboard"})
+    response = await client.receive_json()
+    assert response["result"]["config"]["site"] == site
+    assert "gps" not in response["result"]["config"]
+
+
 async def test_floorplan_dashboard_reports_unloaded(hass, hass_ws_client, entry):
     await hass.config_entries.async_unload(entry.entry_id)
     client = await hass_ws_client(hass)

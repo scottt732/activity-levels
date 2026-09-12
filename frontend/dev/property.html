@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,"><title>Property layout preview</title>
+<style>body{font:16px system-ui;background:#172631;color:#e4edf3;max-width:1200px;margin:24px auto;--primary-text-color:#e4edf3;--card-background-color:#263d4c;--divider-color:#526674;--primary-color:#69c8e0;--secondary-text-color:#9fb2bf}input,textarea,select,button{background:#263d4c;color:#e4edf3;border:1px solid #526674;border-radius:4px;padding:6px}a{color:#69c8e0}</style>
+<h1>Property layout · sample geometry</h1><p>Local preview. Changes here are temporary. Map tiles load only after Load map.</p>
+<al-property-layout></al-property-layout><al-floorplan-viewer></al-floorplan-viewer>
+<script type="module">
+import '../src/al-property-layout.ts';
+import '../src/al-floorplan-viewer.ts';
+import {newGroup} from '../src/model.ts';
+import {roomsConfig} from '../test/fixtures.ts';
+let config=roomsConfig();
+config.gps={latitude:40.7128,longitude:-74.006,rotation:0};
+config.groups=[{...newGroup('house','structure'),name:'House',bounds:[[0,0,0],[12,9,5]],children:[
+ {...newGroup('living','area'),name:'Living',bounds:[[0,0,0],[6,9,2.5]]},
+ {...newGroup('kitchen','area'),name:'Kitchen',bounds:[[6,0,0],[12,9,2.5]]}]},
+ {...newGroup('garage','structure'),name:'Garage',bounds:[[-12,2,0],[-6,8,3]],children:[]}];
+config.site={ground_z:0,features:[{name:'Property',kind:'property',points:[[-20,-5],[18,-5],[18,18],[-12,18]]},
+ {name:'Driveway',kind:'driveway',points:[[-12,-5],[-6,-5],[-6,2],[-12,2]]}]};
+const editor=document.querySelector('al-property-layout'), viewer=document.querySelector('al-floorplan-viewer');
+editor.hass={callWS:async()=>({latitude:40.7128,longitude:-74.006,elevation:10})};
+function update(){editor.config=config;viewer.config=config;viewer.live={now:Date.now()/1000,groups:{living:{value:0,max_value:5},kitchen:{value:3,max_value:5}}};}
+editor.addEventListener('al-change',e=>{config=e.detail;update();});update();setInterval(update,2000);
+</script></html>
