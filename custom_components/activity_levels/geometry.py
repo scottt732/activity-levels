@@ -102,6 +102,7 @@ def position(value: Any) -> list[float]:
 
 FIXTURE_SCHEMA = vol.Schema(
     {
+        vol.Optional("profile_id"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Required("entity"): vol.Match(r"^(binary_sensor|light)\.[a-z0-9_]+$"),
         vol.Required("kind"): vol.In(["motion", "occupancy", "light"]),
         vol.Optional("name", default=""): vol.All(str, vol.Length(max=100)),
@@ -131,3 +132,23 @@ def fixtures(value: Any) -> list[dict[str, Any]]:
             raise vol.Invalid("an entity can only be placed once per room")
         entities.add(item["entity"])
     return result
+
+
+SENSOR_PROFILE_SCHEMA = vol.Schema(
+    {
+        vol.Required("id"): vol.All(str, vol.Length(min=1, max=100)),
+        vol.Required("name"): vol.All(str, vol.Length(min=1, max=100)),
+        vol.Required("kind"): vol.In(["motion", "occupancy", "light"]),
+        vol.Required("fov"): vol.All(coordinate, vol.Range(min=1, max=170)),
+        vol.Required("vertical_fov"): vol.All(coordinate, vol.Range(min=1, max=170)),
+        vol.Required("range"): vol.All(coordinate, vol.Range(min=0, max=100)),
+        vol.Optional("technology", default=""): vol.All(str, vol.Length(max=60)),
+        vol.Optional("mount", default=""): vol.All(str, vol.Length(max=60)),
+        vol.Optional("notes", default=""): vol.All(str, vol.Length(max=2000)),
+        vol.Optional("source", default=""): vol.All(str, vol.Length(max=500)),
+        vol.Optional("match", default=dict): {
+            vol.Optional(key): vol.All(str, vol.Length(min=1, max=200))
+            for key in ("manufacturer", "model", "platform", "device_class", "entity_name")
+        },
+    }
+)

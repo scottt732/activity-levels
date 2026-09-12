@@ -974,3 +974,35 @@ vector tile endpoint cannot be used in the raster tile field.
 
 For a standalone preview with sample structures, run the frontend dev server and open
 `/dev/property.html`. Edits in that fixture are temporary and do not touch Home Assistant.
+
+### Visual room placement and sensor models
+
+In **Floorplans → Room devices**, choose a room to open its top-down outline. Select a
+sensor or light from the room's device list, click inside the outline to place it, or
+drag a marker to move it. **Aim** sets direction with a second click. Height stays in
+metres above the room floor; **Adjust characteristics and precise position** provides
+keyboard-friendly coordinates, tilt, range and field of view. The optional 3D preview
+shows the same placement. Add the placement to the draft, then use the panel's **Save**.
+
+The list includes devices in the room's Home Assistant area, explicit activity inputs
+in the room's subtree, and saved placements. Entity area assignments override their
+device's area. A room without an area may inherit its ancestor's area; otherwise only
+explicit inputs and saved placements appear. Activity inputs sort first, then inputs
+contributing now, then recent entity state changes. State-change recency is not a
+motion detection history. Refresh the list after changing registry area assignments.
+
+Save coverage and model information once as a **personal model profile**, then apply it
+to other devices. Profiles copy characteristics, not installation coordinates or aim.
+Manufacturer/model and entity-role hints can suggest a profile; applying it is explicit.
+Profiles persist in your integration configuration, and JSON import/export supports
+sharing. Import updates existing personal profiles with matching ids. No profiles are
+uploaded automatically. Inspect identification hints before sharing them.
+
+The bundled community catalog starts with SCREEK 2A identification guidance, sourced from
+[its firmware](https://github.com/screekworkshop/screek-human-sensor/blob/main/2a/yaml/human-sensor-2a-stable-github.yaml).
+Its coverage remains unspecified until configured. To contribute a model, submit a PR
+adding an entry to `frontend/src/sensor-catalog.ts`: include a stable `community:` id,
+a source for measured/specification values, and conservative identification hints.
+Manufacturer/model/platform matches are literal (case-insensitive); `entity_name` is a
+literal substring of the original entity name. Suggestions require a model plus a
+manufacturer or platform. Do not infer a unique model from generic ESPHome board data.

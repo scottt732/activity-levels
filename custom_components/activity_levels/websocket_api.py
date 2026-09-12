@@ -8,6 +8,8 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
 from .coordinator import ActivityLevelsCoordinator
@@ -49,6 +51,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_config_save)
     websocket_api.async_register_command(hass, ws_floorplan_parse)
     websocket_api.async_register_command(hass, ws_floorplan_dashboard)
+    websocket_api.async_register_command(hass, ws_floorplan_devices)
     websocket_api.async_register_command(hass, ws_state)
     websocket_api.async_register_command(hass, ws_profile_get)
     websocket_api.async_register_command(hass, ws_profile_save)
@@ -702,3 +705,34 @@ def ws_floorplan_dashboard(
             },
         },
     )
+
+
+@callback
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/floorplan/devices"})
+def ws_floorplan_devices(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Minimal registry metadata for room membership and explicit profile suggestions."""
+    devices = dr.async_get(hass)
+    entities = er.async_get(hass)
+    rows = []
+    for entity in entities.entities.values():
+        if entity.domain not in ("binary_sensor", "light") or entity.disabled_by is not None:
+            continue
+        device = devices.devices.get(entity.device_id) if entity.device_id else None
+        state = hass.states.get(entity.entity_id)
+        rows.append(
+            {
+                "entity": entity.entity_id,
+                "area_id": entity.area_id or (device.area_id if device else None),
+                "manufacturer": device.manufacturer if device else None,
+                "model": device.model if device else None,
+                "platform": entity.platform,
+                "device_class": (state.attributes.get("device_class") if state else None)
+                or entity.device_class
+                or entity.original_device_class,
+                "entity_name": entity.original_name or "",
+            }
+        )
+    connection.send_result(msg["id"], rows)

@@ -9,7 +9,7 @@
 <script type="module">
 import '../src/al-floorplan-viewer.ts';
 import '../src/al-room-device-editor.ts';
-import {newGroup} from '../src/model.ts';
+import {newGroup,newStimulus} from '../src/model.ts';
 import {newFixture} from '../src/room-fixtures.ts';
 import {roomsConfig} from '../test/fixtures.ts';
 let config=roomsConfig();
@@ -22,7 +22,13 @@ config.groups=[{...newGroup('house','structure'),name:'House',bounds:[[0,0,0],[1
 let motion=false,last=Date.now()/1000;
 const states={};
 for(const [entity,state] of [['binary_sensor.corner','off'],['binary_sensor.occupancy','on'],['light.living','on']])states[entity]={entity_id:entity,state,attributes:{brightness:180,rgb_color:[255,220,170]},last_changed:new Date().toISOString()};
-const hass={states,callWS:async()=>({})};
+const registry=[
+ {entity:'binary_sensor.corner',area_id:'living',manufacturer:'Sample maker',model:'PIR A',platform:'zwave_js',device_class:'motion',entity_name:'Motion'},
+ {entity:'binary_sensor.occupancy',area_id:'office',manufacturer:'SCREEK',model:'Human Sensor 2A',platform:'esphome',device_class:'occupancy',entity_name:'Any Presence'},
+ {entity:'light.living',area_id:'living',manufacturer:null,model:null,platform:'demo',device_class:null,entity_name:'Ceiling light'},
+ {entity:'binary_sensor.wall',area_id:'living',manufacturer:'Sample maker',model:'PIR A',platform:'zwave_js',device_class:'motion',entity_name:'Motion'}];
+config.groups[0].children[0].stimuli=[newStimulus('binary_sensor.corner')];config.groups[0].children[0].area_id='living';config.groups[0].children[1].area_id='office';
+const hass={states,callWS:async()=>registry};
 const viewer=document.querySelector('al-floorplan-viewer'),editor=document.querySelector('al-room-device-editor');
 viewer.settings={focus_activity:true};viewer.lights={living:['light.living']};
 function update(){const now=Date.now()/1000;viewer.config=config;editor.config=config;viewer.hass={...hass};editor.hass={...hass};viewer.live={now,groups:{living:{value:motion?3.7:0,max_value:5,last_activity:last},office:{value:1.4,max_value:5,last_activity:now-30}}};viewer.telemetry={now,rooms:{living:{idle_by:motion?now+95:now,people:motion?[{name:'Alex',entity:null,confidence:.88,t:now}]:[],devices:motion?[{name:'Phone',entity:null,confidence:.82}]:[]},office:{idle_by:null,people:[{name:'Sam',entity:null,confidence:.92,t:now}],devices:[{name:'Watch',entity:null,confidence:.86}]}}};}

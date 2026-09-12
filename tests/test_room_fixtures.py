@@ -42,3 +42,28 @@ def test_entity_uniqueness_and_kind():
     with pytest.raises(vol.Invalid):
         fixtures([fixture(), fixture()])
     assert fixtures([fixture(entity="light.ceiling", kind="light")])[0]["kind"] == "light"
+
+
+def test_personal_profiles_round_trip_and_reject_duplicate_ids():
+    from custom_components.activity_levels.schema import ConfigError
+
+    config = house_config()
+    profile = {
+        "id": "personal:motion",
+        "name": "My PIR",
+        "kind": "motion",
+        "fov": 100,
+        "vertical_fov": 40,
+        "range": 5,
+        "match": {"manufacturer": "Acme", "model": "PIR"},
+    }
+    config["sensor_profiles"] = [profile]
+    normalized = validate_config(config)
+    assert validate_config(normalized) == normalized
+    assert normalized["sensor_profiles"][0]["match"]["model"] == "PIR"
+    config["sensor_profiles"] = [profile, profile]
+    with pytest.raises(ConfigError, match="duplicate profile id"):
+        validate_config(config)
+    config["sensor_profiles"] = [{**profile, "range": -1}]
+    with pytest.raises(ConfigError):
+        validate_config(config)

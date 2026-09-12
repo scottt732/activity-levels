@@ -64,7 +64,7 @@ export class AlFloorplans extends LitElement {
       ${this.error || this.preferenceError ? html`<p role="status">${this.error || this.preferenceError}</p>` : nothing}
       <al-floorplan-viewer .config=${this.config} .live=${this.live} .hass=${this.hass} .lights=${this.lights}
         .telemetry=${this.error ? undefined : this.telemetry} .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
-      <details><summary>Room devices</summary><al-room-device-editor .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor></details>
+      <details><summary>Room devices</summary><al-room-device-editor .live=${this.live} .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor></details>
       <details><summary>Property layout</summary><al-property-layout .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-property-layout></details>
       <details .open=${!hasGeometry}><summary>Import or update floorplan</summary>
         <al-floorplan-import .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-floorplan-import>
