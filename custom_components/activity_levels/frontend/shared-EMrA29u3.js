@@ -1,4 +1,4 @@
-import { a as e, h as t, i as n, m as r, n as i, o as a, r as o, s } from "./shared-C_PXtA-U.js";
+import { a as e, g as t, h as n, i as r, n as i, o as a, r as o, s } from "./shared-DmvPhSzT.js";
 import { n as c } from "./shared-IIYdNIav.js";
 import { F as l, G as u, H as d, I as f, K as p, N as m, P as h, Sn as g, T as _, Ut as v, V as y, Wt as b, _ as x, cn as S, d as C, et as w, i as T, in as E, k as D, l as O, nt as k, o as A, on as j, r as M, rn as N, rt as P, sn as F, tn as ee, tt as I, w as L, x as R, xn as z } from "./shared-DVWk8t-w.js";
 import { t as te } from "./shared-mmljZPXC.js";
@@ -467,8 +467,8 @@ function pe() {
 	return t.magFilter = t.minFilter = f, t.needsUpdate = !0, t;
 }
 var me = class {
-	constructor(e, t, r, i, a) {
-		this.host = e, this.select = t, this.fail = r, this.hover = i, this.place = a, this.scene = new ee(), this.camera = new w(38, 1, .01, 1e3), this.raycaster = new b(), this.volumes = [], this.boundsKey = "", this.origin = new g(), this.markers = [], this.coverageRooms = [], this.doors = [], this.siteMeshes = [], this.radius = 1, this.options = n(), this.lastTick = 0, this.pauseUntil = 0, this.focusUntil = 0, this.focusDistance = 0, this.focusEvents = /* @__PURE__ */ new Map(), this.alertKey = "", this.lastSelected = "", this.lastFocus = 0, this.reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)"), this.disposed = !1, this.lost = !1, this.pointer = null, this.resize = () => {
+	constructor(e, t, n, i, a) {
+		this.host = e, this.select = t, this.fail = n, this.hover = i, this.place = a, this.scene = new ee(), this.camera = new w(38, 1, .01, 1e3), this.raycaster = new b(), this.volumes = [], this.boundsKey = "", this.origin = new g(), this.markers = [], this.coverageRooms = [], this.doors = [], this.siteMeshes = [], this.radius = 1, this.options = r(), this.lastTick = 0, this.pauseUntil = 0, this.focusUntil = 0, this.focusDistance = 0, this.focusEvents = /* @__PURE__ */ new Map(), this.alertKey = "", this.lastSelected = "", this.lastFocus = 0, this.reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)"), this.disposed = !1, this.lost = !1, this.pointer = null, this.resize = () => {
 			if (this.disposed) return;
 			let e = Math.max(1, this.host.clientWidth), t = Math.max(1, this.host.clientHeight);
 			this.camera.aspect = e / t, this.camera.updateProjectionMatrix(), this.renderer.setSize(e, t, !1), this.draw();
@@ -698,7 +698,7 @@ var me = class {
 			depthWrite: !1
 		})), this.ground.rotation.x = -Math.PI / 2, this.ground.position.y = this.grid.position.y, this.scene.add(this.ground)), this.grid.material.transparent = !0, this.grid.material.opacity = .14, this.scene.add(this.grid), this.camera.near = Math.max(this.radius / 1e3, .001), this.camera.far = this.radius * 100, this.controls.minDistance = this.radius * .1, this.controls.maxDistance = this.radius * 30, c ? (this.cameraAction("reset"), this.pauseUntil = 0) : this.draw();
 	}
-	setActivity(t, l, u, d = n(), f = {}, p, m = {}) {
+	setActivity(t, l, u, d = r(), f = {}, p, m = {}) {
 		u !== this.lastSelected && (this.pauseMotion(), this.lastSelected = u), this.options = d, d.focus_activity || (this.focusTarget = void 0);
 		for (let n of this.volumes) {
 			let { part: r, edges: i, liquid: a, ceiling: s, wash: c } = n, m = e(t, r.id, l), h = r.id === u || r.ancestors.includes(u), g = p && (!p.group || r.id === p.group || r.ancestors.includes(p.group));
@@ -740,7 +740,7 @@ var me = class {
 			let e = x ?? y.mesh.geometry.boundingBox;
 			this.focusTarget = e.getCenter(new g()), this.focusDistance = Math.min(this.fitDistance(), Math.max(e.getSize(new g()).length() * 2, this.radius)), this.focusUntil = Date.now() + 8e3, this.lastFocus = l;
 		}
-		let S = JSON.stringify(this.coverageRooms.flatMap((e) => (e.openings ?? []).map((e) => r(e, m))));
+		let S = JSON.stringify(this.coverageRooms.flatMap((e) => (e.openings ?? []).map((e) => n(e, m))));
 		for (let e of this.doors) this.updateDoor(e, m);
 		let C;
 		for (let e of this.markers) {
@@ -769,8 +769,8 @@ var me = class {
 		}
 		this.scheduleMotion(), this.draw();
 	}
-	updateDoor(e, n) {
-		let i = r(e.opening, n);
+	updateDoor(e, r) {
+		let i = n(e.opening, r);
 		if (e.key === i) return;
 		e.key = i;
 		let a = e.part, o = e.opening, s = {

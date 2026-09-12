@@ -4,7 +4,7 @@ import { keyed } from "lit/directives/keyed.js";
 import { customElement, property, state } from "lit/decorators.js";
 import { alChange } from "./events";
 import { walkGroups } from "./model";
-import { newFixture, saveFixture, snapWindow } from "./room-fixtures";
+import { newFixture, saveFixture, snapWindow, initialFixturePosition, insideRoom } from "./room-fixtures";
 import { applyProfile, matchesProfile, parseProfiles, roomCandidates } from "./sensor-profiles";
 import {newOpening,saveOpening,snapOpening} from "./room-openings";
 import {defaultLengthUnit,formatLengthInput,parseLength} from "./measurement-units";
@@ -42,6 +42,7 @@ export class AlRoomDeviceEditor extends LitElement {
   @property({type:Boolean}) disabled=false;
   @property({type:String}) room="";
   @state() private unitChoice:"auto"|LengthUnit="auto";
+  @state() private addKind:RoomFixture["kind"]|""="";
   @state() private opening?:RoomOpening;
   @state() private originalOpening?:string;
   @state() private fixture=newFixture();
@@ -107,8 +108,8 @@ export class AlRoomDeviceEditor extends LitElement {
     finally {if(sequence===this.sequence)this.loading=false;}
   }
   private reset():void {
-    const b=this.group?.bounds;
-    this.fixture={...newFixture(),position:b ? [(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,b[0][2]+Math.min(1.5,b[1][2]-b[0][2])] : [0,0,0]};
+    this.addKind="";
+    this.fixture={...newFixture(),position:this.group?initialFixturePosition(this.group):[0,0,0]};
     this.opening=undefined;this.originalOpening=undefined;this.original=undefined;this.error="";this.notice="";this.mode="place";this.profile="";this.profileName="";this.search="";
   }
   private select(entity:string):void {
@@ -119,8 +120,8 @@ export class AlRoomDeviceEditor extends LitElement {
     if(saved){this.fixture=structuredClone(saved);this.original=entity;this.profile=saved.profile_id ?? "";}
     else {
       const candidate=this.candidates.find(d=>d.entity===entity);if(!candidate)return;
-      const position=this.fixture.position;
-      const kind=entity.startsWith("light.")?"light":candidate.device_class==="window" || candidate.device_class==="opening"?"window":candidate.device_class==="occupancy" || candidate.device_class==="presence"?"occupancy":"motion";
+      const position=this.group?initialFixturePosition(this.group):[0,0,0] as [number,number,number];
+      const kind=this.addKind || (entity.startsWith("light.")?"light":candidate.device_class==="window" || candidate.device_class==="opening"?"window":candidate.device_class==="occupancy" || candidate.device_class==="presence"?"occupancy":"motion");
       this.fixture={...newFixture(entity,kind),position,name:candidate.name};this.original=undefined;
       this.profile="";
     }
@@ -130,7 +131,7 @@ export class AlRoomDeviceEditor extends LitElement {
       const matches=candidate?this.profiles.filter(p=>(p.kind==="light")===(this.fixture.kind==="light") && matchesProfile(p,candidate)):[];
       this.profile=matches.length===1?matches[0]!.id:"";
     }
-    this.error="";this.notice="";this.profileName="";this.mode="place";
+    this.addKind="";this.error="";this.notice="";this.profileName="";this.mode="place";
   }
   private patch(patch:Partial<RoomFixture>):void {if(!this.disabled){this.fixture={...this.fixture,...patch};this.error="";this.notice="";}}
   private save():void {
@@ -180,7 +181,7 @@ export class AlRoomDeviceEditor extends LitElement {
   }
   private editOpening(value?:RoomOpening,kind:RoomOpening["kind"]="interior_door"):void {
     if(this.disabled || !this.group?.bounds)return;
-    this.fixture=newFixture();this.original=undefined;this.mode="place";this.error="";
+    this.addKind="";this.fixture=newFixture();this.original=undefined;this.mode="place";this.error="";
     const b=this.group.bounds;
     const opening=value?structuredClone(value):newOpening(kind);
     if(!value)Object.assign(opening,snapOpening(this.group,[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,b[0][2]],opening.width));
@@ -214,7 +215,7 @@ export class AlRoomDeviceEditor extends LitElement {
     const group=this.group,b=group?.bounds;
     const contextGroups=this.preview?walkGroups(this.preview).map(e=>e.group).filter(g=>g.bounds && !["property","structure","floor"].includes(g.kind) && (!b || (g.bounds[0][2]<b[1][2]-0.01 && g.bounds[1][2]>b[0][2]+0.01))):[];
     const previewGroup=contextGroups.find(g=>g.id===this.room) ?? group;
-    const candidates=this.candidates.filter(d=>`${d.name} ${d.entity}`.toLowerCase().includes(this.search.toLowerCase()));
+    const candidates=this.candidates.filter(d=>(!this.addKind || (!d.placed && (this.addKind==="light")===d.entity.startsWith("light.")))).filter(d=>`${d.name} ${d.entity}`.toLowerCase().includes(this.search.toLowerCase()));
     const device=this.candidates.find(d=>d.entity===this.fixture.entity);
     const suggestions=device?this.profiles.filter(p=>matchesProfile(p,device)):[];
     const profile=this.profiles.find(p=>p.id===this.profile);
@@ -235,19 +236,25 @@ export class AlRoomDeviceEditor extends LitElement {
           @al-opening-select=${(e:CustomEvent<string>)=>{const opening=group?.openings?.find(o=>o.id===e.detail);if(opening)this.editOpening(opening);}}
           @al-fixture-select=${(e:CustomEvent<string>)=>this.select(e.detail)}></al-room-plan>
       </div></div><div class="editor-controls"><h3>Room editor</h3>
-        <button id="new-door" type="button" @click=${()=>this.editOpening()}>Add door</button><button id="new-open-wall" type="button" @click=${()=>this.editOpening(undefined,"open_wall")}>Add open wall</button>
-        ${(group?.openings ?? []).map(o=>html`<button type="button" class="device" @click=${()=>this.editOpening(o)}>${o.name || o.kind.replaceAll("_"," ")}</button>`)}
-        ${this.openingControl()}<h3>Devices & windows</h3>
+        <h3>Devices & windows</h3>
+        <details class="add-menu"><summary>Add…</summary>
+          <button id="new-door" type="button" @click=${()=>this.editOpening()}>Add door</button><button id="new-open-wall" type="button" @click=${()=>this.editOpening(undefined,"open_wall")}>Add open wall</button>
+          ${(["window","motion","occupancy","light"] as const).map(kind=>html`<button type="button" data-add-kind=${kind} @click=${()=>{this.reset();this.addKind=kind;}}>Add ${kind==="motion"?"motion sensor":kind==="occupancy"?"occupancy sensor":kind}</button>`)}
+        </details>
+        ${this.addKind?html`<p>Choose a room entity for the new ${this.addKind} placement.</p><button @click=${()=>{this.addKind="";}}>Show all devices</button>`:nothing}
+        ${!this.addKind?(group?.openings ?? []).map(o=>html`<button type="button" class="device" aria-pressed=${this.opening?.id===o.id} @click=${()=>this.editOpening(o)}>${o.name || o.kind.replaceAll("_"," ")}<small>${o.kind.replaceAll("_"," ")}</small></button>`):nothing}
         <input aria-label="Find room device" placeholder="Find a sensor or light…" .value=${this.search} @input=${(e:Event)=>{this.search=(e.target as HTMLInputElement).value;}}>
         <p class="muted">Activity inputs first, then contributing now, then most recently changed.</p>
         <div class="devices">${candidates.map(d=>html`<button type="button" class="device" data-entity=${d.entity} aria-pressed=${this.fixture.entity===d.entity} @click=${()=>this.select(d.entity)}>
-          ${d.name}<small>${d.entity}</small><small>${d.contributing?"Contributing now":d.input?"Activity input":"Room device"}${d.placed?" · placed":""} · ${this.hass?.states[d.entity]?.state ?? "unavailable"}</small>
+          ${d.name}<small>${group?.fixtures?.find(f=>f.entity===d.entity)?.kind ?? d.device_class ?? "device"} · ${d.entity}</small><small>${d.contributing?"Contributing now":d.input?"Activity input":"Room device"}${d.placed?" · placed":""} · ${this.hass?.states[d.entity]?.state ?? "unavailable"}</small>
           ${d.changed?html`<small>Changed ${new Date(d.changed*1000).toLocaleString()}</small>`:nothing}</button>`)}</div>
         ${!candidates.length?html`<p class="muted">No matching devices. Assign devices to this room's HA area or configure its activity inputs. No whole-home fallback is used.</p>`:nothing}
         ${this.registryError?html`<p class="error" role="alert">${this.registryError}</p>`:nothing}
         <button type="button" ?disabled=${this.loading} @click=${()=>void this.loadDevices()}>${this.loading?"Loading devices…":"Refresh room devices"}</button>
+        ${this.openingControl()}
         ${device?html`<p class="muted">${[device.manufacturer,device.model,device.platform].filter(Boolean).join(" · ")}</p>`:nothing}
       ${this.fixture.entity?html`<h3>${this.fixture.name || this.fixture.entity}</h3>
+        ${!insideRoom(group!,this.fixture.position)?html`<p class="error">This saved placement is outside the room.</p><button type="button" @click=${()=>this.patch(this.fixture.kind==="window"?snapWindow(group!,initialFixturePosition(group!),this.fixture.width):{position:initialFixturePosition(group!)})}>Move into room</button>`:nothing}
         ${this.fixture.kind==="window"?html`<p class="muted">Click near a wall to snap the window onto it. Red = open; blue = closed; gray = unavailable.</p><div class="fields">${this.numeric("width","Window width (m)",0.1,20)}${this.numeric("height","Window height (m)",0.1,20)}</div>`:nothing}
         <div class="fields"><label>${this.fixture.kind==="window"?`Window center above floor (${this.unit})`:`Height above floor (${this.unit})`}${this.lengthInput("Height above floor",this.fixture.position[2]-b[0][2],v=>this.patch({position:[this.fixture.position[0],this.fixture.position[1],b[0][2]+v]}),0,b[1][2]-b[0][2],"fixture-height")}</label>
           <label>Sensor model profile<select id="sensor-profile" .value=${this.profile} @change=${(e:Event)=>{this.profile=(e.target as HTMLSelectElement).value;}}>

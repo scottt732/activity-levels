@@ -981,7 +981,11 @@ For a standalone preview with sample structures, run the frontend dev server and
 
 In **Floorplans → Place devices & windows**, choose a room, or select one in the
 live view and use its **Place devices & windows** button. Select a
-sensor or light from the room's device list, click inside the outline to place it, or
+sensor or light from the room's **Devices & windows** list. **Add…** offers doors, open
+walls, windows, motion sensors, occupancy sensors, and lights; choose a room entity
+for a sensor or light. New devices start inside the selected room, including its floor
+elevation. An out-of-room saved placement offers **Move into room** for recovery.
+Click inside the outline to place it, or
 drag a marker to move it. **Aim** updates direction continuously while pressing and dragging. A radial control
 also adjusts direction and tilt with touch, mouse, or keyboard. Measurements default to
 Home Assistant’s unit system; choose meters or feet and inches without changing stored

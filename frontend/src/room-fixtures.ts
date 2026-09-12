@@ -90,3 +90,20 @@ export function readFixture(value: unknown): RoomFixture | null {
   if([fixture.width,fixture.height].some(v=>v!==undefined && (typeof v!=="number" || !Number.isFinite(v) || v<0.1 || v>20)))return null;
   return fixture;
 }
+
+/** Pick an interior point even when a concave room's bounding-box center is outside. */
+export function initialFixturePosition(group: Pick<Group,"points"|"bounds">): [number,number,number] {
+  const b=group.bounds;if(!b)return [0,0,0];
+  const z=b[0][2]+Math.min(1.5,(b[1][2]-b[0][2])/2);
+  const center:[number,number,number]=[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,z];
+  if(insideRoom(group,center))return center;
+  const points=group.points ?? [],levels=[...new Set(points.map(p=>p[1]))].sort((a,b)=>a-b);
+  let best=center,span=0;
+  for(let j=1;j<levels.length;j++) {
+    const y=(levels[j-1]!+levels[j]!)/2,xs:number[]=[];
+    points.forEach((a,i)=>{const c=points[(i+1)%points.length]!;if((a[1]>y)!==(c[1]>y))xs.push(a[0]+(y-a[1])*(c[0]-a[0])/(c[1]-a[1]));});
+    xs.sort((a,b)=>a-b);
+    for(let i=0;i+1<xs.length;i+=2)if(xs[i+1]!-xs[i]!>span){span=xs[i+1]!-xs[i]!;best=[(xs[i]!+xs[i+1]!)/2,y,z];}
+  }
+  return best;
+}

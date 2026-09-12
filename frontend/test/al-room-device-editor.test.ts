@@ -98,3 +98,19 @@ it("keeps partial imperial input out of geometry and refuses invalid lengths",as
   const metric=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
   expect(metric.validity.valid).toBe(true);expect(Number(metric.value)).toBeCloseTo(.762);
 });
+
+it("starts a typed sensor inside the selected room after editing a door",async()=>{
+  const el=new AlRoomDeviceEditor();el.room="room";const config=roomsConfig();
+  config.groups=[{...newGroup("room","area"),area_id:"office",bounds:[[10,20,12],[14,24,15]]}];el.config=config;
+  el.hass={states:{},callWS:vi.fn().mockResolvedValue([{entity:"binary_sensor.motion",area_id:"office",device_class:"motion",entity_name:"Motion"}])} as unknown as HomeAssistant;
+  document.body.append(el);await el.updateComplete;await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#new-door")!.click();await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>('[data-add-kind="occupancy"]')!.click();await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>('[data-entity="binary_sensor.motion"]')!.click();await el.updateComplete;
+  const plan=el.shadowRoot!.querySelector("al-room-plan") as import("../src/al-room-plan").AlRoomPlan;
+  expect(plan.fixture!.kind).toBe("occupancy");expect(plan.fixture!.position).toEqual([12,22,13.5]);
+  plan.dispatchEvent(new CustomEvent("al-fixture-position",{detail:[10,24,13.5],bubbles:true}));await el.updateComplete;
+  const changed=vi.fn();el.addEventListener("al-change",changed);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-fixture")!.click();
+  expect(changed.mock.calls[0]![0].detail.groups[0].fixtures[0].position).toEqual([10,24,13.5]);
+});
