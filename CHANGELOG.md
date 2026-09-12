@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.0](https://github.com/scottt732/activity-levels/compare/v0.17.0...v0.18.0) (2026-09-12)
+
+
+### Added
+
+* **panel:** place room devices and add live floorplan HUD ([#52](https://github.com/scottt732/activity-levels/issues/52)) ([04dd499](https://github.com/scottt732/activity-levels/commit/04dd4993f9eed7a4aa54c4edec21354d9adb35d4))
+
+
+### Fixed
+
+* ship local branding and clean up README metadata ([#50](https://github.com/scottt732/activity-levels/issues/50)) ([9e5f6ea](https://github.com/scottt732/activity-levels/commit/9e5f6ea092fdf2159ae5d164a258e5eeb435ff7e))
+
 ## [0.17.0](https://github.com/scottt732/activity-levels/compare/v0.16.0...v0.17.0) (2026-09-12)
 
 
