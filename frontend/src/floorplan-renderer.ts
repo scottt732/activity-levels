@@ -28,6 +28,7 @@ interface Volume {
   ceiling?: Mesh<ShapeGeometry, MeshBasicMaterial>;
   wash?: Mesh<ExtrudeGeometry, MeshBasicMaterial>;
   targetColor: Color;
+  targetOpacity: number;
 }
 
 /** Surfaces follow the actual polygon, including concave rooms. */
@@ -155,13 +156,13 @@ export class FloorplanRenderer {
       if (part.container) mesh.material.opacity = 0;
       this.scene.add(mesh, edges);
       const floor = part.low - origin.y;
-      const volume: Volume = { part, mesh, edges, targetColor: new Color() };
+      const volume: Volume = { part, mesh, edges, targetColor: new Color(), targetOpacity: 0.015 };
       mesh.material.opacity = 0;
       if (!part.container) {
-        // Activity changes only the color of this fixed, full-height room volume.
+        // Activity changes the color and opacity of this fixed, full-height room volume.
         // The separate invisible mesh continues to own picking and camera bounds.
         volume.liquid = new Mesh(geometry.clone(), new MeshBasicMaterial({
-          transparent: true, opacity: 0.16, side: DoubleSide, depthWrite: false,
+          transparent: true, opacity: 0.015, side: DoubleSide, depthWrite: false,
         }));
         volume.ceiling = new Mesh(surfaceGeometry(part, origin), new MeshBasicMaterial({
           transparent: true, opacity: 0, side: DoubleSide, depthWrite: false,
@@ -232,9 +233,14 @@ export class FloorplanRenderer {
       const ratio = reading.status === "stale" ? 0 : reading.ratio;
       liquid.visible = ratio !== null;
       if (ratio !== null) {
-        volume.targetColor.set(thresholdColor(reading.status === "stale" ? 0 : reading.value!, options));
+        const value = reading.status === "stale" ? 0 : reading.value!;
+        volume.targetColor.set(thresholdColor(value, options));
+        // Use the absolute 0–5 activity scale, not the room maximum. Keep even
+        // the hottest rooms translucent so overlapping structures remain legible.
+        volume.targetOpacity = 0.015 + 0.225 * Math.min(1, Math.max(0, value / 5));
         if (!wasVisible || this.reduced?.matches) {
           liquid.material.color.copy(volume.targetColor);
+          liquid.material.opacity = volume.targetOpacity;
         }
         this.updateColor(volume, 0);
       }
@@ -282,14 +288,19 @@ export class FloorplanRenderer {
     if (!volume.liquid?.visible) return;
     const color = volume.liquid.material.color;
     color.lerp(volume.targetColor, blend);
-    if (!this.colorPending(volume)) color.copy(volume.targetColor);
+    volume.liquid.material.opacity += (volume.targetOpacity - volume.liquid.material.opacity) * blend;
+    if (!this.colorPending(volume)) {
+      color.copy(volume.targetColor);
+      volume.liquid.material.opacity = volume.targetOpacity;
+    }
   }
 
   private colorPending(volume: Volume): boolean {
     const color = volume.liquid?.material.color;
     return !!volume.liquid?.visible && !!color &&
       Math.abs(color.r - volume.targetColor.r) + Math.abs(color.g - volume.targetColor.g) +
-      Math.abs(color.b - volume.targetColor.b) > 0.001;
+      Math.abs(color.b - volume.targetColor.b) +
+      Math.abs(volume.liquid.material.opacity - volume.targetOpacity) > 0.001;
   }
 
   private colorChanging(): boolean {

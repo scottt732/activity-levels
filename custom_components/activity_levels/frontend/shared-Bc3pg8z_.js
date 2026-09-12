@@ -1,4 +1,4 @@
-import { i as e, n as t, r as n } from "./shared-9RI1PBRx.js";
+import { i as e, n as t, r as n } from "./shared-CZEXJBQU.js";
 import { $ as r, B as i, F as a, G as o, Ht as s, N as c, P as l, T as u, Ut as d, V as f, W as p, _ as m, an as h, bn as g, d as _, en as v, et as y, k as b, l as x, nn as S, nt as C, on as w, r as T, rn as E, tt as D, w as O, x as k, yn as A } from "./shared-D0-7sHnd.js";
 import { t as j } from "./shared-DHv2K68C.js";
 //#region node_modules/.pnpm/three@0.185.1/node_modules/three/examples/jsm/controls/OrbitControls.js
@@ -550,12 +550,13 @@ var ie = class {
 				part: t,
 				mesh: n,
 				edges: i,
-				targetColor: new x()
+				targetColor: new x(),
+				targetOpacity: .015
 			};
 			if (n.material.opacity = 0, !t.container) {
 				s.liquid = new p(e.clone(), new o({
 					transparent: !0,
-					opacity: .16,
+					opacity: .015,
 					side: 2,
 					depthWrite: !1
 				})), s.ceiling = new p(ne(t, r), new o({
@@ -598,7 +599,10 @@ var ie = class {
 			let { part: l, edges: u, liquid: d, ceiling: f, wash: p } = n, m = e(r, l.id, i), h = l.id === a || l.ancestors.includes(a), g = c && (!c.group || l.id === c.group || l.ancestors.includes(c.group));
 			if (u.material.color.set(g && c.color ? c.color : h ? "#d7e8f1" : "#8596a1"), u.material.opacity = h || g ? .9 : l.container ? .07 : .24, !d || !f || !p) continue;
 			let _ = d.visible, v = m.status === "stale" ? 0 : m.ratio;
-			d.visible = v !== null, v !== null && (n.targetColor.set(t(m.status === "stale" ? 0 : m.value, o)), (!_ || this.reduced?.matches) && d.material.color.copy(n.targetColor), this.updateColor(n, 0));
+			if (d.visible = v !== null, v !== null) {
+				let e = m.status === "stale" ? 0 : m.value;
+				n.targetColor.set(t(e, o)), n.targetOpacity = .015 + .225 * Math.min(1, Math.max(0, e / 5)), (!_ || this.reduced?.matches) && (d.material.color.copy(n.targetColor), d.material.opacity = n.targetOpacity), this.updateColor(n, 0);
+			}
 			let y = s[l.id], b = o.light_fill ? (y?.brightness ?? 0) * o.fill_brightness : 0;
 			f.material.color.setRGB(...y?.rgb ?? [
 				0,
@@ -636,11 +640,11 @@ var ie = class {
 	updateColor(e, t) {
 		if (!e.liquid?.visible) return;
 		let n = e.liquid.material.color;
-		n.lerp(e.targetColor, t), this.colorPending(e) || n.copy(e.targetColor);
+		n.lerp(e.targetColor, t), e.liquid.material.opacity += (e.targetOpacity - e.liquid.material.opacity) * t, this.colorPending(e) || (n.copy(e.targetColor), e.liquid.material.opacity = e.targetOpacity);
 	}
 	colorPending(e) {
 		let t = e.liquid?.material.color;
-		return !!e.liquid?.visible && !!t && Math.abs(t.r - e.targetColor.r) + Math.abs(t.g - e.targetColor.g) + Math.abs(t.b - e.targetColor.b) > .001;
+		return !!e.liquid?.visible && !!t && Math.abs(t.r - e.targetColor.r) + Math.abs(t.g - e.targetColor.g) + Math.abs(t.b - e.targetColor.b) + Math.abs(e.liquid.material.opacity - e.targetOpacity) > .001;
 	}
 	colorChanging() {
 		return this.volumes.some((e) => this.colorPending(e));

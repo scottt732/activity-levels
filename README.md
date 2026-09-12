@@ -590,11 +590,12 @@ wireframe. Drag to orbit, scroll to zoom, or use the camera buttons, **Top** and
 Choose a property, structure or floor to isolate its current descendants. Geometry keeps
 its imported coordinates; GPS and changes to the group hierarchy do not reposition it.
 
-Room activity colors a fixed floor-to-ceiling translucent volume. Only the color changes:
+Room activity colors a fixed floor-to-ceiling translucent volume. Color and opacity
+change with activity:
 the default continuous gradient runs from blue at 0 through cyan (1.25), yellow (2.5),
-orange (3.75) and red (5). Color follows absolute activity, with consistent opacity at
-all levels. Changes ease smoothly, unless reduced motion is requested. Activity stays
-visible independently of the lights.
+orange (3.75) and red (5). Color follows absolute activity, with opacity rising from
+1.5% at idle to a maximum of 24% at activity 5. Changes ease smoothly, unless reduced
+motion is requested. Activity stays visible independently of the lights.
 
 Ceilings glow with the actual colors and brightness of the room's lights, with a faint
 wash down the walls. Multiple lights blend by brightness; off lights contribute nothing.
