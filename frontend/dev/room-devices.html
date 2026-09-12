@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="data:,"><title>Room devices and HUD preview</title>
-<style>body{font:16px system-ui;background:#111f2a;color:#e1eef6;max-width:1280px;margin:24px auto;--primary-text-color:#e1eef6;--card-background-color:#223849;--divider-color:#486172;--primary-color:#74d5e9;--secondary-background-color:#304d60;--secondary-text-color:#abc0cd}button{font:inherit;background:#223849;color:#e1eef6;padding:10px;border:1px solid #486172;border-radius:6px}h1,p{margin-left:16px}details{margin:24px 16px}summary{cursor:pointer}</style>
-<h1>Room devices + live HUD</h1><p>Sample data only. Hover or select a room. Expand the editor below to place and aim devices.</p>
+<style>body{font:16px system-ui;background:#111f2a;color:#e1eef6;max-width:1900px;margin:24px auto;--primary-text-color:#e1eef6;--card-background-color:#223849;--divider-color:#486172;--primary-color:#74d5e9;--secondary-background-color:#304d60;--secondary-text-color:#abc0cd}button{font:inherit;background:#223849;color:#e1eef6;padding:10px;border:1px solid #486172;border-radius:6px}h1,p{margin-left:16px}details{margin:24px 16px}summary{cursor:pointer}</style>
+<h1>Room devices + live HUD</h1><p>Sample data only. Hover or select a room. Use the editor to place and aim devices.</p>
 <button id="trigger">Toggle living room motion</button>
 <al-floorplan-viewer></al-floorplan-viewer>
-<details><summary>Room device editor</summary><al-room-device-editor></al-room-device-editor></details>
+<details open><summary>Room device editor</summary><al-room-device-editor room="living"></al-room-device-editor></details>
 <script type="module">
 import '../src/al-floorplan-viewer.ts';
 import '../src/al-room-device-editor.ts';
@@ -16,13 +16,15 @@ let config=roomsConfig();
 config.groups=[{...newGroup('house','structure'),name:'House',bounds:[[0,0,0],[10,7,3]],children:[
  {...newGroup('living','area'),name:'Living room',bounds:[[0,0,0],[6,7,3]],fixtures:[
  {...newFixture('binary_sensor.corner'),name:'Corner motion',mount:'Corner',technology:'Z-Wave',position:[.15,.15,2.3],yaw:45,pitch:-15,fov:75,vertical_fov:45,range:4},
+ {...newFixture('binary_sensor.window','window'),name:'Window contact',position:[0,3.5,1.5],yaw:90,width:1.4,height:1.2},
  {...newFixture('light.living','light'),name:'Ceiling light',position:[3,3.5,2.95]}]},
  {...newGroup('office','area'),name:'Office',bounds:[[6,0,0],[10,7,3]],fixtures:[
  {...newFixture('binary_sensor.occupancy','occupancy'),name:'Desk occupancy',technology:'Screek 2A',position:[9.9,3.5,1.2],yaw:180,fov:70,vertical_fov:35,range:3}]}]}];
 let motion=false,last=Date.now()/1000;
 const states={};
-for(const [entity,state] of [['binary_sensor.corner','off'],['binary_sensor.occupancy','on'],['light.living','on']])states[entity]={entity_id:entity,state,attributes:{brightness:180,rgb_color:[255,220,170]},last_changed:new Date().toISOString()};
+for(const [entity,state] of [['binary_sensor.corner','off'],['binary_sensor.window','off'],['binary_sensor.occupancy','on'],['light.living','on']])states[entity]={entity_id:entity,state,attributes:{brightness:180,rgb_color:[255,220,170]},last_changed:new Date().toISOString()};
 const registry=[
+ {entity:"binary_sensor.window",area_id:"living",manufacturer:"Sample maker",model:"Contact",platform:"alarm_bridge",device_class:"window",entity_name:"Window contact"},
  {entity:'binary_sensor.corner',area_id:'living',manufacturer:'Sample maker',model:'PIR A',platform:'zwave_js',device_class:'motion',entity_name:'Motion'},
  {entity:'binary_sensor.occupancy',area_id:'office',manufacturer:'SCREEK',model:'Human Sensor 2A',platform:'esphome',device_class:'occupancy',entity_name:'Any Presence'},
  {entity:'light.living',area_id:'living',manufacturer:null,model:null,platform:'demo',device_class:null,entity_name:'Ceiling light'},
@@ -31,7 +33,7 @@ config.groups[0].children[0].stimuli=[newStimulus('binary_sensor.corner')];confi
 const hass={states,callWS:async()=>registry};
 const viewer=document.querySelector('al-floorplan-viewer'),editor=document.querySelector('al-room-device-editor');
 viewer.settings={focus_activity:true};viewer.lights={living:['light.living']};
-function update(){const now=Date.now()/1000;viewer.config=config;editor.config=config;viewer.hass={...hass};editor.hass={...hass};viewer.live={now,groups:{living:{value:motion?3.7:0,max_value:5,last_activity:last},office:{value:1.4,max_value:5,last_activity:now-30}}};viewer.telemetry={now,rooms:{living:{idle_by:motion?now+95:now,people:motion?[{name:'Alex',entity:null,confidence:.88,t:now}]:[],devices:motion?[{name:'Phone',entity:null,confidence:.82}]:[]},office:{idle_by:null,people:[{name:'Sam',entity:null,confidence:.92,t:now}],devices:[{name:'Watch',entity:null,confidence:.86}]}}};}
+function update(){const now=Date.now()/1000;viewer.config=config;editor.config=config;viewer.hass={...hass};editor.hass={...hass};viewer.live={now,groups:{living:{value:motion?3.7:0,max_value:5,last_activity:last},office:{value:1.4,max_value:5,last_activity:now-30}}};editor.live={...viewer.live,voices:{}};viewer.telemetry={now,rooms:{living:{idle_by:motion?now+95:now,people:motion?[{name:'Alex',entity:null,confidence:.88,t:now}]:[],devices:motion?[{name:'Phone',entity:null,confidence:.82}]:[]},office:{idle_by:null,people:[{name:'Sam',entity:null,confidence:.92,t:now}],devices:[{name:'Watch',entity:null,confidence:.86}]}}};}
 editor.addEventListener('al-change',e=>{config=e.detail;update();});
 document.querySelector('#trigger').onclick=()=>{motion=!motion;last=Date.now()/1000;states['binary_sensor.corner'].state=motion?'on':'off';states['binary_sensor.corner'].last_changed=new Date().toISOString();update();};
 update();setInterval(update,2000);

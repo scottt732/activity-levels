@@ -31,6 +31,8 @@ def test_placements_normalize_and_round_trip():
         {"vertical_fov": 0},
         {"range": -1},
         {"pitch": 91},
+        {"kind": "window", "width": 0},
+        {"kind": "window", "height": float("nan")},
     ],
 )
 def test_reject_invalid_placements(changes):
@@ -67,3 +69,16 @@ def test_personal_profiles_round_trip_and_reject_duplicate_ids():
     config["sensor_profiles"] = [{**profile, "range": -1}]
     with pytest.raises(ConfigError):
         validate_config(config)
+
+
+def test_window_contact_dimensions_round_trip():
+    source = house_config()
+    source["groups"][0]["fixtures"] = [
+        fixture(entity="binary_sensor.window", kind="window", width=1.4, height=1.2, yaw=90)
+    ]
+    config = validate_config(source)
+    window = config["groups"][0]["fixtures"][0]
+    assert window["kind"] == "window"
+    assert window["width"] == 1.4
+    assert window["height"] == 1.2
+    assert validate_config(config) == config

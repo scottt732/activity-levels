@@ -1,9 +1,9 @@
 import { LitElement, css, html, svg, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import type { Group, RoomFixture } from "./types";
+import type { Group, HomeAssistant, RoomFixture } from "./types";
 import { footprint } from "./property-layout";
-import { insideRoom } from "./room-fixtures";
+import { fixtureAppearance, insideRoom, snapWindow } from "./room-fixtures";
 
 @customElement("al-room-plan")
 export class AlRoomPlan extends LitElement {
@@ -16,6 +16,7 @@ export class AlRoomPlan extends LitElement {
     .aim { stroke:#ffcd69; stroke-width:2; vector-effect:non-scaling-stroke; }
     p { color:var(--secondary-text-color); font-size:13px; } .error { color:var(--error-color,#f77); }
   `;
+  @property({attribute:false}) hass?:HomeAssistant;
   @property({attribute:false}) group?:Group;
   @property({attribute:false}) fixture?:RoomFixture;
   @property({type:String}) mode:"place"|"aim"="place";
@@ -35,12 +36,13 @@ export class AlRoomPlan extends LitElement {
     if(this.disabled || !this.fixture?.entity || !this.group)return;
     const point=this.point(event);if(!point)return;
     this.error="";
-    if(this.mode==="aim" && this.drag===undefined) {
+    if(this.mode==="aim" && this.fixture.kind!=="window" && this.drag===undefined) {
       const [x,y]=this.fixture.position;
       if(Math.hypot(point[0]-x,point[1]-y)>.001)this.emit("al-fixture-aim",Math.atan2(point[1]-y,point[0]-x)*180/Math.PI);
       return;
     }
     const position:[number,number,number]=[Number(point[0].toFixed(3)),Number(point[1].toFixed(3)),this.fixture.position[2]];
+    if(this.fixture.kind==="window"){this.emit("al-fixture-position",snapWindow(this.group,position,this.fixture.width).position);return;}
     if(!insideRoom(this.group,position)){this.error="Choose a point inside the room outline.";return;}
     this.emit("al-fixture-position",position);
   }
@@ -51,9 +53,10 @@ export class AlRoomPlan extends LitElement {
     const fixtures=[...(group.fixtures ?? []).filter(f=>f.entity!==this.fixture?.entity),...(this.fixture?.entity?[this.fixture]:[])];
     const f=this.fixture;
     let coverage:TemplateResult|typeof nothing=nothing;
-    if(f?.entity && f.range>0 && f.kind!=="light" && Number.isFinite(f.yaw) && Number.isFinite(f.fov)) {
+    if(f?.entity && f.range>0 && (f.kind==="motion" || f.kind==="occupancy") && Number.isFinite(f.yaw) && Number.isFinite(f.fov)) {
       const arc=Array.from({length:25},(_,i)=>{const a=(f.yaw-f.fov/2+f.fov*i/24)*Math.PI/180;return `${f.position[0]+f.range*Math.cos(a)},${-f.position[1]-f.range*Math.sin(a)}`;});
-      coverage=svg`<polygon class="coverage" points=${`${f.position[0]},${-f.position[1]} ${arc.join(" ")}`} />`;
+      const appearance=fixtureAppearance(f.kind,this.hass?.states[f.entity]?.state);
+      coverage=svg`<polygon class="coverage" style=${`fill:${appearance.color};fill-opacity:${appearance.opacity};stroke:${appearance.color};stroke-dasharray:4 4`} points=${`${f.position[0]},${-f.position[1]} ${arc.join(" ")}`} />`;
     }
     return html`<svg viewBox=${`${b[0][0]-pad} ${-b[1][1]-pad} ${width+pad*2} ${height+pad*2}`} aria-label="Top-down room placement" role="group"
       @click=${(e:MouseEvent)=>{if(this.suppressClick){this.suppressClick=false;return;}this.place(e);}}
@@ -63,13 +66,16 @@ export class AlRoomPlan extends LitElement {
       <polygon class="outline" points=${points.map(([x,y])=>`${x},${-y}`).join(" ")} />
       ${coverage}
       ${fixtures.filter(item=>item.position.every(Number.isFinite)).map(item=>svg`<g>
+        ${item.kind==="window"?svg`<line class="window" stroke=${fixtureAppearance(item.kind,this.hass?.states[item.entity]?.state).color} stroke-width="7" vector-effect="non-scaling-stroke"
+          x1=${item.position[0]-(item.width ?? 1)/2*Math.cos(item.yaw*Math.PI/180)} y1=${-item.position[1]+(item.width ?? 1)/2*Math.sin(item.yaw*Math.PI/180)}
+          x2=${item.position[0]+(item.width ?? 1)/2*Math.cos(item.yaw*Math.PI/180)} y2=${-item.position[1]-(item.width ?? 1)/2*Math.sin(item.yaw*Math.PI/180)}/>`:nothing}
         <circle class=${`marker ${item.entity===f?.entity?"selected":""}`} cx=${item.position[0]} cy=${-item.position[1]} r=${radius} role="button" tabindex=${this.disabled?-1:0} aria-label=${`Select ${item.name || item.entity}`}
           @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.emit("al-fixture-select",item.entity);this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}}
           @click=${(e:Event)=>{e.stopPropagation();if(!this.disabled)this.emit("al-fixture-select",item.entity);}}
           @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-fixture-select",item.entity);}}}><title>${item.name || item.entity}</title></circle>
-        ${item.entity===f?.entity?svg`<line class="aim" x1=${item.position[0]} y1=${-item.position[1]} x2=${item.position[0]+radius*5*Math.cos(item.yaw*Math.PI/180)} y2=${-item.position[1]-radius*5*Math.sin(item.yaw*Math.PI/180)}/>`:nothing}
+        ${item.entity===f?.entity && item.kind!=="window"?svg`<line class="aim" x1=${item.position[0]} y1=${-item.position[1]} x2=${item.position[0]+radius*5*Math.cos(item.yaw*Math.PI/180)} y2=${-item.position[1]-radius*5*Math.sin(item.yaw*Math.PI/180)}/>`:nothing}
       </g>`)}
-    </svg><p>${this.fixture?.entity?(this.mode==="place"?"Click to place · drag a marker to move it · select Aim to set direction":"Click in the direction the sensor faces"):"Select a device to start placing it."} · Top = +Y</p>
+    </svg><p>${this.fixture?.entity?(this.fixture.kind==="window"?"Click near a wall to place a window · drag its marker to move it":this.mode==="place"?"Click to place · drag a marker to move it · select Aim to set direction":"Click in the direction the sensor faces"):"Select a device to start placing it."} · Top = +Y</p>
     ${this.error?html`<p class="error" role="alert">${this.error}</p>`:nothing}`;
   }
 }

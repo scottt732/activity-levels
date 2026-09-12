@@ -104,9 +104,11 @@ FIXTURE_SCHEMA = vol.Schema(
     {
         vol.Optional("profile_id"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Required("entity"): vol.Match(r"^(binary_sensor|light)\.[a-z0-9_]+$"),
-        vol.Required("kind"): vol.In(["motion", "occupancy", "light"]),
+        vol.Required("kind"): vol.In(["motion", "occupancy", "light", "window"]),
         vol.Optional("name", default=""): vol.All(str, vol.Length(max=100)),
         vol.Required("position"): position,
+        vol.Optional("width"): vol.All(coordinate, vol.Range(min=0.1, max=20)),
+        vol.Optional("height"): vol.All(coordinate, vol.Range(min=0.1, max=20)),
         vol.Optional("yaw", default=0): vol.All(coordinate, vol.Range(min=-360, max=360)),
         vol.Optional("pitch", default=0): vol.All(coordinate, vol.Range(min=-90, max=90)),
         vol.Optional("fov", default=60): vol.All(coordinate, vol.Range(min=1, max=170)),
@@ -126,7 +128,7 @@ def fixtures(value: Any) -> list[dict[str, Any]]:
         light = item["entity"].startswith("light.")
         if light != (item["kind"] == "light"):
             raise vol.Invalid(
-                "light entities need light type; binary sensors need motion/occupancy"
+                "light entities need light type; binary sensors need motion/occupancy/window"
             )
         if item["entity"] in entities:
             raise vol.Invalid("an entity can only be placed once per room")
@@ -138,7 +140,7 @@ SENSOR_PROFILE_SCHEMA = vol.Schema(
     {
         vol.Required("id"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Required("name"): vol.All(str, vol.Length(min=1, max=100)),
-        vol.Required("kind"): vol.In(["motion", "occupancy", "light"]),
+        vol.Required("kind"): vol.In(["motion", "occupancy", "light", "window"]),
         vol.Required("fov"): vol.All(coordinate, vol.Range(min=1, max=170)),
         vol.Required("vertical_fov"): vol.All(coordinate, vol.Range(min=1, max=170)),
         vol.Required("range"): vol.All(coordinate, vol.Range(min=0, max=100)),

@@ -610,15 +610,16 @@ Connection status and unavailable lights are identified separately in the readin
 Selection and alerts emphasize the otherwise quiet room outlines. Floors and other
 containers remain faint outlines.
 
-**Room devices** opens a focused 3D editor for motion sensors, occupancy sensors, and
-lights. Link a Home Assistant entity, set its position and height above the room floor,
-then aim it with direction/tilt controls. Enable placement mode to click a position in
-3D; numeric coordinates also work with a keyboard. Add the placement to the draft,
+**Place devices & windows** opens an editor with controls on the left, the room
+centered in the left half of the workspace, and its 2D outline on the right. Choose
+a Home Assistant entity and place it in the 2D plan; both views update together.
+Numeric coordinates, height, direction, and tilt also work with a keyboard. Add the placement to the draft,
 then use the panel's **Save**. Placements move and rotate with their building.
 Placement does not add an activity input: configure those in group settings.
 
 Sensor coverage is an approximate adjustable cone. Range 0 hides it until you specify
-coverage; walls do not clip it. Markers show on/off/unavailable state. With activity
+coverage; walls do not clip it. Dotted boundaries remain visible while idle, with no
+beam fill. Motion or occupancy turns the beam red; unavailable sensors stay gray. With activity
 focus enabled, a sensor turning on can move the camera toward its configured coverage;
 this illustrates the detection area, not a tracked person's path. Reduced motion and
 manual camera interaction suppress automatic movement.
@@ -977,12 +978,19 @@ For a standalone preview with sample structures, run the frontend dev server and
 
 ### Visual room placement and sensor models
 
-In **Floorplans → Room devices**, choose a room to open its top-down outline. Select a
+In **Floorplans → Place devices & windows**, choose a room, or select one in the
+live view and use its **Place devices & windows** button. Select a
 sensor or light from the room's device list, click inside the outline to place it, or
 drag a marker to move it. **Aim** sets direction with a second click. Height stays in
 metres above the room floor; **Adjust characteristics and precise position** provides
-keyboard-friendly coordinates, tilt, range and field of view. The optional 3D preview
-shows the same placement. Add the placement to the draft, then use the panel's **Save**.
+keyboard-friendly coordinates, tilt, range and field of view. The adjacent 3D preview
+shows the same placement; camera auto-focus and orbit are disabled while editing. Add the placement to the draft, then use the panel's **Save**.
+
+Window contacts use the **window** type (automatically suggested for HA window/opening
+sensors). Click near a wall to snap and align the window; set its width, height, and
+center above the floor. Windows show red when open, blue when closed, and gray when
+unavailable. They have no motion coverage cone. On smaller screens, controls and
+views stack vertically.
 
 The list includes devices in the room's Home Assistant area, explicit activity inputs
 in the room's subtree, and saved placements. Entity area assignments override their

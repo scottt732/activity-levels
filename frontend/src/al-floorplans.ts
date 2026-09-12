@@ -17,6 +17,7 @@ import type { Config, HomeAssistant, LiveState } from "./types";
 export class AlFloorplans extends LitElement {
   static styles = css`
     :host { display: block; }
+    button { font:inherit; color:var(--primary-text-color); background:var(--card-background-color); border:1px solid var(--divider-color,#888); border-radius:6px; padding:8px 12px; cursor:pointer; }
     details { margin: 0 16px 24px; border-top: 1px solid var(--divider-color, #aaa); }
     summary { cursor: pointer; padding: 16px 0; font-weight: 500; }
   `;
@@ -25,6 +26,8 @@ export class AlFloorplans extends LitElement {
   @property({ attribute: false }) live: LiveState | null = null;
   @property({ type: Boolean }) disabled = false;
 
+  @state() private editing=false;
+  @state() private editRoom="";
   @state() private telemetry?: FloorplanTelemetry;
   @state() private lights: Record<string,string[]> = {};
   @state() private settings: ViewerSettings = {};
@@ -62,9 +65,9 @@ export class AlFloorplans extends LitElement {
     const hasGeometry = walkGroups(this.config).some(({ group }) => group.bounds || group.points);
     return html`
       ${this.error || this.preferenceError ? html`<p role="status">${this.error || this.preferenceError}</p>` : nothing}
-      <al-floorplan-viewer .config=${this.config} .live=${this.live} .hass=${this.hass} .lights=${this.lights}
-        .telemetry=${this.error ? undefined : this.telemetry} .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
-      <details><summary>Room devices</summary><al-room-device-editor .live=${this.live} .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor></details>
+      <div style="margin:0 16px 12px"><button type="button" @click=${()=>{this.editing=!this.editing;}}>${this.editing?"Done placing · return to live view":"Place devices & windows"}</button><span> ${this.editing?"Add placements to the draft, then use the panel’s Save to persist them.":""}</span></div>
+      ${this.editing?html`<al-room-device-editor style="margin:0 16px 24px" .room=${this.editRoom} .lights=${this.lights} .live=${this.live} .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor>`:html`<al-floorplan-viewer @al-edit-room=${(e:CustomEvent<string>)=>{this.editRoom=e.detail;this.editing=true;}} .config=${this.config} .live=${this.live} .hass=${this.hass} .lights=${this.lights}
+        .telemetry=${this.error ? undefined : this.telemetry} .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>`}
       <details><summary>Property layout</summary><al-property-layout .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-property-layout></details>
       <details .open=${!hasGeometry}><summary>Import or update floorplan</summary>
         <al-floorplan-import .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-floorplan-import>

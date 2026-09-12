@@ -27,7 +27,7 @@ export function parseProfiles(text:string):SensorProfile[] {
       const field=p[key as keyof typeof textFields];
       if(typeof field!=="string" || field.length>max || ((key==="id" || key==="name") && !field.trim()))throw new Error(`Invalid profile ${key}.`);
     }
-    if(!["motion","occupancy","light"].includes(p.kind) || ![p.fov,p.vertical_fov,p.range].every(v=>typeof v==="number" && Number.isFinite(v)))throw new Error("Profile kind and coverage fields are required.");
+    if(!["motion","occupancy","light","window"].includes(p.kind) || ![p.fov,p.vertical_fov,p.range].every(v=>typeof v==="number" && Number.isFinite(v)))throw new Error("Profile kind and coverage fields are required.");
     if(!readFixture({...newFixture(p.kind==="light"?"light.profile":"binary_sensor.profile"),...p}) || ids.has(p.id))throw new Error("Invalid coverage or duplicate profile id.");
     if(!p.match || typeof p.match!=="object" || Array.isArray(p.match))throw new Error("Invalid identification rules.");
     for(const [key,value] of Object.entries(p.match))if(!matchKeys.includes(key as typeof matchKeys[number]) || typeof value!=="string" || !value.trim() || value.length>200)throw new Error("Invalid identification rule.");

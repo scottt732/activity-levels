@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newGroup } from "../src/model";
-import { fixtureDirection, insideRoom, newFixture, readFixture, saveFixture } from "../src/room-fixtures";
+import { fixtureAppearance, snapWindow, fixtureDirection, insideRoom, newFixture, readFixture, saveFixture } from "../src/room-fixtures";
 import { placeStructure } from "../src/property-layout";
 import { roomsConfig } from "./fixtures";
 
@@ -39,4 +39,23 @@ describe("room fixtures",()=>{
     expect(fixtureDirection({...moved,yaw:90,pitch:0})[2]).toBeCloseTo(-1);
     expect(fixtureDirection({...moved,pitch:-90})[1]).toBeCloseTo(-1);
   });
+});
+
+it("snaps windows to polygon walls and validates dimensions and center height",()=>{
+  const source=config(),group=source.groups[0]!.children[0]!;
+  const snapped=snapWindow(group,[0.1,2,3.5]);
+  expect(snapped.position).toEqual([0,2,3.5]);expect(Math.abs(snapped.yaw)).toBe(90);
+  const window={...newFixture("binary_sensor.window","window"),...snapped,width:1.4,height:1.2};
+  expect(saveFixture(source,"room",window).groups[0]!.children[0]!.fixtures![0]).toEqual(window);
+  expect(()=>saveFixture(source,"room",{...window,height:10})).toThrow(/whole window/);
+  expect(()=>saveFixture(source,"room",{...window,width:NaN})).toThrow(/dimensions/);
+  expect(()=>saveFixture(source,"room",{...window,position:[2,2,3.5]})).toThrow(/wall/);
+  expect(readFixture({...window,height:0})).toBeNull();
+});
+it("leaves sensor beams off when idle or unavailable and turns them red on detection",()=>{
+  for(const kind of ["motion","occupancy"] as const){
+    expect(fixtureAppearance(kind,"off").opacity).toBe(0);
+    expect(fixtureAppearance(kind,"unavailable").opacity).toBe(0);
+    expect(fixtureAppearance(kind,"on")).toEqual({color:"#ff3535",opacity:0.16});
+  }
 });

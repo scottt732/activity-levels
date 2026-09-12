@@ -83,7 +83,8 @@ export interface RoomDevice {
 }
 export interface RoomFixture {
   profile_id?: string;
-  entity: string; kind: "motion" | "occupancy" | "light"; name: string;
+  width?: number; height?: number;
+  entity: string; kind: "motion" | "occupancy" | "light" | "window"; name: string;
   position: [number, number, number]; yaw: number; pitch: number;
   fov: number; vertical_fov: number; range: number; mount: string; technology: string;
 }

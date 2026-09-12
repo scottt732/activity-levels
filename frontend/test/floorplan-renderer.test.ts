@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BufferGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3 } from "three";
+import { BufferGeometry, LineSegments, LineDashedMaterial, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3 } from "three";
 import { newFixture } from "../src/room-fixtures";
 import { thresholdColor, viewerOptions } from "../src/floorplan-style";
 import type { ScenePart } from "../src/floorplan-model";
@@ -39,20 +39,25 @@ describe("floorplan renderer", () => {
     renderer.setParts([{...part(),fixtures:[{...newFixture("binary_sensor.motion"),position:[4,5,12],range:2,yaw:0,fov:90,vertical_fov:30}]}]);
     const scene=gpu.render.mock.calls.at(-1)![0] as Scene;
     const coverage=scene.getObjectByName("sensor-coverage") as Mesh<BufferGeometry,MeshBasicMaterial>;
+    const boundary=scene.getObjectByName("sensor-boundary") as LineSegments<BufferGeometry,LineDashedMaterial>;
+    expect(boundary.geometry.getAttribute("lineDistance")).toBeDefined();
+    const boundaryDispose=vi.spyOn(boundary.geometry,"dispose");
     const direction=new Vector3(0,-1,0).applyQuaternion(coverage.quaternion);
     expect(direction.x).toBeCloseTo(1);expect(direction.y).toBeCloseTo(0);
     const options=viewerOptions({focus_activity:true});
     const states={"binary_sensor.motion":{entity_id:"binary_sensor.motion",state:"off",attributes:{},last_changed:new Date().toISOString()}};
     renderer.setActivity(frame(0),1000,"",options,{},undefined,states);
     const camera=gpu.render.mock.calls.at(-1)![1] as PerspectiveCamera;
-    const before=camera.position.clone();const offOpacity=coverage.material.opacity;
+    const before=camera.position.clone();const offOpacity=coverage.material.opacity;expect(offOpacity).toBe(0);
     states["binary_sensor.motion"].state="on";
     renderer.setActivity(frame(1),1000,"",options,{},undefined,states);
     expect(coverage.material.opacity).toBeGreaterThan(offOpacity);
+    expect(coverage.material.color.getHexString()).toBe("ff3535");
+    expect(boundary.material.color.getHexString()).toBe("ff3535");
     await vi.advanceTimersByTimeAsync(1500);expect(camera.position.distanceTo(before)).toBeGreaterThan(1);
     const position=camera.position.clone();
     renderer.setParts([{...part(),fixtures:[{...newFixture("binary_sensor.motion"),position:[5,5,12]}]}]);
-    expect(camera.position.toArray()).toEqual(position.toArray());
+    expect(camera.position.toArray()).toEqual(position.toArray());expect(boundaryDispose).toHaveBeenCalledOnce();
     const dispose=vi.spyOn((scene.getObjectByName("room-fixture") as Mesh).geometry,"dispose");
     renderer.dispose();expect(dispose).toHaveBeenCalledOnce();vi.useRealTimers();
   });
@@ -256,4 +261,15 @@ describe("floorplan renderer", () => {
     expect(error).toHaveBeenCalledWith(expect.stringContaining("context"));
     renderer.dispose(); disposeGeometry.mockRestore();
   });
+});
+
+it("renders window dimensions and contact state without a sensor beam",()=>{
+  const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn());
+  renderer.setParts([{...part(),fixtures:[{...newFixture("binary_sensor.window","window"),position:[4,6,12.8],width:1.4,height:1,range:5,yaw:90}]}]);
+  const scene=gpu.render.mock.calls.at(-1)![0] as Scene;
+  const window=scene.getObjectByName("room-window") as Mesh<BufferGeometry,MeshBasicMaterial>;
+  expect(window).toBeDefined();expect(scene.getObjectByName("sensor-coverage")).toBeUndefined();
+  window.geometry.computeBoundingBox();expect(window.geometry.boundingBox!.getSize(new Vector3()).x).toBeCloseTo(1.4);
+  renderer.setActivity(null,1000,"",viewerOptions(),{},undefined,{"binary_sensor.window":{entity_id:"binary_sensor.window",state:"on",attributes:{},last_changed:""}});
+  expect(window.material.color.getHexString()).toBe("ff3535");renderer.dispose();
 });
