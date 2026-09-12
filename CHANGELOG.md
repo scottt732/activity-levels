@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/scottt732/activity-levels/compare/v0.18.0...v0.19.0) (2026-09-12)
+
+
+### Added
+
+* **panel:** visual room placement and reusable sensor profiles ([#53](https://github.com/scottt732/activity-levels/issues/53)) ([e366425](https://github.com/scottt732/activity-levels/commit/e366425e4059c4214381d7bdca490d5d3052424e))
+
 ## [0.18.0](https://github.com/scottt732/activity-levels/compare/v0.17.0...v0.18.0) (2026-09-12)
 
 
