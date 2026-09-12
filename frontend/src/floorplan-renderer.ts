@@ -7,6 +7,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { activityReading } from "./floorplan-model";
 import type { ScenePart, ActivityFrame } from "./floorplan-model";
 import { viewerOptions, thresholdColor } from "./floorplan-style";
+import type { SiteLayout } from "./types";
 import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
 
 export type CameraAction = "reset" | "top" | "left" | "right" | "up" | "down" | "in" | "out";
@@ -32,7 +33,7 @@ interface Volume {
 }
 
 /** Surfaces follow the actual polygon, including concave rooms. */
-function surfaceGeometry(part: ScenePart, origin: Vector3): ShapeGeometry {
+function surfaceGeometry(part: Pick<ScenePart, "footprint">, origin: Vector3): ShapeGeometry {
   const geometry = new ShapeGeometry(new Shape(part.footprint.map(
     ([x, y]) => new Vector2(x - origin.x, y + origin.z),
   )));
@@ -65,6 +66,7 @@ export class FloorplanRenderer {
   private readonly raycaster = new Raycaster();
   private volumes: Volume[] = [];
   private grid?: GridHelper;
+  private siteMeshes: Mesh<ShapeGeometry, MeshBasicMaterial>[] = [];
   private radius = 1;
   private ground?: Mesh<PlaneGeometry, MeshBasicMaterial>;
   private options = viewerOptions();
@@ -130,15 +132,18 @@ export class FloorplanRenderer {
       this.renderer.render(this.scene, this.camera);
   };
 
-  setParts(parts: ScenePart[], groundZ?: number): void {
+  setParts(parts: ScenePart[], groundZ?: number, site?: SiteLayout): void {
     this.clearParts();
     this.focusTarget=undefined; this.focusEvents.clear();
-    if (!parts.length) { this.draw(); return; }
+    if (!parts.length && !site?.features.length) { this.draw(); return; }
     const box = new Box3();
     for (const part of parts) for (const [x, y] of part.footprint) {
       box.expandByPoint(new Vector3(x, part.low, -y));
       box.expandByPoint(new Vector3(x, part.high, -y));
     }
+    groundZ ??= site?.ground_z;
+    for (const feature of site?.features ?? []) for (const [x, y] of feature.points)
+      box.expandByPoint(new Vector3(x, site!.ground_z, -y));
     if (groundZ !== undefined) {
       box.expandByPoint(new Vector3(box.min.x, groundZ, box.min.z));
       box.expandByPoint(new Vector3(box.max.x, groundZ, box.max.z));
@@ -197,6 +202,16 @@ export class FloorplanRenderer {
       }
       this.volumes.push(volume);
     }
+    const siteColors = {property:0x425044, lawn:0x506b40, driveway:0x697179, path:0x8d8069, pool:0x367c9b};
+    const features = [...(site?.features ?? [])].sort((a, b) => Number(b.kind === "property") - Number(a.kind === "property"));
+    features.forEach((feature, index) => {
+      const geometry = surfaceGeometry({footprint:feature.points}, origin);
+      const mesh = new Mesh(geometry, new MeshBasicMaterial({color:siteColors[feature.kind], side:DoubleSide,
+        transparent:true, opacity:0.5, depthWrite:false}));
+      mesh.position.y = site!.ground_z - origin.y + index * 0.002;
+      mesh.name = "site-feature";
+      this.scene.add(mesh); this.siteMeshes.push(mesh);
+    });
     this.grid = new GridHelper(this.radius * 2.8, 16, 0x69818e, 0x69818e);
     this.grid.position.y = (groundZ ?? box.min.y - this.radius * 0.015) - origin.y;
     if (groundZ !== undefined) {
@@ -394,6 +409,10 @@ export class FloorplanRenderer {
   };
 
   private clearParts(): void {
+    for (const mesh of this.siteMeshes) {
+      this.scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose();
+    }
+    this.siteMeshes = [];
     if (this.ground) { this.scene.remove(this.ground); this.ground.geometry.dispose(); this.ground.material.dispose(); this.ground=undefined; }
     for (const { mesh, edges, liquid, ceiling, wash } of this.volumes) {
       ceiling?.material.map?.dispose();

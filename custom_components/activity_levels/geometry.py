@@ -72,3 +72,24 @@ GPS_SCHEMA = vol.Schema(
         vol.Optional("rotation"): coordinate,
     }
 )
+
+
+SITE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("ground_z", default=0): coordinate,
+        vol.Optional("features", default=list): vol.All(
+            [
+                vol.Schema(
+                    {
+                        vol.Required("name"): vol.All(str, vol.Length(min=1, max=100)),
+                        vol.Required("kind"): vol.In(
+                            ["property", "lawn", "driveway", "path", "pool"]
+                        ),
+                        vol.Required("points"): points,
+                    }
+                )
+            ],
+            vol.Length(max=128),
+        ),
+    }
+)

@@ -651,7 +651,10 @@ def ws_floorplan_dashboard(
         msg["id"],
         {
             "entry_id": entry.entry_id,
-            "config": {"groups": geometry(entry.options.get("groups", []))},
+            "config": {
+                "groups": geometry(entry.options.get("groups", [])),
+                **({"site": entry.options["site"]} if "site" in entry.options else {}),
+            },
             "lights": runtime.patterns.lights,
             "live": {
                 "now": now,

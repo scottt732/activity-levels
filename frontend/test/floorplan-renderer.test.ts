@@ -32,6 +32,20 @@ const frame = (value: number): LiveState => ({ now: 1000, voices: {}, groups: {
 afterEach(() => { vi.clearAllMocks(); document.body.innerHTML = ""; });
 
 describe("floorplan renderer", () => {
+  it("renders ground features at local elevation and releases them", () => {
+    const renderer = new FloorplanRenderer(host(), vi.fn(), vi.fn());
+    renderer.setParts([part()], undefined, {ground_z:12, features:[
+      {name:"Lawn", kind:"lawn", points:[[0,0],[20,0],[20,20],[0,20]]},
+    ]});
+    const scene = gpu.render.mock.calls.at(-1)![0] as Scene;
+    const ground = scene.getObjectByName("site-feature") as Mesh;
+    expect(ground).toBeDefined();
+    const dispose = vi.spyOn(ground.geometry,"dispose");
+    renderer.setParts([part()]);
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(scene.getObjectByName("site-feature")).toBeUndefined();
+    renderer.dispose();
+  });
   it("rotates half as far when the configured period doubles", async () => {
     vi.useFakeTimers();
     const angleAfterSecond=async(rotation_period:number)=>{

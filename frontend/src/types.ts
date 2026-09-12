@@ -159,7 +159,12 @@ export interface PresenceSettings {
   scanner_areas: Record<string, string>;
 }
 
+export type SiteKind = "property" | "lawn" | "driveway" | "path" | "pool";
+export interface SiteFeature { name: string; kind: SiteKind; points: [number, number][] }
+export interface SiteLayout { ground_z: number; features: SiteFeature[] }
+
 export interface Config {
+  site?: SiteLayout;
   gps?: Gps;
   version: 1;
   defaults: Defaults;

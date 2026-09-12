@@ -31,6 +31,60 @@
       "additionalProperties": false,
       "description": "Optional ESPresense geographic origin and rotation; geometry remains in local meters."
     },
+    "site": {
+      "type": "object",
+      "properties": {
+        "ground_z": {
+          "type": "number",
+          "default": 0
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "kind": {
+                "enum": [
+                  "property",
+                  "lawn",
+                  "driveway",
+                  "path",
+                  "pool"
+                ]
+              },
+              "points": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 4096,
+                "items": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "description": "XY polygon in meters with at least three distinct vertices and non-zero area."
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "points"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 128,
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
     "version": {
       "type": "integer",
       "enum": [

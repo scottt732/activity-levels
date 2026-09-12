@@ -1,4 +1,4 @@
-import { A as e, B as t, C as n, D as r, E as i, F as a, I as o, L as s, M as c, N as l, O as u, P as d, R as f, S as p, T as ee, V as m, _ as te, a as ne, b as re, c as ie, d as ae, f as h, g as oe, h as se, j as ce, k as le, l as ue, m as de, o as g, p as fe, r as pe, s as _, t as me, u as he, v as ge, w as _e, x as ve, y as ye, z as v } from "./shared-CZEXJBQU.js";
+import { A as e, B as t, C as n, D as r, E as i, F as a, I as o, L as s, M as c, N as l, O as u, P as d, R as f, S as p, T as ee, V as m, _ as te, a as ne, b as re, c as ie, d as ae, f as h, g as oe, h as se, j as ce, k as le, l as ue, m as de, o as g, p as fe, r as pe, s as _, t as me, u as he, v as ge, w as _e, x as ve, y as ye, z as v } from "./shared-Z4k_40_Y.js";
 //#region src/entities.ts
 var be = (e) => `switch.${e}_presence_simulation`, xe = (e) => `sensor.${e}_expected_activity`, Se = (e) => `sensor.${e}_activity_anomaly`, Ce = [
 	"ha-card",
@@ -2244,7 +2244,7 @@ function Cr(e, t) {
 }
 //#endregion
 //#region src/panels.ts
-function P(e, t, n, r, i, a, o = s) {
+function wr(e, t, n, r, i, a, o = s) {
 	let c = `${e}:${t}`;
 	return v`<ha-expansion-panel
     outlined
@@ -2264,7 +2264,7 @@ function P(e, t, n, r, i, a, o = s) {
 }
 //#endregion
 //#region src/al-adjacency-table.ts
-var wr = class extends o {
+var Tr = class extends o {
 	constructor(...e) {
 		super(...e), this.path = null, this.errors = [];
 	}
@@ -2428,10 +2428,10 @@ var wr = class extends o {
     </tr>`;
 	}
 };
-g([d({ attribute: !1 })], wr.prototype, "config", void 0), g([d({ attribute: !1 })], wr.prototype, "path", void 0), g([d({ attribute: !1 })], wr.prototype, "errors", void 0), wr = g([a("al-adjacency-table")], wr);
+g([d({ attribute: !1 })], Tr.prototype, "config", void 0), g([d({ attribute: !1 })], Tr.prototype, "path", void 0), g([d({ attribute: !1 })], Tr.prototype, "errors", void 0), Tr = g([a("al-adjacency-table")], Tr);
 //#endregion
 //#region src/al-override-field.ts
-var Tr = { select: {
+var Er = { select: {
 	mode: "dropdown",
 	options: [{
 		value: "true",
@@ -2441,10 +2441,10 @@ var Tr = { select: {
 		label: "No"
 	}]
 } };
-function Er(e, t) {
+function Dr(e, t) {
 	return e.select?.options?.find((e) => e.value === t)?.label;
 }
-var F = class extends o {
+var P = class extends o {
 	constructor(...e) {
 		super(...e), this.label = "", this.selector = { text: {} }, this.value = null, this.inherited = null, this.inheritedFrom = "defaults", this.hint = "", this.kind = "number", this.disabled = !1;
 	}
@@ -2479,7 +2479,7 @@ var F = class extends o {
 	describeInherited() {
 		let e = this.inherited;
 		if (this.kind === "select" && e != null) {
-			let t = Er(this.selector, String(e));
+			let t = Dr(this.selector, String(e));
 			if (t !== void 0) return t;
 		}
 		return qn(this.kind, e);
@@ -2491,7 +2491,7 @@ var F = class extends o {
         <ha-selector
           class="field"
           .hass=${this.hass}
-          .selector=${this.kind === "boolean" ? Tr : this.selector}
+          .selector=${this.kind === "boolean" ? Er : this.selector}
           .label=${this.label}
           .required=${!1}
           .disabled=${this.disabled}
@@ -2512,10 +2512,10 @@ var F = class extends o {
     `;
 	}
 };
-g([d({ attribute: !1 })], F.prototype, "hass", void 0), g([d()], F.prototype, "label", void 0), g([d({ attribute: !1 })], F.prototype, "selector", void 0), g([d({ attribute: !1 })], F.prototype, "value", void 0), g([d({ attribute: !1 })], F.prototype, "inherited", void 0), g([d({ attribute: "inherited-from" })], F.prototype, "inheritedFrom", void 0), g([d()], F.prototype, "hint", void 0), g([d()], F.prototype, "kind", void 0), g([d()], F.prototype, "error", void 0), g([d({ type: Boolean })], F.prototype, "disabled", void 0), F = g([a("al-override-field")], F);
+g([d({ attribute: !1 })], P.prototype, "hass", void 0), g([d()], P.prototype, "label", void 0), g([d({ attribute: !1 })], P.prototype, "selector", void 0), g([d({ attribute: !1 })], P.prototype, "value", void 0), g([d({ attribute: !1 })], P.prototype, "inherited", void 0), g([d({ attribute: "inherited-from" })], P.prototype, "inheritedFrom", void 0), g([d()], P.prototype, "hint", void 0), g([d()], P.prototype, "kind", void 0), g([d()], P.prototype, "error", void 0), g([d({ type: Boolean })], P.prototype, "disabled", void 0), P = g([a("al-override-field")], P);
 //#endregion
 //#region src/stimulus-form.ts
-var Dr = {
+var Or = {
 	entity: "Entity",
 	mode: "Mode",
 	to: "Active states",
@@ -2523,7 +2523,7 @@ var Dr = {
 	gain: "Gain",
 	key: "Label",
 	envelope: "Envelope preset"
-}, Or = {
+}, kr = {
 	entity: "The entity whose state drives this stimulus.",
 	mode: "Sustained holds a note while the entity is in its active states. Momentary treats each crossing as one event.",
 	to: "Which states of this entity count as active.",
@@ -2531,23 +2531,23 @@ var Dr = {
 	gain: "How loudly this stimulus contributes to its group.",
 	key: "Optional name for this trigger; defaults to the entity id.",
 	envelope: "Preset the overrides below start from."
-}, kr = (e) => Dr[e.name] ?? e.name, Ar = (e) => Or[e.name] ?? "", jr = [
+}, Ar = (e) => Or[e.name] ?? e.name, jr = (e) => kr[e.name] ?? "", Mr = [
 	"entity",
 	"mode",
 	"gain",
 	"key",
 	"envelope"
-], I = { duration: { enable_millisecond: !0 } }, Mr = { number: {
+], F = { duration: { enable_millisecond: !0 } }, Nr = { number: {
 	min: 0,
 	step: .1,
 	mode: "box",
 	unit_of_measurement: "×"
-} }, Nr = { number: {
+} }, Pr = { number: {
 	min: .1,
 	max: 10,
 	step: .1,
 	mode: "slider"
-} }, Pr = "Allow retrigger", Fr = "When a new trigger is honoured while the envelope is still active.", Ir = "Stacks", Lr = "Each honoured trigger adds its gain on top of the current level instead of restarting the rise.", Rr = { select: {
+} }, Fr = "Allow retrigger", Ir = "When a new trigger is honoured while the envelope is still active.", Lr = "Stacks", Rr = "Each honoured trigger adds its gain on top of the current level instead of restarting the rise.", zr = { select: {
 	mode: "dropdown",
 	options: [
 		{
@@ -2571,7 +2571,7 @@ var Dr = {
 			label: "Only once fully released"
 		}
 	]
-} }, zr = { select: {
+} }, Br = { select: {
 	mode: "list",
 	options: [{
 		value: "sustained",
@@ -2580,11 +2580,11 @@ var Dr = {
 		value: "momentary",
 		label: "Momentary — fire on each change"
 	}]
-} }, Br = [
+} }, Vr = [
 	"attack",
 	"decay",
 	"impulse"
-], Vr = "A momentary trigger is always an impulse: the state change is the whole event, so there is nothing to hold the envelope open — it jumps to its peak and releases. Attack and decay never run.", Hr = (e, t) => e.mode === "momentary" && Br.includes(t), Ur = { select: {
+], Hr = "A momentary trigger is always an impulse: the state change is the whole event, so there is nothing to hold the envelope open — it jumps to its peak and releases. Attack and decay never run.", Ur = (e, t) => e.mode === "momentary" && Vr.includes(t), Wr = { select: {
 	mode: "dropdown",
 	options: [{
 		value: "hold",
@@ -2593,80 +2593,80 @@ var Dr = {
 		value: "note_off",
 		label: "End the trigger"
 	}]
-} }, Wr = "(unknown preset — using built-in defaults)", Gr = [
+} }, Gr = "(unknown preset — using built-in defaults)", Kr = [
 	{
 		name: "attack",
 		label: "Attack",
 		kind: "duration",
-		selector: I
+		selector: F
 	},
 	{
 		name: "decay",
 		label: "Decay",
 		kind: "duration",
-		selector: I
+		selector: F
 	},
 	{
 		name: "sustain",
 		label: "Sustain",
 		kind: "multiplier",
-		selector: Mr
+		selector: Nr
 	},
 	{
 		name: "release",
 		label: "Release",
 		kind: "duration",
-		selector: I
+		selector: F
 	},
 	{
 		name: "impulse",
 		label: "Impulse",
 		kind: "boolean",
-		selector: Tr
+		selector: Er
 	},
 	{
 		name: "retrigger",
-		label: Pr,
+		label: Fr,
 		kind: "select",
-		selector: Rr,
-		hint: Fr
+		selector: zr,
+		hint: Ir
 	},
 	{
 		name: "stack",
-		label: Ir,
+		label: Lr,
 		kind: "boolean",
-		selector: Tr,
-		hint: Lr
+		selector: Er,
+		hint: Rr
 	},
 	{
 		name: "unavailable",
 		label: "When unavailable",
 		kind: "select",
-		selector: Ur
+		selector: Wr
 	},
 	{
 		name: "debounce",
 		label: "Debounce",
 		kind: "duration",
-		selector: I
+		selector: F
 	}
-], Kr = [
+], qr = [
 	"entity",
 	"mode",
 	"to",
 	"edges",
 	"key"
-], qr = (e) => Kr.filter((t) => t !== "edges" || e.mode === "momentary"), Jr = ["envelope", "gain"], Yr = "How a single trigger rises and falls over time.", Xr = "What makes this stimulus fire, and what it is called in the mix.", Zr = "Change part of the preset for this stimulus only.", Qr = (e) => Gr.filter((t) => e[t.name] !== null && e[t.name] !== void 0).length, $r = (e) => [{
+], Jr = (e) => qr.filter((t) => t !== "edges" || e.mode === "momentary"), Yr = ["envelope", "gain"], Xr = "How a single trigger rises and falls over time.", Zr = "What makes this stimulus fire, and what it is called in the mix.", Qr = "Change part of the preset for this stimulus only.", $r = (e) => Kr.filter((t) => e[t.name] !== null && e[t.name] !== void 0).length, ei = (e) => [{
 	value: "",
 	label: "(default preset)"
 }, ...e.envelopes.map((e) => ({
 	value: e.id,
 	label: e.id
 }))];
-function ei(e, t, n, r) {
+function ti(e, t, n, r) {
 	let i = vn(n, t.entity, t.to), a = {
 		entity: { entity: {} },
-		mode: zr,
+		mode: Br,
 		to: { select: {
 			mode: "dropdown",
 			multiple: !0,
@@ -2684,11 +2684,11 @@ function ei(e, t, n, r) {
 				label: i.leave
 			}]
 		} },
-		gain: Nr,
+		gain: Pr,
 		key: { text: {} },
 		envelope: { select: {
 			mode: "dropdown",
-			options: $r(e)
+			options: ei(e)
 		} }
 	};
 	return r.map((e) => ({
@@ -2696,7 +2696,7 @@ function ei(e, t, n, r) {
 		selector: a[e]
 	}));
 }
-function ti(e, t) {
+function ni(e, t) {
 	let n = {
 		entity: e.entity,
 		mode: e.mode,
@@ -2708,30 +2708,30 @@ function ti(e, t) {
 	};
 	return Object.fromEntries(t.map((e) => [e, n[e]]));
 }
-var ni = (e) => Array.isArray(e) ? e.filter((e) => typeof e == "string" && e !== "") : [];
-function ri(e, t) {
+var ri = (e) => Array.isArray(e) ? e.filter((e) => typeof e == "string" && e !== "") : [];
+function ii(e, t) {
 	let n = { ...e };
-	if ("entity" in t && (n.entity = String(t.entity ?? "")), "mode" in t && (t.mode === "sustained" || t.mode === "momentary") && (n.mode = t.mode), "to" in t && (n.to = ni(t.to)), "edges" in t) {
-		let e = ni(t.edges).filter((e) => e === "enter" || e === "leave");
+	if ("entity" in t && (n.entity = String(t.entity ?? "")), "mode" in t && (t.mode === "sustained" || t.mode === "momentary") && (n.mode = t.mode), "to" in t && (n.to = ri(t.to)), "edges" in t) {
+		let e = ri(t.edges).filter((e) => e === "enter" || e === "leave");
 		e.length > 0 && (n.edges = e);
 	}
 	return "gain" in t && (n.gain = typeof t.gain == "number" ? t.gain : e.gain), "key" in t && (n.key = Wn(t.key)), "envelope" in t && (n.envelope = Wn(t.envelope)), n;
 }
-var ii = (e, t) => e.length === t.length && e.every((e, n) => e === t[n]);
-function ai(e, t) {
-	return ii(e.to, t.to) ? ii(e.edges, t.edges) ? jr.find((n) => e[n] !== t[n]) : "edges" : "to";
+var ai = (e, t) => e.length === t.length && e.every((e, n) => e === t[n]);
+function oi(e, t) {
+	return ai(e.to, t.to) ? ai(e.edges, t.edges) ? Mr.find((n) => e[n] !== t[n]) : "edges" : "to";
 }
-function oi(e, t, n) {
+function si(e, t, n) {
 	let r = yt(e, t.envelope);
-	return r ? r[n] === null || r[n] === void 0 ? "defaults" : t.envelope ?? e.defaults.envelope : Wr;
+	return r ? r[n] === null || r[n] === void 0 ? "defaults" : t.envelope ?? e.defaults.envelope : Gr;
 }
-function si(e, t) {
+function ci(e, t) {
 	return t == null || e === void 0 ? null : O(Math.max(0, Math.round((t - e) * 1e3) / 1e3));
 }
 //#endregion
 //#region src/sketch.ts
-var ci = (e) => e.release * e.sustain, li = (e) => Math.max(1, e.sustain), ui = (e) => e.sustain / li(e);
-function di(e, t = .25) {
+var li = (e) => e.release * e.sustain, ui = (e) => Math.max(1, e.sustain), di = (e) => e.sustain / ui(e);
+function fi(e, t = .25) {
 	if (e.impulse) return [
 		{
 			x: 0,
@@ -2746,7 +2746,7 @@ function di(e, t = .25) {
 			y: 0
 		}
 	];
-	let n = ci(e), r = e.attack + e.decay + n, i = r > 0 ? r * t / (1 - t) : 1, a = r + i, o = 1 / li(e), s = ui(e), c = 0, l = [{
+	let n = li(e), r = e.attack + e.decay + n, i = r > 0 ? r * t / (1 - t) : 1, a = r + i, o = 1 / ui(e), s = di(e), c = 0, l = [{
 		x: 0,
 		y: 0
 	}];
@@ -2764,8 +2764,8 @@ function di(e, t = .25) {
 		y: 0
 	}), l;
 }
-function fi(e, t = .25) {
-	let n = di(e, t), r = (e) => ((n[e]?.x ?? 0) + (n[e + 1]?.x ?? 0)) / 2;
+function pi(e, t = .25) {
+	let n = fi(e, t), r = (e) => ((n[e]?.x ?? 0) + (n[e + 1]?.x ?? 0)) / 2;
 	if (e.impulse) {
 		let t = [{
 			text: "impulse",
@@ -2786,14 +2786,14 @@ function fi(e, t = .25) {
 	}), i.push({
 		text: `S ${Jn(e.sustain)}`,
 		x: r(2)
-	}), ci(e) > 0 && i.push({
+	}), li(e) > 0 && i.push({
 		text: `R ${O(e.release)}`,
 		x: r(3)
 	}), i;
 }
 //#endregion
 //#region src/al-envelope-sketch.ts
-var pi = 10, mi = 190, hi = 58, gi = 72, _i = (e) => pi + e * 180, vi = (e) => hi - e * 48, yi = (e) => String(Math.round(e * 10) / 10), bi = (e, t) => `${yi(e)},${yi(t)}`, xi = (e) => Math.min(184, Math.max(16, _i(e))), Si = class extends o {
+var mi = 10, hi = 190, gi = 58, _i = 72, vi = (e) => mi + e * 180, yi = (e) => gi - e * 48, bi = (e) => String(Math.round(e * 10) / 10), xi = (e, t) => `${bi(e)},${bi(t)}`, Si = (e) => Math.min(184, Math.max(16, vi(e))), Ci = class extends o {
 	constructor(...e) {
 		super(...e), this.envelope = null;
 	}
@@ -2834,34 +2834,34 @@ var pi = 10, mi = 190, hi = 58, gi = 72, _i = (e) => pi + e * 180, vi = (e) => h
 	render() {
 		let e = this.envelope;
 		if (!e) return s;
-		let n = di(e), r = n[0], i = n[n.length - 1], a = n.map((e) => bi(_i(e.x), vi(e.y))).join(" "), o = `${bi(_i(r.x), hi)} ${a} ${bi(_i(i.x), hi)}`, c = fi(e), l = e.impulse ? "Impulse envelope" : "Attack, decay, sustain, release envelope";
+		let n = fi(e), r = n[0], i = n[n.length - 1], a = n.map((e) => xi(vi(e.x), yi(e.y))).join(" "), o = `${xi(vi(r.x), gi)} ${a} ${xi(vi(i.x), gi)}`, c = pi(e), l = e.impulse ? "Impulse envelope" : "Attack, decay, sustain, release envelope";
 		return v`
       <svg viewBox="0 0 200 80" role="img" aria-label=${l}>
         <title>${l}</title>
-        <line class="grid" x1=${pi} y1=${hi} x2=${mi} y2=${hi}></line>
+        <line class="grid" x1=${mi} y1=${gi} x2=${hi} y2=${gi}></line>
         ${e.impulse ? s : t`<line
               class="grid"
-              x1=${pi}
-              y1=${yi(vi(ui(e)))}
-              x2=${mi}
-              y2=${yi(vi(ui(e)))}
+              x1=${mi}
+              y1=${bi(yi(di(e)))}
+              x2=${hi}
+              y2=${bi(yi(di(e)))}
             ></line>`}
         <polygon class="area" points=${o}></polygon>
         <polyline class="curve" points=${a}></polyline>
-        ${c.map((e) => t`<text class="caption" x=${yi(xi(e.x))} y=${gi} text-anchor="middle">${e.text}</text>`)}
+        ${c.map((e) => t`<text class="caption" x=${bi(Si(e.x))} y=${_i} text-anchor="middle">${e.text}</text>`)}
       </svg>
     `;
 	}
 };
-g([d({ attribute: !1 })], Si.prototype, "envelope", void 0), Si = g([a("al-envelope-sketch")], Si);
+g([d({ attribute: !1 })], Ci.prototype, "envelope", void 0), Ci = g([a("al-envelope-sketch")], Ci);
 //#endregion
 //#region src/al-presence-overrides.ts
-var Ci = { number: {
+var wi = { number: {
 	min: .01,
 	max: 1,
 	step: .01,
 	mode: "box"
-} }, wi = class extends o {
+} }, Ti = class extends o {
 	constructor(...e) {
 		super(...e), this.path = null, this.errors = [];
 	}
@@ -2892,7 +2892,7 @@ var Ci = { number: {
         .hass=${this.hass}
         .selector=${{ select: {
 			mode: "dropdown",
-			options: $r(e)
+			options: ei(e)
 		} }}
         .label=${"Envelope preset"}
         .required=${!1}
@@ -2904,7 +2904,7 @@ var Ci = { number: {
         .hass=${this.hass}
         label="Gain"
         kind="number"
-        .selector=${Nr}
+        .selector=${Pr}
         .value=${r.gain}
         .inherited=${1}
         .inheritedFrom=${"presence"}
@@ -2917,14 +2917,14 @@ var Ci = { number: {
         label="Empty-room floor"
         hint="Likelihood of this room at an activity level of 0.0. Set 1 for a room people sleep in: a still sleeper trips no motion, and the estimator must not read that as an empty room."
         kind="number"
-        .selector=${Ci}
+        .selector=${wi}
         .value=${r.activity_floor}
         .inherited=${S(e).activity.floor}
         .inheritedFrom=${"presence"}
         .error=${o.activity_floor}
         @value-changed=${(e) => this.setPresence("activity_floor", e.detail.value ?? null)}
       ></al-override-field>
-      ${Gr.map((e) => v`<al-override-field
+      ${Kr.map((e) => v`<al-override-field
           class="presence-${e.name}"
           .hass=${this.hass}
           .label=${e.label}
@@ -2941,10 +2941,10 @@ var Ci = { number: {
     `;
 	}
 };
-g([d({ attribute: !1 })], wi.prototype, "hass", void 0), g([d({ attribute: !1 })], wi.prototype, "config", void 0), g([d({ attribute: !1 })], wi.prototype, "path", void 0), g([d({ attribute: !1 })], wi.prototype, "errors", void 0), wi = g([a("al-presence-overrides")], wi);
+g([d({ attribute: !1 })], Ti.prototype, "hass", void 0), g([d({ attribute: !1 })], Ti.prototype, "config", void 0), g([d({ attribute: !1 })], Ti.prototype, "path", void 0), g([d({ attribute: !1 })], Ti.prototype, "errors", void 0), Ti = g([a("al-presence-overrides")], Ti);
 //#endregion
 //#region src/al-group-editor.ts
-var Ti = "People can leave the property from here, so presence can move from here to Away.", Ei = class extends o {
+var Ei = "People can leave the property from here, so presence can move from here to Away.", Di = class extends o {
 	constructor(...e) {
 		super(...e), this.path = null, this.errors = [];
 	}
@@ -3019,7 +3019,7 @@ var Ti = "People can leave the property from here, so presence can move from her
       <ha-card header="Group">
         ${n.area_id ? Hn("area", n.area_id, "Open Home Assistant area") : s}
         ${i.map((e) => v`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
-        ${P("group", "identity", "Identity", h[n.kind].definition, !0, v`
+        ${wr("group", "identity", "Identity", h[n.kind].definition, !0, v`
             <ha-form
               .hass=${this.hass}
               .data=${pr(n, r, Yn, e)}
@@ -3032,7 +3032,7 @@ var Ti = "People can leave the property from here, so presence can move from her
             <div class="muted note">Changing the id re-creates this group's entities.</div>
             ${this.renderStale(e, n, a)}
           `)}
-        ${P("group", "mix", "Mix", ir, !0, this.renderMix(e, n, r, a))}
+        ${wr("group", "mix", "Mix", ir, !0, this.renderMix(e, n, r, a))}
         ${this.renderAdjacency(e, n, a)} ${this.renderPresence(e, n, t)}
         <div class="danger">
           <ha-button appearance="plain" @click=${this.onDelete}>Delete group</ha-button>
@@ -3076,7 +3076,7 @@ var Ti = "People can leave the property from here, so presence can move from her
     `;
 	}
 	renderAdjacency(e, t, n) {
-		return fe.has(t.kind) ? P("group", "adjacent", "Adjacent groups", ar, !0, v`
+		return fe.has(t.kind) ? wr("group", "adjacent", "Adjacent groups", ar, !0, v`
         <al-adjacency-table
           .config=${e}
           .path=${this.path}
@@ -3093,13 +3093,13 @@ var Ti = "People can leave the property from here, so presence can move from her
       ></ha-switch>
       <div>
         <div>Leads off the property</div>
-        <div class="muted">${Ti}</div>
+        <div class="muted">${Ei}</div>
         ${t.exit ? v`<div class="error">${t.exit}</div>` : s}
       </div>
     </div>`;
 	}
 	renderPresence(e, t, n) {
-		return S(e).enabled ? P("group", "presence", "Presence", or, !1, v`<al-presence-overrides
+		return S(e).enabled ? wr("group", "presence", "Presence", or, !1, v`<al-presence-overrides
         .hass=${this.hass}
         .config=${e}
         .path=${n}
@@ -3123,10 +3123,10 @@ var Ti = "People can leave the property from here, so presence can move from her
 		this.dispatchEvent(M(n, void 0, !0));
 	}
 };
-g([d({ attribute: !1 })], Ei.prototype, "hass", void 0), g([d({ attribute: !1 })], Ei.prototype, "config", void 0), g([d({ attribute: !1 })], Ei.prototype, "path", void 0), g([d({ attribute: !1 })], Ei.prototype, "errors", void 0), Ei = g([a("al-group-editor")], Ei);
+g([d({ attribute: !1 })], Di.prototype, "hass", void 0), g([d({ attribute: !1 })], Di.prototype, "config", void 0), g([d({ attribute: !1 })], Di.prototype, "path", void 0), g([d({ attribute: !1 })], Di.prototype, "errors", void 0), Di = g([a("al-group-editor")], Di);
 //#endregion
 //#region src/al-stimulus-editor.ts
-var L = class extends o {
+var Oi = class extends o {
 	constructor(...e) {
 		super(...e), this.path = null, this.errors = [], this.live = null;
 	}
@@ -3159,7 +3159,7 @@ var L = class extends o {
 		if (!t || !n) return;
 		let r = _t(t, n);
 		if (!r) return;
-		let i = ri(r, e.detail?.value ?? {}), a = ai(i, r);
+		let i = ii(r, e.detail?.value ?? {}), a = oi(i, r);
 		a !== void 0 && this.emitChange(b(t, n, i), `${A(n)}:${a}`);
 	}
 	setOverride(e, t) {
@@ -3176,17 +3176,17 @@ var L = class extends o {
     </div>` : s;
 	}
 	renderOverride(e, t, n, r) {
-		let { config: i } = this, a = Hr(t, e.name);
+		let { config: i } = this, a = Ur(t, e.name);
 		return v`<al-override-field
       .hass=${this.hass}
       .label=${e.label}
       .disabled=${a}
-      .hint=${a ? Vr : e.hint ?? ""}
+      .hint=${a ? Hr : e.hint ?? ""}
       .kind=${e.kind}
       .selector=${e.selector}
       .value=${t[e.name]}
       .inherited=${n[e.name]}
-      .inheritedFrom=${i ? oi(i, t, e.name) : "defaults"}
+      .inheritedFrom=${i ? si(i, t, e.name) : "defaults"}
       .error=${r[e.name]}
       @value-changed=${(t) => this.setOverride(e.name, t.detail.value)}
     ></al-override-field>`;
@@ -3196,44 +3196,44 @@ var L = class extends o {
 		if (!e || !t || t.length < 3) return v`<ha-card><span class="muted">Select a stimulus.</span></ha-card>`;
 		let n = _t(e, t);
 		if (!n) return v`<ha-card><span class="muted">This stimulus no longer exists.</span></ha-card>`;
-		let r = C(e, w(t)), i = j(this.errors, t), a = this.errors.filter((e) => e.path === A(t)), o = bt(e, n), c = this.live?.voices[r?.id ?? ""]?.find((e) => e.label === (n.key ?? n.entity)), l = si(this.live?.now, c?.phase_ends), u = Qr(n);
+		let r = C(e, w(t)), i = j(this.errors, t), a = this.errors.filter((e) => e.path === A(t)), o = bt(e, n), c = this.live?.voices[r?.id ?? ""]?.find((e) => e.label === (n.key ?? n.entity)), l = ci(this.live?.now, c?.phase_ends), u = $r(n);
 		return v`
       <ha-card header="Stimulus">
         ${Un(this, this.hass, n.entity)}
         ${a.map((e) => v`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
-        ${P("stimulus", "source", "Source", Xr, !0, v`
+        ${wr("stimulus", "source", "Source", Zr, !0, v`
             <ha-form
               .hass=${this.hass}
-              .data=${ti(n, qr(n))}
-              .schema=${ei(e, n, this.hass, qr(n))}
+              .data=${ni(n, Jr(n))}
+              .schema=${ti(e, n, this.hass, Jr(n))}
               .error=${i}
-              .computeLabel=${kr}
-              .computeHelper=${Ar}
+              .computeLabel=${Ar}
+              .computeHelper=${jr}
               @value-changed=${this.onFormChanged}
             ></ha-form>
           `)}
-        ${P("stimulus", "envelope", "Envelope", Yr, !0, v`
+        ${wr("stimulus", "envelope", "Envelope", Xr, !0, v`
             <ha-form
               .hass=${this.hass}
-              .data=${ti(n, Jr)}
-              .schema=${ei(e, n, this.hass, Jr)}
+              .data=${ni(n, Yr)}
+              .schema=${ti(e, n, this.hass, Yr)}
               .error=${i}
-              .computeLabel=${kr}
-              .computeHelper=${Ar}
+              .computeLabel=${Ar}
+              .computeHelper=${jr}
               @value-changed=${this.onFormChanged}
             ></ha-form>
             ${this.renderLive(c, l)}
             <al-envelope-sketch .envelope=${o}></al-envelope-sketch>
           `)}
-        ${P("stimulus", "overrides", "Override preset", Zr, !1, Gr.map((e) => this.renderOverride(e, n, o, i)), u === 0 ? s : v`<span class="badge">${u} overridden</span>`)}
+        ${wr("stimulus", "overrides", "Override preset", Qr, !1, Kr.map((e) => this.renderOverride(e, n, o, i)), u === 0 ? s : v`<span class="badge">${u} overridden</span>`)}
       </ha-card>
     `;
 	}
 };
-g([d({ attribute: !1 })], L.prototype, "hass", void 0), g([d({ attribute: !1 })], L.prototype, "config", void 0), g([d({ attribute: !1 })], L.prototype, "path", void 0), g([d({ attribute: !1 })], L.prototype, "errors", void 0), g([d({ attribute: !1 })], L.prototype, "live", void 0), L = g([a("al-stimulus-editor")], L);
+g([d({ attribute: !1 })], Oi.prototype, "hass", void 0), g([d({ attribute: !1 })], Oi.prototype, "config", void 0), g([d({ attribute: !1 })], Oi.prototype, "path", void 0), g([d({ attribute: !1 })], Oi.prototype, "errors", void 0), g([d({ attribute: !1 })], Oi.prototype, "live", void 0), Oi = g([a("al-stimulus-editor")], Oi);
 //#endregion
 //#region src/al-envelopes.ts
-var Di = {
+var ki = {
 	label: "Name",
 	id: "ID",
 	attack: "Attack",
@@ -3241,7 +3241,7 @@ var Di = {
 	sustain: "Sustain",
 	release: "Release",
 	impulse: "Impulse"
-}, Oi = {
+}, Ai = {
 	label: "What this preset is called in the panel. Blank shows the id instead.",
 	id: "Name stimuli use to pick this preset. Renaming it updates every reference.",
 	attack: "Time to rise from zero to the stimulus gain.",
@@ -3249,7 +3249,7 @@ var Di = {
 	sustain: "Multiplier on the peak, held while the trigger is on. Above 1 the decay climbs.",
 	release: "Time to fall from the group's limiter (full scale) back to zero; lower levels fall faster, at the same slope.",
 	impulse: "Fire and forget: the trigger ends the moment it starts, leaving only the release."
-}, ki = [
+}, ji = [
 	"label",
 	"id",
 	"attack",
@@ -3257,7 +3257,7 @@ var Di = {
 	"sustain",
 	"release",
 	"impulse"
-], Ai = [
+], Mi = [
 	{
 		name: "label",
 		selector: { text: {} }
@@ -3268,54 +3268,54 @@ var Di = {
 	},
 	{
 		name: "attack",
-		selector: I
+		selector: F
 	},
 	{
 		name: "decay",
-		selector: I
+		selector: F
 	},
 	{
 		name: "sustain",
-		selector: Mr
+		selector: Nr
 	},
 	{
 		name: "release",
-		selector: I
+		selector: F
 	},
 	{
 		name: "impulse",
 		selector: { boolean: {} }
 	}
-], ji = [
+], Ni = [
 	{
 		name: "retrigger",
-		label: Pr,
+		label: Fr,
 		kind: "select",
-		selector: Rr,
-		hint: Fr
+		selector: zr,
+		hint: Ir
 	},
 	{
 		name: "stack",
-		label: Ir,
+		label: Lr,
 		kind: "boolean",
-		selector: Tr,
-		hint: Lr
+		selector: Er,
+		hint: Rr
 	},
 	{
 		name: "unavailable",
 		label: "When unavailable",
 		kind: "select",
-		selector: Ur
+		selector: Wr
 	},
 	{
 		name: "debounce",
 		label: "Debounce",
 		kind: "duration",
-		selector: I
+		selector: F
 	}
-], Mi = "text/plain", Ni = 36, Pi = (e) => e.stopPropagation(), R = class extends o {
+], Pi = "text/plain", Fi = 36, Ii = (e) => e.stopPropagation(), I = class extends o {
 	constructor(...e) {
-		super(...e), this.errors = [], this.narrow = !1, this.selected = 0, this.blocked = null, this.dragging = null, this.dropAt = null, this.computeLabel = (e) => Di[e.name] ?? e.name, this.computeHelper = (e) => Oi[e.name] ?? "";
+		super(...e), this.errors = [], this.narrow = !1, this.selected = 0, this.blocked = null, this.dragging = null, this.dropAt = null, this.computeLabel = (e) => ki[e.name] ?? e.name, this.computeHelper = (e) => Ai[e.name] ?? "";
 	}
 	static {
 		this.styles = [_, m`
@@ -3423,17 +3423,17 @@ var Di = {
 		this.selected = a === -1 ? 0 : a, this.blocked = null, this.emitChange(r);
 	}
 	onDragStart(e, t) {
-		e.dataTransfer?.setData(Mi, String(t)), e.dataTransfer && (e.dataTransfer.effectAllowed = "move"), this.dragging = t;
+		e.dataTransfer?.setData(Pi, String(t)), e.dataTransfer && (e.dataTransfer.effectAllowed = "move"), this.dragging = t;
 	}
 	onDragEnd() {
 		this.dragging = null, this.dropAt = null;
 	}
 	slotFor(e, t) {
-		let n = e.currentTarget.getBoundingClientRect(), r = n.height || Ni;
+		let n = e.currentTarget.getBoundingClientRect(), r = n.height || Fi;
 		return e.clientY - n.top < r / 2 ? t : t + 1;
 	}
 	isOurs(e) {
-		return this.dragging !== null && e.dataTransfer?.types.includes(Mi) === !0;
+		return this.dragging !== null && e.dataTransfer?.types.includes(Pi) === !0;
 	}
 	onDragOver(e, t) {
 		this.isOurs(e) && (e.preventDefault(), e.dataTransfer && (e.dataTransfer.dropEffect = "move"), this.dropAt = this.slotFor(e, t));
@@ -3480,7 +3480,7 @@ var Di = {
 			sustain: typeof i.sustain == "number" ? i.sustain : r.sustain,
 			release: D(i.release) ?? r.release,
 			impulse: typeof i.impulse == "boolean" ? i.impulse : r.impulse
-		}, s = ki.find((e) => o[e] !== r[e]);
+		}, s = ji.find((e) => o[e] !== r[e]);
 		if (s === void 0) return;
 		let c = ["envelopes", n], l = b(gt(t, n, o.id), c, o);
 		this.emitChange(l, `${A(c)}:${s}`);
@@ -3511,7 +3511,7 @@ var Di = {
         <h3>Presets</h3>
         ${e.envelopes.map((t, n) => this.renderPresetRow(e, t, n))}
         ${e.envelopes.length === 0 ? v`<p class="muted">No presets yet.</p>` : s}
-        ${t ? v`<ha-alert alert-type="warning">${Ii(t)}</ha-alert>` : s}
+        ${t ? v`<ha-alert alert-type="warning">${Ri(t)}</ha-alert>` : s}
         <div class="row">
           <ha-button @click=${this.addPreset}>Add preset</ha-button>
         </div>
@@ -3559,8 +3559,8 @@ var Di = {
           .checked=${i}
           .disabled=${i}
           draggable="false"
-          @dragstart=${Pi}
-          @click=${Pi}
+          @dragstart=${Ii}
+          @click=${Ii}
           @change=${() => this.setDefault(n)}
         />
       </label>
@@ -3568,7 +3568,7 @@ var Di = {
         label="Delete preset"
         title="Delete preset"
         draggable="false"
-        @dragstart=${Pi}
+        @dragstart=${Ii}
         @click=${() => this.removePreset(n)}
       >
         <ha-icon icon="mdi:delete"></ha-icon>
@@ -3592,7 +3592,7 @@ var Di = {
 			sustain: n.sustain,
 			release: E(n.release),
 			impulse: n.impulse
-		}, c = Fi(e, t, n);
+		}, c = Li(e, t, n);
 		return v`
       <ha-card header="Envelope preset">
         ${a.map((e) => v`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
@@ -3600,7 +3600,7 @@ var Di = {
         <ha-form
           .hass=${this.hass}
           .data=${o}
-          .schema=${Ai}
+          .schema=${Mi}
           .error=${i}
           .computeLabel=${this.computeLabel}
           .computeHelper=${this.computeHelper}
@@ -3611,12 +3611,12 @@ var Di = {
         </div>
 
         <h3>Behaviour</h3>
-        ${ji.map((t) => v`<al-override-field
+        ${Ni.map((t) => v`<al-override-field
               .hass=${this.hass}
               .label=${t.label}
               .hint=${t.hint ?? ""}
               .kind=${t.kind}
-              .selector=${t.kind === "boolean" ? Tr : t.selector}
+              .selector=${t.kind === "boolean" ? Er : t.selector}
               .value=${n[t.name]}
               .inherited=${e.defaults[t.name]}
               .inheritedFrom=${"defaults"}
@@ -3627,37 +3627,37 @@ var Di = {
     `;
 	}
 };
-g([d({ attribute: !1 })], R.prototype, "hass", void 0), g([d({ attribute: !1 })], R.prototype, "config", void 0), g([d({ attribute: !1 })], R.prototype, "errors", void 0), g([d({ type: Boolean })], R.prototype, "narrow", void 0), g([l()], R.prototype, "selected", void 0), g([l()], R.prototype, "blocked", void 0), g([l()], R.prototype, "dragging", void 0), g([l()], R.prototype, "dropAt", void 0), R = g([a("al-envelopes")], R);
-function Fi(e, t, n) {
+g([d({ attribute: !1 })], I.prototype, "hass", void 0), g([d({ attribute: !1 })], I.prototype, "config", void 0), g([d({ attribute: !1 })], I.prototype, "errors", void 0), g([d({ type: Boolean })], I.prototype, "narrow", void 0), g([l()], I.prototype, "selected", void 0), g([l()], I.prototype, "blocked", void 0), g([l()], I.prototype, "dragging", void 0), g([l()], I.prototype, "dropAt", void 0), I = g([a("al-envelopes")], I);
+function Li(e, t, n) {
 	return n.id.trim() === "" ? "This preset needs an id before stimuli can name it." : e.envelopes.some((e, r) => r !== t && e.id === n.id) ? `Another preset already uses the id "${n.id}". Ids must be unique, and a reference follows a rename only while the id it names is unambiguous.` : null;
 }
-function Ii(e) {
+function Ri(e) {
 	let t = [];
 	return e.defaults && t.push("the defaults"), e.groups.length > 0 && t.push(`group${e.groups.length > 1 ? "s" : ""} ${e.groups.join(", ")}`), `"${e.id}" is still used by ${t.join(" and ")}. Point those at another preset first.`;
 }
 //#endregion
 //#region src/al-defaults.ts
-var Li = {
+var zi = {
 	envelope: "Default envelope",
 	max_value: "Max value",
 	precision: "Precision",
 	unavailable: "When unavailable",
-	retrigger: Pr,
-	stack: Ir,
+	retrigger: Fr,
+	stack: Lr,
 	debounce: "Debounce",
 	safety_refresh: "Safety refresh",
 	min_wake_interval: "Minimum wake interval"
-}, Ri = {
+}, Bi = {
 	envelope: "Preset used when a stimulus names none.",
 	max_value: "Limiter for groups that don't set their own.",
 	precision: "Display decimals.",
 	unavailable: "What an entity going unavailable does to its trigger.",
-	retrigger: Fr,
-	stack: Lr,
+	retrigger: Ir,
+	stack: Rr,
 	debounce: "Minimum time between triggers per stimulus.",
 	safety_refresh: "Periodic recompute as a self-heal.",
 	min_wake_interval: "Floor for the scheduler's timer delay."
-}, zi = [
+}, Vi = [
 	"envelope",
 	"max_value",
 	"precision",
@@ -3667,11 +3667,11 @@ var Li = {
 	"debounce",
 	"safety_refresh",
 	"min_wake_interval"
-], Bi = { duration: { enable_millisecond: !0 } }, Vi = { number: {
+], Hi = { duration: { enable_millisecond: !0 } }, Ui = { number: {
 	min: .1,
 	step: .1,
 	mode: "box"
-} }, Hi = { select: {
+} }, Wi = { select: {
 	mode: "dropdown",
 	options: [
 		0,
@@ -3682,7 +3682,7 @@ var Li = {
 		value: String(e),
 		label: String(e)
 	}))
-} }, Ui = { boolean: {} }, Wi = { select: {
+} }, Gi = { boolean: {} }, Ki = { select: {
 	mode: "dropdown",
 	options: [{
 		value: "hold",
@@ -3691,9 +3691,9 @@ var Li = {
 		value: "note_off",
 		label: "End the trigger"
 	}]
-} }, Gi = class extends o {
+} }, qi = class extends o {
 	constructor(...e) {
-		super(...e), this.errors = [], this.computeLabel = (e) => Li[e.name] ?? e.name, this.computeHelper = (e) => Ri[e.name] ?? "";
+		super(...e), this.errors = [], this.computeLabel = (e) => zi[e.name] ?? e.name, this.computeHelper = (e) => Bi[e.name] ?? "";
 	}
 	static {
 		this.styles = [_, m`
@@ -3719,35 +3719,35 @@ var Li = {
 			},
 			{
 				name: "max_value",
-				selector: Vi
-			},
-			{
-				name: "precision",
-				selector: Hi
-			},
-			{
-				name: "unavailable",
-				selector: Wi
-			},
-			{
-				name: "retrigger",
-				selector: Rr
-			},
-			{
-				name: "stack",
 				selector: Ui
 			},
 			{
+				name: "precision",
+				selector: Wi
+			},
+			{
+				name: "unavailable",
+				selector: Ki
+			},
+			{
+				name: "retrigger",
+				selector: zr
+			},
+			{
+				name: "stack",
+				selector: Gi
+			},
+			{
 				name: "debounce",
-				selector: Bi
+				selector: Hi
 			},
 			{
 				name: "safety_refresh",
-				selector: Bi
+				selector: Hi
 			},
 			{
 				name: "min_wake_interval",
-				selector: Bi
+				selector: Hi
 			}
 		];
 	}
@@ -3765,7 +3765,7 @@ var Li = {
 			debounce: D(r.debounce) ?? n.debounce,
 			safety_refresh: D(r.safety_refresh) ?? n.safety_refresh,
 			min_wake_interval: D(r.min_wake_interval) ?? n.min_wake_interval
-		}, o = zi.find((e) => a[e] !== n[e]);
+		}, o = Vi.find((e) => a[e] !== n[e]);
 		o !== void 0 && this.emitChange(b(t, ["defaults"], a), `defaults:${o}`);
 	}
 	emitChange(e, t) {
@@ -3806,37 +3806,37 @@ var Li = {
     `;
 	}
 };
-g([d({ attribute: !1 })], Gi.prototype, "hass", void 0), g([d({ attribute: !1 })], Gi.prototype, "config", void 0), g([d({ attribute: !1 })], Gi.prototype, "errors", void 0), Gi = g([a("al-defaults")], Gi);
+g([d({ attribute: !1 })], qi.prototype, "hass", void 0), g([d({ attribute: !1 })], qi.prototype, "config", void 0), g([d({ attribute: !1 })], qi.prototype, "errors", void 0), qi = g([a("al-defaults")], qi);
 //#endregion
 //#region src/fader.ts
-var Ki = .1, qi = Math.log10(Ki), Ji = Math.log10(10) - qi, Yi = (e) => Math.min(10, Math.max(Ki, e)), Xi = (e) => Math.round(e * 100) / 100, Zi = (e) => Xi(Yi(e));
-function Qi(e) {
-	return (Math.log10(Yi(e)) - qi) / Ji;
-}
-function $i(e) {
-	return Xi(Yi(10 ** (qi + Math.min(1, Math.max(0, e)) * Ji)));
-}
-function ea(e, t, n = !1) {
-	let r = n ? 1.05 : 1.25;
-	return Xi(Yi(t === 1 ? e * r : e / r));
+var Ji = .1, Yi = Math.log10(Ji), Xi = Math.log10(10) - Yi, Zi = (e) => Math.min(10, Math.max(Ji, e)), Qi = (e) => Math.round(e * 100) / 100, $i = (e) => Qi(Zi(e));
+function ea(e) {
+	return (Math.log10(Zi(e)) - Yi) / Xi;
 }
 function ta(e) {
+	return Qi(Zi(10 ** (Yi + Math.min(1, Math.max(0, e)) * Xi)));
+}
+function na(e, t, n = !1) {
+	let r = n ? 1.05 : 1.25;
+	return Qi(Zi(t === 1 ? e * r : e / r));
+}
+function ra(e) {
 	let t = e.toFixed(2).replace(/0+$/, "");
 	return t.endsWith(".") && (t += "0"), t;
 }
-var na = {
-	min: Ki,
+var ia = {
+	min: Ji,
 	max: 10,
-	toPosition: Qi,
-	fromPosition: $i,
-	clamp: Zi,
-	step: (e, t, n = !1) => ea(e, t, n),
-	page: (e, t) => Zi(t === 1 ? e * 2 : e / 2),
-	format: ta,
+	toPosition: ea,
+	fromPosition: ta,
+	clamp: $i,
+	step: (e, t, n = !1) => na(e, t, n),
+	page: (e, t) => $i(t === 1 ? e * 2 : e / 2),
+	format: ra,
 	reset: 1
-}, ra = (e) => Math.min(6, Math.max(0, Math.trunc(e)));
-function ia(e, t) {
-	let n = e > 0 ? e : 1, r = ra(t), i = 10 ** -r, a = (e) => Number(Math.min(n, Math.max(0, e)).toFixed(r)), o = Math.max(i, Number((n / 10).toFixed(r)));
+}, aa = (e) => Math.min(6, Math.max(0, Math.trunc(e)));
+function oa(e, t) {
+	let n = e > 0 ? e : 1, r = aa(t), i = 10 ** -r, a = (e) => Number(Math.min(n, Math.max(0, e)).toFixed(r)), o = Math.max(i, Number((n / 10).toFixed(r)));
 	return {
 		min: 0,
 		max: n,
@@ -3851,7 +3851,7 @@ function ia(e, t) {
 }
 //#endregion
 //#region src/al-fader.ts
-var aa = 12, oa = (e) => `${Math.round(e * 1e3) / 10}%`, z = class extends o {
+var sa = 12, ca = (e) => `${Math.round(e * 1e3) / 10}%`, L = class extends o {
 	constructor(...e) {
 		super(...e), this.value = 1, this.disabled = !1, this.focusable = !0, this.readOnly = !1, this.label = "Gain", this.showValue = !0, this.unavailable = !1, this.mode = "gain", this.max = 5, this.precision = 1, this.tick = null, this.dragValue = null, this.dragging = !1;
 	}
@@ -3900,7 +3900,7 @@ var aa = 12, oa = (e) => `${Math.round(e * 1e3) / 10}%`, z = class extends o {
       position: absolute;
       left: -3px;
       right: -3px;
-      height: ${aa}px;
+      height: ${sa}px;
       border-radius: 3px;
       background: var(--primary-color);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
@@ -3936,7 +3936,7 @@ var aa = 12, oa = (e) => `${Math.round(e * 1e3) / 10}%`, z = class extends o {
   `;
 	}
 	get scale() {
-		return this.mode === "level" ? ia(this.max, this.precision) : na;
+		return this.mode === "level" ? oa(this.max, this.precision) : ia;
 	}
 	get current() {
 		return this.dragValue ?? this.value;
@@ -4011,8 +4011,8 @@ var aa = 12, oa = (e) => `${Math.round(e * 1e3) / 10}%`, z = class extends o {
 	render() {
 		let e = this.scale, t = e.clamp(this.current), n = e.toPosition(t), r = this.tick === null || e.clamp(this.tick) === t ? null : e.clamp(this.tick), i = v`
       ${this.mode === "gain" ? v`<div class="unity"></div>` : s}
-      <div class="fill" style="height: ${oa(n)}"></div>
-      ${r === null ? s : v`<div class="tick" style="bottom: ${oa(e.toPosition(r))}" title=${e.format(r)}></div>`}
+      <div class="fill" style="height: ${ca(n)}"></div>
+      ${r === null ? s : v`<div class="tick" style="bottom: ${ca(e.toPosition(r))}" title=${e.format(r)}></div>`}
     `;
 		return this.readOnly ? v`
         <div
@@ -4050,34 +4050,34 @@ var aa = 12, oa = (e) => `${Math.round(e * 1e3) / 10}%`, z = class extends o {
           @pointercancel=${this.onPointerUp}
         >
           ${i}
-          <div class="knob" style="bottom: calc(${oa(n)} - ${Math.round((n - .5) * aa * 10) / 10}px - ${aa / 2}px)"></div>
+          <div class="knob" style="bottom: calc(${ca(n)} - ${Math.round((n - .5) * sa * 10) / 10}px - ${sa / 2}px)"></div>
         </div>
         ${this.showValue ? v`<div class="value">${e.format(t)}</div>` : s}
       </div>
     `;
 	}
 };
-g([d({ type: Number })], z.prototype, "value", void 0), g([d({
+g([d({ type: Number })], L.prototype, "value", void 0), g([d({
 	type: Boolean,
 	reflect: !0
-})], z.prototype, "disabled", void 0), g([d({ type: Boolean })], z.prototype, "focusable", void 0), g([d({
+})], L.prototype, "disabled", void 0), g([d({ type: Boolean })], L.prototype, "focusable", void 0), g([d({
 	type: Boolean,
 	reflect: !0,
 	attribute: "readonly"
-})], z.prototype, "readOnly", void 0), g([d({ type: String })], z.prototype, "label", void 0), g([d({ type: Boolean })], z.prototype, "showValue", void 0), g([d({ type: Boolean })], z.prototype, "unavailable", void 0), g([d({ type: String })], z.prototype, "mode", void 0), g([d({ type: Number })], z.prototype, "max", void 0), g([d({ type: Number })], z.prototype, "precision", void 0), g([d({ type: Number })], z.prototype, "tick", void 0), g([l()], z.prototype, "dragValue", void 0), z = g([a("al-fader")], z);
+})], L.prototype, "readOnly", void 0), g([d({ type: String })], L.prototype, "label", void 0), g([d({ type: Boolean })], L.prototype, "showValue", void 0), g([d({ type: Boolean })], L.prototype, "unavailable", void 0), g([d({ type: String })], L.prototype, "mode", void 0), g([d({ type: Number })], L.prototype, "max", void 0), g([d({ type: Number })], L.prototype, "precision", void 0), g([d({ type: Number })], L.prototype, "tick", void 0), g([l()], L.prototype, "dragValue", void 0), L = g([a("al-fader")], L);
 //#endregion
 //#region node_modules/.pnpm/lit-html@3.3.3/node_modules/lit-html/directive.js
-var sa = {
+var la = {
 	ATTRIBUTE: 1,
 	CHILD: 2,
 	PROPERTY: 3,
 	BOOLEAN_ATTRIBUTE: 4,
 	EVENT: 5,
 	ELEMENT: 6
-}, ca = (e) => (...t) => ({
+}, ua = (e) => (...t) => ({
 	_$litDirective$: e,
 	values: t
-}), la = class {
+}), da = class {
 	constructor(e) {}
 	get _$AU() {
 		return this._$AM._$AU;
@@ -4091,9 +4091,9 @@ var sa = {
 	update(e, t) {
 		return this.render(...t);
 	}
-}, ua = ca(class extends la {
+}, fa = ua(class extends da {
 	constructor(e) {
-		if (super(e), e.type !== sa.ATTRIBUTE || e.name !== "class" || e.strings?.length > 2) throw Error("`classMap()` can only be used in the `class` attribute and must be the only part in the attribute.");
+		if (super(e), e.type !== la.ATTRIBUTE || e.name !== "class" || e.strings?.length > 2) throw Error("`classMap()` can only be used in the `class` attribute and must be the only part in the attribute.");
 	}
 	render(e) {
 		return " " + Object.keys(e).filter((t) => e[t]).join(" ") + " ";
@@ -4112,7 +4112,7 @@ var sa = {
 		}
 		return f;
 	}
-}), da = (e) => `${Math.round(e * 1e3) / 10}%`, fa = class extends o {
+}), pa = (e) => `${Math.round(e * 1e3) / 10}%`, ma = class extends o {
 	constructor(...e) {
 		super(...e), this.value = 0, this.max = 1, this.gated = !1;
 	}
@@ -4161,20 +4161,20 @@ var sa = {
 		let e = this.ratio;
 		return v`
       <div class="meter">
-        <div class=${ua({
+        <div class=${fa({
 			fill: !0,
 			hot: e > .9
-		})} style="width: ${da(e)}"></div>
+		})} style="width: ${pa(e)}"></div>
       </div>
-      <div class=${ua({
+      <div class=${fa({
 			dot: !0,
 			gated: this.gated
 		})}></div>
     `;
 	}
 };
-g([d({ type: Number })], fa.prototype, "value", void 0), g([d({ type: Number })], fa.prototype, "max", void 0), g([d({ type: Boolean })], fa.prototype, "gated", void 0), fa = g([a("al-meter")], fa);
-var B = class extends o {
+g([d({ type: Number })], ma.prototype, "value", void 0), g([d({ type: Number })], ma.prototype, "max", void 0), g([d({ type: Boolean })], ma.prototype, "gated", void 0), ma = g([a("al-meter")], ma);
+var R = class extends o {
 	constructor(...e) {
 		super(...e), this.label = "", this.editable = !1, this.value = 0, this.realValue = 0, this.maxValue = 5, this.precision = 1, this.liveNow = 0, this.muted = !1, this.selected = !1, this.errors = 0, this.pending = null, this.dragging = !1;
 	}
@@ -4379,19 +4379,19 @@ var B = class extends o {
     `;
 	}
 };
-g([d({ type: String })], B.prototype, "label", void 0), g([d({
+g([d({ type: String })], R.prototype, "label", void 0), g([d({
 	type: Boolean,
 	reflect: !0
-})], B.prototype, "editable", void 0), g([d({ attribute: !1 })], B.prototype, "value", void 0), g([d({ attribute: !1 })], B.prototype, "realValue", void 0), g([d({ type: Number })], B.prototype, "maxValue", void 0), g([d({ type: Number })], B.prototype, "precision", void 0), g([d({ type: Number })], B.prototype, "liveNow", void 0), g([d({
+})], R.prototype, "editable", void 0), g([d({ attribute: !1 })], R.prototype, "value", void 0), g([d({ attribute: !1 })], R.prototype, "realValue", void 0), g([d({ type: Number })], R.prototype, "maxValue", void 0), g([d({ type: Number })], R.prototype, "precision", void 0), g([d({ type: Number })], R.prototype, "liveNow", void 0), g([d({
 	type: Boolean,
 	reflect: !0
-})], B.prototype, "muted", void 0), g([d({
+})], R.prototype, "muted", void 0), g([d({
 	type: Boolean,
 	reflect: !0
-})], B.prototype, "selected", void 0), g([d({ type: Number })], B.prototype, "errors", void 0), g([l()], B.prototype, "pending", void 0), B = g([a("al-strip")], B);
+})], R.prototype, "selected", void 0), g([d({ type: Number })], R.prototype, "errors", void 0), g([l()], R.prototype, "pending", void 0), R = g([a("al-strip")], R);
 //#endregion
 //#region src/al-mixer.ts
-var pa = 8e3, ma = (e) => e instanceof Error ? e.message : String(e), V = class extends o {
+var ha = 8e3, ga = (e) => e instanceof Error ? e.message : String(e), z = class extends o {
 	constructor(...e) {
 		super(...e), this.nav = {
 			expanded: /* @__PURE__ */ new Set(),
@@ -4531,14 +4531,14 @@ var pa = 8e3, ma = (e) => e instanceof Error ? e.message : String(e), V = class 
 	fail(e) {
 		this.commandError = e, this.clearErrorTimer(), this.errorTimer = window.setTimeout(() => {
 			this.errorTimer = void 0, this.commandError = null;
-		}, pa);
+		}, ha);
 	}
 	async command(e, t, n) {
 		let r = this.hass;
 		if (!(!r || this.preview)) try {
 			await t(r), this.commandError = null, this.clearErrorTimer(), this.dispatchEvent(On());
 		} catch (t) {
-			n?.settle(null), this.fail(`Could not ${e}: ${ma(t)}`);
+			n?.settle(null), this.fail(`Could not ${e}: ${ga(t)}`);
 		}
 	}
 	trackOf(e) {
@@ -4714,34 +4714,34 @@ var pa = 8e3, ma = (e) => e instanceof Error ? e.message : String(e), V = class 
     `;
 	}
 };
-g([d({ attribute: !1 })], V.prototype, "hass", void 0), g([d({ attribute: !1 })], V.prototype, "config", void 0), g([d({ attribute: !1 })], V.prototype, "nav", void 0), g([d({ attribute: !1 })], V.prototype, "errors", void 0), g([d({ attribute: !1 })], V.prototype, "live", void 0), g([d({
+g([d({ attribute: !1 })], z.prototype, "hass", void 0), g([d({ attribute: !1 })], z.prototype, "config", void 0), g([d({ attribute: !1 })], z.prototype, "nav", void 0), g([d({ attribute: !1 })], z.prototype, "errors", void 0), g([d({ attribute: !1 })], z.prototype, "live", void 0), g([d({
 	type: Boolean,
 	reflect: !0
-})], V.prototype, "narrow", void 0), g([d({ attribute: !1 })], V.prototype, "preview", void 0), g([l()], V.prototype, "editing", void 0), g([l()], V.prototype, "commandError", void 0), V = g([a("al-mixer")], V);
+})], z.prototype, "narrow", void 0), g([d({ attribute: !1 })], z.prototype, "preview", void 0), g([l()], z.prototype, "editing", void 0), g([l()], z.prototype, "commandError", void 0), z = g([a("al-mixer")], z);
 //#endregion
 //#region src/al-timeline.ts
-var ha = 32, ga = 28, _a = 4, va = 8, ya = 800, ba = 220, xa = 160, Sa = 2e3, Ca = 6e4, wa = 1e4, Ta = 6e4, Ea = 32, Da = [
+var _a = 32, va = 28, ya = 4, ba = 8, xa = 800, Sa = 220, Ca = 160, wa = 2e3, Ta = 6e4, Ea = 1e4, Da = 6e4, Oa = 32, ka = [
 	"24h",
 	"7d",
 	"30d"
-], Oa = [
+], Aa = [
 	"off",
 	"24h",
 	"7d"
-], ka = ["rgba(255,255,255,0.04)", "rgba(255,255,255,0.10)"], Aa = (e) => `hsl(${e * 67 % 360} 55% 62%)`, H = /* @__PURE__ */ new Map(), ja = /* @__PURE__ */ new Map();
-function Ma(e, t) {
+], ja = ["rgba(255,255,255,0.04)", "rgba(255,255,255,0.10)"], Ma = (e) => `hsl(${e * 67 % 360} 55% 62%)`, B = /* @__PURE__ */ new Map(), Na = /* @__PURE__ */ new Map();
+function Pa(e, t) {
 	let n = Date.now();
-	for (let [e, t] of H) n - t.at >= Ta && H.delete(e);
-	H.delete(e), H.set(e, {
+	for (let [e, t] of B) n - t.at >= Da && B.delete(e);
+	B.delete(e), B.set(e, {
 		at: n,
 		data: t
 	});
-	for (let e of H.keys()) {
-		if (H.size <= Ea) break;
-		H.delete(e);
+	for (let e of B.keys()) {
+		if (B.size <= Oa) break;
+		B.delete(e);
 	}
 }
-var Na = (e) => e ? e.replace(/[MLZ]/g, " ").trim().replace(/\s+/g, " ") : "", Pa = (e, t) => {
+var Fa = (e) => e ? e.replace(/[MLZ]/g, " ").trim().replace(/\s+/g, " ") : "", Ia = (e, t) => {
 	let n = /* @__PURE__ */ new Date(e * 1e3);
 	return t < 86400 ? n.toLocaleTimeString(void 0, {
 		hour: "2-digit",
@@ -4750,19 +4750,19 @@ var Na = (e) => e ? e.replace(/[MLZ]/g, " ").trim().replace(/\s+/g, " ") : "", P
 		month: "short",
 		day: "numeric"
 	});
-}, Fa = (e) => String(Math.round(e * 100) / 100), Ia = (e, t, n) => Math.min(n, Math.max(t, e));
-function La(e, t, n, r) {
-	let i = Math.max(1, r.width - ha), a = Math.max(1, r.height - ga), o = n.start, s = Math.max(n.until, n.end), c = zt(o, s, i), l = Bt(r.maxValue, a), u = Object.keys(e.series), d = u.includes(t) ? t : u[0] ?? t, f = (t, n) => {
-		let r = Vt(e.series[t] ?? [], Sa);
+}, La = (e) => String(Math.round(e * 100) / 100), Ra = (e, t, n) => Math.min(n, Math.max(t, e));
+function za(e, t, n, r) {
+	let i = Math.max(1, r.width - _a), a = Math.max(1, r.height - va), o = n.start, s = Math.max(n.until, n.end), c = zt(o, s, i), l = Bt(r.maxValue, a), u = Object.keys(e.series), d = u.includes(t) ? t : u[0] ?? t, f = (t, n) => {
+		let r = Vt(e.series[t] ?? [], wa);
 		return {
 			id: t,
 			points: r,
 			d: Ht(r, c, l),
 			color: n
 		};
-	}, p = f(d, "var(--primary-color)"), ee = r.showChannels ? u.filter((e) => e !== d).map((e, t) => f(e, Aa(t))) : [], m = e.forecast, te = m ? Na(Ut(m, c, l, Sa)) : "", ne = m ? Ht(Vt(Wt(m, "p50"), Sa), c, l) : "", re = [];
+	}, p = f(d, "var(--primary-color)"), ee = r.showChannels ? u.filter((e) => e !== d).map((e, t) => f(e, Ma(t))) : [], m = e.forecast, te = m ? Fa(Ut(m, c, l, wa)) : "", ne = m ? Ht(Vt(Wt(m, "p50"), wa), c, l) : "", re = [];
 	for (let [, , t] of e.day_types) re.includes(t) || re.push(t);
-	let ie = (e) => ka[re.indexOf(e) % ka.length], ae = Kt(e.day_types.map(([e, t, n]) => [
+	let ie = (e) => ja[re.indexOf(e) % ja.length], ae = Kt(e.day_types.map(([e, t, n]) => [
 		e,
 		t,
 		n
@@ -4795,9 +4795,9 @@ function La(e, t, n, r) {
 		plotH: a
 	};
 }
-var U = class extends o {
+var V = class extends o {
 	constructor(...e) {
-		super(...e), this.groupId = null, this.heading = "", this.labels = {}, this.precisions = {}, this.cursorTime = null, this.viewport = null, this.pinnedTime = null, this.dragging = !1, this.range = "7d", this.horizon = "24h", this.showChannels = !0, this.showLights = !0, this.live = null, this.maxValue = 5, this.profileState = null, this.minDays = 14, this.narrow = !1, this.paused = !1, this.cursorIndex = null, this.width = ya, this.loaded = null, this.error = null, this.liveValue = null, this.seq = 0, this.memo = null;
+		super(...e), this.groupId = null, this.heading = "", this.labels = {}, this.precisions = {}, this.cursorTime = null, this.viewport = null, this.pinnedTime = null, this.dragging = !1, this.range = "7d", this.horizon = "24h", this.showChannels = !0, this.showLights = !0, this.live = null, this.maxValue = 5, this.profileState = null, this.minDays = 14, this.narrow = !1, this.paused = !1, this.cursorIndex = null, this.width = xa, this.loaded = null, this.error = null, this.liveValue = null, this.seq = 0, this.memo = null;
 	}
 	static {
 		this.styles = [_, m`
@@ -4972,7 +4972,7 @@ var U = class extends o {
     `];
 	}
 	get height() {
-		return this.narrow ? xa : ba;
+		return this.narrow ? Ca : Sa;
 	}
 	get refetchable() {
 		return !this.paused && document.visibilityState === "visible";
@@ -4992,7 +4992,7 @@ var U = class extends o {
 			t > 0 && (this.width = t);
 		}), this.observer.observe(this)), this.timer = setInterval(() => {
 			this.refetchable && this.load();
-		}, Ca), this.load();
+		}, Ta), this.load();
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), this.observer?.disconnect(), this.observer = void 0, this.timer !== void 0 && clearInterval(this.timer), this.timer = void 0, this.resetLiveWatch(), this.clearViewportTimer(), this.seq++, this.dragging = !1;
@@ -5010,7 +5010,7 @@ var U = class extends o {
 		}
 		Math.abs(t.value - n) <= 10 ** -t.precision / 2 || (this.liveValue = t.value, this.liveTimer === void 0 && (this.liveTimer = setTimeout(() => {
 			this.liveTimer = void 0, this.refetchable && this.load(!0);
-		}, wa)));
+		}, Ea)));
 	}
 	willUpdate(e) {
 		let t = e.has("groupId") || e.has("range") || e.has("horizon") || e.has("showChannels"), n = e.has("hass") && e.get("hass") === void 0 && this.hass !== void 0;
@@ -5041,19 +5041,19 @@ var U = class extends o {
 	async load(e = !1) {
 		let t = this.hass, r = this.groupId;
 		if (!t || r === null) return;
-		let i = this.query(r), a = Jt(i), o = e ? void 0 : H.get(a);
-		if (o && Date.now() - o.at < Ta) {
+		let i = this.query(r), a = Jt(i), o = e ? void 0 : B.get(a);
+		if (o && Date.now() - o.at < Da) {
 			this.seq++, this.loaded = {
 				q: i,
 				data: o.data
-			}, this.error = null, Ma(a, o.data);
+			}, this.error = null, Pa(a, o.data);
 			return;
 		}
-		let s = e ? void 0 : ja.get(a);
+		let s = e ? void 0 : Na.get(a);
 		if (!s) {
 			let e = n(t, i);
-			s = e, ja.set(a, e), e.then((e) => Ma(a, e), () => void 0).finally(() => {
-				ja.get(a) === e && ja.delete(a);
+			s = e, Na.set(a, e), e.then((e) => Pa(a, e), () => void 0).finally(() => {
+				Na.get(a) === e && Na.delete(a);
 			});
 		}
 		let c = ++this.seq;
@@ -5085,7 +5085,7 @@ var U = class extends o {
 			this.showChannels
 		], n = this.memo;
 		if (n && n.key.length === t.length && n.key.every((e, n) => e === t[n])) return n.value;
-		let r = La(e.data, e.q.group_id, this.viewport ? {
+		let r = za(e.data, e.q.group_id, this.viewport ? {
 			...this.viewport,
 			until: this.viewport.end
 		} : {
@@ -5133,7 +5133,7 @@ var U = class extends o {
 		this.showLights = !this.showLights, this.emitSettings();
 	}
 	timeAt(e, t) {
-		let n = e.currentTarget.getBoundingClientRect(), r = n.width > 0 ? this.width / n.width : 1, i = Ia(((e.clientX - n.left) * r - ha) / t.plotW, 0, 1);
+		let n = e.currentTarget.getBoundingClientRect(), r = n.width > 0 ? this.width / n.width : 1, i = Ra(((e.clientX - n.left) * r - _a) / t.plotW, 0, 1);
 		return t.t0 + i * (t.t1 - t.t0);
 	}
 	emitTransport() {
@@ -5192,7 +5192,7 @@ var U = class extends o {
 	onWheel(e) {
 		let t = this.paths;
 		if (t) {
-			if (e.ctrlKey || e.metaKey) e.preventDefault(), this.zoom(Math.exp(Ia(e.deltaY, -100, 100) * .01), this.timeAt(e, t));
+			if (e.ctrlKey || e.metaKey) e.preventDefault(), this.zoom(Math.exp(Ra(e.deltaY, -100, 100) * .01), this.timeAt(e, t));
 			else if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
 				e.preventDefault();
 				let n = e.deltaX * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? t.plotW : 1) / t.plotW * (t.t1 - t.t0);
@@ -5226,7 +5226,7 @@ var U = class extends o {
 		if (n < 0 || e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
 		e.preventDefault();
 		let r = (e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 10 : 1);
-		this.cursorIndex = this.cursorIndex === null ? r > 0 ? 0 : n : Ia(this.cursorIndex + r, 0, n), this.pinnedTime = t.bus.points[this.cursorIndex][0], this.selectTime(this.pinnedTime);
+		this.cursorIndex = this.cursorIndex === null ? r > 0 ? 0 : n : Ra(this.cursorIndex + r, 0, n), this.pinnedTime = t.bus.points[this.cursorIndex][0], this.selectTime(this.pinnedTime);
 	}
 	renderChips() {
 		let e = this.learningHint;
@@ -5234,7 +5234,7 @@ var U = class extends o {
       <div class="toolbar">
         <span class="title">${this.heading}</span>
         <div class="chips" role="group" aria-label="History range">
-          ${Da.map((e) => v`
+          ${ka.map((e) => v`
               <button
                 class="chip range"
                 data-range=${e}
@@ -5246,7 +5246,7 @@ var U = class extends o {
             `)}
         </div>
         <div class="chips horizons" role="group" aria-label="Forecast horizon">
-          ${Oa.map((t) => {
+          ${Aa.map((t) => {
 			let n = t !== "off" && !this.forecastReady;
 			return v`
               <button
@@ -5278,7 +5278,7 @@ var U = class extends o {
     `;
 	}
 	renderChart(e) {
-		let n = this.width, r = this.height, i = e.x(this.nowAt()), a = this.tailPath(e), o = e.plotH + _a, c = this.cursorTime === null ? null : e.x(this.cursorTime), l = `${this.heading} activity, ${this.range} history, ${this.horizon} forecast`;
+		let n = this.width, r = this.height, i = e.x(this.nowAt()), a = this.tailPath(e), o = e.plotH + ya, c = this.cursorTime === null ? null : e.x(this.cursorTime), l = `${this.heading} activity, ${this.range} history, ${this.horizon} forecast`;
 		return v`
       <svg
         class="chart"
@@ -5306,12 +5306,12 @@ var U = class extends o {
 			.5,
 			0
 		].map((r) => t`
-            <line class="grid" x1=${ha} y1=${e.y(this.maxValue * r)} x2=${n} y2=${e.y(this.maxValue * r)}></line>
+            <line class="grid" x1=${_a} y1=${e.y(this.maxValue * r)} x2=${n} y2=${e.y(this.maxValue * r)}></line>
             <text class="ytick" x=${28} y=${e.y(this.maxValue * r) + 3} text-anchor="end">
-              ${Fa(this.maxValue * r)}
+              ${La(this.maxValue * r)}
             </text>
           `)}
-        <g transform="translate(${ha},0)">
+        <g transform="translate(${_a},0)">
           ${e.dayTypes.map((n) => t`<rect
               class="daytype"
               x=${n.x0}
@@ -5330,7 +5330,7 @@ var U = class extends o {
                   x=${e.x0}
                   y=${o}
                   width=${Math.max(1, e.x1 - e.x0)}
-                  height=${va}
+                  height=${ba}
                   fill="rgba(255,220,120,1)"
                   opacity="0.6"
                 ></rect>`) : s}
@@ -5339,7 +5339,7 @@ var U = class extends o {
                   x=${e.x0}
                   y=${o}
                   width=${Math.max(1, e.x1 - e.x0)}
-                  height=${va}
+                  height=${ba}
                   fill="rgba(255,220,120,1)"
                   opacity="0.3"
                 ></rect>`) : s}
@@ -5358,13 +5358,13 @@ var U = class extends o {
 			[.5, "middle"],
 			[1, "end"]
 		].map(([r, i]) => t`<text class="xlabel" x=${r * e.plotW} y=${n} text-anchor=${i}>
-        ${Pa(e.t0 + r * (e.t1 - e.t0), e.t1 - e.t0)}
+        ${Ia(e.t0 + r * (e.t1 - e.t0), e.t1 - e.t0)}
       </text>`);
 	}
 	renderTooltip(e) {
 		let t = this.cursorTime;
 		if (t === null || t < e.t0 || t > e.t1) return s;
-		let n = this.forecastReady ? this.loaded?.data.forecast : null, r = this.loaded?.q.resolution === "5m" ? 600 : 7200, i = t > this.nowAt() ? n ? Zt(Wt(n, "p50"), t) : null : Zt(e.bus.points, t, r), a = (ha + e.x(t)) / this.width * 100, o = this.loaded?.data.day_types.find(([e, n]) => t >= e && t < n)?.[2], c = (e, t) => {
+		let n = this.forecastReady ? this.loaded?.data.forecast : null, r = this.loaded?.q.resolution === "5m" ? 600 : 7200, i = t > this.nowAt() ? n ? Zt(Wt(n, "p50"), t) : null : Zt(e.bus.points, t, r), a = (_a + e.x(t)) / this.width * 100, o = this.loaded?.data.day_types.find(([e, n]) => t >= e && t < n)?.[2], c = (e, t) => {
 			if (t === null) return null;
 			let n = st(t, this.precisions[e] ?? this.live?.groups[e]?.precision ?? 1);
 			return Number(n) === 0 ? null : n;
@@ -5431,18 +5431,18 @@ var U = class extends o {
     `;
 	}
 };
-g([d({ attribute: !1 })], U.prototype, "hass", void 0), g([d({ attribute: !1 })], U.prototype, "groupId", void 0), g([d({ attribute: !1 })], U.prototype, "heading", void 0), g([d({ attribute: !1 })], U.prototype, "labels", void 0), g([d({ attribute: !1 })], U.prototype, "precisions", void 0), g([l()], U.prototype, "cursorTime", void 0), g([l()], U.prototype, "viewport", void 0), g([d({ attribute: !1 })], U.prototype, "range", void 0), g([d({ attribute: !1 })], U.prototype, "horizon", void 0), g([d({ type: Boolean })], U.prototype, "showChannels", void 0), g([d({ type: Boolean })], U.prototype, "showLights", void 0), g([d({ attribute: !1 })], U.prototype, "live", void 0), g([d({ type: Number })], U.prototype, "maxValue", void 0), g([d({ attribute: !1 })], U.prototype, "profileState", void 0), g([d({ type: Number })], U.prototype, "minDays", void 0), g([d({
+g([d({ attribute: !1 })], V.prototype, "hass", void 0), g([d({ attribute: !1 })], V.prototype, "groupId", void 0), g([d({ attribute: !1 })], V.prototype, "heading", void 0), g([d({ attribute: !1 })], V.prototype, "labels", void 0), g([d({ attribute: !1 })], V.prototype, "precisions", void 0), g([l()], V.prototype, "cursorTime", void 0), g([l()], V.prototype, "viewport", void 0), g([d({ attribute: !1 })], V.prototype, "range", void 0), g([d({ attribute: !1 })], V.prototype, "horizon", void 0), g([d({ type: Boolean })], V.prototype, "showChannels", void 0), g([d({ type: Boolean })], V.prototype, "showLights", void 0), g([d({ attribute: !1 })], V.prototype, "live", void 0), g([d({ type: Number })], V.prototype, "maxValue", void 0), g([d({ attribute: !1 })], V.prototype, "profileState", void 0), g([d({ type: Number })], V.prototype, "minDays", void 0), g([d({
 	type: Boolean,
 	reflect: !0
-})], U.prototype, "narrow", void 0), g([d({ type: Boolean })], U.prototype, "paused", void 0), g([l()], U.prototype, "cursorIndex", void 0), g([l()], U.prototype, "width", void 0), g([l()], U.prototype, "loaded", void 0), g([l()], U.prototype, "error", void 0), U = g([a("al-timeline")], U);
+})], V.prototype, "narrow", void 0), g([d({ type: Boolean })], V.prototype, "paused", void 0), g([l()], V.prototype, "cursorIndex", void 0), g([l()], V.prototype, "width", void 0), g([l()], V.prototype, "loaded", void 0), g([l()], V.prototype, "error", void 0), V = g([a("al-timeline")], V);
 //#endregion
 //#region src/al-strip-controls.ts
-var Ra = [
+var Ba = [
 	"name",
 	"mix",
 	"null_handling",
 	"gain"
-], za = 5, Ba = (e) => e[e.length - 2] === "stimuli", W = class extends o {
+], Va = 5, Ha = (e) => e[e.length - 2] === "stimuli", H = class extends o {
 	constructor(...e) {
 		super(...e), this.path = null, this.errors = [], this.live = null, this.profileState = null, this.statusOnly = !1, this.simLog = null;
 	}
@@ -5561,8 +5561,8 @@ var Ra = [
           <div class="col">
             <ha-form
               .hass=${this.hass}
-              .data=${pr(n, r, Ra, e)}
-              .schema=${fr(n, r, Ra, e)}
+              .data=${pr(n, r, Ba, e)}
+              .schema=${fr(n, r, Ba, e)}
               .error=${a}
               .computeLabel=${$n}
               .computeHelper=${er}
@@ -5650,7 +5650,7 @@ var Ra = [
     `;
 	}
 	renderStatus(e, t) {
-		let n = t.id, r = this.live?.groups[n]?.precision ?? ot(e, t), i = this.live?.groups[n]?.lights ?? 0, a = this.hass?.states[be(n)], o = this.simLog?.blocked[n] ?? null, c = (this.simLog?.entries ?? []).filter((e) => e.group_id === n).sort((e, t) => t.t - e.t).slice(0, za);
+		let n = t.id, r = this.live?.groups[n]?.precision ?? ot(e, t), i = this.live?.groups[n]?.lights ?? 0, a = this.hass?.states[be(n)], o = this.simLog?.blocked[n] ?? null, c = (this.simLog?.entries ?? []).filter((e) => e.group_id === n).sort((e, t) => t.t - e.t).slice(0, Va);
 		return v`
       <div class="col status">
         <h3>Status</h3>
@@ -5702,14 +5702,14 @@ var Ra = [
 	}
 	render() {
 		let { config: e, path: t } = this;
-		return !e || !t || t.length === 0 ? v`<ha-card><span class="muted">Select a strip to tune it.</span></ha-card>` : Ba(t) ? this.renderChannel(e, t) : this.renderBus(e, t);
+		return !e || !t || t.length === 0 ? v`<ha-card><span class="muted">Select a strip to tune it.</span></ha-card>` : Ha(t) ? this.renderChannel(e, t) : this.renderBus(e, t);
 	}
 };
-g([d({ attribute: !1 })], W.prototype, "hass", void 0), g([d({ attribute: !1 })], W.prototype, "config", void 0), g([d({ attribute: !1 })], W.prototype, "path", void 0), g([d({ attribute: !1 })], W.prototype, "errors", void 0), g([d({ attribute: !1 })], W.prototype, "live", void 0), g([d({ attribute: !1 })], W.prototype, "profileState", void 0), g([d({ type: Boolean })], W.prototype, "statusOnly", void 0), g([d({ attribute: !1 })], W.prototype, "simLog", void 0), W = g([a("al-strip-controls")], W);
+g([d({ attribute: !1 })], H.prototype, "hass", void 0), g([d({ attribute: !1 })], H.prototype, "config", void 0), g([d({ attribute: !1 })], H.prototype, "path", void 0), g([d({ attribute: !1 })], H.prototype, "errors", void 0), g([d({ attribute: !1 })], H.prototype, "live", void 0), g([d({ attribute: !1 })], H.prototype, "profileState", void 0), g([d({ type: Boolean })], H.prototype, "statusOnly", void 0), g([d({ attribute: !1 })], H.prototype, "simLog", void 0), H = g([a("al-strip-controls")], H);
 //#endregion
 //#region src/al-patterns.ts
-var Va = 50;
-function Ha(e) {
+var Ua = 50;
+function Wa(e) {
 	let t = [], n = (r) => {
 		t.push({
 			id: r.id,
@@ -5719,12 +5719,12 @@ function Ha(e) {
 	};
 	return e?.groups.forEach(n), t;
 }
-function Ua(e, t) {
+function Ga(e, t) {
 	if (e === void 0) return "—";
 	let n = Number(e);
 	return e.trim() !== "" && Number.isFinite(n) ? st(n, t) : e;
 }
-var Wa = (e) => (/* @__PURE__ */ new Date(e * 1e3)).toLocaleDateString(), G = class extends o {
+var Ka = (e) => (/* @__PURE__ */ new Date(e * 1e3)).toLocaleDateString(), qa = class extends o {
 	constructor(...e) {
 		super(...e), this.profileState = null, this.simLog = null, this.force = !1;
 	}
@@ -5803,14 +5803,14 @@ var Wa = (e) => (/* @__PURE__ */ new Date(e * 1e3)).toLocaleDateString(), G = cl
         </div>
         <div>
           <span class="muted">Learned from</span>
-          <span class="window">${Wa(r[0])} – ${Wa(r[1])}</span>
+          <span class="window">${Ka(r[0])} – ${Ka(r[1])}</span>
         </div>
         <div class="muted">${i.join(", ")} · ${a}-minute slots</div>
       </div>
     `;
 	}
 	renderReadiness() {
-		let e = this.profileState, t = Ha(this.config);
+		let e = this.profileState, t = Wa(this.config);
 		if (!e || t.length === 0) return v`<div class="muted">${t.length === 0 ? "No groups configured." : "Nothing learned yet."}</div>`;
 		let n = this.config?.defaults.patterns?.min_days ?? 14;
 		return v`
@@ -5837,19 +5837,19 @@ var Wa = (e) => (/* @__PURE__ */ new Date(e * 1e3)).toLocaleDateString(), G = cl
         ${r ? "✓" : "✗"}
       </td>
       <td class="days">${i}</td>
-      <td class="expected">${Ua(a, e.precision)}</td>
+      <td class="expected">${Ga(a, e.precision)}</td>
     </tr>`;
 	}
 	renderBlocked() {
 		let e = Object.entries(this.simLog?.blocked ?? {}).filter((e) => typeof e[1] == "string");
 		if (e.length === 0) return s;
-		let t = Ha(this.config), n = (e) => t.find((t) => t.id === e)?.label ?? e;
+		let t = Wa(this.config), n = (e) => t.find((t) => t.id === e)?.label ?? e;
 		return v`<ul class="blocked">
       ${e.map(([e, t]) => v`<li><span class="group">${n(e)}:</span> <span>${t}</span></li>`)}
     </ul>`;
 	}
 	renderLog() {
-		let e = [...this.simLog?.entries ?? []].sort((e, t) => t.t - e.t).slice(0, Va);
+		let e = [...this.simLog?.entries ?? []].sort((e, t) => t.t - e.t).slice(0, Ua);
 		return e.length === 0 ? v`<div class="muted log-empty">No simulated light changes yet.</div>` : v`<ol class="log">
       ${e.map((e) => this.renderEntry(e))}
     </ol>`;
@@ -5885,48 +5885,48 @@ var Wa = (e) => (/* @__PURE__ */ new Date(e * 1e3)).toLocaleDateString(), G = cl
     `;
 	}
 };
-g([d({ attribute: !1 })], G.prototype, "hass", void 0), g([d({ attribute: !1 })], G.prototype, "config", void 0), g([d({ attribute: !1 })], G.prototype, "profileState", void 0), g([d({ attribute: !1 })], G.prototype, "simLog", void 0), g([l()], G.prototype, "force", void 0), G = g([a("al-patterns")], G);
+g([d({ attribute: !1 })], qa.prototype, "hass", void 0), g([d({ attribute: !1 })], qa.prototype, "config", void 0), g([d({ attribute: !1 })], qa.prototype, "profileState", void 0), g([d({ attribute: !1 })], qa.prototype, "simLog", void 0), g([l()], qa.prototype, "force", void 0), qa = g([a("al-patterns")], qa);
 //#endregion
 //#region src/types.ts
-var Ga = [
+var Ja = [
 	"phone",
 	"watch",
 	"tag",
 	"laptop",
 	"other"
-], Ka = [
+], Ya = [
 	"activity",
 	"steps",
 	"battery_state"
-], qa = {
+], Xa = {
 	phone: "mdi:cellphone",
 	watch: "mdi:watch",
 	tag: "mdi:tag",
 	laptop: "mdi:laptop",
 	other: "mdi:bluetooth"
-}, Ja = {
+}, Za = {
 	phone: "Phone",
 	watch: "Watch",
 	tag: "Tag",
 	laptop: "Laptop",
 	other: "Other"
-}, Ya = {
+}, Qa = {
 	activity: "Activity",
 	steps: "Steps",
 	battery_state: "Battery state"
-}, Xa = { entity: { filter: {
+}, $a = { entity: { filter: {
 	domain: "device_tracker",
 	integration: "bermuda"
-} } }, Za = { entity: { filter: { domain: "person" } } }, Qa = { entity: { filter: {
+} } }, eo = { entity: { filter: { domain: "person" } } }, to = { entity: { filter: {
 	domain: "device_tracker",
 	integration: "mobile_app"
-} } }, $a = { entity: { filter: { domain: "sensor" } } }, eo = { select: {
+} } }, no = { entity: { filter: { domain: "sensor" } } }, ro = { select: {
 	mode: "dropdown",
-	options: Ga.map((e) => ({
+	options: Ja.map((e) => ({
 		value: e,
-		label: Ja[e]
+		label: Za[e]
 	}))
-} }, to = class extends o {
+} }, io = class extends o {
 	constructor(...e) {
 		super(...e), this.errors = [], this.presence = null;
 	}
@@ -6059,8 +6059,8 @@ var Ga = [
 		return v`<div class="signal signal-${r}">
       <ha-selector
         .hass=${this.hass}
-        .selector=${$a}
-        .label=${Ya[r]}
+        .selector=${no}
+        .label=${Qa[r]}
         .helper=${n.companion ? "Blank: found on the companion device when available." : "Optional. Movement can also be detected from Bluetooth."}
         .required=${!1}
         .value=${this.text(n.signals[r])}
@@ -6089,7 +6089,7 @@ var Ga = [
 			"signals"
 		]), o = this.found(n, r), c = Object.values(this.presence?.people?.[n.name ?? ""]?.devices ?? {}).find((e) => e.tracker === r.tracker), l = r.name ?? c?.name ?? (r.tracker || "New device");
 		return v`<details class="device" ?open=${!r.tracker || Object.keys(i).length > 0 || Object.keys(a).length > 0}>
-      <summary>${l}${l === Ja[r.kind] ? s : v`<span class="device-kind">${Ja[r.kind]}</span>`}</summary>
+      <summary>${l}${l === Za[r.kind] ? s : v`<span class="device-kind">${Za[r.kind]}</span>`}</summary>
       <div class="device-body"><div class="device-head">
         <div class="resource-links">${Un(this, this.hass, r.tracker, "Open tracker", c?.device_id, "Open Bermuda device", !0)}</div>
         <button type="button"
@@ -6102,7 +6102,7 @@ var Ga = [
         <ha-selector
           class="tracker"
           .hass=${this.hass}
-          .selector=${Xa}
+          .selector=${$a}
           .label=${"Bermuda tracker"}
           .required=${!0}
           .value=${r.tracker}
@@ -6122,7 +6122,7 @@ var Ga = [
         <ha-selector
           class="kind"
           .hass=${this.hass}
-          .selector=${eo}
+          .selector=${ro}
           .label=${"Kind"}
           .required=${!0}
           .value=${r.kind}
@@ -6131,14 +6131,14 @@ var Ga = [
         <ha-selector
           class="companion"
           .hass=${this.hass}
-          .selector=${Qa}
+          .selector=${to}
           .label=${"Companion app tracker"}
           .helper=${"Optional. The companion tracker for this device supplies carrying evidence."}
           .required=${!1}
           .value=${this.text(r.companion)}
           @value-changed=${(n) => this.editDevice(e, t, { companion: n.detail.value ? n.detail.value : null }, "companion")}
         ></ha-selector>
-        ${Ka.map((n) => this.renderSignal(e, t, r, n, o, a))}
+        ${Ya.map((n) => this.renderSignal(e, t, r, n, o, a))}
       </div></div>
     </details>`;
 	}
@@ -6170,7 +6170,7 @@ var Ga = [
         <ha-selector
           class="person-entity"
           .hass=${this.hass}
-          .selector=${Za}
+          .selector=${eo}
           .label=${"Person"}
           .helper=${"Its device_trackers seed the devices below: Bermuda ones to follow, a mobile_app one as the companion."}
           .required=${!1}
@@ -6193,8 +6193,8 @@ var Ga = [
     `;
 	}
 };
-g([d({ attribute: !1 })], to.prototype, "hass", void 0), g([d({ attribute: !1 })], to.prototype, "config", void 0), g([d({ attribute: !1 })], to.prototype, "errors", void 0), g([d({ attribute: !1 })], to.prototype, "presence", void 0), to = g([a("al-people-editor")], to);
-function no(e) {
+g([d({ attribute: !1 })], io.prototype, "hass", void 0), g([d({ attribute: !1 })], io.prototype, "config", void 0), g([d({ attribute: !1 })], io.prototype, "errors", void 0), g([d({ attribute: !1 })], io.prototype, "presence", void 0), io = g([a("al-people-editor")], io);
+function ao(e) {
 	let t = [], n = (e, r, i) => {
 		let a = r <= 1 ? e.id : i;
 		t.push({
@@ -6205,14 +6205,14 @@ function no(e) {
 	};
 	return e.groups.forEach((e) => n(e, 0, e.id)), t;
 }
-function ro(e, t) {
+function oo(e, t) {
 	if (e === 0 && t === 0) return 0;
 	let n = e === 0 ? Infinity : 60 / Math.abs(e), r = t === 0 ? Infinity : 27 / Math.abs(t);
 	return Math.min(n, r, .5);
 }
-function io(e, t) {
+function so(e, t) {
 	let n = new Set(t.nodes), r = new Set(t.exits), i = [], a = /* @__PURE__ */ new Map(), o = /* @__PURE__ */ new Map();
-	for (let t of no(e)) {
+	for (let t of ao(e)) {
 		if (o.set(t.id, t.label), !n.has(t.id)) continue;
 		let e = a.get(t.branch);
 		e === void 0 && (e = i.length, a.set(t.branch, e), i.push([])), i[e].push(t.id);
@@ -6231,7 +6231,7 @@ function io(e, t) {
 	for (let [e, n, r] of t.edges) {
 		let t = c.get(e), i = c.get(n);
 		if (!t || !i) continue;
-		let a = i.x - t.x, o = i.y - t.y, s = ro(a, o);
+		let a = i.x - t.x, o = i.y - t.y, s = oo(a, o);
 		l.push({
 			a: e,
 			b: n,
@@ -6249,21 +6249,21 @@ function io(e, t) {
 		height: 120 + (Math.max(i.length, 1) - 1) * 110
 	};
 }
-var ao = (e, t) => ({
+var co = (e, t) => ({
 	x: e.x1 + (e.x2 - e.x1) * t,
 	y: e.y1 + (e.y2 - e.y1) * t
-}), oo = (e, t, n) => e.edges.find((e) => e.a === t && e.b === n || e.a === n && e.b === t);
-function so(e, t) {
+}), lo = (e, t, n) => e.edges.find((e) => e.a === t && e.b === n || e.a === n && e.b === t);
+function uo(e, t) {
 	let n = [];
 	for (let r = 1; r < t.length; r++) {
-		let i = oo(e, t[r - 1], t[r]);
+		let i = lo(e, t[r - 1], t[r]);
 		i && n.push(i);
 	}
 	return n;
 }
 //#endregion
 //#region src/al-presence.ts
-var co = 2e3, lo = "away", uo = {
+var fo = 2e3, po = "away", mo = {
 	enabled: "Estimate room presence",
 	devices: "Tracked devices",
 	envelope: "Presence envelope",
@@ -6282,7 +6282,7 @@ var co = 2e3, lo = "away", uo = {
 	carried_moving: "Moving weight",
 	carried_still_room_empty: "Still in an empty room weight",
 	carried_jitter: "Jitter weight"
-}, fo = {
+}, ho = {
 	enabled: "Estimate which room each tracked device is in. Needs Bermuda.",
 	devices: "Bermuda device_trackers to follow — one per person.",
 	envelope: "Preset the presence channel of every room starts from.",
@@ -6301,7 +6301,7 @@ var co = 2e3, lo = "away", uo = {
 	carried_moving: "Log-odds added while the companion app reports walking, or the step count rose lately.",
 	carried_still_room_empty: "Log-odds added while the device sits still in a room whose level is 0.0.",
 	carried_jitter: "Log-odds added while the device's closest distance wanders. A pocket moves; a shelf does not."
-}, po = [
+}, go = [
 	"enabled",
 	"envelope",
 	"threshold",
@@ -6319,12 +6319,12 @@ var co = 2e3, lo = "away", uo = {
 	"carried_moving",
 	"carried_still_room_empty",
 	"carried_jitter"
-], mo = [
+], _o = [
 	"charging",
 	"moving",
 	"still_room_empty",
 	"jitter"
-], ho = [
+], vo = [
 	{
 		id: "tracking",
 		title: "Tracking",
@@ -6370,56 +6370,56 @@ var co = 2e3, lo = "away", uo = {
 			"carried_jitter"
 		]
 	}
-], go = (e) => {
+], yo = (e) => {
 	if (e === "activity_floor") return "presence/activity/floor";
 	if (e.startsWith("carried_")) {
 		let t = e.slice(8);
-		return `presence/carried/${mo.includes(t) ? "weights/" : ""}${t}`;
+		return `presence/carried/${_o.includes(t) ? "weights/" : ""}${t}`;
 	}
 	return `presence/${e}`;
-}, _o = { entity: {
+}, bo = { entity: {
 	multiple: !0,
 	filter: {
 		domain: "device_tracker",
 		integration: "bermuda"
 	}
-} }, vo = { number: {
+} }, xo = { number: {
 	min: .01,
 	max: .99,
 	step: .01,
 	mode: "slider"
-} }, yo = { number: {
-	min: .01,
-	max: 1,
-	step: .01,
-	mode: "slider"
-} }, bo = { number: {
-	min: 0,
-	max: .1,
-	step: .001,
-	mode: "box"
-} }, xo = { number: {
-	min: .1,
-	step: .1,
-	mode: "box"
 } }, So = { number: {
 	min: .01,
 	max: 1,
 	step: .01,
+	mode: "slider"
+} }, Co = { number: {
+	min: 0,
+	max: .1,
+	step: .001,
 	mode: "box"
-} }, Co = { duration: {} }, wo = { number: {
+} }, wo = { number: {
+	min: .1,
+	step: .1,
+	mode: "box"
+} }, To = { number: {
+	min: .01,
+	max: 1,
+	step: .01,
+	mode: "box"
+} }, Eo = { duration: {} }, Do = { number: {
 	min: .01,
 	max: .99,
 	step: .01,
 	mode: "slider"
-} }, To = { number: {
+} }, Oo = { number: {
 	min: -10,
 	max: 10,
 	step: .5,
 	mode: "box"
-} }, Eo = " → ", Do = "Give it an area that matches a room, or map it in Settings below.", Oo = "Enable these distance sensors in Settings → Devices & services → Bermuda, then reload Activity Levels:", K = (e) => typeof e == "number" && Number.isFinite(e) ? e : null, q = class extends o {
+} }, ko = " → ", Ao = "Give it an area that matches a room, or map it in Settings below.", jo = "Enable these distance sensors in Settings → Devices & services → Bermuda, then reload Activity Levels:", U = (e) => typeof e == "number" && Number.isFinite(e) ? e : null, W = class extends o {
 	constructor(...e) {
-		super(...e), this.errors = [], this.narrow = !1, this.topology = null, this.presence = null, this.correcting = null, this.correctingDevice = null, this.carryingChoices = {}, this.correctionPending = !1, this.correctionError = null, this.notice = null, this.computeLabel = (e) => uo[e.name] ?? e.name, this.computeHelper = (e) => fo[e.name] ?? "", this.onDevicesChanged = (e) => {
+		super(...e), this.errors = [], this.narrow = !1, this.topology = null, this.presence = null, this.correcting = null, this.correctingDevice = null, this.carryingChoices = {}, this.correctionPending = !1, this.correctionError = null, this.notice = null, this.computeLabel = (e) => mo[e.name] ?? e.name, this.computeHelper = (e) => ho[e.name] ?? "", this.onDevicesChanged = (e) => {
 			e.stopPropagation();
 			let t = this.config;
 			if (!t) return;
@@ -6555,7 +6555,7 @@ var co = 2e3, lo = "away", uo = {
 	connectedCallback() {
 		super.connectedCallback(), this.refreshTopology(), this.refreshPresence(), this.timer = setInterval(() => {
 			document.visibilityState !== "hidden" && this.refreshPresence();
-		}, co);
+		}, fo);
 	}
 	disconnectedCallback() {
 		super.disconnectedCallback(), this.timer !== void 0 && clearInterval(this.timer), this.timer = void 0;
@@ -6600,20 +6600,20 @@ var co = 2e3, lo = "away", uo = {
 	}
 	get correctionRooms() {
 		let e = this.config;
-		return [...this.topology?.nodes ?? (e ? [...lt(e)] : []), lo];
+		return [...this.topology?.nodes ?? (e ? [...lt(e)] : []), po];
 	}
 	get labels() {
 		let e = this.config;
-		return new Map(e ? no(e).map((e) => [e.id, e.label]) : []);
+		return new Map(e ? ao(e).map((e) => [e.id, e.label]) : []);
 	}
 	roomName(e) {
-		return e == null || e === "" ? "—" : e === lo ? "Away" : this.labels.get(e) ?? e;
+		return e == null || e === "" ? "—" : e === po ? "Away" : this.labels.get(e) ?? e;
 	}
 	areaName(e) {
 		return e === null ? "—" : this.hass?.areas[e]?.name ?? e;
 	}
 	trail(e) {
-		return e.map((e) => this.roomName(e)).join(Eo);
+		return e.map((e) => this.roomName(e)).join(ko);
 	}
 	schemaFor(e) {
 		return [
@@ -6625,56 +6625,56 @@ var co = 2e3, lo = "away", uo = {
 				name: "envelope",
 				selector: { select: {
 					mode: "dropdown",
-					options: $r(e)
+					options: ei(e)
 				} }
 			},
 			{
 				name: "threshold",
-				selector: yo
+				selector: So
 			},
 			{
 				name: "stay",
-				selector: vo
-			},
-			{
-				name: "escape",
-				selector: bo
-			},
-			{
-				name: "scale",
 				selector: xo
 			},
 			{
+				name: "escape",
+				selector: Co
+			},
+			{
+				name: "scale",
+				selector: wo
+			},
+			{
 				name: "floor",
-				selector: So
+				selector: To
 			},
 			{
 				name: "stuck_after",
-				selector: Co
+				selector: Eo
 			},
 			{
 				name: "activity_floor",
-				selector: So
+				selector: To
 			},
 			{
 				name: "carried_prior",
-				selector: wo
+				selector: Do
 			},
 			{
 				name: "carried_flip",
-				selector: Co
+				selector: Eo
 			},
 			{
 				name: "carried_recent",
-				selector: Co
+				selector: Eo
 			},
 			{
 				name: "carried_nearby",
-				selector: wo
+				selector: Do
 			},
-			...mo.map((e) => ({
+			..._o.map((e) => ({
 				name: `carried_${e}`,
-				selector: To
+				selector: Oo
 			}))
 		];
 	}
@@ -6691,26 +6691,26 @@ var co = 2e3, lo = "away", uo = {
 		let t = this.config;
 		if (!t) return;
 		let n = S(t), r = e.detail?.value ?? {}, i = {
-			charging: K(r.carried_charging) ?? n.carried.weights.charging,
-			moving: K(r.carried_moving) ?? n.carried.weights.moving,
-			still_room_empty: K(r.carried_still_room_empty) ?? n.carried.weights.still_room_empty,
-			jitter: K(r.carried_jitter) ?? n.carried.weights.jitter
+			charging: U(r.carried_charging) ?? n.carried.weights.charging,
+			moving: U(r.carried_moving) ?? n.carried.weights.moving,
+			still_room_empty: U(r.carried_still_room_empty) ?? n.carried.weights.still_room_empty,
+			jitter: U(r.carried_jitter) ?? n.carried.weights.jitter
 		}, a = {
 			...n,
 			enabled: typeof r.enabled == "boolean" ? r.enabled : n.enabled,
 			envelope: r.envelope === void 0 ? n.envelope : typeof r.envelope == "string" && r.envelope !== "" ? r.envelope : null,
-			threshold: K(r.threshold) ?? n.threshold,
-			stay: K(r.stay) ?? n.stay,
-			escape: K(r.escape) ?? n.escape,
-			scale: K(r.scale) ?? n.scale,
-			floor: K(r.floor) ?? n.floor,
+			threshold: U(r.threshold) ?? n.threshold,
+			stay: U(r.stay) ?? n.stay,
+			escape: U(r.escape) ?? n.escape,
+			scale: U(r.scale) ?? n.scale,
+			floor: U(r.floor) ?? n.floor,
 			stuck_after: D(r.stuck_after) ?? n.stuck_after,
-			activity: { floor: K(r.activity_floor) ?? n.activity.floor },
+			activity: { floor: U(r.activity_floor) ?? n.activity.floor },
 			carried: {
-				prior: K(r.carried_prior) ?? n.carried.prior,
+				prior: U(r.carried_prior) ?? n.carried.prior,
 				flip: D(r.carried_flip) ?? n.carried.flip,
 				recent: D(r.carried_recent) ?? n.carried.recent,
-				nearby: K(r.carried_nearby) ?? n.carried.nearby,
+				nearby: U(r.carried_nearby) ?? n.carried.nearby,
 				weights: i
 			}
 		}, o = (e) => {
@@ -6732,7 +6732,7 @@ var co = 2e3, lo = "away", uo = {
 				}
 				default: return a[e] === n[e];
 			}
-		}, s = po.find((e) => !o(e));
+		}, s = go.find((e) => !o(e));
 		s !== void 0 && this.dispatchEvent(M(b(t, ["presence"], a), `presence:${s}`));
 	}
 	setSetting(e, t) {
@@ -6771,9 +6771,9 @@ var co = 2e3, lo = "away", uo = {
       <ha-selector
         class="setup-devices"
         .hass=${this.hass}
-        .selector=${_o}
-        .label=${uo.devices}
-        .helper=${fo.devices}
+        .selector=${bo}
+        .label=${mo.devices}
+        .helper=${ho.devices}
         .required=${!1}
         .value=${n.people.flatMap((e) => e.devices.map((e) => e.tracker))}
         @value-changed=${this.onDevicesChanged}
@@ -6878,14 +6878,14 @@ var co = 2e3, lo = "away", uo = {
     </tr>`;
 	}
 	renderDeviceChip(e, t, n) {
-		let r = n.carried, i = r !== null && r < .5, a = r === null ? "—" : `${Math.round(r * 100)}%`, o = `${n.name} (${Ja[n.kind]}): carried ${a}${i && n.room ? `, in ${this.roomName(n.room)}` : ""}`;
+		let r = n.carried, i = r !== null && r < .5, a = r === null ? "—" : `${Math.round(r * 100)}%`, o = `${n.name} (${Za[n.kind]}): carried ${a}${i && n.room ? `, in ${this.roomName(n.room)}` : ""}`;
 		return v`<div class="device-entry"><button type="button" aria-expanded=${this.correctingDevice?.person === e && this.correctingDevice.device === t ? "true" : "false"} aria-label=${`Correct ${n.name}`} @click=${() => {
 			this.correctingDevice = {
 				person: e,
 				device: t
 			}, this.correcting = null, this.correctionError = null;
 		}} class="chip device-chip ${i ? "parked" : "carried"}" data-device=${t} title=${o}>
-      <ha-icon icon=${qa[n.kind] ?? qa.other}></ha-icon>
+      <ha-icon icon=${Xa[n.kind] ?? Xa.other}></ha-icon>
       <span class="device-name">${n.name}</span>
       <span class="carried-pct">${a} carrying</span>
       ${i && n.room ? v`<span class="parked-room">${this.roomName(n.room)}</span>` : s}
@@ -6944,21 +6944,21 @@ var co = 2e3, lo = "away", uo = {
 		return v`<tr class="scanner ${t ? "unmapped" : ""}">
       <td class="name">${Hn("device", e.device_id, e.name)}</td>
       <td class="area">${Hn("area", e.area_id, this.areaName(e.area_id))}</td>
-      <td class="room">${t ? Do : this.roomName(e.group_id)}</td>
+      <td class="room">${t ? Ao : this.roomName(e.group_id)}</td>
     </tr>`;
 	}
 	renderDisabled() {
 		let e = this.presence?.disabled ?? [];
 		return e.length === 0 ? s : v`<div class="disabled-sensors">
-      ${Oo}
+      ${jo}
       <ul>
         ${e.map((e) => v`<li>${e}</li>`)}
       </ul>
     </div>`;
 	}
 	renderSettings(e) {
-		let t = S(e), n = Object.fromEntries(po.flatMap((e) => {
-			let t = this.errors.find((t) => t.path === go(e));
+		let t = S(e), n = Object.fromEntries(go.flatMap((e) => {
+			let t = this.errors.find((t) => t.path === yo(e));
 			return t ? [[e, t.message]] : [];
 		})), r = this.errors.filter((e) => e.path === "presence"), i = {
 			enabled: t.enabled,
@@ -6974,7 +6974,7 @@ var co = 2e3, lo = "away", uo = {
 			carried_flip: E(t.carried.flip),
 			carried_recent: E(t.carried.recent),
 			carried_nearby: t.carried.nearby,
-			...Object.fromEntries(mo.map((e) => [`carried_${e}`, t.carried.weights[e]]))
+			...Object.fromEntries(_o.map((e) => [`carried_${e}`, t.carried.weights[e]]))
 		}, a = (t) => v`<ha-form
       class="presence-settings" data-section=${t.id}
       .hass=${this.hass}
@@ -6984,7 +6984,7 @@ var co = 2e3, lo = "away", uo = {
       .computeLabel=${this.computeLabel}
       .computeHelper=${this.computeHelper}
       @value-changed=${this.onFormChanged}
-    ></ha-form>`, o = ho[0];
+    ></ha-form>`, o = vo[0];
 		return v`<ha-card><details class="settings" ?open=${this.errors.some((e) => e.path.startsWith("presence"))}>
       <summary>Presence settings</summary><div class="settings-body">
       ${r.map((e) => v`<ha-alert alert-type="error">${e.message}</ha-alert>`)}
@@ -6997,7 +6997,7 @@ var co = 2e3, lo = "away", uo = {
         <h3>${o.title}</h3><p>${o.hint}</p>${a(o)}
       </section>
       <div class="settings-grid">
-        ${ho.slice(1).map((e) => v`<details class="settings-section" data-section=${e.id}
+        ${vo.slice(1).map((e) => v`<details class="settings-section" data-section=${e.id}
           ?open=${e.fields.some((e) => n[e] !== void 0)}>
           <summary>${e.title}</summary><p>${e.hint}</p>${a(e)}
         </details>`)}
@@ -7011,10 +7011,10 @@ var co = 2e3, lo = "away", uo = {
     </div>` : v`<div class="page">${this.renderSetup(e)}</div>` : v`<div class="page"><ha-card><span class="muted">Loading…</span></ha-card></div>`;
 	}
 };
-g([d({ attribute: !1 })], q.prototype, "hass", void 0), g([d({ attribute: !1 })], q.prototype, "config", void 0), g([d({ attribute: !1 })], q.prototype, "errors", void 0), g([d({ type: Boolean })], q.prototype, "narrow", void 0), g([l()], q.prototype, "topology", void 0), g([l()], q.prototype, "presence", void 0), g([l()], q.prototype, "correcting", void 0), g([l()], q.prototype, "correctingDevice", void 0), g([l()], q.prototype, "carryingChoices", void 0), g([l()], q.prototype, "correctionPending", void 0), g([l()], q.prototype, "correctionError", void 0), g([l()], q.prototype, "notice", void 0), q = g([a("al-presence")], q);
+g([d({ attribute: !1 })], W.prototype, "hass", void 0), g([d({ attribute: !1 })], W.prototype, "config", void 0), g([d({ attribute: !1 })], W.prototype, "errors", void 0), g([d({ type: Boolean })], W.prototype, "narrow", void 0), g([l()], W.prototype, "topology", void 0), g([l()], W.prototype, "presence", void 0), g([l()], W.prototype, "correcting", void 0), g([l()], W.prototype, "correctingDevice", void 0), g([l()], W.prototype, "carryingChoices", void 0), g([l()], W.prototype, "correctionPending", void 0), g([l()], W.prototype, "correctionError", void 0), g([l()], W.prototype, "notice", void 0), W = g([a("al-presence")], W);
 //#endregion
 //#region src/al-graph-map.ts
-var ko = 60, Ao = 27, jo = 2, Mo = 9, No = 7, J = (e) => String(Math.round(e * 10) / 10), Y = class extends o {
+var Mo = 60, No = 27, Po = 2, Fo = 9, Io = 7, G = (e) => String(Math.round(e * 10) / 10), K = class extends o {
 	constructor(...e) {
 		super(...e), this.topology = null, this.presence = null, this.selected = [null, null], this.paths = [];
 	}
@@ -7106,10 +7106,10 @@ var ko = 60, Ao = 27, jo = 2, Mo = 9, No = 7, J = (e) => String(Math.round(e * 1
 			if (!i.moving) continue;
 			let n = Object.entries(i.candidates).sort((e, t) => t[1] - e[1] || e[0].localeCompare(t[0])), a = n[0]?.[0], o = n[1]?.[0];
 			if (a === void 0 || o === void 0) continue;
-			let s = oo(e, a, o);
+			let s = lo(e, a, o);
 			s && t.push({
 				name: r,
-				...ao(s, .5)
+				...co(s, .5)
 			});
 		}
 		return t;
@@ -7123,15 +7123,15 @@ var ko = 60, Ao = 27, jo = 2, Mo = 9, No = 7, J = (e) => String(Math.round(e * 1
 		return t`<line
       class="edge ${r ? "on-path" : ""}"
       data-one-way=${e.oneWay}
-      x1=${J(e.x1)}
-      y1=${J(e.y1)}
-      x2=${J(e.x2)}
-      y2=${J(e.y2)}
+      x1=${G(e.x1)}
+      y1=${G(e.y1)}
+      x2=${G(e.x2)}
+      y2=${G(e.y2)}
       marker-end=${e.oneWay ? "url(#al-arrow)" : s}
     ></line>`;
 	}
 	renderNode(e) {
-		let n = this.occupantsOf(e.id), r = n.slice(0, jo), i = n.length - r.length, a = this.selected.includes(e.id), o = [...r, ...i > 0 ? [`+${i}`] : []].join(", "), c = [
+		let n = this.occupantsOf(e.id), r = n.slice(0, Po), i = n.length - r.length, a = this.selected.includes(e.id), o = [...r, ...i > 0 ? [`+${i}`] : []].join(", "), c = [
 			e.label,
 			e.exit ? "an exit" : "",
 			n.length > 0 ? `${n.length} here: ${n.join(", ")}` : "empty"
@@ -7148,29 +7148,29 @@ var ko = 60, Ao = 27, jo = 2, Mo = 9, No = 7, J = (e) => String(Math.round(e * 1
     >
       <rect
         class="box"
-        x=${J(e.x - ko)}
-        y=${J(e.y - Ao)}
+        x=${G(e.x - Mo)}
+        y=${G(e.y - No)}
         width=${120}
         height=${54}
         rx="8"
       ></rect>
-      <text class="label" x=${J(e.x)} y=${J(e.y - 4)} text-anchor="middle">${e.label}</text>
-      ${o === "" ? s : t`<text class="names" x=${J(e.x)} y=${J(e.y + 13)} text-anchor="middle">${o}</text>`}
+      <text class="label" x=${G(e.x)} y=${G(e.y - 4)} text-anchor="middle">${e.label}</text>
+      ${o === "" ? s : t`<text class="names" x=${G(e.x)} y=${G(e.y + 13)} text-anchor="middle">${o}</text>`}
       ${n.length === 0 ? s : this.renderBadge(e, n.length)}
       ${e.exit ? this.renderDoor(e) : s}
     </g>`;
 	}
 	renderBadge(e, n) {
-		let r = e.x + ko - Mo - 3, i = e.y - Ao + Mo + 3;
-		return t`<circle class="badge" cx=${J(r)} cy=${J(i)} r=${Mo}></circle>
-      <text class="count" x=${J(r)} y=${J(i + 3.5)} text-anchor="middle">${n}</text>`;
+		let r = e.x + Mo - Fo - 3, i = e.y - No + Fo + 3;
+		return t`<circle class="badge" cx=${G(r)} cy=${G(i)} r=${Fo}></circle>
+      <text class="count" x=${G(r)} y=${G(i + 3.5)} text-anchor="middle">${n}</text>`;
 	}
 	renderDoor(e) {
-		let n = e.x - ko + 7, r = e.y + Ao - 7;
-		return t`<path class="door" d=${`M ${J(n)} ${J(r)} v -14 h 10 v 14 z`}></path>`;
+		let n = e.x - Mo + 7, r = e.y + No - 7;
+		return t`<path class="door" d=${`M ${G(n)} ${G(r)} v -14 h 10 v 14 z`}></path>`;
 	}
 	renderPerson(e) {
-		return t`<circle class="person" data-name=${e.name} cx=${J(e.x)} cy=${J(e.y)} r=${No}>
+		return t`<circle class="person" data-name=${e.name} cx=${G(e.x)} cy=${G(e.y)} r=${Io}>
       <title>${e.name} is on the move</title>
     </circle>`;
 	}
@@ -7179,7 +7179,7 @@ var ko = 60, Ao = 27, jo = 2, Mo = 9, No = 7, J = (e) => String(Math.round(e * 1
 		if (!e || !t || t.nodes.length === 0) return v`<div class="empty">
         No rooms are connected yet — set <em>Adjacent rooms</em> on a group in the Groups tab.
       </div>`;
-		let n = io(e, t), r = new Set(this.paths.flatMap((e) => so(n, e))), i = this.summary(n);
+		let n = so(e, t), r = new Set(this.paths.flatMap((e) => uo(n, e))), i = this.summary(n);
 		return v`
       <svg
         style="width: ${n.width}px"
@@ -7209,10 +7209,10 @@ var ko = 60, Ao = 27, jo = 2, Mo = 9, No = 7, J = (e) => String(Math.round(e * 1
     `;
 	}
 };
-g([d({ attribute: !1 })], Y.prototype, "hass", void 0), g([d({ attribute: !1 })], Y.prototype, "config", void 0), g([d({ attribute: !1 })], Y.prototype, "topology", void 0), g([d({ attribute: !1 })], Y.prototype, "presence", void 0), g([d({ attribute: !1 })], Y.prototype, "selected", void 0), g([d({ attribute: !1 })], Y.prototype, "paths", void 0), Y = g([a("al-graph-map")], Y);
+g([d({ attribute: !1 })], K.prototype, "hass", void 0), g([d({ attribute: !1 })], K.prototype, "config", void 0), g([d({ attribute: !1 })], K.prototype, "topology", void 0), g([d({ attribute: !1 })], K.prototype, "presence", void 0), g([d({ attribute: !1 })], K.prototype, "selected", void 0), g([d({ attribute: !1 })], K.prototype, "paths", void 0), K = g([a("al-graph-map")], K);
 //#endregion
 //#region src/al-paths.ts
-var X = class extends o {
+var q = class extends o {
 	constructor(...e) {
 		super(...e), this.narrow = !1, this.topology = null, this.selected = [null, null], this.paths = [], this.pending = !1, this.error = null, this.loading = !1, this.pathSeq = 0, this.topologySeq = 0;
 	}
@@ -7264,7 +7264,7 @@ var X = class extends o {
 		}
 	}
 	roomName(e) {
-		return this.config ? no(this.config).find((t) => t.id === e)?.label ?? e : e;
+		return this.config ? ao(this.config).find((t) => t.id === e)?.label ?? e : e;
 	}
 	async select(e) {
 		let t = this.selected.filter((e) => e !== null), n = t.includes(e) ? t.filter((t) => t !== e) : [...t, e].slice(-2);
@@ -7328,15 +7328,15 @@ var X = class extends o {
     </div>`;
 	}
 };
-g([d({ attribute: !1 })], X.prototype, "hass", void 0), g([d({ attribute: !1 })], X.prototype, "config", void 0), g([d({ type: Boolean })], X.prototype, "narrow", void 0), g([l()], X.prototype, "topology", void 0), g([l()], X.prototype, "selected", void 0), g([l()], X.prototype, "paths", void 0), g([l()], X.prototype, "pending", void 0), g([l()], X.prototype, "error", void 0), g([l()], X.prototype, "loading", void 0), X = g([a("al-paths")], X);
+g([d({ attribute: !1 })], q.prototype, "hass", void 0), g([d({ attribute: !1 })], q.prototype, "config", void 0), g([d({ type: Boolean })], q.prototype, "narrow", void 0), g([l()], q.prototype, "topology", void 0), g([l()], q.prototype, "selected", void 0), g([l()], q.prototype, "paths", void 0), g([l()], q.prototype, "pending", void 0), g([l()], q.prototype, "error", void 0), g([l()], q.prototype, "loading", void 0), q = g([a("al-paths")], q);
 //#endregion
 //#region src/yaml-locate.ts
-var Po = /^(?:"([^"]*)"|'([^']*)'|([^\s"'#][^:]*?))\s*:(?:\s|$)/, Fo = (e) => e.dash >= 0 ? e.dash : e.indent;
-function Io(e) {
-	let t = Po.exec(e);
+var Lo = /^(?:"([^"]*)"|'([^']*)'|([^\s"'#][^:]*?))\s*:(?:\s|$)/, Ro = (e) => e.dash >= 0 ? e.dash : e.indent;
+function zo(e) {
+	let t = Lo.exec(e);
 	return t ? t[1] ?? t[2] ?? t[3] ?? null : null;
 }
-function Lo(e) {
+function Bo(e) {
 	let t = [];
 	return e.split("\n").forEach((e, n) => {
 		let r = e.replace(/\s+$/, ""), i = r.trimStart();
@@ -7355,38 +7355,38 @@ function Lo(e) {
 		});
 	}), t;
 }
-function Ro(e, t, n, r) {
-	for (let i = t + 1; i < n; i++) if (Fo(e[i]) <= r) return i;
+function Vo(e, t, n, r) {
+	for (let i = t + 1; i < n; i++) if (Ro(e[i]) <= r) return i;
 	return n;
 }
-function zo(e, t, n, r) {
+function Ho(e, t, n, r) {
 	if (t >= n) return -1;
 	let i = e[t].indent;
 	for (let a = t; a < n; a++) {
 		let t = e[a];
-		if (t.indent === i && Io(t.text) === r) return a;
+		if (t.indent === i && zo(t.text) === r) return a;
 	}
 	return -1;
 }
-function Bo(e, t, n, r) {
+function Uo(e, t, n, r) {
 	if (t >= n || e[t].dash < 0) return -1;
 	let i = e[t].dash, a = -1;
 	for (let o = t; o < n; o++) if (e[o].dash === i && ++a === r) return o;
 	return -1;
 }
-function Vo(e, t) {
+function Wo(e, t) {
 	let n = t.split("/").filter((e) => e !== "");
 	if (n.length === 0) return null;
-	let r = Lo(e), i = 0, a = r.length, o = null;
+	let r = Bo(e), i = 0, a = r.length, o = null;
 	for (let e of n) {
-		let t = /^\d+$/.test(e) ? Bo(r, i, a, Number(e)) : zo(r, i, a, e);
+		let t = /^\d+$/.test(e) ? Uo(r, i, a, Number(e)) : Ho(r, i, a, e);
 		if (t < 0) return o;
 		let n = r[t];
-		o = n.line, a = Ro(r, t, a, Fo(n)), i = n.dash >= 0 ? t : t + 1;
+		o = n.line, a = Vo(r, t, a, Ro(n)), i = n.dash >= 0 ? t : t + 1;
 	}
 	return o;
 }
-var Z = class extends o {
+var J = class extends o {
 	constructor(...e) {
 		super(...e), this.errors = [], this.available = !0, this.parseError = null, this.seq = 0, this.validating = !1, this.validationFailure = null, this.onYaml = (e) => {
 			e.stopPropagation(), window.clearTimeout(this.timer), this.seq++, this.validating = !0, this.validationFailure = null, this.dispatchEvent(bn(!1, []));
@@ -7473,7 +7473,7 @@ var Z = class extends o {
 	jump(e) {
 		let t = this.editor, n = t?.codemirror, r = t?.yaml;
 		if (!n || typeof r != "string") return;
-		let i = Vo(r, e);
+		let i = Wo(r, e);
 		if (i === null || i > n.state.doc.lines) return;
 		let a = n.state.doc.line(i).from;
 		n.dispatch({
@@ -7520,14 +7520,14 @@ var Z = class extends o {
     ` : v`<div class="page">${this.renderUnavailable()}</div>`;
 	}
 };
-g([d({ attribute: !1 })], Z.prototype, "hass", void 0), g([d({ attribute: !1 })], Z.prototype, "config", void 0), g([d({ attribute: !1 })], Z.prototype, "errors", void 0), g([d({ type: Boolean })], Z.prototype, "available", void 0), g([l()], Z.prototype, "parseError", void 0), g([l()], Z.prototype, "validating", void 0), g([l()], Z.prototype, "validationFailure", void 0), Z = g([a("al-code")], Z);
+g([d({ attribute: !1 })], J.prototype, "hass", void 0), g([d({ attribute: !1 })], J.prototype, "config", void 0), g([d({ attribute: !1 })], J.prototype, "errors", void 0), g([d({ type: Boolean })], J.prototype, "available", void 0), g([l()], J.prototype, "parseError", void 0), g([l()], J.prototype, "validating", void 0), g([l()], J.prototype, "validationFailure", void 0), J = g([a("al-code")], J);
 //#endregion
 //#region src/floorplan-import.ts
-var Ho = (e) => e.trim().toLocaleLowerCase();
-function Uo(e, t) {
+var Go = (e) => e.trim().toLocaleLowerCase();
+function Ko(e, t) {
 	let n = x(e).map(({ group: e }) => e), r = {}, i = /* @__PURE__ */ new Map();
 	for (let e of t.items) {
-		let t = e.source_id ? n.filter((t) => t.id === e.source_id) : [], a = t.length ? t : n.filter((t) => Ho(t.name ?? t.id) === Ho(e.name)), o = a.length === 1 ? a[0] : void 0;
+		let t = e.source_id ? n.filter((t) => t.id === e.source_id) : [], a = t.length ? t : n.filter((t) => Go(t.name ?? t.id) === Go(e.name)), o = a.length === 1 ? a[0] : void 0;
 		r[e.key] = o ? {
 			action: "existing",
 			id: o.id
@@ -7536,7 +7536,7 @@ function Uo(e, t) {
 	for (let [e, t] of Object.entries(r)) t.action === "existing" && i.get(t.id) > 1 && (r[e] = { action: "skip" });
 	return r;
 }
-function Wo(e, t, n) {
+function qo(e, t, n) {
 	let r = new Set(x(e).map(({ group: e }) => e.id));
 	Object.values(n).forEach((e) => {
 		e.action === "create" && r.add(e.id);
@@ -7553,7 +7553,7 @@ function Wo(e, t, n) {
 		parent: null
 	};
 }
-function Go(e, t, n, r) {
+function Jo(e, t, n, r) {
 	let i = structuredClone(e), a = new Map(x(i).map(({ group: e }) => [e.id, e])), o = new Map(t.items.map((e) => [e.key, e])), s = [], c = /* @__PURE__ */ new Set(), l = /* @__PURE__ */ new Set(), u = /* @__PURE__ */ new Map(), d = /* @__PURE__ */ new Set();
 	for (let [e, t] of Object.entries(n)) {
 		if (!o.has(e)) throw Error("Source changed. Parse the configuration again.");
@@ -7605,7 +7605,7 @@ function Go(e, t, n, r) {
 }
 //#endregion
 //#region src/al-floorplan-import.ts
-var Ko = 1e6, qo = (e) => typeof e == "object" && e && "message" in e ? String(e.message) : "Import failed. Try again.", Q = class extends o {
+var Yo = 1e6, Xo = (e) => typeof e == "object" && e && "message" in e ? String(e.message) : "Import failed. Try again.", Y = class extends o {
 	constructor(...e) {
 		super(...e), this.disabled = !1, this.text = "", this.source = null, this.choices = {}, this.importGps = !1, this.busy = null, this.error = "", this.notice = "", this.sequence = 0;
 	}
@@ -7643,7 +7643,7 @@ var Ko = 1e6, qo = (e) => typeof e == "object" && e && "message" in e ? String(e
 		if (!n) return;
 		this.resetPreview();
 		let r = this.sequence;
-		if (n.size > Ko) {
+		if (n.size > Yo) {
 			this.error = "File is too large (maximum 1 MB).", t.value = "";
 			return;
 		}
@@ -7659,7 +7659,7 @@ var Ko = 1e6, qo = (e) => typeof e == "object" && e && "message" in e ? String(e
 	}
 	async parse() {
 		if (!this.hass || !this.config || this.disabled || this.busy) return;
-		if (this.resetPreview(), this.text.length > Ko) {
+		if (this.resetPreview(), this.text.length > Yo) {
 			this.error = "Paste is too large (maximum 1 MB of text).";
 			return;
 		}
@@ -7672,9 +7672,9 @@ var Ko = 1e6, qo = (e) => typeof e == "object" && e && "message" in e ? String(e
 				this.error = "The draft changed. Parse again to review matches.";
 				return;
 			}
-			this.source = n, this.snapshot = t, this.choices = Uo(t, n);
+			this.source = n, this.snapshot = t, this.choices = Ko(t, n);
 		} catch (t) {
-			e === this.sequence && (this.error = qo(t));
+			e === this.sequence && (this.error = Xo(t));
 		} finally {
 			e === this.sequence && (this.busy = null);
 		}
@@ -7687,7 +7687,7 @@ var Ko = 1e6, qo = (e) => typeof e == "object" && e && "message" in e ? String(e
 	}
 	destination(e, t) {
 		let n = t.target.value;
-		this.choose(e.key, n === "create" ? Wo(this.config, e, this.choices) : n === "skip" ? { action: "skip" } : {
+		this.choose(e.key, n === "create" ? qo(this.config, e, this.choices) : n === "skip" ? { action: "skip" } : {
 			action: "existing",
 			id: n.slice(9)
 		});
@@ -7695,9 +7695,9 @@ var Ko = 1e6, qo = (e) => typeof e == "object" && e && "message" in e ? String(e
 	preview() {
 		if (!this.config || !this.source) return {};
 		try {
-			return { result: Go(this.config, this.source, this.choices, this.importGps) };
+			return { result: Jo(this.config, this.source, this.choices, this.importGps) };
 		} catch (e) {
-			return { error: qo(e) };
+			return { error: Xo(e) };
 		}
 	}
 	async apply() {
@@ -7715,7 +7715,7 @@ var Ko = 1e6, qo = (e) => typeof e == "object" && e && "message" in e ? String(e
 			}
 			this.resetPreview(), this.notice = "Import applied to the draft. Use Save to persist it, or Undo to revert the import.", this.dispatchEvent(M(e.config, void 0, e.created ? !0 : void 0));
 		} catch (e) {
-			t === this.sequence && (this.error = qo(e));
+			t === this.sequence && (this.error = Xo(e));
 		} finally {
 			t === this.sequence && (this.busy = null);
 		}
@@ -7809,7 +7809,329 @@ var Ko = 1e6, qo = (e) => typeof e == "object" && e && "message" in e ? String(e
     `;
 	}
 };
-g([d({ attribute: !1 })], Q.prototype, "hass", void 0), g([d({ attribute: !1 })], Q.prototype, "config", void 0), g([d({ type: Boolean })], Q.prototype, "disabled", void 0), g([l()], Q.prototype, "text", void 0), g([l()], Q.prototype, "source", void 0), g([l()], Q.prototype, "choices", void 0), g([l()], Q.prototype, "importGps", void 0), g([l()], Q.prototype, "busy", void 0), g([l()], Q.prototype, "error", void 0), g([l()], Q.prototype, "notice", void 0), Q = g([a("al-floorplan-import")], Q);
+g([d({ attribute: !1 })], Y.prototype, "hass", void 0), g([d({ attribute: !1 })], Y.prototype, "config", void 0), g([d({ type: Boolean })], Y.prototype, "disabled", void 0), g([l()], Y.prototype, "text", void 0), g([l()], Y.prototype, "source", void 0), g([l()], Y.prototype, "choices", void 0), g([l()], Y.prototype, "importGps", void 0), g([l()], Y.prototype, "busy", void 0), g([l()], Y.prototype, "error", void 0), g([l()], Y.prototype, "notice", void 0), Y = g([a("al-floorplan-import")], Y);
+//#endregion
+//#region src/property-layout.ts
+var Zo = 6378137, X = Math.PI / 180;
+function Qo(e) {
+	return Number.isFinite(e.latitude) && Math.abs(e.latitude) < 85 && Number.isFinite(e.longitude) && Math.abs(e.longitude) <= 180 && Number.isFinite(e.rotation ?? 0) && Number.isFinite(e.elevation ?? 0);
+}
+function $o([e, t], n) {
+	let r = (n.rotation ?? 0) * X, i = e * Math.cos(r) - t * Math.sin(r), a = e * Math.sin(r) + t * Math.cos(r);
+	return [n.longitude + i / (Zo * Math.cos(n.latitude * X)) / X, n.latitude + a / Zo / X];
+}
+function es([e, t], n) {
+	let r = (e - n.longitude) * X * Zo * Math.cos(n.latitude * X), i = (t - n.latitude) * X * Zo, a = (n.rotation ?? 0) * X;
+	return [r * Math.cos(a) + i * Math.sin(a), -r * Math.sin(a) + i * Math.cos(a)];
+}
+function ts([e, t], n) {
+	let r = 256 * 2 ** n, i = Math.sin(Math.max(-85, Math.min(85, t)) * X);
+	return [(e + 180) / 360 * r, (.5 - Math.log((1 + i) / (1 - i)) / (4 * Math.PI)) * r];
+}
+function ns([e, t], n) {
+	let r = 256 * 2 ** n;
+	return [e / r * 360 - 180, Math.atan(Math.sinh(Math.PI * (1 - 2 * t / r))) / X];
+}
+function rs(e) {
+	if (e.points) return e.points;
+	if (!e.bounds) return [];
+	let [[t, n], [r, i]] = e.bounds;
+	return [
+		[t, n],
+		[r, n],
+		[r, i],
+		[t, i]
+	];
+}
+function is(e, t, n, r, i) {
+	if (![
+		n,
+		r,
+		i
+	].every(Number.isFinite)) throw Error("Placement needs finite numbers.");
+	let a = structuredClone(e), o = x(a).find((e) => e.group.id === t)?.group;
+	if (!o || o.kind !== "structure" || !o.bounds) throw Error("Choose a structure with dimensions.");
+	let [[s, c], [l, u]] = o.bounds, d = (s + l) / 2, f = (c + u) / 2, p = i * X, ee = (e) => {
+		let t = rs(e);
+		if (t.length && (e.points = t.map(([e, t]) => [d + n + (e - d) * Math.cos(p) - (t - f) * Math.sin(p), f + r + (e - d) * Math.sin(p) + (t - f) * Math.cos(p)]), e.bounds)) {
+			let t = e.points.map((e) => e[0]), n = e.points.map((e) => e[1]);
+			e.bounds = [[
+				Math.min(...t),
+				Math.min(...n),
+				e.bounds[0][2]
+			], [
+				Math.max(...t),
+				Math.max(...n),
+				e.bounds[1][2]
+			]];
+		}
+		e.children.forEach(ee);
+	};
+	return ee(o), a;
+}
+function as(e) {
+	let t = e.trim().split(/\n/).filter(Boolean).map((e) => e.trim().split(/[,\s]+/).map(Number));
+	if (t.length < 3 || t.length > 4096 || t.some((e) => e.length !== 2 || !e.every(Number.isFinite))) throw Error("Enter at least three X,Y coordinate pairs, one per line.");
+	let n = t.reduce((e, n, r) => {
+		let i = t[(r + 1) % t.length];
+		return e + n[0] * i[1] - i[0] * n[1];
+	}, 0);
+	if (!Number.isFinite(n) || Math.abs(n) < 1e-8) throw Error("The outline must enclose an area.");
+	return t;
+}
+//#endregion
+//#region src/al-property-layout.ts
+var os = {
+	property: "#74836b",
+	lawn: "#65964d",
+	driveway: "#89919a",
+	path: "#b5a58a",
+	pool: "#59aac7"
+}, Z = 512, Q = class extends o {
+	constructor(...e) {
+		super(...e), this.disabled = !1, this.latitude = "", this.longitude = "", this.elevation = "", this.rotation = "0", this.loadedLocation = !1, this.error = "", this.mapOpen = !1, this.tileError = !1, this.zoom = 19, this.provider = "https://tile.openstreetmap.org/{z}/{x}/{y}.png", this.attribution = "© OpenStreetMap contributors", this.editing = null, this.name = "", this.kind = "property", this.vertices = "", this.structure = "", this.dx = "0", this.dy = "0", this.angle = "0", this.busy = !1;
+	}
+	static {
+		this.styles = m`
+    :host { display:block; } fieldset { border:0; padding:0; margin:16px 0; }
+    .row { display:flex; flex-wrap:wrap; gap:12px; align-items:end; margin:12px 0; }
+    label { display:flex; flex-direction:column; gap:4px; }
+    input, select, textarea, button { font:inherit; color:var(--primary-text-color,#e4edf3);
+      background:var(--card-background-color,#263d4c); border:1px solid var(--divider-color,#526674);
+      border-radius:6px; padding:8px; } button:disabled { opacity:0.5; cursor:default; }
+    input { max-width:150px; } button { padding:8px; cursor:pointer; } a { color:var(--primary-color,#69c8e0); }
+    .map { position:relative; max-width:768px; background:#253743; }
+    svg { display:block; width:100%; touch-action:manipulation; }
+    .credit { background:#fff; color:#222; font-size:12px; padding:4px 8px; } .credit a { color:#145273; }
+    textarea { width:min(95%,500px); min-height:100px; } .error { color:var(--error-color,#ef6b6b); }
+    .hint { color:var(--secondary-text-color); } li { margin:8px 0; }
+  `;
+	}
+	willUpdate(e) {
+		e.has("config") && this.config?.gps && !this.latitude && !this.longitude && (this.latitude = String(this.config.gps.latitude), this.longitude = String(this.config.gps.longitude), this.elevation = this.config.gps.elevation === void 0 ? "" : String(this.config.gps.elevation), this.rotation = String(this.config.gps.rotation ?? 0)), e.has("config") && this.editing !== null && (this.editing = null, this.vertices = "", this.name = "");
+	}
+	editFeature(e) {
+		if (this.disabled) return;
+		let t = this.config?.site?.features[e];
+		t && (this.editing = e, this.name = t.name, this.kind = t.kind, this.vertices = t.points.map((e) => e.join(", ")).join("\n"));
+	}
+	async useHome() {
+		if (!(!this.hass || this.disabled)) {
+			this.busy = !0, this.error = "";
+			try {
+				let e = await this.hass.callWS({ type: "get_config" });
+				if (!Qo(e)) throw Error("Home Assistant location is outside the supported map range. Edit Home information first.");
+				this.latitude = String(e.latitude), this.longitude = String(e.longitude), this.elevation = String(e.elevation ?? 0), this.loadedLocation = !0;
+			} catch (e) {
+				this.error = e instanceof Error ? e.message : String(e);
+			} finally {
+				this.busy = !1;
+			}
+		}
+	}
+	applyOrigin() {
+		if (!(!this.config || this.disabled)) try {
+			if (!this.latitude.trim() || !this.longitude.trim()) throw Error("Enter latitude and longitude.");
+			let e = {
+				latitude: Number(this.latitude),
+				longitude: Number(this.longitude),
+				rotation: Number(this.rotation)
+			};
+			if (this.elevation.trim() && (e.elevation = Number(this.elevation)), !Qo(e)) throw Error("Enter valid coordinates (latitude between −85 and 85) and finite elevation/rotation.");
+			this.dispatchEvent(M({
+				...this.config,
+				gps: e
+			})), this.center = [e.longitude, e.latitude], this.error = "";
+		} catch (e) {
+			this.error = e.message;
+		}
+	}
+	loadMap() {
+		try {
+			if (!this.config?.gps || !Qo(this.config.gps)) throw Error("Apply a valid geographic origin first.");
+			if (new URL(this.provider).protocol !== "https:" || ![
+				"{x}",
+				"{y}",
+				"{z}"
+			].every((e) => this.provider.includes(e)) || !this.attribution.trim()) throw Error("Use an HTTPS tile template with {z}, {x}, {y} and attribution.");
+			this.center = [this.config.gps.longitude, this.config.gps.latitude], this.mapOpen = !0, this.tileError = !1, this.error = "";
+		} catch (e) {
+			this.error = e.message;
+		}
+	}
+	originPixel() {
+		return ts(this.center, this.zoom);
+	}
+	screen(e) {
+		let t = ts($o(e, this.config.gps), this.zoom), n = this.originPixel();
+		return [t[0] - n[0] + Z / 2, t[1] - n[1] + Z / 2];
+	}
+	pan(e, t) {
+		let n = this.originPixel();
+		this.center = ns([n[0] + e * 128, n[1] + t * 128], this.zoom);
+	}
+	addVertex(e) {
+		if (this.disabled || !this.config?.gps) return;
+		let t = e.currentTarget.getBoundingClientRect(), n = this.originPixel(), r = es(ns([n[0] + (e.clientX - t.left) / t.width * Z - Z / 2, n[1] + (e.clientY - t.top) / t.height * Z - Z / 2], this.zoom), this.config.gps);
+		this.vertices = [this.vertices.trim(), r.map((e) => e.toFixed(3)).join(", ")].filter(Boolean).join("\n");
+	}
+	addFeature() {
+		if (!(!this.config || this.disabled)) try {
+			if (!this.name.trim()) throw Error("Give the feature a name.");
+			let e = as(this.vertices), t = this.config.site ?? {
+				ground_z: 0,
+				features: []
+			};
+			if (this.editing === null && t.features.length >= 128) throw Error("Maximum 128 ground features.");
+			let n = {
+				name: this.name.trim(),
+				kind: this.kind,
+				points: e
+			}, r = this.editing === null ? [...t.features, n] : t.features.map((e, t) => t === this.editing ? n : e);
+			this.dispatchEvent(M({
+				...this.config,
+				site: {
+					...t,
+					features: r
+				}
+			})), this.editing = null, this.vertices = "", this.name = "", this.error = "";
+		} catch (e) {
+			this.error = e.message;
+		}
+	}
+	removeFeature(e) {
+		this.disabled || !this.config?.site || this.dispatchEvent(M({
+			...this.config,
+			site: {
+				...this.config.site,
+				features: this.config.site.features.filter((t, n) => n !== e)
+			}
+		}));
+	}
+	place() {
+		if (!(!this.config || this.disabled)) try {
+			this.dispatchEvent(M(is(this.config, this.structure, Number(this.dx), Number(this.dy), Number(this.angle)))), this.dx = this.dy = this.angle = "0", this.error = "";
+		} catch (e) {
+			this.error = e.message;
+		}
+	}
+	tiles() {
+		let [e, n] = this.originPixel(), r = 2 ** this.zoom, i = e - Z / 2, a = n - Z / 2, o = [];
+		for (let e = Math.floor(a / 256); e <= Math.floor((a + Z) / 256); e++) if (!(e < 0 || e >= r)) for (let n = Math.floor(i / 256); n <= Math.floor((i + Z) / 256); n++) {
+			let s = this.provider.replace("{z}", String(this.zoom)).replace("{x}", String((n % r + r) % r)).replace("{y}", String(e));
+			o.push(t`<image href=${s} x=${n * 256 - i} y=${e * 256 - a} width="256" height="256"
+          @error=${() => {
+				this.tileError = !0;
+			}}></image>`);
+		}
+		return o;
+	}
+	polygon(e) {
+		return e.map((e) => this.screen(e).join(",")).join(" ");
+	}
+	render() {
+		if (!this.config) return s;
+		let e = this.config.gps, n = x(this.config).map((e) => e.group).filter((e) => e.kind === "structure" && e.bounds), r = this.vertices.trim().split("\n").map((e) => e.trim().split(/[,\s]+/).map(Number)).filter((e) => e.length === 2 && e.every(Number.isFinite));
+		return v`
+      <p>Use your home location, trace outdoor features, and place existing buildings. Changes join the panel draft; use Save to keep them.</p>
+      ${e ? v`<p>Current origin: ${e.latitude}, ${e.longitude}; rotation ${e.rotation ?? 0}°.</p>` : v`<p>No geographic origin configured yet.</p>`}
+      <fieldset ?disabled=${this.disabled || this.busy}>
+        <legend>Location</legend>
+        <button @click=${this.useHome}>Use Home Assistant location</button>
+        <a href="/config/general" target="_blank" rel="noopener">Edit Home Assistant home information</a>
+        ${this.loadedLocation ? v`<p>Home location loaded below. Apply it to this floorplan when ready.</p>` : s}
+        <div class="row">
+          <label>Latitude<input type="number" step="any" .value=${this.latitude} @input=${(e) => {
+			this.latitude = e.target.value;
+		}}></label>
+          <label>Longitude<input type="number" step="any" .value=${this.longitude} @input=${(e) => {
+			this.longitude = e.target.value;
+		}}></label>
+          <label>Elevation above sea level (m)<input type="number" step="any" .value=${this.elevation} @input=${(e) => {
+			this.elevation = e.target.value;
+		}}></label>
+          <label>Origin rotation (°)<input type="number" step="any" .value=${this.rotation} @input=${(e) => {
+			this.rotation = e.target.value;
+		}}></label>
+          <button @click=${this.applyOrigin}>${e ? "Replace floorplan origin" : "Apply floorplan origin"}</button>
+        </div>
+        <p class="hint">Local room coordinates stay unchanged. The map origin identifies local X=0, Y=0; it may differ from the home pin.</p>
+        <button @click=${this.loadMap}>Load map</button>
+        <details><summary>Map provider</summary><p>Street map by default. Supply an HTTPS tile provider and its attribution for other imagery.</p>
+          <label>Tile URL<textarea .value=${this.provider} @change=${(e) => {
+			this.mapOpen = !1, this.provider = e.target.value;
+		}}></textarea></label>
+          <label>Attribution<input .value=${this.attribution} @input=${(e) => {
+			this.attribution = e.target.value;
+		}}></label>
+        </details>
+      </fieldset>
+      ${this.mapOpen && e && this.center ? v`
+        <div class="row"><button @click=${() => {
+			this.zoom = Math.min(19, this.zoom + 1);
+		}}>Zoom in</button><button @click=${() => {
+			this.zoom = Math.max(3, this.zoom - 1);
+		}}>Zoom out</button>
+          <button @click=${() => this.pan(-1, 0)}>West</button><button @click=${() => this.pan(1, 0)}>East</button><button @click=${() => this.pan(0, -1)}>North</button><button @click=${() => this.pan(0, 1)}>South</button></div>
+        <p>Click the map to add outline vertices, or enter local coordinates below.</p>
+        <div class="map"><svg viewBox=${`0 0 ${Z} ${Z}`} role="img" aria-label="Property map; use coordinate fields below for keyboard editing" @click=${this.addVertex}>
+          ${this.tiles()}
+          ${this.config.site?.features.map((e) => t`<polygon points=${this.polygon(e.points)} fill=${os[e.kind]} fill-opacity="0.35" stroke=${os[e.kind]} stroke-width="2"></polygon>`)}
+          ${n.map((e) => t`<polygon points=${this.polygon(rs(e))} fill="#46b6ff" fill-opacity="0.15" stroke="#159ce9" stroke-width="2"></polygon>`)}
+          <polyline points=${this.polygon(r)} fill="#ffcc55" fill-opacity="0.2" stroke="#ffcc55" stroke-width="3"></polyline>
+          ${r.map((e) => {
+			let [n, r] = this.screen(e);
+			return t`<circle cx=${n} cy=${r} r="4" fill="#ffcc55"></circle>`;
+		})}
+        </svg><div class="credit">${this.attribution} · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div></div>
+        ${this.tileError ? v`<p role="status">Some map tiles could not load. Coordinates and layout editing remain available.</p>` : s}
+      ` : s}
+      <fieldset ?disabled=${this.disabled}><legend>Ground features</legend>
+        <label>Local ground Z (m)<input type="number" step="any" .value=${String(this.config.site?.ground_z ?? 0)} @change=${(e) => {
+			let t = Number(e.target.value);
+			Number.isFinite(t) && this.dispatchEvent(M({
+				...this.config,
+				site: {
+					features: this.config.site?.features ?? [],
+					ground_z: t
+				}
+			}));
+		}}></label>
+        <p class="hint">Local ground height is separate from geographic elevation; use the same Z reference as your rooms.</p>
+        <div class="row"><label>Name<input maxlength="100" .value=${this.name} @input=${(e) => {
+			this.name = e.target.value;
+		}}></label>
+          <label>Type<select .value=${this.kind} @change=${(e) => {
+			this.kind = e.target.value;
+		}}>${Object.keys(os).map((e) => v`<option value=${e}>${e}</option>`)}</select></label></div>
+        <label>Outline coordinates (X, Y metres; one vertex per line)<textarea .value=${this.vertices} @input=${(e) => {
+			this.vertices = e.target.value;
+		}}></textarea></label>
+        <div class="row"><button @click=${this.addFeature}>${this.editing === null ? "Add ground feature" : "Update ground feature"}</button><button @click=${() => {
+			this.vertices = "", this.editing = null;
+		}}>Clear drawing</button></div>
+        <ul>${this.config.site?.features.map((e, t) => v`<li>${e.name} (${e.kind}) <button @click=${() => this.editFeature(t)}>Edit ${e.name}</button> <button @click=${() => this.removeFeature(t)}>Remove ${e.name}</button></li>`)}</ul>
+      </fieldset>
+      <fieldset ?disabled=${this.disabled}><legend>Place existing structures</legend>
+        <p>Move in local metres and rotate counterclockwise around the building centre. All descendant rooms move together; their dimensions and heights are preserved.</p>
+        <div class="row"><label>Structure<select .value=${this.structure} @change=${(e) => {
+			this.structure = e.target.value;
+		}}><option value="">Choose a building</option>${n.map((e) => v`<option value=${e.id}>${e.name ?? e.id}</option>`)}</select></label>
+          <label>Move X (m)<input type="number" step="any" .value=${this.dx} @input=${(e) => {
+			this.dx = e.target.value;
+		}}></label>
+          <label>Move Y (m)<input type="number" step="any" .value=${this.dy} @input=${(e) => {
+			this.dy = e.target.value;
+		}}></label>
+          <label>Rotate (°)<input type="number" step="any" .value=${this.angle} @input=${(e) => {
+			this.angle = e.target.value;
+		}}></label>
+          <button @click=${this.place}>Apply placement</button></div>
+      </fieldset>
+      ${this.error ? v`<p class="error" role="alert">${this.error}</p>` : s}`;
+	}
+};
+g([d({ attribute: !1 })], Q.prototype, "config", void 0), g([d({ attribute: !1 })], Q.prototype, "hass", void 0), g([d({ type: Boolean })], Q.prototype, "disabled", void 0), g([l()], Q.prototype, "latitude", void 0), g([l()], Q.prototype, "longitude", void 0), g([l()], Q.prototype, "elevation", void 0), g([l()], Q.prototype, "rotation", void 0), g([l()], Q.prototype, "loadedLocation", void 0), g([l()], Q.prototype, "error", void 0), g([l()], Q.prototype, "mapOpen", void 0), g([l()], Q.prototype, "tileError", void 0), g([l()], Q.prototype, "zoom", void 0), g([l()], Q.prototype, "center", void 0), g([l()], Q.prototype, "provider", void 0), g([l()], Q.prototype, "attribution", void 0), g([l()], Q.prototype, "editing", void 0), g([l()], Q.prototype, "name", void 0), g([l()], Q.prototype, "kind", void 0), g([l()], Q.prototype, "vertices", void 0), g([l()], Q.prototype, "structure", void 0), g([l()], Q.prototype, "dx", void 0), g([l()], Q.prototype, "dy", void 0), g([l()], Q.prototype, "angle", void 0), g([l()], Q.prototype, "busy", void 0), Q = g([a("al-property-layout")], Q);
 //#endregion
 //#region src/al-floorplans.ts
 var $ = class extends o {
@@ -7862,6 +8184,7 @@ var $ = class extends o {
       ${this.error || this.preferenceError ? v`<p role="status">${this.error || this.preferenceError}</p>` : s}
       <al-floorplan-viewer .config=${this.config} .live=${this.live} .hass=${this.hass} .lights=${this.lights}
         .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
+      <details><summary>Property layout</summary><al-property-layout .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-property-layout></details>
       <details .open=${!e}><summary>Import or update floorplan</summary>
         <al-floorplan-import .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-floorplan-import>
       </details>`;
