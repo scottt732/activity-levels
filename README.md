@@ -1,11 +1,13 @@
 # Activity Levels
 
+![Activity Levels logo](https://raw.githubusercontent.com/scottt732/activity-levels/main/custom_components/activity_levels/brand/logo.png)
+
 [![python](https://github.com/scottt732/activity-levels/actions/workflows/python.yml/badge.svg)](https://github.com/scottt732/activity-levels/actions/workflows/python.yml)
 [![frontend](https://github.com/scottt732/activity-levels/actions/workflows/frontend.yml/badge.svg)](https://github.com/scottt732/activity-levels/actions/workflows/frontend.yml)
 [![codecov](https://codecov.io/gh/scottt732/activity-levels/branch/main/graph/badge.svg)](https://codecov.io/gh/scottt732/activity-levels)
 [![release](https://img.shields.io/github/v/release/scottt732/activity-levels?sort=semver)](https://github.com/scottt732/activity-levels/releases/latest)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
-[![license MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[MIT License](https://github.com/scottt732/activity-levels/blob/main/LICENSE)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196.svg)](https://www.conventionalcommits.org/en/v1.0.0/)
 
 Home Assistant custom integration (HACS) that turns entity state changes into per-area
