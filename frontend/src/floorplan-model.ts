@@ -1,8 +1,9 @@
+import { readFixture } from "./room-fixtures";
 import type { Kind } from "./kinds";
-import type { Bounds, GroupLive, Path, SiteLayout } from "./types";
+import type { Bounds, GroupLive, Path, SiteLayout, RoomFixture } from "./types";
 
 export interface ActivityFrame { now: number; groups: Record<string, Pick<GroupLive,"value" | "max_value"> & Partial<Pick<GroupLive,"last_activity">>> }
-export interface FloorplanNode { id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[] }
+export interface FloorplanNode { id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[]; fixtures?: RoomFixture[] }
 export interface FloorplanConfig { site?: SiteLayout; groups: FloorplanNode[] }
 
 export interface FloorplanGroup {
@@ -17,6 +18,7 @@ export interface ScenePart extends FloorplanGroup {
   low: number;
   high: number;
   container: boolean;
+  fixtures?: RoomFixture[];
 }
 export interface FloorplanModel {
   parts: ScenePart[];
@@ -90,7 +92,10 @@ export function floorplanModel(config: FloorplanConfig): FloorplanModel {
       ? [[b[0][0], b[0][1]], [b[1][0], b[0][1]], [b[1][0], b[1][1]], [b[0][0], b[1][1]]] as [number, number][]
       : polygon(group.points);
     if (!footprint) { invalid("Invalid footprint in the draft."); continue; }
-    parts.push({ ...info, footprint, low: b[0][2], high: b[1][2],
+    const fixtures=Array.isArray(group.fixtures) ? group.fixtures.slice(0,128).map(readFixture).filter(f=>f!==null) : [];
+    if(group.fixtures!==undefined && (!Array.isArray(group.fixtures) || fixtures.length!==group.fixtures.length))
+      invalid("Some device placements are invalid and could not be displayed.");
+    parts.push({ ...info, fixtures, footprint, low: b[0][2], high: b[1][2],
       container: ["property", "structure", "floor"].includes(group.kind) });
   }
   const groups = [...all.values()].filter((group) => relevant.has(group.id));

@@ -62,6 +62,11 @@ export function placeStructure(config: Config, id: string, dx: number, dy: numbe
           [Math.max(...xs), Math.max(...ys), node.bounds[1][2]]];
       }
     }
+    node.fixtures = node.fixtures?.map(fixture => {
+      const [x,y,z]=fixture.position;
+      return {...fixture,position:[cx+dx+(x-cx)*Math.cos(a)-(y-cy)*Math.sin(a),
+        cy+dy+(x-cx)*Math.sin(a)+(y-cy)*Math.cos(a),z],yaw:((fixture.yaw+degrees)%360+360)%360};
+    });
     node.children.forEach(visit);
   };
   visit(group);

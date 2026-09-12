@@ -93,3 +93,41 @@ SITE_SCHEMA = vol.Schema(
         ),
     }
 )
+
+
+def position(value: Any) -> list[float]:
+    """An XYZ point in the same absolute metre frame as room geometry."""
+    return _point(value, 3)
+
+
+FIXTURE_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity"): vol.Match(r"^(binary_sensor|light)\.[a-z0-9_]+$"),
+        vol.Required("kind"): vol.In(["motion", "occupancy", "light"]),
+        vol.Optional("name", default=""): vol.All(str, vol.Length(max=100)),
+        vol.Required("position"): position,
+        vol.Optional("yaw", default=0): vol.All(coordinate, vol.Range(min=-360, max=360)),
+        vol.Optional("pitch", default=0): vol.All(coordinate, vol.Range(min=-90, max=90)),
+        vol.Optional("fov", default=60): vol.All(coordinate, vol.Range(min=1, max=170)),
+        vol.Optional("vertical_fov", default=45): vol.All(coordinate, vol.Range(min=1, max=170)),
+        vol.Optional("range", default=0): vol.All(coordinate, vol.Range(min=0, max=100)),
+        vol.Optional("mount", default=""): vol.All(str, vol.Length(max=60)),
+        vol.Optional("technology", default=""): vol.All(str, vol.Length(max=60)),
+    }
+)
+
+
+def fixtures(value: Any) -> list[dict[str, Any]]:
+    """Enforce entity/type agreement and one placement per entity in a room."""
+    result: list[dict[str, Any]] = vol.All([FIXTURE_SCHEMA], vol.Length(max=128))(value)
+    entities: set[str] = set()
+    for item in result:
+        light = item["entity"].startswith("light.")
+        if light != (item["kind"] == "light"):
+            raise vol.Invalid(
+                "light entities need light type; binary sensors need motion/occupancy"
+            )
+        if item["entity"] in entities:
+            raise vol.Invalid("an entity can only be placed once per room")
+        entities.add(item["entity"])
+    return result

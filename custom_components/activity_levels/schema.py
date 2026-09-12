@@ -51,7 +51,7 @@ from .const import (
 )
 from .duration import parse_duration
 from .engine import Mix, NullHandling, RetriggerWhen, Unavailable
-from .geometry import GPS_SCHEMA, SITE_SCHEMA, bounds, points
+from .geometry import GPS_SCHEMA, SITE_SCHEMA, bounds, fixtures, points
 
 PRESENCE_CORRECTION_FIELDS: dict[Any, Any] = {
     vol.Required("person"): str,
@@ -493,6 +493,7 @@ GROUP_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_BOUNDS): bounds,
         vol.Optional(CONF_POINTS): points,
+        vol.Optional("fixtures"): fixtures,
         vol.Required("id"): _group_id,
         vol.Optional("name", default=None): vol.Any(None, str),
         vol.Optional(CONF_KIND, default=None): vol.Any(None, vol.In(KINDS)),

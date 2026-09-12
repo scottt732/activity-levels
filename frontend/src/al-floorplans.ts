@@ -3,10 +3,11 @@ import { customElement, property, state } from "lit/decorators.js";
 import "./al-floorplan-viewer";
 import "./al-floorplan-import";
 import "./al-property-layout";
+import "./al-room-device-editor";
 import { walkGroups } from "./model";
 import type { PropertyValues } from "lit";
 import { floorplanSource } from "./floorplan-store";
-import type { FloorplanSource } from "./floorplan-store";
+import type { FloorplanSource, FloorplanTelemetry } from "./floorplan-store";
 import { viewerOptions } from "./floorplan-style";
 import type { ViewerSettings } from "./floorplan-style";
 import type { Config, HomeAssistant, LiveState } from "./types";
@@ -24,6 +25,7 @@ export class AlFloorplans extends LitElement {
   @property({ attribute: false }) live: LiveState | null = null;
   @property({ type: Boolean }) disabled = false;
 
+  @state() private telemetry?: FloorplanTelemetry;
   @state() private lights: Record<string,string[]> = {};
   @state() private settings: ViewerSettings = {};
   @state() private error = "";
@@ -42,7 +44,7 @@ export class AlFloorplans extends LitElement {
     this.unsubscribe=source.subscribe(({data,error})=>{
       this.error=error ?? "";
       if(!data) return;
-      this.lights=data.lights;
+      this.lights=data.lights; this.telemetry=data.telemetry;
       if(this.entry!==data.entry_id) {
         this.entry=data.entry_id;
         try { const raw=localStorage.getItem(`al-floorplan:${this.entry}`); this.settings=raw?JSON.parse(raw):{}; viewerOptions(this.settings); }
@@ -61,7 +63,8 @@ export class AlFloorplans extends LitElement {
     return html`
       ${this.error || this.preferenceError ? html`<p role="status">${this.error || this.preferenceError}</p>` : nothing}
       <al-floorplan-viewer .config=${this.config} .live=${this.live} .hass=${this.hass} .lights=${this.lights}
-        .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
+        .telemetry=${this.error ? undefined : this.telemetry} .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
+      <details><summary>Room devices</summary><al-room-device-editor .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor></details>
       <details><summary>Property layout</summary><al-property-layout .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-property-layout></details>
       <details .open=${!hasGeometry}><summary>Import or update floorplan</summary>
         <al-floorplan-import .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-floorplan-import>

@@ -1,6 +1,12 @@
 import type { HomeAssistant } from "./types";
 import type { FloorplanConfig, ActivityFrame } from "./floorplan-model";
-export interface FloorplanDashboard { entry_id: string; config: FloorplanConfig; lights: Record<string,string[]>; live: ActivityFrame }
+export interface RoomTelemetry {
+  idle_by: number | null;
+  people: {name:string; entity:string | null; confidence:number | null; t:number | null}[];
+  devices: {name:string; entity:string | null; confidence:number | null}[];
+}
+export interface FloorplanTelemetry { now:number; rooms:Record<string,RoomTelemetry> }
+export interface FloorplanDashboard { telemetry?: FloorplanTelemetry; entry_id: string; config: FloorplanConfig; lights: Record<string,string[]>; live: ActivityFrame }
 export interface FloorplanSnapshot { data?: FloorplanDashboard; error?: string }
 type Listener = (snapshot: FloorplanSnapshot) => void;
 const sources = new WeakMap<object,FloorplanSource>();

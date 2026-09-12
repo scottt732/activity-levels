@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
 from .coordinator import ActivityLevelsCoordinator
+from .engine.forecast import idle_by
 from .floorplan import MAX_IMPORT_LENGTH, FloorplanError, parse_floorplan
 from .patterns.profile import ProfileError
 from .runtime import RuntimeData
@@ -636,7 +637,7 @@ def ws_floorplan_dashboard(
             {
                 **{
                     key: node[key]
-                    for key in ("id", "name", "kind", "bounds", "points")
+                    for key in ("id", "name", "kind", "bounds", "points", "fixtures")
                     if key in node
                 },
                 "children": geometry(node.get("children", [])),
@@ -647,10 +648,41 @@ def ws_floorplan_dashboard(
     coordinator = runtime.coordinator
     now = coordinator.now()
     details = coordinator.group_details(now)
+    presence = runtime.presence.payload() if runtime.presence is not None else {}
+    room_details = {}
+    for gid, info in coordinator.tree.groups.items():
+        people = []
+        devices = []
+        for name, person in presence.get("people", {}).items():
+            if person.get("room") == gid and not person.get("moving", False):
+                people.append(
+                    {
+                        "name": name,
+                        "entity": person.get("person"),
+                        "confidence": person.get("confidence"),
+                        "t": person.get("t"),
+                    }
+                )
+            for device in person.get("devices", {}).values():
+                if device.get("room") == gid:
+                    devices.append(
+                        {
+                            "name": device.get("name"),
+                            "entity": device.get("tracker"),
+                            "confidence": device.get("confidence"),
+                        }
+                    )
+        room_details[gid] = {
+            "idle_by": idle_by(info.group, now),
+            "people": people,
+            "devices": devices,
+        }
+
     connection.send_result(
         msg["id"],
         {
             "entry_id": entry.entry_id,
+            "telemetry": {"now": now, "rooms": room_details},
             "config": {
                 "groups": geometry(entry.options.get("groups", [])),
                 **({"site": entry.options["site"]} if "site" in entry.options else {}),

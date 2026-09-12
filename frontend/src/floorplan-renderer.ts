@@ -1,13 +1,14 @@
 import {
   Box3, DoubleSide, EdgesGeometry, ExtrudeGeometry, GridHelper, LineBasicMaterial,
   LineSegments, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Scene, Shape,
-  Vector2, Vector3, WebGLRenderer, PlaneGeometry, ShapeGeometry, Float32BufferAttribute, Color, DataTexture, LinearFilter,
+  Vector2, Vector3, WebGLRenderer, PlaneGeometry, ShapeGeometry, Float32BufferAttribute, Color, DataTexture, LinearFilter, SphereGeometry, ConeGeometry, Plane, BufferGeometry, Matrix4,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { activityReading } from "./floorplan-model";
 import type { ScenePart, ActivityFrame } from "./floorplan-model";
-import { viewerOptions, thresholdColor } from "./floorplan-style";
-import type { SiteLayout } from "./types";
+import { viewerOptions, thresholdColor, roomLight } from "./floorplan-style";
+import { fixtureDirection } from "./room-fixtures";
+import type { SiteLayout, RoomFixture, HassEntity } from "./types";
 import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
 
 export type CameraAction = "reset" | "top" | "left" | "right" | "up" | "down" | "in" | "out";
@@ -66,6 +67,10 @@ export class FloorplanRenderer {
   private readonly raycaster = new Raycaster();
   private volumes: Volume[] = [];
   private grid?: GridHelper;
+  private boundsKey = "";
+  private origin = new Vector3();
+  private placementHeight?: number;
+  private markers: {room:string; fixture:RoomFixture; marker:Mesh<BufferGeometry,MeshBasicMaterial>; coverage?:Mesh<BufferGeometry,MeshBasicMaterial>; previous?:string}[] = [];
   private siteMeshes: Mesh<ShapeGeometry, MeshBasicMaterial>[] = [];
   private radius = 1;
   private ground?: Mesh<PlaneGeometry, MeshBasicMaterial>;
@@ -89,6 +94,8 @@ export class FloorplanRenderer {
     private readonly host: HTMLElement,
     private readonly select: (id: string) => void,
     private readonly fail: (message: string) => void,
+    private readonly hover?: (id: string) => void,
+    private readonly place?: (position: [number,number,number]) => void,
   ) {
     this.renderer = new WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -111,6 +118,7 @@ export class FloorplanRenderer {
     canvas.addEventListener("pointermove", this.onPointerMove);
     canvas.addEventListener("pointerup", this.onPointerUp);
     canvas.addEventListener("pointercancel", this.onPointerCancel);
+    canvas.addEventListener("pointerleave", this.onPointerLeave);
     canvas.addEventListener("webglcontextlost", this.onContextLost);
     this.observer = new ResizeObserver(this.resize);
     this.observer.observe(host);
@@ -148,7 +156,11 @@ export class FloorplanRenderer {
       box.expandByPoint(new Vector3(box.min.x, groundZ, box.min.z));
       box.expandByPoint(new Vector3(box.max.x, groundZ, box.max.z));
     }
+    const boundsKey=JSON.stringify([box.min.toArray(),box.max.toArray()]);
+    const resetCamera=this.boundsKey!==boundsKey;
+    this.boundsKey=boundsKey;
     const origin = box.getCenter(new Vector3());
+    this.origin.copy(origin);
     this.radius = Math.max(box.getSize(new Vector3()).length() / 2, 0.1);
     for (const part of parts) {
       const geometry = volumeGeometry(part, origin);
@@ -201,6 +213,27 @@ export class FloorplanRenderer {
         this.scene.add(volume.liquid, volume.ceiling, volume.wash);
       }
       this.volumes.push(volume);
+      for (const fixture of part.fixtures ?? []) {
+        const marker = new Mesh(new SphereGeometry(Math.min(0.15,Math.max(this.radius*0.008,0.06)),12,8), new MeshBasicMaterial({color:0x82cddb}));
+        marker.position.set(fixture.position[0]-origin.x,fixture.position[2]-origin.y,-fixture.position[1]-origin.z);
+        marker.name="room-fixture";
+        this.scene.add(marker);
+        let coverage: Mesh<BufferGeometry,MeshBasicMaterial> | undefined;
+        if (fixture.range>0 && fixture.kind!=="light") {
+          const geometry=new ConeGeometry(1,1,24,1,true);
+          geometry.translate(0,-0.5,0);
+          geometry.scale(Math.tan(fixture.fov*Math.PI/360)*fixture.range,fixture.range,Math.tan(fixture.vertical_fov*Math.PI/360)*fixture.range);
+          coverage=new Mesh(geometry,new MeshBasicMaterial({color:0x4ad8ed,transparent:true,opacity:0.045,side:DoubleSide,depthWrite:false}));
+          const direction=new Vector3(...fixtureDirection(fixture));
+          const yaw=fixture.yaw*Math.PI/180;
+          const right=new Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+          const up=direction.clone().cross(right);
+          coverage.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(right,direction.clone().negate(),up));
+          coverage.position.copy(marker.position); coverage.name="sensor-coverage";
+          this.scene.add(coverage);
+        }
+        this.markers.push({room:part.id,fixture,marker,coverage});
+      }
     }
     const siteColors = {property:0x425044, lawn:0x506b40, driveway:0x697179, path:0x8d8069, pool:0x367c9b};
     const features = [...(site?.features ?? [])].sort((a, b) => Number(b.kind === "property") - Number(a.kind === "property"));
@@ -227,11 +260,11 @@ export class FloorplanRenderer {
     this.camera.far = this.radius * 100;
     this.controls.minDistance = this.radius * 0.1;
     this.controls.maxDistance = this.radius * 30;
-    this.cameraAction("reset");
-    this.pauseUntil=0;
+    if(resetCamera) {this.cameraAction("reset");this.pauseUntil=0;}
+    else this.draw();
   }
 
-  setActivity(live: ActivityFrame | null, now: number, selected: string, options: ViewerOptions = viewerOptions(), fills: Record<string,RoomLight> = {}, alert?: AlertRule): void {
+  setActivity(live: ActivityFrame | null, now: number, selected: string, options: ViewerOptions = viewerOptions(), fills: Record<string,RoomLight> = {}, alert?: AlertRule, states: Record<string,HassEntity> = {}): void {
     if (selected !== this.lastSelected) { this.pauseMotion(); this.lastSelected=selected; }
     this.options = options;
     if (!options.focus_activity) this.focusTarget=undefined;
@@ -267,6 +300,7 @@ export class FloorplanRenderer {
       wash.material.opacity = strength * 0.25;
       ceiling.visible = wash.visible = strength > 0;
     }
+    const previousFocus=this.lastFocus;
     const key = alert ? `${alert.entity}:${alert.state}:${alert.group ?? ""}` : "";
     let candidate = key && key !== this.alertKey ? this.volumes.find(v=>v.part.id === alert?.group) : undefined;
     const fresh: {volume: Volume; event: number}[] = [];
@@ -295,9 +329,34 @@ export class FloorplanRenderer {
       this.focusDistance = Math.min(this.fitDistance(), Math.max(box.getSize(new Vector3()).length()*2, this.radius));
       this.focusUntil = Date.now()+8000; this.lastFocus=now;
     }
+    let sensorTarget: typeof this.markers[number] | undefined;
+    for (const item of this.markers) {
+      const state=states[item.fixture.entity];
+      const known=state?.state==="on" || state?.state==="off";
+      const on=state?.state==="on";
+      item.marker.material.color.set(!known?"#7a8790":on?"#ffce62":"#53b6ce");
+      if (item.fixture.kind==="light" && on) {
+        const light=roomLight([item.fixture.entity],states);
+        item.marker.material.color.setRGB(...light.rgb);
+      }
+      if (item.coverage) {
+        item.coverage.material.color.copy(item.marker.material.color);
+        item.coverage.material.opacity=!known?0.015:on?0.14:0.035;
+      }
+      if (item.fixture.kind!=="light" && item.previous==="off" && on) sensorTarget=item;
+      item.previous=state?.state;
+    }
+    if (sensorTarget && options.focus_activity && !alert && !this.reduced?.matches && Date.now()>=this.pauseUntil && now-previousFocus>=12) {
+      const direction=new Vector3(...fixtureDirection(sensorTarget.fixture));
+      this.focusTarget=sensorTarget.marker.position.clone().addScaledVector(direction,Math.min(sensorTarget.fixture.range,3)*0.5);
+      this.focusDistance=Math.max(this.radius*0.6,2);
+      this.focusUntil=Date.now()+8000; this.lastFocus=now;
+    }
     this.scheduleMotion();
     this.draw();
   }
+
+  setPlacement(height?: number): void { this.placementHeight=height; }
 
   private updateColor(volume: Volume, blend: number): void {
     if (!volume.liquid?.visible) return;
@@ -380,7 +439,16 @@ export class FloorplanRenderer {
     if (!event.isPrimary || event.button !== 0) { this.pointer = null; return; }
     this.pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
   };
+  private readonly onPointerLeave = (): void => { this.hover?.(""); };
   private readonly onPointerMove = (event: PointerEvent): void => {
+    if (!this.pointer && this.hover) {
+      const rect=this.renderer.domElement.getBoundingClientRect();
+      if (rect.width && rect.height) {
+        this.raycaster.setFromCamera(new Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),this.camera);
+        const hit=this.raycaster.intersectObjects(this.volumes.filter(v=>!v.part.container).map(v=>v.mesh))[0];
+        this.hover(this.volumes.find(v=>v.mesh===hit?.object)?.part.id ?? "");
+      }
+    }
     if (this.pointer && Math.hypot(event.clientX - this.pointer.x, event.clientY - this.pointer.y) > 5)
       this.pointer.moved = true;
   };
@@ -395,6 +463,11 @@ export class FloorplanRenderer {
       (event.clientX - rect.left) / rect.width * 2 - 1,
       -(event.clientY - rect.top) / rect.height * 2 + 1,
     ), this.camera);
+    if (this.placementHeight !== undefined && this.place) {
+      const hit=this.raycaster.ray.intersectPlane(new Plane(new Vector3(0,1,0),this.origin.y-this.placementHeight),new Vector3());
+      if (hit) this.place([hit.x+this.origin.x,-hit.z-this.origin.z,this.placementHeight]);
+      return;
+    }
     // Enclosing floor/building boxes must not intercept clicks intended for their rooms.
     const rooms = this.volumes.filter(({ part }) => !part.container);
     const hits = this.raycaster.intersectObjects(rooms.map(({ mesh }) => mesh));
@@ -409,6 +482,10 @@ export class FloorplanRenderer {
   };
 
   private clearParts(): void {
+    for (const item of this.markers) for (const mesh of [item.marker,item.coverage]) {
+      if (mesh) {this.scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();}
+    }
+    this.markers=[];
     for (const mesh of this.siteMeshes) {
       this.scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose();
     }
@@ -448,6 +525,7 @@ export class FloorplanRenderer {
     canvas.removeEventListener("pointermove", this.onPointerMove);
     canvas.removeEventListener("pointerup", this.onPointerUp);
     canvas.removeEventListener("pointercancel", this.onPointerCancel);
+    canvas.removeEventListener("pointerleave", this.onPointerLeave);
     canvas.removeEventListener("webglcontextlost", this.onContextLost);
     this.clearParts();
     this.renderer.dispose();

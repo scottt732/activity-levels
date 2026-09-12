@@ -72,7 +72,13 @@ export interface Gps {
   rotation?: number;
 }
 
+export interface RoomFixture {
+  entity: string; kind: "motion" | "occupancy" | "light"; name: string;
+  position: [number, number, number]; yaw: number; pitch: number;
+  fov: number; vertical_fov: number; range: number; mount: string; technology: string;
+}
 export interface Group {
+  fixtures?: RoomFixture[];
   bounds?: Bounds;
   points?: [number, number][];
   id: string;

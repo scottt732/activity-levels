@@ -852,6 +852,85 @@
           },
           "description": "XY polygon in meters with at least three distinct vertices and non-zero area."
         },
+        "fixtures": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "properties": {
+              "entity": {
+                "type": "string",
+                "pattern": "^(binary_sensor|light)\\.[a-z0-9_]+$"
+              },
+              "kind": {
+                "enum": [
+                  "motion",
+                  "occupancy",
+                  "light"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 100,
+                "default": ""
+              },
+              "position": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "yaw": {
+                "type": "number",
+                "minimum": -360,
+                "maximum": 360,
+                "default": 0
+              },
+              "pitch": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90,
+                "default": 0
+              },
+              "fov": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 170,
+                "default": 60
+              },
+              "vertical_fov": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 170,
+                "default": 45
+              },
+              "range": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100,
+                "default": 0
+              },
+              "mount": {
+                "type": "string",
+                "maxLength": 60,
+                "default": ""
+              },
+              "technology": {
+                "type": "string",
+                "maxLength": 60,
+                "default": ""
+              }
+            },
+            "required": [
+              "entity",
+              "kind",
+              "position"
+            ],
+            "additionalProperties": false
+          }
+        },
         "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$",
