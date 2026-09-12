@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/scottt732/activity-levels/compare/v0.20.0...v0.21.0) (2026-09-12)
+
+
+### Added
+
+* **panel:** doors, clipped sensor coverage, units and visual aiming ([#58](https://github.com/scottt732/activity-levels/issues/58)) ([ee0406a](https://github.com/scottt732/activity-levels/commit/ee0406a6b4061e8619e18b4aee143f45db481d39))
+
 ## [0.20.0](https://github.com/scottt732/activity-levels/compare/v0.19.0...v0.20.0) (2026-09-12)
 
 
