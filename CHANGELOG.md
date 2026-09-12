@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/scottt732/activity-levels/compare/v0.16.0...v0.17.0) (2026-09-12)
+
+
+### Added
+
+* **panel:** fade idle fills and scale opacity with activity ([#47](https://github.com/scottt732/activity-levels/issues/47)) ([8dbfda4](https://github.com/scottt732/activity-levels/commit/8dbfda4f82c3e645d9beb4ea1b383ce989ecab18))
+
 ## [0.16.0](https://github.com/scottt732/activity-levels/compare/v0.15.0...v0.16.0) (2026-09-09)
 
 
