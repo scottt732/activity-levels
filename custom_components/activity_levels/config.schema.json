@@ -108,6 +108,9 @@
               "window"
             ]
           },
+          "look_down": {
+            "type": "boolean"
+          },
           "fov": {
             "type": "number",
             "minimum": 1,
@@ -961,6 +964,9 @@
           "items": {
             "type": "object",
             "properties": {
+              "look_down": {
+                "type": "boolean"
+              },
               "profile_id": {
                 "type": "string",
                 "minLength": 1,
@@ -1044,6 +1050,86 @@
             },
             "required": [
               "entity",
+              "kind",
+              "position"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "openings": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 100,
+                "default": ""
+              },
+              "kind": {
+                "enum": [
+                  "interior_door",
+                  "exterior_door",
+                  "open_wall"
+                ]
+              },
+              "position": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "yaw": {
+                "type": "number",
+                "minimum": -360,
+                "maximum": 360,
+                "default": 0
+              },
+              "width": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 20,
+                "default": 0.9
+              },
+              "height": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 20,
+                "default": 2
+              },
+              "hinge": {
+                "enum": [
+                  "left",
+                  "right"
+                ],
+                "default": "left"
+              },
+              "swing": {
+                "enum": [
+                  "in",
+                  "out"
+                ],
+                "default": "in"
+              },
+              "open": {
+                "type": "boolean",
+                "default": false
+              },
+              "entity": {
+                "type": "string",
+                "pattern": "^binary_sensor\\.[a-z0-9_]+$"
+              }
+            },
+            "required": [
+              "id",
               "kind",
               "position"
             ],

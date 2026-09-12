@@ -30,7 +30,17 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import SCHEMA_NAME
 from .duration import parse_duration
-from .geometry import FIXTURE_SCHEMA, MAX_POINTS, bounds, coordinate, fixtures, points, position
+from .geometry import (
+    FIXTURE_SCHEMA,
+    MAX_POINTS,
+    OPENING_SCHEMA,
+    bounds,
+    coordinate,
+    fixtures,
+    openings,
+    points,
+    position,
+)
 from .schema import (
     ADJACENT_SCHEMA,
     CONFIG_SCHEMA,
@@ -306,6 +316,8 @@ def _translate(validator: Any) -> JsonSchema:
     """One voluptuous validator as one JSON Schema."""
     if isinstance(validator, vol.Match):
         return {"type": "string", "pattern": validator.pattern.pattern}
+    if validator is openings:
+        return {"type": "array", "maxItems": 128, "items": _translate(OPENING_SCHEMA)}
     if validator is fixtures:
         return {"type": "array", "maxItems": 128, "items": _translate(FIXTURE_SCHEMA)}
     if validator is None:

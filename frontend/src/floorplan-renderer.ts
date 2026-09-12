@@ -1,14 +1,16 @@
 import {
   Box3, BoxGeometry, LineDashedMaterial, DoubleSide, EdgesGeometry, ExtrudeGeometry, GridHelper, LineBasicMaterial,
   LineSegments, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Scene, Shape,
-  Vector2, Vector3, WebGLRenderer, PlaneGeometry, ShapeGeometry, Float32BufferAttribute, Color, DataTexture, LinearFilter, SphereGeometry, ConeGeometry, Plane, BufferGeometry, Matrix4,
+  Vector2, Vector3, WebGLRenderer, PlaneGeometry, ShapeGeometry, Float32BufferAttribute, Color, DataTexture, LinearFilter, SphereGeometry, Plane, BufferGeometry,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { activityReading } from "./floorplan-model";
 import type { ScenePart, ActivityFrame } from "./floorplan-model";
 import { viewerOptions, thresholdColor, roomLight } from "./floorplan-style";
+import {coverageRays} from "./sensor-coverage";
+import {openingIsOpen,openingSwing} from "./room-openings";
 import { fixtureAppearance, fixtureDirection } from "./room-fixtures";
-import type { SiteLayout, RoomFixture, HassEntity } from "./types";
+import type { SiteLayout, RoomOpening, RoomFixture, HassEntity } from "./types";
 import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
 
 export type CameraAction = "reset" | "top" | "left" | "right" | "up" | "down" | "in" | "out";
@@ -70,7 +72,9 @@ export class FloorplanRenderer {
   private boundsKey = "";
   private origin = new Vector3();
   private placementHeight?: number;
-  private markers: {room:string; fixture:RoomFixture; marker:Mesh<BufferGeometry,MeshBasicMaterial>; coverage?:Mesh<BufferGeometry,MeshBasicMaterial>; boundary?:LineSegments<BufferGeometry,LineDashedMaterial>; previous?:string}[] = [];
+  private markers: {room:string; fixture:RoomFixture; marker:Mesh<BufferGeometry,MeshBasicMaterial>; coverage?:Mesh<BufferGeometry,MeshBasicMaterial>; boundary?:LineSegments<BufferGeometry,LineDashedMaterial>; previous?:string;coverageKey?:string}[] = [];
+  private coverageRooms:ScenePart[]=[];
+  private doors:{part:ScenePart;opening:RoomOpening;leaf:Mesh<BufferGeometry,MeshBasicMaterial>;frame:LineSegments<BufferGeometry,LineBasicMaterial>;arc:LineSegments<BufferGeometry,LineBasicMaterial>;key?:boolean}[]=[];
   private siteMeshes: Mesh<ShapeGeometry, MeshBasicMaterial>[] = [];
   private radius = 1;
   private ground?: Mesh<PlaneGeometry, MeshBasicMaterial>;
@@ -140,8 +144,9 @@ export class FloorplanRenderer {
       this.renderer.render(this.scene, this.camera);
   };
 
-  setParts(parts: ScenePart[], groundZ?: number, site?: SiteLayout): void {
+  setParts(parts: ScenePart[], groundZ?: number, site?: SiteLayout, focusRoom?:string): void {
     this.clearParts();
+    this.coverageRooms=parts.filter(p=>!p.container);
     this.focusTarget=undefined; this.focusEvents.clear();
     if (!parts.length && !site?.features.length) { this.draw(); return; }
     const box = new Box3();
@@ -156,12 +161,14 @@ export class FloorplanRenderer {
       box.expandByPoint(new Vector3(box.min.x, groundZ, box.min.z));
       box.expandByPoint(new Vector3(box.max.x, groundZ, box.max.z));
     }
-    const boundsKey=JSON.stringify([box.min.toArray(),box.max.toArray()]);
+    const focused=parts.find(p=>p.id===focusRoom);
+    const focusBox=focused?new Box3().setFromPoints(focused.footprint.flatMap(([x,y])=>[new Vector3(x,focused.low,-y),new Vector3(x,focused.high,-y)])):box;
+    const boundsKey=JSON.stringify([focusBox.min.toArray(),focusBox.max.toArray(),focusRoom]);
     const resetCamera=this.boundsKey!==boundsKey;
     this.boundsKey=boundsKey;
-    const origin = box.getCenter(new Vector3());
+    const origin = focusBox.getCenter(new Vector3());
     this.origin.copy(origin);
-    this.radius = Math.max(box.getSize(new Vector3()).length() / 2, 0.1);
+    this.radius = Math.max(focusBox.getSize(new Vector3()).length() / 2, 0.1);
     for (const part of parts) {
       const geometry = volumeGeometry(part, origin);
       const mesh = new Mesh(geometry, new MeshBasicMaterial({
@@ -222,25 +229,9 @@ export class FloorplanRenderer {
         let coverage: Mesh<BufferGeometry,MeshBasicMaterial> | undefined;
         let boundary: LineSegments<BufferGeometry,LineDashedMaterial> | undefined;
         if (fixture.range>0 && (fixture.kind==="motion" || fixture.kind==="occupancy")) {
-          const geometry=new ConeGeometry(1,1,24,1,true);
-          geometry.translate(0,-0.5,0);
-          geometry.scale(Math.tan(fixture.fov*Math.PI/360)*fixture.range,fixture.range,Math.tan(fixture.vertical_fov*Math.PI/360)*fixture.range);
-          coverage=new Mesh(geometry,new MeshBasicMaterial({color:0x4ad8ed,transparent:true,opacity:0,side:DoubleSide,depthWrite:false}));
-          const direction=new Vector3(...fixtureDirection(fixture));
-          const yaw=fixture.yaw*Math.PI/180;
-          const right=new Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
-          const up=direction.clone().cross(right);
-          coverage.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(right,direction.clone().negate(),up));
-          coverage.position.copy(marker.position); coverage.name="sensor-coverage";
-          const vertices:number[]=[];
-          const point=(angle:number)=>new Vector3(Math.sin(angle)*Math.tan(fixture.fov*Math.PI/360)*fixture.range,-fixture.range,Math.cos(angle)*Math.tan(fixture.vertical_fov*Math.PI/360)*fixture.range);
-          for(let i=0;i<32;i++) {
-            vertices.push(...point(i*Math.PI/16).toArray(),...point((i+1)*Math.PI/16).toArray());
-            if(i%8===0)vertices.push(0,0,0,...point(i*Math.PI/16).toArray());
-          }
-          boundary=new LineSegments(new BufferGeometry().setAttribute("position",new Float32BufferAttribute(vertices,3)),new LineDashedMaterial({color:0x53b6ce,dashSize:0.06,gapSize:0.08,transparent:true,opacity:0.65,depthWrite:false}));
-          boundary.computeLineDistances();boundary.position.copy(marker.position);boundary.quaternion.copy(coverage.quaternion);boundary.name="sensor-boundary";
-          this.scene.add(coverage,boundary);
+          coverage=new Mesh(new BufferGeometry(),new MeshBasicMaterial({color:0x53b6ce,transparent:true,opacity:0,side:DoubleSide,depthWrite:false}));
+          boundary=new LineSegments(new BufferGeometry(),new LineDashedMaterial({color:0x53b6ce,dashSize:0.06,gapSize:0.08,transparent:true,opacity:0.65,depthWrite:false}));
+          coverage.name="sensor-coverage";boundary.name="sensor-boundary";this.scene.add(coverage,boundary);
         }
         if(fixture.kind==="window") {
           boundary=new LineSegments(new EdgesGeometry(marker.geometry),new LineDashedMaterial({color:0x53b6ce,dashSize:1,gapSize:0,transparent:true,opacity:0.65,depthWrite:false}));
@@ -249,6 +240,13 @@ export class FloorplanRenderer {
         }
         this.markers.push({room:part.id,fixture,marker,coverage,boundary});
       }
+    }
+    for(const part of this.coverageRooms)for(const opening of part.openings ?? []) {
+      const leaf=new Mesh(new BufferGeometry(),new MeshBasicMaterial({color:0x78cebd,transparent:true,opacity:0.22,side:DoubleSide,depthWrite:false}));
+      const frame=new LineSegments(new BufferGeometry(),new LineBasicMaterial({color:0x87eac8,transparent:true,opacity:0.8,depthWrite:false}));
+      const arc=new LineSegments(new BufferGeometry(),new LineBasicMaterial({color:0x87eac8,transparent:true,opacity:0.35,depthWrite:false}));
+      leaf.name="door-leaf";frame.name="opening-frame";arc.name="door-swing";
+      this.doors.push({part,opening,leaf,frame,arc});this.scene.add(leaf,frame,arc);
     }
     const siteColors = {property:0x425044, lawn:0x506b40, driveway:0x697179, path:0x8d8069, pool:0x367c9b};
     const features = [...(site?.features ?? [])].sort((a, b) => Number(b.kind === "property") - Number(a.kind === "property"));
@@ -344,6 +342,8 @@ export class FloorplanRenderer {
       this.focusDistance = Math.min(this.fitDistance(), Math.max(box.getSize(new Vector3()).length()*2, this.radius));
       this.focusUntil = Date.now()+8000; this.lastFocus=now;
     }
+    const portalKey=JSON.stringify(this.coverageRooms.flatMap(p=>(p.openings ?? []).map(o=>openingIsOpen(o,states))));
+    for(const door of this.doors)this.updateDoor(door,states);
     let sensorTarget: typeof this.markers[number] | undefined;
     for (const item of this.markers) {
       const state=states[item.fixture.entity];
@@ -354,6 +354,20 @@ export class FloorplanRenderer {
       if (item.fixture.kind==="light" && on) {
         const light=roomLight([item.fixture.entity],states);
         item.marker.material.color.setRGB(...light.rgb);
+      }
+      if(item.coverage && item.boundary && item.coverageKey!==portalKey) {
+        const vertices:number[]=[],lines:number[]=[];
+        const local=(p:[number,number,number])=>[p[0]-this.origin.x,p[2]-this.origin.y,-p[1]-this.origin.z];
+        for(const lobe of coverageRays(item.fixture,this.coverageRooms,states)) {
+          for(let i=0;i<lobe.rim.length;i++) {
+            const a=lobe.rim[i]!,b=lobe.rim[(i+1)%lobe.rim.length]!;
+            vertices.push(...local(lobe.origin),...local(a),...local(b),...local(lobe.center),...local(b),...local(a));
+            lines.push(...local(a),...local(b));if(i%8===0)lines.push(...local(lobe.origin),...local(a));
+          }
+        }
+        item.coverage.geometry.dispose();item.boundary.geometry.dispose();
+        item.coverage.geometry=new BufferGeometry().setAttribute("position",new Float32BufferAttribute(vertices,3));
+        item.boundary.geometry=new BufferGeometry().setAttribute("position",new Float32BufferAttribute(lines,3));item.boundary.computeLineDistances();item.coverageKey=portalKey;
       }
       if (item.coverage) {
         item.coverage.material.color.copy(item.marker.material.color);
@@ -371,6 +385,24 @@ export class FloorplanRenderer {
     }
     this.scheduleMotion();
     this.draw();
+  }
+
+  private updateDoor(door:typeof this.doors[number],states:Record<string,HassEntity>):void {
+    const open=openingIsOpen(door.opening,states);if(door.key===open)return;door.key=open;
+    const p=door.part,o=door.opening;
+    const group={points:p.footprint,bounds:[[Math.min(...p.footprint.map(v=>v[0])),Math.min(...p.footprint.map(v=>v[1])),p.low],[Math.max(...p.footprint.map(v=>v[0])),Math.max(...p.footprint.map(v=>v[1])),p.high]] as [[number,number,number],[number,number,number]]};
+    const swing=openingSwing(group,o),end=open?swing.open:swing.closed;
+    const point=(v:[number,number],z:number)=>[v[0]-this.origin.x,z-this.origin.y,-v[1]-this.origin.z];
+    const bottom=o.position[2],top=bottom+o.height;
+    const a=point(swing.hinge,bottom),b=point(swing.closed,bottom),c=point(swing.closed,top),d=point(swing.hinge,top),e=point(end,bottom),f=point(end,top);
+    door.frame.geometry.dispose();door.leaf.geometry.dispose();door.arc.geometry.dispose();
+    door.frame.geometry=new BufferGeometry().setAttribute("position",new Float32BufferAttribute([...a,...b,...b,...c,...c,...d,...d,...a],3));
+    door.leaf.geometry=new BufferGeometry().setAttribute("position",new Float32BufferAttribute([...a,...e,...f,...a,...f,...d],3));door.leaf.visible=o.kind!=="open_wall";
+    const angle=Math.atan2(swing.closed[1]-swing.hinge[1],swing.closed[0]-swing.hinge[0]);
+    const target=Math.atan2(swing.open[1]-swing.hinge[1],swing.open[0]-swing.hinge[0]),delta=Math.atan2(Math.sin(target-angle),Math.cos(target-angle));
+    const lines:number[]=[];
+    for(let i=0;i<16;i++)for(const t of [i/16,(i+1)/16])lines.push(...point([swing.hinge[0]+o.width*Math.cos(angle+delta*t),swing.hinge[1]+o.width*Math.sin(angle+delta*t)],bottom+0.01));
+    door.arc.geometry=new BufferGeometry().setAttribute("position",new Float32BufferAttribute(lines,3));door.arc.visible=o.kind!=="open_wall";
   }
 
   setPlacement(height?: number): void { this.placementHeight=height; }
@@ -503,6 +535,8 @@ export class FloorplanRenderer {
       if (mesh) {this.scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();}
     }
     this.markers=[];
+    for(const door of this.doors)for(const mesh of [door.leaf,door.frame,door.arc]){this.scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();}
+    this.doors=[];
     for (const mesh of this.siteMeshes) {
       this.scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose();
     }

@@ -14,8 +14,8 @@ import {newFixture} from '../src/room-fixtures.ts';
 import {roomsConfig} from '../test/fixtures.ts';
 let config=roomsConfig();
 config.groups=[{...newGroup('house','structure'),name:'House',bounds:[[0,0,0],[10,7,3]],children:[
- {...newGroup('living','area'),name:'Living room',bounds:[[0,0,0],[6,7,3]],fixtures:[
- {...newFixture('binary_sensor.corner'),name:'Corner motion',mount:'Corner',technology:'Z-Wave',position:[.15,.15,2.3],yaw:45,pitch:-15,fov:75,vertical_fov:45,range:4},
+ {...newGroup('living','area'),name:'Living room',bounds:[[0,0,0],[6,7,3]],openings:[{id:'door',name:'Office door',kind:'interior_door',position:[6,3.5,0],yaw:90,width:1,height:2.1,hinge:'left',swing:'in',open:true}],fixtures:[
+ {...newFixture('binary_sensor.corner'),name:'Corner motion',mount:'Corner',technology:'Z-Wave',position:[.15,.15,2.3],look_down:true,yaw:45,pitch:-15,fov:75,vertical_fov:45,range:4},
  {...newFixture('binary_sensor.window','window'),name:'Window contact',position:[0,3.5,1.5],yaw:90,width:1.4,height:1.2},
  {...newFixture('light.living','light'),name:'Ceiling light',position:[3,3.5,2.95]}]},
  {...newGroup('office','area'),name:'Office',bounds:[[6,0,0],[10,7,3]],fixtures:[
@@ -30,7 +30,7 @@ const registry=[
  {entity:'light.living',area_id:'living',manufacturer:null,model:null,platform:'demo',device_class:null,entity_name:'Ceiling light'},
  {entity:'binary_sensor.wall',area_id:'living',manufacturer:'Sample maker',model:'PIR A',platform:'zwave_js',device_class:'motion',entity_name:'Motion'}];
 config.groups[0].children[0].stimuli=[newStimulus('binary_sensor.corner')];config.groups[0].children[0].area_id='living';config.groups[0].children[1].area_id='office';
-const hass={states,callWS:async()=>registry};
+const hass={config:{unit_system:{length:"mi"}},states,callWS:async()=>registry};
 const viewer=document.querySelector('al-floorplan-viewer'),editor=document.querySelector('al-room-device-editor');
 viewer.settings={focus_activity:true};viewer.lights={living:['light.living']};
 function update(){const now=Date.now()/1000;viewer.config=config;editor.config=config;viewer.hass={...hass};editor.hass={...hass};viewer.live={now,groups:{living:{value:motion?3.7:0,max_value:5,last_activity:last},office:{value:1.4,max_value:5,last_activity:now-30}}};editor.live={...viewer.live,voices:{}};viewer.telemetry={now,rooms:{living:{idle_by:motion?now+95:now,people:motion?[{name:'Alex',entity:null,confidence:.88,t:now}]:[],devices:motion?[{name:'Phone',entity:null,confidence:.82}]:[]},office:{idle_by:null,people:[{name:'Sam',entity:null,confidence:.92,t:now}],devices:[{name:'Watch',entity:null,confidence:.86}]}}};}

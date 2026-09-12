@@ -82,3 +82,60 @@ def test_window_contact_dimensions_round_trip():
     assert window["width"] == 1.4
     assert window["height"] == 1.2
     assert validate_config(config) == config
+
+
+def test_openings_and_look_down_round_trip():
+    source = house_config()
+    source["groups"][0]["openings"] = [
+        {"id": "front", "kind": "exterior_door", "position": [0, 1, 0]},
+        {
+            "id": "hall",
+            "kind": "open_wall",
+            "position": [2, 1, 0],
+            "width": 2,
+            "height": 2.4,
+        },
+    ]
+    source["groups"][0]["fixtures"] = [fixture(look_down=True)]
+    config = validate_config(source)
+    door = config["groups"][0]["openings"][0]
+    assert door["hinge"] == "left"
+    assert door["swing"] == "in"
+    assert door["open"] is False
+    assert "entity" not in door
+    assert config["groups"][0]["fixtures"][0]["look_down"] is True
+    assert "look_down" not in fixtures([fixture()])[0]
+    assert validate_config(config) == config
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"id": ""},
+        {"entity": "light.invalid"},
+        {"width": 0},
+        {"height": float("inf")},
+        {"yaw": 361},
+        {"hinge": "top"},
+        {"swing": "sideways"},
+        {"open": "true"},
+        {"position": [0, 0]},
+    ],
+)
+def test_invalid_openings(changes):
+    from custom_components.activity_levels.geometry import openings
+
+    with pytest.raises(vol.Invalid):
+        openings([{"id": "door", "kind": "interior_door", "position": [0, 0, 0], **changes}])
+
+
+def test_opening_ids_are_unique_and_count_is_bounded():
+    from custom_components.activity_levels.geometry import openings
+
+    door = {"id": "door", "kind": "interior_door", "position": [0, 0, 0]}
+    with pytest.raises(vol.Invalid):
+        openings([door, door])
+    with pytest.raises(vol.Invalid):
+        openings([{**door, "id": str(index)} for index in range(129)])
+    with pytest.raises(vol.Invalid):
+        fixtures([fixture(look_down="true")])

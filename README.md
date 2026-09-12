@@ -618,7 +618,8 @@ then use the panel's **Save**. Placements move and rotate with their building.
 Placement does not add an activity input: configure those in group settings.
 
 Sensor coverage is an approximate adjustable cone. Range 0 hides it until you specify
-coverage; walls do not clip it. Dotted boundaries remain visible while idle, with no
+coverage. Walls, floors, and ceilings clip the sampled projection; open doorways and
+explicit open-wall spans let it continue into adjacent rooms. Dotted boundaries remain visible while idle, with no
 beam fill. Motion or occupancy turns the beam red; unavailable sensors stay gray. With activity
 focus enabled, a sensor turning on can move the camera toward its configured coverage;
 this illustrates the detection area, not a tracked person's path. Reduced motion and
@@ -981,16 +982,27 @@ For a standalone preview with sample structures, run the frontend dev server and
 In **Floorplans → Place devices & windows**, choose a room, or select one in the
 live view and use its **Place devices & windows** button. Select a
 sensor or light from the room's device list, click inside the outline to place it, or
-drag a marker to move it. **Aim** sets direction with a second click. Height stays in
-metres above the room floor; **Adjust characteristics and precise position** provides
+drag a marker to move it. **Aim** updates direction continuously while pressing and dragging. A radial control
+also adjusts direction and tilt with touch, mouse, or keyboard. Measurements default to
+Home Assistant’s unit system; choose meters or feet without changing stored geometry.
+Height is measured above the room floor; **Adjust characteristics and precise position** provides
 keyboard-friendly coordinates, tilt, range and field of view. The adjacent 3D preview
-shows the same placement; camera auto-focus and orbit are disabled while editing. Add the placement to the draft, then use the panel's **Save**.
+shows the same placement and neighboring rooms on the same level, centered on the
+selected room. Use the orbit pad, zoom buttons, Top, and reset to inspect coverage;
+automatic activity focus stays disabled while editing. Add the placement to the draft, then use the panel's **Save**.
 
 Window contacts use the **window** type (automatically suggested for HA window/opening
 sensors). Click near a wall to snap and align the window; set its width, height, and
 center above the floor. Windows show red when open, blue when closed, and gray when
 unavailable. They have no motion coverage cone. On smaller screens, controls and
 views stack vertically.
+
+Use **Add door** for an interior or exterior door, or **Add open wall** for a permanent
+opening. Click near a wall to snap its position, then set width and height. Hinge left/right
+is viewed from inside the selected room facing the doorway; swing can be inward or outward.
+A door can use a room contact sensor or a manual open/closed state. Unknown contact
+states block coverage. Open walls always pass coverage; closed doors and windows block it.
+The sampled projection illustrates room visibility, not material penetration or exact PIR optics.
 
 The list includes devices in the room's Home Assistant area, explicit activity inputs
 in the room's subtree, and saved placements. Entity area assignments override their
@@ -1013,6 +1025,9 @@ the non-pet ISC-BPR2-W12 and separate ISC-BPR2-WP12 pet-immunity ON/OFF choices.
 Choose the mode set on your physical detector; the editor cannot read or change it.
 These use Bosch's nominal 12 m range and 94° horizontal coverage. The vertical angle
 is illustrative; the overlay does not model individual PIR beams or pet exclusion.
+Non-pet profiles enable a separate approximate look-down lobe. Confirm the physical
+look-down selector and use the editor checkbox to match it; the diagram is not a
+measured detection boundary.
 Set the installation height (Bosch recommends 2.2–2.75 m) and aim for each placement.
 Wired bridges may hide the detector's identity, requiring manual profile selection.
 To contribute a model, submit a PR

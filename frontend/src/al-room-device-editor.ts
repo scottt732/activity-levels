@@ -5,8 +5,12 @@ import { alChange } from "./events";
 import { walkGroups } from "./model";
 import { newFixture, saveFixture, snapWindow } from "./room-fixtures";
 import { applyProfile, matchesProfile, parseProfiles, roomCandidates } from "./sensor-profiles";
+import {newOpening,saveOpening,snapOpening} from "./room-openings";
+import {defaultLengthUnit,fromMeters,toMeters} from "./measurement-units";
+import type {LengthUnit} from "./measurement-units";
+import "./al-orientation-control";
 import { SENSOR_CATALOG } from "./sensor-catalog";
-import type { Config, HomeAssistant, LiveState, RoomDevice, RoomFixture, SensorProfile } from "./types";
+import type { Config, HomeAssistant, LiveState, RoomDevice, RoomOpening, RoomFixture, SensorProfile } from "./types";
 import "./al-room-plan";
 import "./al-floorplan-viewer";
 
@@ -36,6 +40,9 @@ export class AlRoomDeviceEditor extends LitElement {
   @property({attribute:false}) live:LiveState|null=null;
   @property({type:Boolean}) disabled=false;
   @property({type:String}) room="";
+  @state() private unitChoice:"auto"|LengthUnit="auto";
+  @state() private opening?:RoomOpening;
+  @state() private originalOpening?:string;
   @state() private fixture=newFixture();
   @state() private original?:string;
   @state() private mode:"place"|"aim"="place";
@@ -51,19 +58,21 @@ export class AlRoomDeviceEditor extends LitElement {
 
   private loadedFor?:HomeAssistant["callWS"];
   private sequence=0;
-  private preview?:Pick<Config,"groups">;
+  private preview?:Config;
   private previewError="";
+  private get unit():LengthUnit{return this.unitChoice==="auto"?defaultLengthUnit(this.hass):this.unitChoice;}
+  private length(value:number):string{return String(Number(fromMeters(value,this.unit).toFixed(4)));}
   private get group() { return this.config && walkGroups(this.config).find(e=>e.group.id===this.room)?.group; }
   private get candidates() {return this.config?roomCandidates(this.config,this.room,this.registry,this.hass,this.live):[];}
   private get profiles() {return [...(this.config?.sensor_profiles ?? []),...SENSOR_CATALOG];}
   protected override willUpdate(changed:PropertyValues):void {
     if(changed.has("room"))this.reset();
     // Live telemetry must not recreate every mesh or discard sensor state transitions.
-    if(this.config && ["config","fixture","room","original"].some(key=>changed.has(key))) {
+    if(this.config && ["config","fixture","room","original","opening","originalOpening"].some(key=>changed.has(key))) {
       let preview=this.config;this.previewError="";
-      if(this.fixture.entity)try{preview=saveFixture(this.config,this.room,this.fixture,this.original);}
+      try{if(this.opening)preview=saveOpening(this.config,this.room,this.opening,this.originalOpening);else if(this.fixture.entity)preview=saveFixture(this.config,this.room,this.fixture,this.original);}
       catch(error){this.previewError=(error as Error).message;}
-      this.preview={groups:preview.groups};
+      this.preview=preview;
     }
   }
   protected override updated(changed:PropertyValues):void {
@@ -85,11 +94,12 @@ export class AlRoomDeviceEditor extends LitElement {
   private reset():void {
     const b=this.group?.bounds;
     this.fixture={...newFixture(),position:b ? [(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,b[0][2]+Math.min(1.5,b[1][2]-b[0][2])] : [0,0,0]};
-    this.original=undefined;this.error="";this.notice="";this.mode="place";this.profile="";this.profileName="";this.search="";
+    this.opening=undefined;this.originalOpening=undefined;this.original=undefined;this.error="";this.notice="";this.mode="place";this.profile="";this.profileName="";this.search="";
   }
   private select(entity:string):void {
     if(this.disabled)return;
-    if(entity===this.fixture.entity)return;
+    if(entity===this.fixture.entity && !this.opening)return;
+    this.opening=undefined;this.originalOpening=undefined;
     const saved=this.group?.fixtures?.find(f=>f.entity===entity);
     if(saved){this.fixture=structuredClone(saved);this.original=entity;this.profile=saved.profile_id ?? "";}
     else {
@@ -133,7 +143,7 @@ export class AlRoomDeviceEditor extends LitElement {
       for(const key of ["manufacturer","model","platform","device_class","entity_name"] as const)if(device?.[key])match[key]=device[key];
       const profile=parseProfiles(JSON.stringify([{id:existing?.id ?? `personal:${crypto.randomUUID()}`,name:this.profileName,
         kind:this.fixture.kind,fov:this.fixture.fov,vertical_fov:this.fixture.vertical_fov,range:this.fixture.range,
-        technology:this.fixture.technology,mount:this.fixture.mount,notes:existing?.notes ?? "",source:existing?.source ?? "",match:existing?.match ?? match}]))[0]!;
+        technology:this.fixture.technology,mount:this.fixture.mount,...(this.fixture.look_down===undefined?{}:{look_down:this.fixture.look_down}),notes:existing?.notes ?? "",source:existing?.source ?? "",match:existing?.match ?? match}]))[0]!;
       const profiles=[...(this.config.sensor_profiles ?? []).filter(p=>p.id!==profile.id),profile];
       parseProfiles(JSON.stringify(profiles));this.dispatchEvent(alChange({...this.config,sensor_profiles:profiles}));
       this.profile=profile.id;this.notice="Model profile added to draft. Apply it to any matching device.";this.error="";
@@ -149,30 +159,69 @@ export class AlRoomDeviceEditor extends LitElement {
     } catch(error){this.error=(error as Error).message;}
   }
   private numeric(key:"yaw"|"pitch"|"fov"|"vertical_fov"|"range"|"width"|"height",label:string,min:number,max:number) {
-    return html`<label>${label}<input type="number" data-field=${key} min=${min} max=${max} step="any" .value=${String(this.fixture[key] ?? (key==="height"?1.2:1))}
-      @input=${(e:Event)=>this.patch({[key]:(e.target as HTMLInputElement).valueAsNumber})}></label>`;
+    const length=["range","width","height"].includes(key),value=this.fixture[key] ?? (key==="height"?1.2:1);
+    return html`<label>${length?label.replace("(m",`(${this.unit}`):label}<input type="number" data-field=${key} min=${length?fromMeters(min,this.unit):min} max=${length?fromMeters(max,this.unit):max} step="any" .value=${length?this.length(value):String(value)}
+      @input=${(e:Event)=>{const v=(e.target as HTMLInputElement).valueAsNumber;this.patch({[key]:length?toMeters(v,this.unit):v});}}></label>`;
+  }
+  private editOpening(value?:RoomOpening,kind:RoomOpening["kind"]="interior_door"):void {
+    if(this.disabled || !this.group?.bounds)return;
+    this.fixture=newFixture();this.original=undefined;this.mode="place";this.error="";
+    const b=this.group.bounds;
+    const opening=value?structuredClone(value):newOpening(kind);
+    if(!value)Object.assign(opening,snapOpening(this.group,[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,b[0][2]],opening.width));
+    this.opening=opening;this.originalOpening=value?.id;
+  }
+  private patchOpening(patch:Partial<RoomOpening>):void {if(this.opening && !this.disabled){this.opening={...this.opening,...patch};this.error="";}}
+  private saveDoor():void {
+    if(!this.config || !this.opening || this.disabled)return;
+    try{this.dispatchEvent(alChange(saveOpening(this.config,this.room,this.opening,this.originalOpening)));this.originalOpening=this.opening.id;this.notice="Opening added to draft. Use the panel's Save to persist it.";this.error="";}
+    catch(error){this.error=(error as Error).message;}
+  }
+  private openingControl() {
+    const o=this.opening;if(!o)return nothing;
+    return html`<h3>${o.kind==="open_wall"?"Open wall":"Door"}</h3>
+      <label>Name<input aria-label="Opening name" .value=${o.name} @input=${(e:Event)=>this.patchOpening({name:(e.target as HTMLInputElement).value})}></label>
+      <label>Opening type<select aria-label="Opening type" .value=${o.kind} @change=${(e:Event)=>this.patchOpening({kind:(e.target as HTMLSelectElement).value as RoomOpening["kind"]})}>${["interior_door","exterior_door","open_wall"].map(kind=>html`<option value=${kind} .selected=${o.kind===kind}>${kind.replaceAll("_"," ")}</option>`)}</select></label>
+      ${(["width","height"] as const).map(key=>html`<label>${key} (${this.unit})<input aria-label=${`Opening ${key}`} type="number" step="any" .value=${this.length(o[key])} @input=${(e:Event)=>this.patchOpening({[key]:toMeters((e.target as HTMLInputElement).valueAsNumber,this.unit)})}></label>`)}
+      <label>Bottom above floor (${this.unit})<input aria-label="Opening elevation" type="number" step="any" .value=${this.length(o.position[2]-(this.group?.bounds?.[0][2] ?? 0))} @input=${(e:Event)=>this.patchOpening({position:[o.position[0],o.position[1],(this.group?.bounds?.[0][2] ?? 0)+toMeters((e.target as HTMLInputElement).valueAsNumber,this.unit)]})}></label>
+      ${o.kind!=="open_wall"?html`<p class="muted">Hinge left/right is viewed from inside this room facing the doorway.</p>
+        <label>Hinge<select aria-label="Door hinge" .value=${o.hinge} @change=${(e:Event)=>this.patchOpening({hinge:(e.target as HTMLSelectElement).value as RoomOpening["hinge"]})}>${["left","right"].map(v=>html`<option .selected=${o.hinge===v} value=${v}>${v}</option>`)}</select></label>
+        <label>Swing<select aria-label="Door swing" .value=${o.swing} @change=${(e:Event)=>this.patchOpening({swing:(e.target as HTMLSelectElement).value as RoomOpening["swing"]})}>${["in","out"].map(v=>html`<option .selected=${o.swing===v} value=${v}>${v}</option>`)}</select></label>
+        <label>Contact sensor (optional)<select aria-label="Door contact" .value=${o.entity ?? ""} @change=${(e:Event)=>this.patchOpening({entity:(e.target as HTMLSelectElement).value || undefined})}><option value="">Manual open / closed</option>${this.candidates.filter(d=>d.entity.startsWith("binary_sensor.")).map(d=>html`<option value=${d.entity} .selected=${o.entity===d.entity}>${d.name}</option>`)}</select></label>
+        ${!o.entity?html`<label><input type="checkbox" .checked=${o.open} @change=${(e:Event)=>this.patchOpening({open:(e.target as HTMLInputElement).checked})}>Door is open</label>`:html`<p class="muted">Door state: ${this.hass?.states[o.entity]?.state ?? "unavailable"}. Unknown contacts block coverage.</p>`}`:nothing}
+      <p class="muted">Click near a wall to place and align the opening. An open wall always lets coverage pass.</p>
+      <button id="save-opening" type="button" @click=${()=>this.saveDoor()}>${this.originalOpening?"Update":"Add"} opening to draft</button>
+      ${this.originalOpening?html`<button type="button" @click=${()=>{if(!this.config || this.disabled)return;const next=structuredClone(this.config),g=walkGroups(next).find(e=>e.group.id===this.room)?.group;if(g)g.openings=g.openings?.filter(v=>v.id!==this.originalOpening);this.dispatchEvent(alChange(next));this.opening=undefined;this.originalOpening=undefined;}}>Remove opening</button>`:nothing}`;
   }
   protected override render() {
     if(!this.config)return nothing;
     const rooms=walkGroups(this.config).filter(e=>e.group.bounds && !["property","structure","floor"].includes(e.group.kind));
     const group=this.group,b=group?.bounds;
+    const contextGroups=this.preview?walkGroups(this.preview).map(e=>e.group).filter(g=>g.bounds && !["property","structure","floor"].includes(g.kind) && (!b || (g.bounds[0][2]<b[1][2]-0.01 && g.bounds[1][2]>b[0][2]+0.01))):[];
+    const previewGroup=contextGroups.find(g=>g.id===this.room) ?? group;
     const candidates=this.candidates.filter(d=>`${d.name} ${d.entity}`.toLowerCase().includes(this.search.toLowerCase()));
     const device=this.candidates.find(d=>d.entity===this.fixture.entity);
     const suggestions=device?this.profiles.filter(p=>matchesProfile(p,device)):[];
     const profile=this.profiles.find(p=>p.id===this.profile);
     return html`<fieldset ?disabled=${this.disabled}>
+      <label>Measurements<select id="length-unit" .value=${this.unitChoice} @change=${(e:Event)=>{this.unitChoice=(e.target as HTMLSelectElement).value as "auto"|LengthUnit;}}><option value="auto" .selected=${this.unitChoice==="auto"}>Home Assistant (${defaultLengthUnit(this.hass)})</option><option value="m" .selected=${this.unitChoice==="m"}>Meters</option><option value="ft" .selected=${this.unitChoice==="ft"}>Feet</option></select></label>
       <label>Room<select id="device-room" .value=${this.room} @change=${(e:Event)=>{this.room=(e.target as HTMLSelectElement).value;this.reset();}}>
         <option value="">Choose a room</option>${rooms.map(e=>html`<option value=${e.group.id} .selected=${e.group.id===this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
       ${b?html`<div class="workspace">
-        <div class="scene-pane"><al-floorplan-viewer editing-preview .config=${this.preview} .room=${this.room} .live=${this.live} .hass=${this.hass} .lights=${this.lights} .settings=${{focus_activity:false,auto_rotate:false}}></al-floorplan-viewer></div>
+        <div class="scene-pane"><al-floorplan-viewer editing-preview .context=${true} .config=${this.preview} .room=${this.room} .live=${this.live} .hass=${this.hass} .lights=${this.lights} .settings=${{focus_activity:false,auto_rotate:false}}></al-floorplan-viewer></div>
         <div class="plan-pane"><h3>Top-down placement</h3><div>
         <div><button type="button" aria-pressed=${this.mode==="place"} @click=${()=>{this.mode="place";}}>Place / move</button>
           <button type="button" aria-pressed=${this.mode==="aim"} ?disabled=${!this.fixture.entity || (this.fixture.kind==="light" || this.fixture.kind==="window")} @click=${()=>{this.mode="aim";}}>Aim</button></div>
-        <al-room-plan .group=${group} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
+        <al-room-plan .group=${previewGroup} .neighbors=${contextGroups} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
           @al-fixture-position=${(e:CustomEvent<[number,number,number]>)=>{e.stopPropagation();this.patch(this.fixture.kind==="window" && this.group?snapWindow(this.group,e.detail,this.fixture.width):{position:e.detail});}}
           @al-fixture-aim=${(e:CustomEvent<number>)=>this.patch({yaw:Number(e.detail.toFixed(1))})}
+          @al-opening-position=${(e:CustomEvent<[number,number,number]>)=>{if(this.opening && this.group)this.patchOpening(snapOpening(this.group,e.detail,this.opening.width));}}
+          @al-opening-select=${(e:CustomEvent<string>)=>{const opening=group?.openings?.find(o=>o.id===e.detail);if(opening)this.editOpening(opening);}}
           @al-fixture-select=${(e:CustomEvent<string>)=>this.select(e.detail)}></al-room-plan>
-      </div></div><div class="editor-controls"><h3>Devices & windows</h3>
+      </div></div><div class="editor-controls"><h3>Room editor</h3>
+        <button id="new-door" type="button" @click=${()=>this.editOpening()}>Add door</button><button id="new-open-wall" type="button" @click=${()=>this.editOpening(undefined,"open_wall")}>Add open wall</button>
+        ${(group?.openings ?? []).map(o=>html`<button type="button" class="device" @click=${()=>this.editOpening(o)}>${o.name || o.kind.replaceAll("_"," ")}</button>`)}
+        ${this.openingControl()}<h3>Devices & windows</h3>
         <input aria-label="Find room device" placeholder="Find a sensor or light…" .value=${this.search} @input=${(e:Event)=>{this.search=(e.target as HTMLInputElement).value;}}>
         <p class="muted">Activity inputs first, then contributing now, then most recently changed.</p>
         <div class="devices">${candidates.map(d=>html`<button type="button" class="device" data-entity=${d.entity} aria-pressed=${this.fixture.entity===d.entity} @click=${()=>this.select(d.entity)}>
@@ -184,22 +233,24 @@ export class AlRoomDeviceEditor extends LitElement {
         ${device?html`<p class="muted">${[device.manufacturer,device.model,device.platform].filter(Boolean).join(" · ")}</p>`:nothing}
       ${this.fixture.entity?html`<h3>${this.fixture.name || this.fixture.entity}</h3>
         ${this.fixture.kind==="window"?html`<p class="muted">Click near a wall to snap the window onto it. Red = open; blue = closed; gray = unavailable.</p><div class="fields">${this.numeric("width","Window width (m)",0.1,20)}${this.numeric("height","Window height (m)",0.1,20)}</div>`:nothing}
-        <div class="fields"><label>${this.fixture.kind==="window"?"Window center above floor (m)":"Height above floor (m)"}<input id="fixture-height" type="number" min="0" max=${b[1][2]-b[0][2]} step="any" .value=${String(Number((this.fixture.position[2]-b[0][2]).toFixed(3)))}
-          @input=${(e:Event)=>this.patch({position:[this.fixture.position[0],this.fixture.position[1],b[0][2]+(e.target as HTMLInputElement).valueAsNumber]})}></label>
+        <div class="fields"><label>${this.fixture.kind==="window"?`Window center above floor (${this.unit})`:`Height above floor (${this.unit})`}<input id="fixture-height" type="number" min="0" max=${fromMeters(b[1][2]-b[0][2],this.unit)} step="any" .value=${this.length(this.fixture.position[2]-b[0][2])}
+          @input=${(e:Event)=>this.patch({position:[this.fixture.position[0],this.fixture.position[1],b[0][2]+toMeters((e.target as HTMLInputElement).valueAsNumber,this.unit)]})}></label>
           <label>Sensor model profile<select id="sensor-profile" .value=${this.profile} @change=${(e:Event)=>{this.profile=(e.target as HTMLSelectElement).value;}}>
             <option value="">Choose a profile</option>${this.profiles.filter(p=>(p.kind==="light")===this.fixture.entity.startsWith("light.") && (p.kind==="window")===(this.fixture.kind==="window")).map(p=>html`<option value=${p.id} .selected=${p.id===this.profile}>${suggestions.includes(p)?"Suggested · ":""}${p.name}</option>`)}</select></label>
           <button type="button" ?disabled=${!profile} @click=${()=>this.useProfile()}>Apply profile</button></div>
         ${suggestions.length?html`<p class="muted">Suggested from device metadata: ${suggestions.map(p=>p.name).join(", ")}. Confirm the model and sensor entity before applying.</p>`:nothing}
         ${profile?html`<p class="muted">${profile.notes}</p>${/^https?:\/\//.test(profile.source)?html`<a href=${profile.source} target="_blank" rel="noopener noreferrer">Profile source</a>`:nothing}`:nothing}
+        ${(this.fixture.kind==="motion" || this.fixture.kind==="occupancy")?html`<al-orientation-control .yaw=${this.fixture.yaw} .pitch=${this.fixture.pitch} .disabled=${this.disabled} @al-orientation-change=${(e:CustomEvent<{yaw:number;pitch:number}>)=>this.patch(e.detail)}></al-orientation-control>
+        <label><input type="checkbox" .checked=${this.fixture.look_down ?? false} @change=${(e:Event)=>this.patch({look_down:(e.target as HTMLInputElement).checked})}>Separate look-down coverage</label><p class="muted">Look-down shape is approximate. Match the physical lens setting.</p>`:nothing}
         <details><summary>Adjust characteristics and precise position</summary><div class="fields">
           <label>Type<select id="fixture-kind" .value=${this.fixture.kind} @change=${(e:Event)=>{const kind=(e.target as HTMLSelectElement).value as RoomFixture["kind"];this.patch({kind,profile_id:undefined,...(kind==="window" && this.group?snapWindow(this.group,this.fixture.position,this.fixture.width):{})});this.profile="";}}>${["motion","occupancy","light","window"].map(k=>html`<option value=${k} .selected=${k===this.fixture.kind}>${k}</option>`)}</select></label>
           <label>Label<input maxlength="100" .value=${this.fixture.name} @input=${(e:Event)=>this.patch({name:(e.target as HTMLInputElement).value})}></label>
           <label>Mount<input maxlength="60" .value=${this.fixture.mount} @input=${(e:Event)=>this.patch({mount:(e.target as HTMLInputElement).value})}></label>
           <label>Model / technology<input maxlength="60" .value=${this.fixture.technology} @input=${(e:Event)=>this.patch({technology:(e.target as HTMLInputElement).value})}></label>
-          ${([0,1] as const).map(i=>html`<label>${i===0?"X":"Y"} (m)<input type="number" step="any" .value=${String(this.fixture.position[i])} @input=${(e:Event)=>{const p=[...this.fixture.position] as [number,number,number];p[i]=(e.target as HTMLInputElement).valueAsNumber;this.patch({position:p});}}></label>`)}
+          ${([0,1] as const).map(i=>html`<label>${i===0?"X":"Y"} (${this.unit})<input type="number" step="any" .value=${this.length(this.fixture.position[i])} @input=${(e:Event)=>{const p=[...this.fixture.position] as [number,number,number];p[i]=toMeters((e.target as HTMLInputElement).valueAsNumber,this.unit);this.patch({position:p});}}></label>`)}
           ${this.numeric("yaw","Direction (°)",-360,360)}${this.numeric("pitch","Tilt (°)",-90,90)}
           ${(this.fixture.kind==="motion" || this.fixture.kind==="occupancy")?html`${this.numeric("fov","Horizontal view (°)",1,170)}${this.numeric("vertical_fov","Vertical view (°)",1,170)}${this.numeric("range","Range (m; 0 = hidden)",0,100)}`:nothing}
-        </div><p class="muted">Coverage is approximate; walls do not clip it. The top-down sector illustrates horizontal coverage; use 3D to inspect tilt.</p>
+        </div><p class="muted">Coverage is approximate and clipped by solid room boundaries. The top-down sector illustrates horizontal coverage; use 3D to inspect tilt.</p>
         <label>Personal model name<input id="profile-name" maxlength="100" .value=${this.profileName} @input=${(e:Event)=>{this.profileName=(e.target as HTMLInputElement).value;}}></label>
         <button id="save-profile" type="button" @click=${()=>this.saveProfile()}>${this.config.sensor_profiles?.some(p=>p.id===this.profile)?"Update":"Save"} personal model profile</button></details>
         <button id="save-fixture" type="button" @click=${()=>this.save()}>${this.original?"Update":"Add"} placement to draft</button>
