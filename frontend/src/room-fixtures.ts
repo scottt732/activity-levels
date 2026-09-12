@@ -107,3 +107,12 @@ export function initialFixturePosition(group: Pick<Group,"points"|"bounds">): [n
   }
   return best;
 }
+
+export function windowFitsRoom(group:Pick<Group,"points"|"bounds">,fixture:RoomFixture):boolean {
+  if(!group.bounds || !insideRoom(group,fixture.position))return false;
+  const width=fixture.width ?? 1,height=fixture.height ?? 1.2,angle=fixture.yaw*Math.PI/180;
+  const snap=snapWindow(group,fixture.position,width);
+  return fixture.position[2]-height/2>=group.bounds[0][2] && fixture.position[2]+height/2<=group.bounds[1][2] &&
+    Math.hypot(snap.position[0]-fixture.position[0],snap.position[1]-fixture.position[1])<=.01 && Math.abs(Math.sin((snap.yaw-fixture.yaw)*Math.PI/180))<=.001 &&
+    [-1,1].every(sign=>insideRoom(group,[fixture.position[0]+sign*width/2*Math.cos(angle),fixture.position[1]+sign*width/2*Math.sin(angle),fixture.position[2]]));
+}

@@ -4,9 +4,9 @@ import { keyed } from "lit/directives/keyed.js";
 import { customElement, property, state } from "lit/decorators.js";
 import { alChange } from "./events";
 import { walkGroups } from "./model";
-import { newFixture, saveFixture, snapWindow, initialFixturePosition, insideRoom } from "./room-fixtures";
+import { newFixture, saveFixture, snapWindow, initialFixturePosition, insideRoom, readFixture } from "./room-fixtures";
 import { applyProfile, matchesProfile, parseProfiles, roomCandidates } from "./sensor-profiles";
-import {newOpening,saveOpening,snapOpening} from "./room-openings";
+import {newOpening,saveOpening,snapOpening,readOpening} from "./room-openings";
 import {defaultLengthUnit,formatLengthInput,parseLength} from "./measurement-units";
 import type {LengthUnit} from "./measurement-units";
 import "./al-orientation-control";
@@ -87,7 +87,16 @@ export class AlRoomDeviceEditor extends LitElement {
     if(this.config && ["config","fixture","room","original","opening","originalOpening"].some(key=>changed.has(key))) {
       let preview=this.config;this.previewError="";
       try{if(this.opening)preview=saveOpening(this.config,this.room,this.opening,this.originalOpening);else if(this.fixture.entity)preview=saveFixture(this.config,this.room,this.fixture,this.original);}
-      catch(error){this.previewError=(error as Error).message;}
+      catch(error){
+        this.previewError=(error as Error).message;
+        // Valid finite geometry remains visible while it is being fitted to the room.
+        // This copy only feeds the previews; Save still runs full placement validation.
+        const opening=this.opening && readOpening(this.opening),fixture=readFixture(this.fixture);
+        if(opening || fixture){preview=structuredClone(this.config);const room=walkGroups(preview).find(e=>e.group.id===this.room)?.group;
+          if(room && opening)room.openings=[...(room.openings ?? []).filter(o=>o.id!==(this.originalOpening ?? opening.id)),opening];
+          else if(room && fixture)room.fixtures=[...(room.fixtures ?? []).filter(f=>f.entity!==(this.original ?? fixture.entity)),fixture];
+        }
+      }
       this.preview=preview;
     }
   }
@@ -278,7 +287,7 @@ export class AlRoomDeviceEditor extends LitElement {
         <button id="save-fixture" type="button" @click=${()=>this.save()}>${this.original?"Update":"Add"} placement to draft</button>
         ${this.original?html`<button type="button" @click=${()=>this.removeFixture()}>Remove placement</button>`:nothing}
       `:nothing}
-      ${this.previewError?html`<p class="error" role="status">Preview unchanged: ${this.previewError}</p>`:nothing}
+      ${this.previewError?html`<p class="error" role="status">Placement needs adjustment: ${this.previewError}</p>`:nothing}
       <p class="status" role="status">${this.notice}</p>${this.error?html`<p class="error" role="alert">${this.error}</p>`:nothing}
       <details><summary>Personal profiles · import / export</summary><p class="muted">Copy profiles between installations or contribute them to the bundled community catalog. Placement coordinates, linked entity ids and aiming angles are excluded. Import updates matching profile ids in the draft.</p>
         <textarea aria-label="Profile JSON" .value=${this.profileText} @input=${(e:Event)=>{this.profileText=(e.target as HTMLTextAreaElement).value;}}></textarea>

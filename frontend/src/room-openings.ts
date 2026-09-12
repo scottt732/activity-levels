@@ -52,7 +52,10 @@ function alignedWall(room:Room,opening:RoomOpening) {
 }
 /** Inward normal derives from polygon winding, never from the editable yaw sign. */
 export function openingWallNormal(room:Room,opening:RoomOpening):XY {
-  const wall=alignedWall(room,opening);
+  const wall=alignedWall(room,opening) ?? walls(room).sort((a,b)=>{
+    const distance=(w:ReturnType<typeof walls>[number])=>{const x=opening.position[0]-w.a[0],y=opening.position[1]-w.a[1],t=Math.max(0,Math.min(w.length,x*w.dx+y*w.dy));return Math.hypot(x-t*w.dx,y-t*w.dy);};
+    return distance(a)-distance(b);
+  })[0];
   return wall?[-wall.dy*wall.sign,wall.dx*wall.sign]:[0,0];
 }
 /** Left/right are seen from inside facing outside; in swings toward that interior. */
@@ -77,4 +80,8 @@ export function saveOpening(config:Config,room:string,opening:RoomOpening,origin
   if(index<0 && openings.length>=128)throw new Error("Maximum 128 openings per room.");
   group.openings=index<0?[...openings,structuredClone(value)]:openings.map((o,i)=>i===index?structuredClone(value):o);
   return next;
+}
+
+export function openingFitsRoom(room:Room,opening:RoomOpening):boolean {
+  return !!room.bounds && !!alignedWall(room,opening) && opening.position[2]>=room.bounds[0][2]-1e-6 && opening.position[2]+opening.height<=room.bounds[1][2]+1e-6;
 }

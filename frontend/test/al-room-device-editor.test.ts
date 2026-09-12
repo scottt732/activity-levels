@@ -114,3 +114,18 @@ it("starts a typed sensor inside the selected room after editing a door",async()
   el.shadowRoot!.querySelector<HTMLButtonElement>("#save-fixture")!.click();
   expect(changed.mock.calls[0]![0].detail.groups[0].fixtures[0].position).toEqual([10,24,13.5]);
 });
+
+it("previews an oversized door but refuses to save it",async()=>{
+  const el=new AlRoomDeviceEditor();el.room="room";const config=roomsConfig();
+  config.groups=[{...newGroup("room","area"),bounds:[[0,0,0],[4,4,3]]}];el.config=config;
+  el.hass={states:{},callWS:vi.fn().mockResolvedValue([])} as unknown as HomeAssistant;
+  document.body.append(el);await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#new-door")!.click();await el.updateComplete;
+  const width=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
+  width.value="6";width.dispatchEvent(new Event("change"));await el.updateComplete;
+  const viewer=el.shadowRoot!.querySelector("al-floorplan-viewer") as AlFloorplanViewer;
+  expect(viewer.config!.groups[0]!.openings![0]!.width).toBe(6);
+  expect(config.groups[0]!.openings).toBeUndefined();
+  const changed=vi.fn();el.addEventListener("al-change",changed);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();expect(changed).not.toHaveBeenCalled();
+});

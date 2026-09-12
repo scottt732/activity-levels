@@ -1007,7 +1007,8 @@ views stack vertically.
 Use **Add door** for an interior or exterior door, or **Add open wall** for a permanent
 opening. Click near a wall to snap its position, then set width and height. Hinge left/right
 is viewed from inside the selected room facing the doorway; swing can be inward or outward.
-A door can use a room contact sensor or a manual open/closed state. Unknown contact
+Windows and doors that do not fit remain visible in red in both previews; adjust
+them before saving. A door can use a room contact sensor or a manual open/closed state. Unknown contact
 states block coverage. Open walls always pass coverage; closed doors and windows block it.
 The sampled projection illustrates room visibility, not material penetration or exact PIR optics.
 

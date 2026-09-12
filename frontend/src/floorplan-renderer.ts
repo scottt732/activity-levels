@@ -8,8 +8,8 @@ import { activityReading } from "./floorplan-model";
 import type { ScenePart, ActivityFrame } from "./floorplan-model";
 import { viewerOptions, thresholdColor, roomLight } from "./floorplan-style";
 import {coverageRays} from "./sensor-coverage";
-import {openingIsOpen,openingSwing} from "./room-openings";
-import { fixtureAppearance, fixtureDirection } from "./room-fixtures";
+import {openingIsOpen,openingSwing,openingFitsRoom} from "./room-openings";
+import { fixtureAppearance, fixtureDirection, windowFitsRoom } from "./room-fixtures";
 import type { SiteLayout, RoomOpening, RoomFixture, HassEntity } from "./types";
 import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
 
@@ -72,7 +72,7 @@ export class FloorplanRenderer {
   private boundsKey = "";
   private origin = new Vector3();
   private placementHeight?: number;
-  private markers: {room:string; fixture:RoomFixture; marker:Mesh<BufferGeometry,MeshBasicMaterial>; coverage?:Mesh<BufferGeometry,MeshBasicMaterial>; boundary?:LineSegments<BufferGeometry,LineDashedMaterial>; previous?:string;coverageKey?:string}[] = [];
+  private markers: {room:string; fixture:RoomFixture; marker:Mesh<BufferGeometry,MeshBasicMaterial>; coverage?:Mesh<BufferGeometry,MeshBasicMaterial>; boundary?:LineSegments<BufferGeometry,LineDashedMaterial>; previous?:string;coverageKey?:string;invalid?:boolean}[] = [];
   private coverageRooms:ScenePart[]=[];
   private doors:{part:ScenePart;opening:RoomOpening;leaf:Mesh<BufferGeometry,MeshBasicMaterial>;frame:LineSegments<BufferGeometry,LineBasicMaterial>;arc:LineSegments<BufferGeometry,LineBasicMaterial>;key?:boolean}[]=[];
   private siteMeshes: Mesh<ShapeGeometry, MeshBasicMaterial>[] = [];
@@ -238,7 +238,7 @@ export class FloorplanRenderer {
           boundary.computeLineDistances();boundary.position.copy(marker.position);boundary.quaternion.copy(marker.quaternion);boundary.name="window-boundary";
           this.scene.add(boundary);
         }
-        this.markers.push({room:part.id,fixture,marker,coverage,boundary});
+        this.markers.push({room:part.id,fixture,marker,coverage,boundary,invalid:fixture.kind==="window" && !windowFitsRoom({points:part.footprint,bounds:[[0,0,part.low],[0,0,part.high]]},fixture)});
       }
     }
     for(const part of this.coverageRooms)for(const opening of part.openings ?? []) {
@@ -350,6 +350,7 @@ export class FloorplanRenderer {
       const known=state?.state==="on" || state?.state==="off";
       const on=state?.state==="on";
       const appearance=fixtureAppearance(item.fixture.kind,state?.state);
+      if(item.invalid)appearance.color="#ff3535";
       item.marker.material.color.set(appearance.color);
       if (item.fixture.kind==="light" && on) {
         const light=roomLight([item.fixture.entity],states);
@@ -391,6 +392,8 @@ export class FloorplanRenderer {
     const open=openingIsOpen(door.opening,states);if(door.key===open)return;door.key=open;
     const p=door.part,o=door.opening;
     const group={points:p.footprint,bounds:[[Math.min(...p.footprint.map(v=>v[0])),Math.min(...p.footprint.map(v=>v[1])),p.low],[Math.max(...p.footprint.map(v=>v[0])),Math.max(...p.footprint.map(v=>v[1])),p.high]] as [[number,number,number],[number,number,number]]};
+    const color=openingFitsRoom(group,o)?0x87eac8:0xff3535;
+    door.frame.material.color.setHex(color);door.leaf.material.color.setHex(color);door.arc.material.color.setHex(color);
     const swing=openingSwing(group,o),end=open?swing.open:swing.closed;
     const point=(v:[number,number],z:number)=>[v[0]-this.origin.x,z-this.origin.y,-v[1]-this.origin.z];
     const bottom=o.position[2],top=bottom+o.height;
