@@ -32,6 +32,20 @@ const frame = (value: number): LiveState => ({ now: 1000, voices: {}, groups: {
 afterEach(() => { vi.clearAllMocks(); document.body.innerHTML = ""; });
 
 describe("floorplan renderer", () => {
+  it("renders ground features at local elevation and releases them", () => {
+    const renderer = new FloorplanRenderer(host(), vi.fn(), vi.fn());
+    renderer.setParts([part()], undefined, {ground_z:12, features:[
+      {name:"Lawn", kind:"lawn", points:[[0,0],[20,0],[20,20],[0,20]]},
+    ]});
+    const scene = gpu.render.mock.calls.at(-1)![0] as Scene;
+    const ground = scene.getObjectByName("site-feature") as Mesh;
+    expect(ground).toBeDefined();
+    const dispose = vi.spyOn(ground.geometry,"dispose");
+    renderer.setParts([part()]);
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(scene.getObjectByName("site-feature")).toBeUndefined();
+    renderer.dispose();
+  });
   it("rotates half as far when the configured period doubles", async () => {
     vi.useFakeTimers();
     const angleAfterSecond=async(rotation_period:number)=>{
@@ -88,7 +102,7 @@ describe("floorplan renderer", () => {
     expect(liquid.material.color.getHexString()).toBe(thresholdColor(3, viewerOptions()).slice(1));
     renderer.dispose();
   });
-  it("changes only color and returns expired activity to blue", async () => {
+  it("changes color and opacity without resizing and returns expired activity to faint blue", async () => {
     vi.useFakeTimers();
     const renderer = new FloorplanRenderer(host(), vi.fn(), vi.fn());
     renderer.setParts([part()]);
@@ -96,24 +110,40 @@ describe("floorplan renderer", () => {
     const scene = gpu.render.mock.calls.at(-1)![0] as Scene;
     const liquid = scene.getObjectByName("activity-volume") as Mesh<BufferGeometry, MeshBasicMaterial>;
     const geometry = liquid.geometry;
-    const opacity = liquid.material.opacity;
+    expect(liquid.material.opacity).toBeCloseTo(0.015);
     expect(liquid.material.color.getHexString()).toBe("2189ef");
     renderer.setActivity(frame(5), 1000, "");
     await vi.advanceTimersByTimeAsync(2000);
     expect(liquid.material.color.getHexString()).toBe("ef493e");
     expect(liquid.geometry).toBe(geometry);
     expect(liquid.scale.toArray()).toEqual([1, 1, 1]);
-    expect(liquid.material.opacity).toBe(opacity);
+    expect(liquid.material.opacity).toBeCloseTo(0.24);
     expect(scene.getObjectByName("activity-surface")).toBeUndefined();
     expect(vi.getTimerCount()).toBe(0);
     renderer.setActivity(frame(5), 1011, "");
     await vi.advanceTimersByTimeAsync(2000);
     expect(liquid.visible).toBe(true);
     expect(liquid.material.color.getHexString()).toBe("2189ef");
+    expect(liquid.material.opacity).toBeCloseTo(0.015);
     renderer.setActivity(null, 1011, "");
     expect(liquid.visible).toBe(false);
     renderer.dispose();
     vi.useRealTimers();
+  });
+  it("caps fill opacity and increases it on the absolute activity scale", () => {
+    const renderer = new FloorplanRenderer(host(), vi.fn(), vi.fn());
+    for (const [value, opacity] of [[-1, 0.015], [0, 0.015], [2.5, 0.1275], [5, 0.24], [20, 0.24]]) {
+      renderer.setParts([part()]);
+      const live = frame(value!);
+      live.groups.room!.max_value = 20;
+      renderer.setActivity(live, 1000, "");
+      const scene = gpu.render.mock.calls.at(-1)![0] as Scene;
+      const liquid = scene.getObjectByName("activity-volume") as Mesh<BufferGeometry, MeshBasicMaterial>;
+      expect(liquid.material.opacity).toBeCloseTo(opacity!);
+      expect(liquid.material.depthWrite).toBe(false);
+      expect(liquid.scale.toArray()).toEqual([1, 1, 1]);
+    }
+    renderer.dispose();
   });
   it("keeps containers empty and snaps activity when reduced motion is requested", () => {
     const previous = window.matchMedia;

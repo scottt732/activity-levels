@@ -148,14 +148,14 @@ export class AlFloorplanViewer extends LitElement {
     if(changed.has("settings") && this.options.ambient && !(changed.get("settings") as ViewerSettings | undefined)?.ambient)
       this.renderRoot.querySelector<HTMLButtonElement>("#exit-view")?.focus({preventScroll:true});
     const parts = inScope(this.model.parts, this.scope);
-    if (!parts.length) { this.stopRenderer(); return; }
+    if (!parts.length && !this.config?.site?.features.length) { this.stopRenderer(); return; }
     if (!this.renderer && !this.loading && !this.error) {
       // Start outside Lit's update transaction; loading changes need their own render.
       queueMicrotask(() => { void this.startRenderer(); });
       return;
     }
     if (changed.has("config") || changed.has("scope") || this.groundZ !== this.options.ground_z) {
-      this.renderer?.setParts(parts,this.options.ground_z); this.groundZ=this.options.ground_z;
+      this.renderer?.setParts(parts,this.options.ground_z,this.config?.site); this.groundZ=this.options.ground_z;
     }
     this.updateAppearance();
   }
@@ -168,7 +168,7 @@ export class AlFloorplanViewer extends LitElement {
   }
 
   private async startRenderer(): Promise<void> {
-    if (!this.isConnected || this.renderer || this.loading || this.error || !inScope(this.model.parts, this.scope).length) return;
+    if (!this.isConnected || this.renderer || this.loading || this.error || (!inScope(this.model.parts, this.scope).length && !this.config?.site?.features.length)) return;
     const sequence = ++this.sequence;
     this.loading = true;
     try {
@@ -178,7 +178,7 @@ export class AlFloorplanViewer extends LitElement {
       this.renderer = new FloorplanRenderer(host, (id) => { this.selected = id; }, (message) => {
         this.stopRenderer(); this.error = message;
       });
-      this.renderer.setParts(inScope(this.model.parts, this.scope),this.options.ground_z);
+      this.renderer.setParts(inScope(this.model.parts, this.scope),this.options.ground_z,this.config?.site);
       this.groundZ=this.options.ground_z;
       this.updateAppearance();
     } catch {
@@ -268,13 +268,13 @@ export class AlFloorplanViewer extends LitElement {
       <div class="viewer">
         <div class="viewport" aria-describedby="floorplan-help">
           <div id="scene"></div>
-          ${!parts.length ? html`<div class="overlay"><p>${this.model.groups.length ?
+          ${!parts.length && !this.config?.site?.features.length ? html`<div class="overlay"><p>${this.model.groups.length ?
             "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>` :
             this.error ? html`<div class="overlay"><p role="alert">${this.error}</p>
               <button id="retry" type="button" @click=${() => { this.error = ""; }}>Retry 3D view</button></div>` :
               this.loading ? html`<div class="overlay"><p role="status">Loading 3D view…</p></div>` : nothing}
           ${parts.length && !this.error ? html`<div class="legend">${this.options.color_thresholds.map(t=>html`<span style=${`color:${t.color};margin-right:12px`}>● ${t.value}</span>`)} · no fill = unknown
-            <br>${this.options.ground_z === undefined ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z} m`}</div>` : nothing}
+            <br>${(this.options.ground_z ?? this.config?.site?.ground_z) === undefined ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z ?? this.config?.site?.ground_z} m`}</div>` : nothing}
         </div>
         <aside aria-label="Floorplan groups">
           <div class="groups" aria-label="Select a group">

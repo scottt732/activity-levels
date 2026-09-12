@@ -7,6 +7,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { activityReading } from "./floorplan-model";
 import type { ScenePart, ActivityFrame } from "./floorplan-model";
 import { viewerOptions, thresholdColor } from "./floorplan-style";
+import type { SiteLayout } from "./types";
 import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
 
 export type CameraAction = "reset" | "top" | "left" | "right" | "up" | "down" | "in" | "out";
@@ -28,10 +29,11 @@ interface Volume {
   ceiling?: Mesh<ShapeGeometry, MeshBasicMaterial>;
   wash?: Mesh<ExtrudeGeometry, MeshBasicMaterial>;
   targetColor: Color;
+  targetOpacity: number;
 }
 
 /** Surfaces follow the actual polygon, including concave rooms. */
-function surfaceGeometry(part: ScenePart, origin: Vector3): ShapeGeometry {
+function surfaceGeometry(part: Pick<ScenePart, "footprint">, origin: Vector3): ShapeGeometry {
   const geometry = new ShapeGeometry(new Shape(part.footprint.map(
     ([x, y]) => new Vector2(x - origin.x, y + origin.z),
   )));
@@ -64,6 +66,7 @@ export class FloorplanRenderer {
   private readonly raycaster = new Raycaster();
   private volumes: Volume[] = [];
   private grid?: GridHelper;
+  private siteMeshes: Mesh<ShapeGeometry, MeshBasicMaterial>[] = [];
   private radius = 1;
   private ground?: Mesh<PlaneGeometry, MeshBasicMaterial>;
   private options = viewerOptions();
@@ -129,15 +132,18 @@ export class FloorplanRenderer {
       this.renderer.render(this.scene, this.camera);
   };
 
-  setParts(parts: ScenePart[], groundZ?: number): void {
+  setParts(parts: ScenePart[], groundZ?: number, site?: SiteLayout): void {
     this.clearParts();
     this.focusTarget=undefined; this.focusEvents.clear();
-    if (!parts.length) { this.draw(); return; }
+    if (!parts.length && !site?.features.length) { this.draw(); return; }
     const box = new Box3();
     for (const part of parts) for (const [x, y] of part.footprint) {
       box.expandByPoint(new Vector3(x, part.low, -y));
       box.expandByPoint(new Vector3(x, part.high, -y));
     }
+    groundZ ??= site?.ground_z;
+    for (const feature of site?.features ?? []) for (const [x, y] of feature.points)
+      box.expandByPoint(new Vector3(x, site!.ground_z, -y));
     if (groundZ !== undefined) {
       box.expandByPoint(new Vector3(box.min.x, groundZ, box.min.z));
       box.expandByPoint(new Vector3(box.max.x, groundZ, box.max.z));
@@ -155,13 +161,13 @@ export class FloorplanRenderer {
       if (part.container) mesh.material.opacity = 0;
       this.scene.add(mesh, edges);
       const floor = part.low - origin.y;
-      const volume: Volume = { part, mesh, edges, targetColor: new Color() };
+      const volume: Volume = { part, mesh, edges, targetColor: new Color(), targetOpacity: 0.015 };
       mesh.material.opacity = 0;
       if (!part.container) {
-        // Activity changes only the color of this fixed, full-height room volume.
+        // Activity changes the color and opacity of this fixed, full-height room volume.
         // The separate invisible mesh continues to own picking and camera bounds.
         volume.liquid = new Mesh(geometry.clone(), new MeshBasicMaterial({
-          transparent: true, opacity: 0.16, side: DoubleSide, depthWrite: false,
+          transparent: true, opacity: 0.015, side: DoubleSide, depthWrite: false,
         }));
         volume.ceiling = new Mesh(surfaceGeometry(part, origin), new MeshBasicMaterial({
           transparent: true, opacity: 0, side: DoubleSide, depthWrite: false,
@@ -196,6 +202,16 @@ export class FloorplanRenderer {
       }
       this.volumes.push(volume);
     }
+    const siteColors = {property:0x425044, lawn:0x506b40, driveway:0x697179, path:0x8d8069, pool:0x367c9b};
+    const features = [...(site?.features ?? [])].sort((a, b) => Number(b.kind === "property") - Number(a.kind === "property"));
+    features.forEach((feature, index) => {
+      const geometry = surfaceGeometry({footprint:feature.points}, origin);
+      const mesh = new Mesh(geometry, new MeshBasicMaterial({color:siteColors[feature.kind], side:DoubleSide,
+        transparent:true, opacity:0.5, depthWrite:false}));
+      mesh.position.y = site!.ground_z - origin.y + index * 0.002;
+      mesh.name = "site-feature";
+      this.scene.add(mesh); this.siteMeshes.push(mesh);
+    });
     this.grid = new GridHelper(this.radius * 2.8, 16, 0x69818e, 0x69818e);
     this.grid.position.y = (groundZ ?? box.min.y - this.radius * 0.015) - origin.y;
     if (groundZ !== undefined) {
@@ -232,9 +248,14 @@ export class FloorplanRenderer {
       const ratio = reading.status === "stale" ? 0 : reading.ratio;
       liquid.visible = ratio !== null;
       if (ratio !== null) {
-        volume.targetColor.set(thresholdColor(reading.status === "stale" ? 0 : reading.value!, options));
+        const value = reading.status === "stale" ? 0 : reading.value!;
+        volume.targetColor.set(thresholdColor(value, options));
+        // Use the absolute 0–5 activity scale, not the room maximum. Keep even
+        // the hottest rooms translucent so overlapping structures remain legible.
+        volume.targetOpacity = 0.015 + 0.225 * Math.min(1, Math.max(0, value / 5));
         if (!wasVisible || this.reduced?.matches) {
           liquid.material.color.copy(volume.targetColor);
+          liquid.material.opacity = volume.targetOpacity;
         }
         this.updateColor(volume, 0);
       }
@@ -282,14 +303,19 @@ export class FloorplanRenderer {
     if (!volume.liquid?.visible) return;
     const color = volume.liquid.material.color;
     color.lerp(volume.targetColor, blend);
-    if (!this.colorPending(volume)) color.copy(volume.targetColor);
+    volume.liquid.material.opacity += (volume.targetOpacity - volume.liquid.material.opacity) * blend;
+    if (!this.colorPending(volume)) {
+      color.copy(volume.targetColor);
+      volume.liquid.material.opacity = volume.targetOpacity;
+    }
   }
 
   private colorPending(volume: Volume): boolean {
     const color = volume.liquid?.material.color;
     return !!volume.liquid?.visible && !!color &&
       Math.abs(color.r - volume.targetColor.r) + Math.abs(color.g - volume.targetColor.g) +
-      Math.abs(color.b - volume.targetColor.b) > 0.001;
+      Math.abs(color.b - volume.targetColor.b) +
+      Math.abs(volume.liquid.material.opacity - volume.targetOpacity) > 0.001;
   }
 
   private colorChanging(): boolean {
@@ -383,6 +409,10 @@ export class FloorplanRenderer {
   };
 
   private clearParts(): void {
+    for (const mesh of this.siteMeshes) {
+      this.scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose();
+    }
+    this.siteMeshes = [];
     if (this.ground) { this.scene.remove(this.ground); this.ground.geometry.dispose(); this.ground.material.dispose(); this.ground=undefined; }
     for (const { mesh, edges, liquid, ceiling, wash } of this.volumes) {
       ceiling?.material.map?.dispose();

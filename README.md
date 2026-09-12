@@ -590,11 +590,12 @@ wireframe. Drag to orbit, scroll to zoom, or use the camera buttons, **Top** and
 Choose a property, structure or floor to isolate its current descendants. Geometry keeps
 its imported coordinates; GPS and changes to the group hierarchy do not reposition it.
 
-Room activity colors a fixed floor-to-ceiling translucent volume. Only the color changes:
+Room activity colors a fixed floor-to-ceiling translucent volume. Color and opacity
+change with activity:
 the default continuous gradient runs from blue at 0 through cyan (1.25), yellow (2.5),
-orange (3.75) and red (5). Color follows absolute activity, with consistent opacity at
-all levels. Changes ease smoothly, unless reduced motion is requested. Activity stays
-visible independently of the lights.
+orange (3.75) and red (5). Color follows absolute activity, with opacity rising from
+1.5% at idle to a maximum of 24% at activity 5. Changes ease smoothly, unless reduced
+motion is requested. Activity stays visible independently of the lights.
 
 Ceilings glow with the actual colors and brightness of the room's lights, with a faint
 wash down the walls. Multiple lights blend by brightness; off lights contribute nothing.
@@ -927,3 +928,28 @@ lovelace:
 The integration now ships separate panel and card modules with shared generated chunks.
 All generated files in `custom_components/activity_levels/frontend/` must be installed
 together; HACS handles that as part of the existing integration download.
+
+### Property layout
+
+Open **Floorplans → Property layout** to place buildings and draw muted ground features.
+**Use Home Assistant location** loads latitude, longitude and elevation into editable
+fields; **Apply floorplan origin** adds them to the draft. An existing origin is shown
+and preserved until you explicitly replace it. The link to HA Home information lets you
+correct HA's persistent location separately. Geographic elevation never moves room Z.
+
+**Load map** opens an OpenStreetMap street backdrop. Click to trace a property boundary,
+lawn, driveway, path or pool, or enter local X,Y metre coordinates with the keyboard.
+Give the feature a name and add it; existing features can be edited or removed. Adjust
+**Local ground Z** to the same coordinate reference as the imported rooms. Move/rotate a
+structure using local metres and degrees; all its descendant rooms move together without
+changing their actual dimensions. Changes use the panel's existing Undo/Redo/Save flow.
+
+The map is loaded only on request, shows attribution, and uses normal browser caching.
+There is no tile prefetch or offline map download. A different HTTPS raster tile template
+and attribution can be entered for the editing session. Saved geometry works without map
+access. This first editor does not fetch aerial imagery or detect parcel boundaries.
+Martin/MapLibre vector maps and calibrated image upload are follow-up work; a Martin
+vector tile endpoint cannot be used in the raster tile field.
+
+For a standalone preview with sample structures, run the frontend dev server and open
+`/dev/property.html`. Edits in that fixture are temporary and do not touch Home Assistant.

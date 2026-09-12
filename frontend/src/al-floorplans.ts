@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import "./al-floorplan-viewer";
 import "./al-floorplan-import";
+import "./al-property-layout";
 import { walkGroups } from "./model";
 import type { PropertyValues } from "lit";
 import { floorplanSource } from "./floorplan-store";
@@ -61,6 +62,7 @@ export class AlFloorplans extends LitElement {
       ${this.error || this.preferenceError ? html`<p role="status">${this.error || this.preferenceError}</p>` : nothing}
       <al-floorplan-viewer .config=${this.config} .live=${this.live} .hass=${this.hass} .lights=${this.lights}
         .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
+      <details><summary>Property layout</summary><al-property-layout .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-property-layout></details>
       <details .open=${!hasGeometry}><summary>Import or update floorplan</summary>
         <al-floorplan-import .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-floorplan-import>
       </details>`;
