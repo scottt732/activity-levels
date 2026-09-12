@@ -85,6 +85,108 @@
       },
       "additionalProperties": false
     },
+    "sensor_profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "kind": {
+            "enum": [
+              "motion",
+              "occupancy",
+              "light"
+            ]
+          },
+          "fov": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 170
+          },
+          "vertical_fov": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 170
+          },
+          "range": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "technology": {
+            "type": "string",
+            "maxLength": 60,
+            "default": ""
+          },
+          "mount": {
+            "type": "string",
+            "maxLength": 60,
+            "default": ""
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "default": ""
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 500,
+            "default": ""
+          },
+          "match": {
+            "type": "object",
+            "properties": {
+              "manufacturer": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "platform": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "device_class": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "entity_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "additionalProperties": false,
+            "default": {}
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "fov",
+          "vertical_fov",
+          "range"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 128
+    },
     "version": {
       "type": "integer",
       "enum": [
@@ -858,6 +960,11 @@
           "items": {
             "type": "object",
             "properties": {
+              "profile_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
               "entity": {
                 "type": "string",
                 "pattern": "^(binary_sensor|light)\\.[a-z0-9_]+$"

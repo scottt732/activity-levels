@@ -72,7 +72,17 @@ export interface Gps {
   rotation?: number;
 }
 
+export interface SensorProfile {
+  id:string; name:string; kind:RoomFixture["kind"]; fov:number; vertical_fov:number; range:number;
+  technology:string; mount:string; notes:string; source:string;
+  match:Partial<Record<"manufacturer"|"model"|"platform"|"device_class"|"entity_name",string>>;
+}
+export interface RoomDevice {
+  entity:string; area_id:string|null; manufacturer:string|null; model:string|null;
+  platform:string; device_class:string|null; entity_name:string;
+}
 export interface RoomFixture {
+  profile_id?: string;
   entity: string; kind: "motion" | "occupancy" | "light"; name: string;
   position: [number, number, number]; yaw: number; pitch: number;
   fov: number; vertical_fov: number; range: number; mount: string; technology: string;
@@ -170,6 +180,7 @@ export interface SiteFeature { name: string; kind: SiteKind; points: [number, nu
 export interface SiteLayout { ground_z: number; features: SiteFeature[] }
 
 export interface Config {
+  sensor_profiles?:SensorProfile[];
   site?: SiteLayout;
   gps?: Gps;
   version: 1;

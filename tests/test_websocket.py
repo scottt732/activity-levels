@@ -465,3 +465,57 @@ async def test_floorplan_dashboard_projects_fixtures_and_conditional_idle(
     assert room["idle_by"] == result["telemetry"]["now"]
     assert room["people"][0]["entity"] == "person.alex"
     assert room["devices"][0]["name"] == "Phone"
+
+
+async def test_floorplan_devices_area_override_and_identification(hass, hass_ws_client, entry):
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    areas = ar.async_get(hass)
+    den = areas.async_create("Den")
+    kitchen = areas.async_create("Kitchen")
+    devices = dr.async_get(hass)
+    device = devices.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={("test", "pir")},
+        manufacturer="Acme",
+        model="PIR 1",
+    )
+    devices.async_update_device(device.id, area_id=den.id)
+    entities = er.async_get(hass)
+    sensor = entities.async_get_or_create(
+        "binary_sensor",
+        "test",
+        "pir",
+        device_id=device.id,
+        original_name="Motion",
+        original_device_class="motion",
+    )
+    override = entities.async_get_or_create(
+        "binary_sensor", "test", "override", device_id=device.id
+    )
+    entities.async_update_entity(override.entity_id, area_id=kitchen.id)
+    disabled = entities.async_get_or_create(
+        "binary_sensor", "test", "disabled", device_id=device.id
+    )
+    entities.async_update_entity(disabled.entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/floorplan/devices"})
+    result = (await client.receive_json())["result"]
+    rows = {row["entity"]: row for row in result}
+    assert rows[sensor.entity_id]["area_id"] == den.id
+    assert rows[sensor.entity_id]["model"] == "PIR 1"
+    assert rows[sensor.entity_id]["entity_name"] == "Motion"
+    assert rows[override.entity_id]["area_id"] == kitchen.id
+    assert disabled.entity_id not in rows
+
+
+async def test_floorplan_devices_requires_admin(
+    hass, hass_ws_client, hass_read_only_access_token, entry
+):
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json_auto_id({"type": "activity_levels/floorplan/devices"})
+    result = await client.receive_json()
+    assert not result["success"]
+    assert result["error"]["code"] == "unauthorized"

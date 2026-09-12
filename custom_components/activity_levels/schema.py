@@ -51,7 +51,7 @@ from .const import (
 )
 from .duration import parse_duration
 from .engine import Mix, NullHandling, RetriggerWhen, Unavailable
-from .geometry import GPS_SCHEMA, SITE_SCHEMA, bounds, fixtures, points
+from .geometry import GPS_SCHEMA, SENSOR_PROFILE_SCHEMA, SITE_SCHEMA, bounds, fixtures, points
 
 PRESENCE_CORRECTION_FIELDS: dict[Any, Any] = {
     vol.Required("person"): str,
@@ -521,6 +521,7 @@ CONFIG_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_GPS): GPS_SCHEMA,
         vol.Optional("site"): SITE_SCHEMA,
+        vol.Optional("sensor_profiles"): vol.All([SENSOR_PROFILE_SCHEMA], vol.Length(max=128)),
         vol.Required(CONF_VERSION): vol.All(int, vol.In([1])),
         vol.Optional(CONF_DEFAULTS, default=dict): DEFAULTS_SCHEMA,
         vol.Optional(CONF_ENVELOPES, default=list): [ENVELOPE_SCHEMA],
@@ -663,6 +664,13 @@ def infer_kinds(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
 
 def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
+    profile_ids: set[str] = set()
+    for index, profile in enumerate(cfg.get("sensor_profiles", [])):
+        if profile["id"] in profile_ids:
+            errors.append(
+                {"path": f"sensor_profiles/{index}/id", "message": "duplicate profile id"}
+            )
+        profile_ids.add(profile["id"])
     envelope_ids: set[str] = set()
     for i, env in enumerate(cfg[CONF_ENVELOPES]):
         if env["id"] in envelope_ids:
