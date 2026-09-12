@@ -104,7 +104,8 @@
             "enum": [
               "motion",
               "occupancy",
-              "light"
+              "light",
+              "window"
             ]
           },
           "fov": {
@@ -973,7 +974,8 @@
                 "enum": [
                   "motion",
                   "occupancy",
-                  "light"
+                  "light",
+                  "window"
                 ]
               },
               "name": {
@@ -988,6 +990,16 @@
                 "items": {
                   "type": "number"
                 }
+              },
+              "width": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 20
+              },
+              "height": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 20
               },
               "yaw": {
                 "type": "number",
