@@ -1,5 +1,5 @@
 import {
-  Box3, DoubleSide, EdgesGeometry, ExtrudeGeometry, GridHelper, LineBasicMaterial,
+  Box3, BoxGeometry, LineDashedMaterial, DoubleSide, EdgesGeometry, ExtrudeGeometry, GridHelper, LineBasicMaterial,
   LineSegments, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Scene, Shape,
   Vector2, Vector3, WebGLRenderer, PlaneGeometry, ShapeGeometry, Float32BufferAttribute, Color, DataTexture, LinearFilter, SphereGeometry, ConeGeometry, Plane, BufferGeometry, Matrix4,
 } from "three";
@@ -7,7 +7,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { activityReading } from "./floorplan-model";
 import type { ScenePart, ActivityFrame } from "./floorplan-model";
 import { viewerOptions, thresholdColor, roomLight } from "./floorplan-style";
-import { fixtureDirection } from "./room-fixtures";
+import { fixtureAppearance, fixtureDirection } from "./room-fixtures";
 import type { SiteLayout, RoomFixture, HassEntity } from "./types";
 import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
 
@@ -70,7 +70,7 @@ export class FloorplanRenderer {
   private boundsKey = "";
   private origin = new Vector3();
   private placementHeight?: number;
-  private markers: {room:string; fixture:RoomFixture; marker:Mesh<BufferGeometry,MeshBasicMaterial>; coverage?:Mesh<BufferGeometry,MeshBasicMaterial>; previous?:string}[] = [];
+  private markers: {room:string; fixture:RoomFixture; marker:Mesh<BufferGeometry,MeshBasicMaterial>; coverage?:Mesh<BufferGeometry,MeshBasicMaterial>; boundary?:LineSegments<BufferGeometry,LineDashedMaterial>; previous?:string}[] = [];
   private siteMeshes: Mesh<ShapeGeometry, MeshBasicMaterial>[] = [];
   private radius = 1;
   private ground?: Mesh<PlaneGeometry, MeshBasicMaterial>;
@@ -214,25 +214,40 @@ export class FloorplanRenderer {
       }
       this.volumes.push(volume);
       for (const fixture of part.fixtures ?? []) {
-        const marker = new Mesh(new SphereGeometry(Math.min(0.15,Math.max(this.radius*0.008,0.06)),12,8), new MeshBasicMaterial({color:0x82cddb}));
+        const marker = new Mesh(fixture.kind==="window" ? new BoxGeometry(fixture.width ?? 1,fixture.height ?? 1.2,0.06) : new SphereGeometry(Math.min(0.15,Math.max(this.radius*0.008,0.06)),12,8), new MeshBasicMaterial({color:0x82cddb,transparent:true,opacity:fixture.kind==="window"?0.35:1}));
+        if(fixture.kind==="window")marker.rotation.y=fixture.yaw*Math.PI/180;
         marker.position.set(fixture.position[0]-origin.x,fixture.position[2]-origin.y,-fixture.position[1]-origin.z);
-        marker.name="room-fixture";
+        marker.name=fixture.kind==="window"?"room-window":"room-fixture";
         this.scene.add(marker);
         let coverage: Mesh<BufferGeometry,MeshBasicMaterial> | undefined;
-        if (fixture.range>0 && fixture.kind!=="light") {
+        let boundary: LineSegments<BufferGeometry,LineDashedMaterial> | undefined;
+        if (fixture.range>0 && (fixture.kind==="motion" || fixture.kind==="occupancy")) {
           const geometry=new ConeGeometry(1,1,24,1,true);
           geometry.translate(0,-0.5,0);
           geometry.scale(Math.tan(fixture.fov*Math.PI/360)*fixture.range,fixture.range,Math.tan(fixture.vertical_fov*Math.PI/360)*fixture.range);
-          coverage=new Mesh(geometry,new MeshBasicMaterial({color:0x4ad8ed,transparent:true,opacity:0.045,side:DoubleSide,depthWrite:false}));
+          coverage=new Mesh(geometry,new MeshBasicMaterial({color:0x4ad8ed,transparent:true,opacity:0,side:DoubleSide,depthWrite:false}));
           const direction=new Vector3(...fixtureDirection(fixture));
           const yaw=fixture.yaw*Math.PI/180;
           const right=new Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
           const up=direction.clone().cross(right);
           coverage.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(right,direction.clone().negate(),up));
           coverage.position.copy(marker.position); coverage.name="sensor-coverage";
-          this.scene.add(coverage);
+          const vertices:number[]=[];
+          const point=(angle:number)=>new Vector3(Math.sin(angle)*Math.tan(fixture.fov*Math.PI/360)*fixture.range,-fixture.range,Math.cos(angle)*Math.tan(fixture.vertical_fov*Math.PI/360)*fixture.range);
+          for(let i=0;i<32;i++) {
+            vertices.push(...point(i*Math.PI/16).toArray(),...point((i+1)*Math.PI/16).toArray());
+            if(i%8===0)vertices.push(0,0,0,...point(i*Math.PI/16).toArray());
+          }
+          boundary=new LineSegments(new BufferGeometry().setAttribute("position",new Float32BufferAttribute(vertices,3)),new LineDashedMaterial({color:0x53b6ce,dashSize:0.06,gapSize:0.08,transparent:true,opacity:0.65,depthWrite:false}));
+          boundary.computeLineDistances();boundary.position.copy(marker.position);boundary.quaternion.copy(coverage.quaternion);boundary.name="sensor-boundary";
+          this.scene.add(coverage,boundary);
         }
-        this.markers.push({room:part.id,fixture,marker,coverage});
+        if(fixture.kind==="window") {
+          boundary=new LineSegments(new EdgesGeometry(marker.geometry),new LineDashedMaterial({color:0x53b6ce,dashSize:1,gapSize:0,transparent:true,opacity:0.65,depthWrite:false}));
+          boundary.computeLineDistances();boundary.position.copy(marker.position);boundary.quaternion.copy(marker.quaternion);boundary.name="window-boundary";
+          this.scene.add(boundary);
+        }
+        this.markers.push({room:part.id,fixture,marker,coverage,boundary});
       }
     }
     const siteColors = {property:0x425044, lawn:0x506b40, driveway:0x697179, path:0x8d8069, pool:0x367c9b};
@@ -248,7 +263,7 @@ export class FloorplanRenderer {
     this.grid = new GridHelper(this.radius * 2.8, 16, 0x69818e, 0x69818e);
     this.grid.position.y = (groundZ ?? box.min.y - this.radius * 0.015) - origin.y;
     if (groundZ !== undefined) {
-      this.ground = new Mesh(new PlaneGeometry(this.radius * 2.8, this.radius * 2.8), new MeshBasicMaterial({color:0x75818a,transparent:true,opacity:0.045,side:DoubleSide,depthWrite:false}));
+      this.ground = new Mesh(new PlaneGeometry(this.radius * 2.8, this.radius * 2.8), new MeshBasicMaterial({color:0x75818a,transparent:true,opacity:0,side:DoubleSide,depthWrite:false}));
       this.ground.rotation.x = -Math.PI / 2;
       this.ground.position.y = this.grid.position.y;
       this.scene.add(this.ground);
@@ -334,16 +349,18 @@ export class FloorplanRenderer {
       const state=states[item.fixture.entity];
       const known=state?.state==="on" || state?.state==="off";
       const on=state?.state==="on";
-      item.marker.material.color.set(!known?"#7a8790":on?"#ffce62":"#53b6ce");
+      const appearance=fixtureAppearance(item.fixture.kind,state?.state);
+      item.marker.material.color.set(appearance.color);
       if (item.fixture.kind==="light" && on) {
         const light=roomLight([item.fixture.entity],states);
         item.marker.material.color.setRGB(...light.rgb);
       }
       if (item.coverage) {
         item.coverage.material.color.copy(item.marker.material.color);
-        item.coverage.material.opacity=!known?0.015:on?0.14:0.035;
+        item.coverage.material.opacity=appearance.opacity;
       }
-      if (item.fixture.kind!=="light" && item.previous==="off" && on) sensorTarget=item;
+      if(item.boundary){item.boundary.material.color.set(appearance.color);item.boundary.material.opacity=known?0.65:0.25;}
+      if ((item.fixture.kind==="motion" || item.fixture.kind==="occupancy") && item.previous==="off" && on) sensorTarget=item;
       item.previous=state?.state;
     }
     if (sensorTarget && options.focus_activity && !alert && !this.reduced?.matches && Date.now()>=this.pauseUntil && now-previousFocus>=12) {
@@ -482,7 +499,7 @@ export class FloorplanRenderer {
   };
 
   private clearParts(): void {
-    for (const item of this.markers) for (const mesh of [item.marker,item.coverage]) {
+    for (const item of this.markers) for (const mesh of [item.marker,item.coverage,item.boundary]) {
       if (mesh) {this.scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();}
     }
     this.markers=[];

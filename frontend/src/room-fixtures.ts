@@ -10,16 +10,50 @@ export function fixtureDirection(fixture: RoomFixture): [number,number,number] {
   // Local +X is yaw zero; +90 points along +Y. Three.js uses Y up and -Z north.
   return [Math.cos(yaw)*Math.cos(pitch), Math.sin(pitch), -Math.sin(yaw)*Math.cos(pitch)];
 }
+
+/** Snap a window's center to the nearest wall and align its width with that wall. */
+export function snapWindow(group: Pick<Group,"points"|"bounds">, position: [number,number,number], width=1): {position:[number,number,number];yaw:number} {
+  const b=group.bounds;
+  if(!b)return {position,yaw:0};
+  const points=group.points ?? [[b[0][0],b[0][1]],[b[1][0],b[0][1]],[b[1][0],b[1][1]],[b[0][0],b[1][1]]];
+  let best={position,yaw:0},distance=Infinity;
+  points.forEach((a,i)=>{
+    const c=points[(i+1)%points.length]!,dx=c[0]-a[0],dy=c[1]-a[1],length=dx*dx+dy*dy;
+    if(!length)return;
+    const margin=Math.min(0.5,width/(2*Math.sqrt(length)));
+    const t=Math.max(margin,Math.min(1-margin,((position[0]-a[0])*dx+(position[1]-a[1])*dy)/length));
+    const x=a[0]+t*dx,y=a[1]+t*dy,d=Math.hypot(x-position[0],y-position[1]);
+    if(d<distance){distance=d;best={position:[x,y,position[2]],yaw:Math.atan2(dy,dx)*180/Math.PI};}
+  });
+  return best;
+}
+
+export function fixtureAppearance(kind:RoomFixture["kind"],state?:string):{color:string;opacity:number} {
+  if(state!=="on" && state!=="off")return {color:"#7a8790",opacity:0};
+  return {color:state==="on"?(kind==="light"?"#ffce62":"#ff3535"):"#53b6ce",opacity:state==="on"?0.16:0};
+}
 export function saveFixture(config: Config, room: string, fixture: RoomFixture, original?: string): Config {
   const next=structuredClone(config), group=walkGroups(next).find(e=>e.group.id===room)?.group;
   if (!group?.bounds) throw new Error("Choose a placed room.");
   if (!/^(binary_sensor|light)\.[a-z0-9_]+$/.test(fixture.entity) || fixture.entity.startsWith("light.") !== (fixture.kind==="light"))
-    throw new Error("Choose a binary sensor for motion/occupancy or a light entity for a light.");
+    throw new Error("Choose a binary sensor for motion/occupancy/window or a light entity for a light.");
   if (![...fixture.position,fixture.yaw,fixture.pitch,fixture.fov,fixture.vertical_fov,fixture.range].every(Number.isFinite) ||
       Math.abs(fixture.yaw)>360 || Math.abs(fixture.pitch)>90 || fixture.range<0 || fixture.range>100 ||
       fixture.fov<1 || fixture.fov>170 || fixture.vertical_fov<1 || fixture.vertical_fov>170)
     throw new Error("Check position, angles, field of view (1–170°), and range (0–100 m).");
   if (!insideRoom(group,fixture.position)) throw new Error("Place the device inside this room, including its floor-to-ceiling height.");
+  if(!readFixture(fixture))throw new Error("Check device type and window dimensions (0.1–20 m).");
+  if(fixture.kind==="window") {
+    const halfHeight=(fixture.height ?? 1.2)/2;
+    if(fixture.position[2]-halfHeight<group.bounds[0][2] || fixture.position[2]+halfHeight>group.bounds[1][2])
+      throw new Error("Keep the whole window between the floor and ceiling; height is measured at its center.");
+    const snapped=snapWindow(group,fixture.position,fixture.width ?? 1);
+    if(Math.hypot(snapped.position[0]-fixture.position[0],snapped.position[1]-fixture.position[1])>0.01 || Math.abs(Math.sin((snapped.yaw-fixture.yaw)*Math.PI/180))>0.001)
+      throw new Error("Place and align the whole window on a wall using the 2D plan.");
+    const halfWidth=(fixture.width ?? 1)/2,angle=fixture.yaw*Math.PI/180;
+    if(![-1,1].every(sign=>insideRoom(group,[fixture.position[0]+sign*halfWidth*Math.cos(angle),fixture.position[1]+sign*halfWidth*Math.sin(angle),fixture.position[2]])))
+      throw new Error("The window is wider than this wall. Reduce its width.");
+  }
   const fixtures=group.fixtures ?? [];
   if (fixtures.some(f=>f.entity===fixture.entity && f.entity!==original)) throw new Error("This entity already has a placement in the room.");
   const index=fixtures.findIndex(f=>f.entity===original);
@@ -46,11 +80,12 @@ export function readFixture(value: unknown): RoomFixture | null {
   if(!value || typeof value!=="object") return null;
   const fixture={...newFixture(),...value} as RoomFixture;
   if(typeof fixture.entity!=="string" || !/^(binary_sensor|light)\.[a-z0-9_]+$/.test(fixture.entity) ||
-    !["motion","occupancy","light"].includes(fixture.kind) || fixture.entity.startsWith("light.")!==(fixture.kind==="light") ||
+    !["motion","occupancy","light","window"].includes(fixture.kind) || fixture.entity.startsWith("light.")!==(fixture.kind==="light") ||
     !Array.isArray(fixture.position) || fixture.position.length!==3 ||
     ![...fixture.position,fixture.yaw,fixture.pitch,fixture.fov,fixture.vertical_fov,fixture.range].every(v=>typeof v==="number" && Number.isFinite(v)) ||
     Math.abs(fixture.yaw)>360 || Math.abs(fixture.pitch)>90 || fixture.fov<1 || fixture.fov>170 ||
     fixture.vertical_fov<1 || fixture.vertical_fov>170 || fixture.range<0 || fixture.range>100 ||
     typeof fixture.name!=="string" || typeof fixture.mount!=="string" || typeof fixture.technology!=="string") return null;
+  if([fixture.width,fixture.height].some(v=>v!==undefined && (typeof v!=="number" || !Number.isFinite(v) || v<0.1 || v>20)))return null;
   return fixture;
 }

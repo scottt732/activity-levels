@@ -23,6 +23,13 @@ const format = (value: number): string => Number(value.toFixed(2)).toLocaleStrin
 export class AlFloorplanViewer extends LitElement {
   static styles = [sharedStyles, css`
     :host { display: block; padding: 16px; }
+    :host([editing-preview]) { padding:0; position:relative; }
+    :host([editing-preview]) .viewer, :host([editing-preview]) .viewport { height:100%; }
+    :host([editing-preview]) h2, :host([editing-preview]) > p, :host([editing-preview]) .legend, :host([editing-preview]) .issues { display:none; }
+    :host([editing-preview]) .viewport { border:0; border-radius:0; }
+    :host([editing-preview]) .toolbar { position:absolute; bottom:10px; left:280px; right:12px; z-index:2; margin:0; justify-content:center; }
+    :host([editing-preview]) .toolbar button { padding:5px; font-size:12px; }
+    @media(max-width:1100px) { :host([editing-preview]) .toolbar { left:12px; } }
     h2 { margin: 0 0 6px; }
     .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
     label { display: flex; align-items: center; gap: 8px; }
@@ -301,7 +308,7 @@ export class AlFloorplanViewer extends LitElement {
             <h3>${selected.label}</h3><p>${KIND_DEFS[selected.kind]?.label ?? "Group"} · ${selected.id}</p>
             <p>Activity: <strong>${this.reading(selected)}</strong></p>
             <p>${roomLight(this.lights[selected.id],this.hass?.states ?? {}).unknown ? "Some light readings unavailable" : `Lights: ${Math.round(roomLight(this.lights[selected.id],this.hass?.states ?? {}).brightness*100)}%`}</p>
-            ${!this.dashboard ? html`<button id="open-group" type="button" @click=${() => this.openGroup(selected)}>Open group settings</button>` : nothing}
+            ${!this.dashboard ? html`<button id="edit-room" type="button" @click=${()=>this.dispatchEvent(new CustomEvent("al-edit-room",{detail:selected.id,bubbles:true,composed:true}))}>Place devices & windows</button><button id="open-group" type="button" @click=${() => this.openGroup(selected)}>Open group settings</button>` : nothing}
           </section>` : html`<p class="muted">Select a room in the scene or a group in this list.</p>`}
         </aside>
       </div>

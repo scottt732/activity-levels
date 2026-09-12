@@ -101,10 +101,13 @@ describe("floorplan viewer", () => {
   it("selects groups from the list or canvas and opens their existing settings", async () => {
     const el = await mount();
     const open = vi.fn(); el.addEventListener("al-open-group", open);
+    const edit=vi.fn();el.addEventListener("al-edit-room",edit);
     el.shadowRoot!.querySelector<HTMLButtonElement>('[data-group="ground"]')!.click(); await settle(el);
     expect(el.shadowRoot!.querySelector(".selection")!.textContent).toContain("7 / 10");
     scene.select("kitchen"); await settle(el);
     expect(el.shadowRoot!.querySelector(".selection")!.textContent).toContain("2 / 5");
+    el.shadowRoot!.querySelector<HTMLButtonElement>("#edit-room")!.click();
+    expect(edit.mock.calls[0]![0].detail).toBe("kitchen");
     el.shadowRoot!.querySelector<HTMLButtonElement>("#open-group")!.click();
     expect(open.mock.calls[0]![0].detail).toEqual(["groups", 0, "children", 0, "children", 0, "children", 0]);
   });
