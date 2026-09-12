@@ -36,7 +36,7 @@ export class AlRoomHud extends LitElement {
     const fresh=this.telemetry && Number.isFinite(this.telemetry.now) && Math.abs(this.now-this.telemetry.now)<=STALE_SECONDS;
     const detail=fresh ? this.telemetry?.rooms[room.id] : undefined;
     const last=this.live?.groups[room.id]?.last_activity;
-    const people=detail?.people.filter(p=>p.t!==null && Number.isFinite(p.t) && this.now-p.t<=120) ?? [];
+    const people=detail?.people ?? [];
     return html`<section aria-label="Room telemetry">
       <button type="button" aria-label="Dismiss room details" @click=${()=>this.dispatchEvent(new CustomEvent("al-dismiss-hud",{bubbles:true,composed:true}))}>×</button>
       <div class="eyebrow">Room telemetry · ${reading.status==="live"?"live":"awaiting update"}</div>
@@ -51,9 +51,9 @@ export class AlRoomHud extends LitElement {
         const picture=entity?.attributes.entity_picture;
         const src=typeof picture==="string" && (picture.startsWith("/") || /^https?:\/\//.test(picture))?picture:undefined;
         return html`<div class="person">${src?html`<img src=${src} alt="" @error=${(e:Event)=>{(e.target as HTMLImageElement).hidden=true;}}>`:html`<span class="initial">${person.name.slice(0,1)}</span>`}
-          <span>${person.name}<br><span class="muted">Estimated${person.confidence===null?"":` · ${Math.round(person.confidence*100)}%`}</span></span></div>`;
+          <span>${person.name}<br><span class="muted">Estimated${person.confidence===null?"":` · ${Math.round(person.confidence*100)}%`}${person.t!==null && Number.isFinite(person.t)?` · ${elapsed(Math.max(0,this.now-person.t))} ago`:""}</span></span></div>`;
       })}</div>
-      ${!people.length?html`<p class="muted">No current person estimate</p>`:nothing}
+      ${!people.length?html`<p class="muted">No person estimate</p>`:nothing}
       ${detail?.devices.length?html`<p class="eyebrow">Estimated devices</p><ul>${detail.devices.map(d=>html`<li>${d.name ?? d.entity}${d.confidence===null?"":` · ${Math.round(d.confidence*100)}%`}</li>`)}</ul>`:nothing}
       ${room.fixtures?.length?html`<p class="eyebrow">Placed devices</p><ul>${room.fixtures.map(f=>html`<li>${f.name || this.hass?.states[f.entity]?.attributes.friendly_name || f.entity} · ${this.hass?.states[f.entity]?.state ?? "unavailable"}</li>`)}</ul>`:nothing}
     </section>`;

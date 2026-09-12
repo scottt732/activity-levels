@@ -10,9 +10,12 @@ it("shows conditional idle timing, estimated people and held input without a fal
   expect(el.shadowRoot!.textContent).toContain("Idle within 30s");
   expect(el.shadowRoot!.textContent).toContain("Scott");
   expect(el.shadowRoot!.textContent).toContain("Estimated · 90%");
-  el.telemetry={now:1000,rooms:{room:{idle_by:null,people:[],devices:[]}}};await el.updateComplete;
+  el.telemetry={now:1000,rooms:{room:{idle_by:null,people:[{name:"Scott",entity:null,confidence:.9,t:100}],devices:[]}}};await el.updateComplete;
+  expect(el.shadowRoot!.textContent).toContain("Scott");
+  expect(el.shadowRoot!.textContent).toContain("15m ago");
   expect(el.shadowRoot!.textContent).toContain("Held by ongoing input");
   expect(el.shadowRoot!.textContent).not.toContain("Idle within");
   el.now=1011;await el.updateComplete;
   expect(el.shadowRoot!.textContent).toContain("Idle forecast unavailable");
+  expect(el.shadowRoot!.textContent).not.toContain("Scott");
 });
