@@ -1000,7 +1000,14 @@ uploaded automatically. Inspect identification hints before sharing them.
 
 The bundled community catalog starts with SCREEK 2A identification guidance, sourced from
 [its firmware](https://github.com/screekworkshop/screek-human-sensor/blob/main/2a/yaml/human-sensor-2a-stable-github.yaml).
-Its coverage remains unspecified until configured. To contribute a model, submit a PR
+Its coverage remains unspecified until configured. Bosch Blue Line Gen2 profiles include
+the non-pet ISC-BPR2-W12 and separate ISC-BPR2-WP12 pet-immunity ON/OFF choices.
+Choose the mode set on your physical detector; the editor cannot read or change it.
+These use Bosch's nominal 12 m range and 94° horizontal coverage. The vertical angle
+is illustrative; the overlay does not model individual PIR beams or pet exclusion.
+Set the installation height (Bosch recommends 2.2–2.75 m) and aim for each placement.
+Wired bridges may hide the detector's identity, requiring manual profile selection.
+To contribute a model, submit a PR
 adding an entry to `frontend/src/sensor-catalog.ts`: include a stable `community:` id,
 a source for measured/specification values, and conservative identification hints.
 Manufacturer/model/platform matches are literal (case-insensitive); `entity_name` is a
