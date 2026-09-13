@@ -97,7 +97,13 @@ export interface RoomOpening {
   position:[number,number,number]; yaw:number; width:number; height:number;
   hinge:"left"|"right"; swing:"in"|"out"; open:boolean; entity?:string; entities?:string[];
 }
+export interface ArchitecturalObject {
+ id:string;name:string;kind:"stairs"|"chimney"|"column"|"shaft"|"solid";
+ position:[number,number,number];yaw:number;width:number;run:number;height:number;
+ steps:number;landing_bottom:number;landing_top:number;under_room?:string;to_floor?:string;
+}
 export interface Group {
+  architecture?:ArchitecturalObject[];
   openings?:RoomOpening[];
   fixtures?: RoomFixture[];
   bounds?: Bounds;

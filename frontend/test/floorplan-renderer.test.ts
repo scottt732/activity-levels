@@ -276,3 +276,41 @@ it("renders window dimensions and contact state without a sensor beam",()=>{
   renderer.setActivity(null,1000,"",viewerOptions(),{},undefined,{"binary_sensor.window":{entity_id:"binary_sensor.window",state:"on",attributes:{},last_changed:""}});
   expect(window.material.color.getHexString()).toBe("ff3535");renderer.dispose();
 });
+
+it("cuts a shared open wall from both room volumes",()=>{
+ const opening={id:"shared",name:"",kind:"open_wall" as const,position:[4,2,0] as [number,number,number],yaw:90,width:4,height:3,hinge:"left" as const,swing:"in" as const,open:true};
+ for(const footprint of [[[0,0],[4,0],[4,4],[0,4]],[[4,0],[8,0],[8,4],[4,4]]] as [number,number][][]){
+  const geometry=volumeGeometry({...part(),footprint,low:0,high:3},new Vector3(),[opening]);
+  const p=geometry.getAttribute("position"),n=geometry.getAttribute("normal");
+  for(let i=0;i<p.count;i+=3){
+   const wall=Math.abs(n.getY(i))<.01;
+   const shared=[0,1,2].every(j=>Math.abs(p.getX(i+j)-4)<.001);
+   expect(wall && shared).toBe(false);
+  }
+  geometry.dispose();
+ }
+});
+
+it("opens stairwells through the upper cap while retaining the lower floor",()=>{
+ const stairs={id:"stairs",name:"Stairs",kind:"stairs" as const,position:[1,1,0] as [number,number,number],yaw:0,width:1,run:2,height:3,steps:14,landing_bottom:0,landing_top:0};
+ const geometry=volumeGeometry({...part(),footprint:[[0,0],[4,0],[4,4],[0,4]],low:0,high:3},new Vector3(),[],undefined,[stairs]);
+ const p=geometry.getAttribute("position");let floor=0,ceiling=0;
+ for(let i=0;i<p.count;i+=3){
+  if(![1,2].every(j=>Math.abs(p.getY(i+j)-p.getY(i))<1e-5))continue;
+  const a=new Vector3().fromBufferAttribute(p,i),b=new Vector3().fromBufferAttribute(p,i+1),c=new Vector3().fromBufferAttribute(p,i+2);
+  const area=b.sub(a).cross(c.sub(a)).length()/2;
+  if(Math.abs(p.getY(i))<1e-5)floor+=area;else ceiling+=area;
+ }
+ expect(floor).toBeCloseTo(16);expect(ceiling).toBeCloseTo(14);
+ geometry.dispose();
+});
+
+it("renders stair treads and tall solids and releases them on rebuild",()=>{
+ const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn());
+ const base={id:"stairs",name:"Stairs",kind:"stairs" as const,position:[4,5,11.8] as [number,number,number],yaw:0,width:1,run:3,height:3,steps:12,landing_bottom:.5,landing_top:.5};
+ renderer.setParts([{...part(),architecture:[base,{...base,id:"chimney",kind:"chimney",height:9}]}]);
+ const scene=gpu.render.mock.calls.at(-1)![0] as Scene;
+ expect(scene.children.filter(o=>o.name==="stair-step")).toHaveLength(14);
+ const solid=scene.getObjectByName("architectural-solid") as Mesh;
+ const dispose=vi.spyOn(solid.geometry,"dispose");renderer.setParts([part()]);expect(dispose).toHaveBeenCalledOnce();renderer.dispose();
+});

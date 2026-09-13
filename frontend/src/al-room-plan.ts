@@ -2,8 +2,10 @@ import { LitElement, css, html, svg, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { Group, HomeAssistant, RoomOpening, RoomFixture } from "./types";
+import {formatLengthInput} from "./measurement-units";
+import type {LengthUnit} from "./measurement-units";
 import { footprint } from "./property-layout";
-import {openingIsOpen,openingSwing,openingFitsRoom,openingState} from "./room-openings";
+import {resizeOpening,openingIsOpen,openingSwing,openingFitsRoom,openingState} from "./room-openings";
 import {coverageFootprint} from "./sensor-coverage";
 import { fixtureAppearance, insideRoom, snapWindow, windowFitsRoom } from "./room-fixtures";
 
@@ -28,6 +30,8 @@ export class AlRoomPlan extends LitElement {
   @property({type:String}) mode:"place"|"aim"="place";
   @property({type:Boolean}) disabled=false;
   @property({type:Boolean}) minimal=false;
+  @property({type:String}) unit:LengthUnit="m";
+  private resizeSide?:-1|1;
   @state() private aimingHandle=false;
   @state() private error="";
   private drag?:number;
@@ -45,6 +49,7 @@ export class AlRoomPlan extends LitElement {
     if(this.disabled || (!this.fixture?.entity && !this.opening) || !this.group)return;
     const point=this.point(event);if(!point)return;
     this.error="";
+    if(this.opening && this.resizeSide){this.emit("al-opening-resize",resizeOpening(this.opening,this.resizeSide,point));return;}
     if(this.opening){this.emit("al-opening-position",[point[0],point[1],this.opening.position[2]]);return;}
     if(!this.fixture)return;
     if((this.aimingHandle || this.mode==="aim") && this.fixture.kind!=="window" && !this.movingMarker) {
@@ -73,8 +78,8 @@ export class AlRoomPlan extends LitElement {
       @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;this.movingMarker=false;this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);this.place(e);}}
       @click=${(e:MouseEvent)=>{if(this.suppressClick){this.suppressClick=false;return;}this.place(e);}}
       @pointermove=${(e:PointerEvent)=>{if(this.drag===e.pointerId){this.dragged=true;this.place(e);}}}
-      @pointerup=${()=>{this.suppressClick=this.dragged || this.aimingHandle;this.aimingHandle=false;this.drag=undefined;this.dragged=false;this.movingMarker=false;}}
-      @pointercancel=${()=>{this.aimingHandle=false;this.drag=undefined;this.dragged=false;this.movingMarker=false;}}>
+      @pointerup=${()=>{this.suppressClick=this.dragged || this.aimingHandle || !!this.resizeSide;this.resizeSide=undefined;this.aimingHandle=false;this.drag=undefined;this.dragged=false;this.movingMarker=false;}}
+      @pointercancel=${()=>{this.aimingHandle=false;this.resizeSide=undefined;this.drag=undefined;this.dragged=false;this.movingMarker=false;}}>
       ${this.neighbors.filter(g=>g.id!==group.id && g.bounds).map(g=>svg`<polygon fill="#25374444" stroke="#607584" stroke-width="1" vector-effect="non-scaling-stroke" points=${footprint(g).map(([x,y])=>`${x},${-y}`).join(" ")}/><text fill="#94acb7" text-anchor="middle" font-size=${radius*1.8} x=${(g.bounds![0][0]+g.bounds![1][0])/2} y=${-(g.bounds![0][1]+g.bounds![1][1])/2}>${g.name || g.id}</text>`)}
       <polygon class="outline" points=${points.map(([x,y])=>`${x},${-y}`).join(" ")} />
       ${coverage}
@@ -99,6 +104,7 @@ export class AlRoomPlan extends LitElement {
           @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-fixture-select",item.entity);}}}><title>${item.name || item.entity}</title></circle>
         ${item.entity===f?.entity && item.kind!=="window"?svg`<line class="aim" x1=${item.position[0]} y1=${-item.position[1]} x2=${item.position[0]+radius*5*Math.cos(item.yaw*Math.PI/180)} y2=${-item.position[1]-radius*5*Math.sin(item.yaw*Math.PI/180)}/>`:nothing}
       </g>`)}
+      ${this.opening?svg`<g>${([-1,1] as const).map(side=>svg`<circle class="marker selected" cx=${this.opening!.position[0]+side*this.opening!.width/2*Math.cos(this.opening!.yaw*Math.PI/180)} cy=${-this.opening!.position[1]-side*this.opening!.width/2*Math.sin(this.opening!.yaw*Math.PI/180)} r=${radius} aria-label=${side<0?"Resize opening start":"Resize opening end"} @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.resizeSide=side;this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}} @click=${(e:Event)=>e.stopPropagation()}/>`)}<text x=${this.opening.position[0]} y=${-this.opening.position[1]-radius*3} fill="#d8edf2" font-size=${radius*2} text-anchor="middle">${formatLengthInput(this.opening.width,this.unit)}</text></g>`:nothing}
       ${f?.entity && !this.opening && ["motion","occupancy"].includes(f.kind)?svg`<circle class="marker selected" role="button" tabindex=${this.disabled?-1:0} aria-label="Aim sensor" cx=${f.position[0]+radius*5*Math.cos(f.yaw*Math.PI/180)} cy=${-f.position[1]-radius*5*Math.sin(f.yaw*Math.PI/180)} r=${radius*.75}
         @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.aimingHandle=true;this.movingMarker=false;this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}}
         @click=${(e:Event)=>e.stopPropagation()}

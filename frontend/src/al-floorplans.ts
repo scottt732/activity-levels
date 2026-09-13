@@ -4,6 +4,7 @@ import "./al-floorplan-viewer";
 import "./al-floorplan-import";
 import "./al-property-layout";
 import "./al-room-device-editor";
+import "./al-architecture-editor";
 import { walkGroups } from "./model";
 import type { PropertyValues } from "lit";
 import { floorplanSource } from "./floorplan-store";
@@ -20,7 +21,7 @@ export class AlFloorplans extends LitElement {
     :host(:fullscreen) { height:100dvh; }
     .fullscreen { position:absolute; right:54px; top:12px; z-index:8; height:32px; }
     .scene { position:absolute; inset:0; } .scene.shifted { left:400px; }
-    al-floorplan-viewer, al-room-device-editor { display:block; height:100%; }
+    al-floorplan-viewer, al-room-device-editor, al-architecture-editor { display:block; height:100%; }
     [hidden] { display:none !important; }
     .rail { position:absolute; left:10px; top:12px; z-index:8; display:flex; flex-direction:column; gap:6px; padding:6px; border:1px solid #426477; background:#10232ee8; border-radius:8px; }
     button { font:inherit; color:inherit; background:#152d3bdd; border:1px solid #36576b; border-radius:4px; padding:5px 8px; cursor:pointer; }
@@ -43,7 +44,7 @@ export class AlFloorplans extends LitElement {
   @property({type:Boolean}) dirty=false;
   @property({type:Boolean}) blocked=false;
   @property({type:String}) status="";
-  @state() private page:"live"|"openings"|"sensors"|"lights"|"property"|"import"|"settings"="live";
+  @state() private page:"live"|"openings"|"sensors"|"lights"|"property"|"import"|"settings"|"architecture"="live";
   @state() private editRoom="";
   @state() private telemetry?: FloorplanTelemetry;
   @state() private lights: Record<string,string[]> = {};
@@ -79,14 +80,14 @@ export class AlFloorplans extends LitElement {
   }
   private navigate(page:typeof this.page):void {
     this.page=page;
-    if (["openings","sensors","lights"].includes(page) && this.config) {
+    if (["openings","sensors","lights","architecture"].includes(page) && this.config) {
       const rooms=walkGroups(this.config).filter(e=>e.group.bounds && !["property","structure","floor"].includes(e.group.kind));
       if (!rooms.some(e=>e.group.id===this.editRoom)) this.editRoom=rooms[0]?.group.id ?? "";
-      if (!this.editRoom) this.page="import";
+      if (!this.editRoom && page!=="architecture") this.page="import";
     }
   }
   private action(name:string):void {
-    const editor=this.renderRoot.querySelector("al-room-device-editor") as import("./al-room-device-editor").AlRoomDeviceEditor|null;
+    const editor=this.renderRoot.querySelector("al-room-device-editor,al-architecture-editor") as import("./al-room-device-editor").AlRoomDeviceEditor|null;
     if(name==="al-save-config" && editor && !editor.flushDraft())return;
     if(name==="al-discard-config")editor?.resetDraft();
     this.dispatchEvent(new CustomEvent(name,{bubbles:true,composed:true}));}
@@ -94,7 +95,7 @@ export class AlFloorplans extends LitElement {
     if (!this.config) return nothing;
     const editing=["openings","sensors","lights"].includes(this.page),panel=this.page==="property" || this.page==="import";
     return html`
-      <div class=${`scene${panel?" shifted":""}`} ?hidden=${editing}>
+      <div class=${`scene${panel?" shifted":""}`} ?hidden=${editing || this.page==="architecture"}>
         <al-floorplan-viewer workspace .settingsOpen=${this.page==="settings"} .hideHud=${panel || this.page==="settings"}
           @al-room-selected=${(e:CustomEvent<string>)=>{this.editRoom=e.detail;}}
           @al-edit-room=${(e:CustomEvent<string>)=>{this.editRoom=e.detail;this.navigate("openings");}}
@@ -102,10 +103,11 @@ export class AlFloorplans extends LitElement {
           .telemetry=${this.error ? undefined : this.telemetry} .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
       </div>
       ${editing?html`<al-room-device-editor @al-editor-room=${(e:CustomEvent<string>)=>{this.editRoom=e.detail;}} workspace .section=${this.page} .room=${this.editRoom} .lights=${this.lights} .live=${this.live} .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor>`:nothing}
+      ${this.page==="architecture"?html`<al-architecture-editor .room=${this.editRoom} .config=${this.config} .hass=${this.hass} .live=${this.live} .disabled=${this.disabled}></al-architecture-editor>`:nothing}
       <button class="fullscreen" aria-label="Toggle fullscreen" title="Fullscreen" @click=${async()=>{try{if(this.matches(":fullscreen"))await document.exitFullscreen();else await this.requestFullscreen();}catch{this.preferenceError="Fullscreen is unavailable in this browser.";}}}>⛶</button>
       <nav class="rail" aria-label="Floorplan tools">
         <button aria-label="Exit floorplan" title="Back to Activity Levels" @click=${()=>this.action("al-exit-floorplan")}>←</button>
-        ${([ ["live","◈","Live telemetry"],["openings","▣","Doors & windows"],["sensors","◎","Motion & occupancy"],["lights","☼","Lights"],["property","⌖","Property layout"],["import","⇧","Import floorplan"],["settings","⚙","Viewer settings"] ] as const).map(([page,icon,label])=>html`<button aria-label=${label} title=${label} aria-pressed=${this.page===page} @click=${()=>this.navigate(page)}>${icon}</button>`)}
+        ${([ ["live","◈","Live telemetry"],["openings","▣","Doors & windows"],["sensors","◎","Motion & occupancy"],["lights","☼","Lights"],["architecture","▱","Architecture"],["property","⌖","Property layout"],["import","⇧","Import floorplan"],["settings","⚙","Viewer settings"] ] as const).map(([page,icon,label])=>html`<button aria-label=${label} title=${label} aria-pressed=${this.page===page} @click=${()=>this.navigate(page)}>${icon}</button>`)}
       </nav>
       <div class="save"><button ?disabled=${!this.dirty || this.disabled} @click=${()=>this.action("al-discard-config")}>Discard</button><button ?disabled=${!this.dirty || this.disabled || this.blocked} @click=${()=>this.action("al-save-config")}>${this.disabled?"Saving…":this.dirty?"Save changes":"Saved"}</button></div>
       <section class="page" aria-label="Property layout" ?hidden=${this.page!=="property"}><header>Property layout<button aria-label="Close property layout" @click=${()=>this.navigate("live")}>×</button></header><al-property-layout .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-property-layout></section>

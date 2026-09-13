@@ -6,13 +6,14 @@ import { alChange } from "./events";
 import { walkGroups } from "./model";
 import { newFixture, saveFixture, snapWindow, initialFixturePosition, insideRoom, readFixture } from "./room-fixtures";
 import { applyProfile, matchesProfile, parseProfiles, roomCandidates } from "./sensor-profiles";
-import {newOpening,saveOpening,snapOpening,readOpening,openingEntities,openingState} from "./room-openings";
+import {openingWall,openingSwing,setOpeningOffset,newOpening,saveOpening,snapOpening,readOpening,openingEntities,openingState} from "./room-openings";
 import {defaultLengthUnit,formatLengthInput,parseLength} from "./measurement-units";
 import type {LengthUnit} from "./measurement-units";
 import "./al-orientation-control";
 import { SENSOR_CATALOG } from "./sensor-catalog";
 import type { Config, HomeAssistant, LiveState, RoomDevice, RoomOpening, RoomFixture, SensorProfile } from "./types";
 import "./al-room-plan";
+import "./al-wall-elevation";
 import "./al-floorplan-viewer";
 
 @customElement("al-room-device-editor")
@@ -40,7 +41,7 @@ export class AlRoomDeviceEditor extends LitElement {
     :host([workspace]) .workspace { display:grid; grid-template-columns:58% 42%; border:0; border-radius:0; }
     :host([workspace]) .scene-pane { height:100%; }
     :host([workspace]) .plan-pane { height:100%; box-sizing:border-box; padding:66px 12px 12px; --room-plan-height:calc(100% - 1px); }
-    :host([workspace]) .plan-pane > div, :host([workspace]) al-room-plan { height:100%; }
+    :host([workspace]) .plan-pane > div, :host([workspace]) al-room-plan, :host([workspace]) al-wall-elevation { height:100%; }
     :host([workspace]) .plan-pane h3 { font-size:12px; text-transform:uppercase; letter-spacing:.15em; margin:0 0 8px; }
     :host([workspace]) .editor-controls { position:absolute; top:60px; left:62px; width:260px; max-width:none; max-height:calc(100% - 78px); margin:0; padding:10px; border-radius:8px; background:#102633f2; }
     :host([workspace]) button, :host([workspace]) select, :host([workspace]) input, :host([workspace]) textarea { padding:4px 6px; font-size:12px; border-radius:3px; background:#163140; border-color:#355365; }
@@ -66,6 +67,7 @@ export class AlRoomDeviceEditor extends LitElement {
   `;
   @property({type:Boolean,reflect:true}) workspace=false;
   @property({type:String}) section:"all"|"openings"|"sensors"|"lights"="all";
+  @state() private wallView=false;
   @state() private aimSnap=0;
   @state() private information=false;
   @state() private adding=false;
@@ -155,7 +157,7 @@ export class AlRoomDeviceEditor extends LitElement {
     finally {if(sequence===this.sequence)this.loading=false;}
   }
   private reset():void {
-    this.information=false;this.adding=false;this.profilesPage=false;this.legacyWindow=undefined;this.addKind="";
+    this.wallView=false;this.information=false;this.adding=false;this.profilesPage=false;this.legacyWindow=undefined;this.addKind="";
     this.fixture={...newFixture(),position:this.group?initialFixturePosition(this.group):[0,0,0]};
     this.opening=undefined;this.originalOpening=undefined;this.original=undefined;this.error="";this.notice="";this.mode="place";this.profile="";this.profileName="";this.search="";
   }
@@ -285,8 +287,10 @@ export class AlRoomDeviceEditor extends LitElement {
     catch(error){this.error=(error as Error).message;}
   }
   private openingControl() {
-    const o=this.opening;if(!o)return nothing;
+    const o=this.opening;if(!o)return nothing;const wall=this.group?openingWall(this.group,o):undefined;
     return html`<h3>${o.kind==="open_wall"?"Open wall":o.kind==="window"?"Window":"Door"}</h3>
+      ${wall?html`<label>Jamb from wall start (${this.unit})${this.lengthInput("Opening from wall start",(o.position[0]-wall.a[0])*wall.dx+(o.position[1]-wall.a[1])*wall.dy-o.width/2,v=>this.patchOpening(setOpeningOffset(this.group!,o,v)),0)}</label>${o.kind.includes("door")?html`<label>Hinge from wall start (${this.unit})${this.lengthInput("Hinge from wall start",(openingSwing(this.group!,o).hinge[0]-wall.a[0])*wall.dx+(openingSwing(this.group!,o).hinge[1]-wall.a[1])*wall.dy,v=>this.patchOpening(setOpeningOffset(this.group!,o,v,true)),0)}</label>`:nothing}${o.kind==="open_wall"?html`<button type="button" @click=${()=>this.patchOpening({width:wall.length,height:this.group!.bounds![1][2]-this.group!.bounds![0][2],position:[wall.a[0]+wall.dx*wall.length/2,wall.a[1]+wall.dy*wall.length/2,this.group!.bounds![0][2]]})}>Open entire wall</button>`:nothing}`:nothing}
+      <button type="button" @click=${()=>{this.wallView=!this.wallView;}}>${this.wallView?"Floor plan":"Wall elevation"}</button>
       <label>Name<input aria-label="Opening name" .value=${o.name} @input=${(e:Event)=>this.patchOpening({name:(e.target as HTMLInputElement).value})}></label>
       <label>Opening type<select aria-label="Opening type" .value=${o.kind} @change=${(e:Event)=>this.patchOpening({kind:(e.target as HTMLSelectElement).value as RoomOpening["kind"]})}>${["interior_door","exterior_door","open_wall","window"].map(kind=>html`<option value=${kind} .selected=${o.kind===kind}>${kind.replaceAll("_"," ")}</option>`)}</select></label>
       ${(["width","height"] as const).map(key=>html`<label>${key} (${this.unit})${this.lengthInput(`Opening ${key}`,o[key],v=>this.patchOpening({[key]:v}),.1,20)}</label>`)}
@@ -321,7 +325,8 @@ export class AlRoomDeviceEditor extends LitElement {
         <div class="plan-pane"><h3 ?hidden=${this.workspace}>Top-down placement</h3><div>
         <div ?hidden=${this.workspace}><button type="button" aria-pressed=${this.mode==="place"} @click=${()=>{this.mode="place";}}>Place / move</button>
           <button type="button" aria-pressed=${this.mode==="aim"} ?disabled=${!this.fixture.entity || (this.fixture.kind==="light" || this.fixture.kind==="window")} @click=${()=>{this.mode="aim";}}>Aim</button></div>
-        <al-room-plan .minimal=${this.workspace} .group=${previewGroup} .neighbors=${contextGroups} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
+        ${this.wallView && this.opening?html`<al-wall-elevation .group=${previewGroup} .opening=${this.opening} .unit=${this.unit} .disabled=${this.disabled} @al-opening-resize=${(e:CustomEvent<Partial<RoomOpening>>)=>this.patchOpening(e.detail)}></al-wall-elevation>`:nothing}
+        <al-room-plan ?hidden=${this.wallView && !!this.opening} .unit=${this.unit} @al-opening-resize=${(e:CustomEvent<Partial<RoomOpening>>)=>this.patchOpening(e.detail)} .minimal=${this.workspace} .group=${previewGroup} .neighbors=${contextGroups} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
           @al-fixture-position=${(e:CustomEvent<[number,number,number]>)=>{e.stopPropagation();this.patch(this.fixture.kind==="window" && this.group?snapWindow(this.group,e.detail,this.fixture.width):{position:e.detail});}}
           @al-fixture-aim=${(e:CustomEvent<number>)=>this.patch({yaw:this.aimSnap?Math.round(e.detail/this.aimSnap)*this.aimSnap:Number(e.detail.toFixed(1))})}
           @al-opening-position=${(e:CustomEvent<[number,number,number]>)=>{if(this.opening && this.group)this.patchOpening(snapOpening(this.group,e.detail,this.opening.width));}}

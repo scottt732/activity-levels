@@ -640,7 +640,16 @@ def ws_floorplan_dashboard(
             {
                 **{
                     key: node[key]
-                    for key in ("id", "name", "kind", "bounds", "points", "fixtures")
+                    for key in (
+                        "id",
+                        "name",
+                        "kind",
+                        "bounds",
+                        "points",
+                        "fixtures",
+                        "openings",
+                        "architecture",
+                    )
                     if key in node
                 },
                 "children": geometry(node.get("children", [])),

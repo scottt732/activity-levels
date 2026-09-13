@@ -97,3 +97,19 @@ export function openingState(opening:RoomOpening,states:Record<string,{state:str
   if(entities.some(e=>states[e]?.state==="on"))return "on";
   return entities.every(e=>states[e]?.state==="off")?"off":"unknown";
 }
+
+export function openingWall(room:Room,opening:RoomOpening) {
+ return alignedWall(room,opening) ?? walls(room).find(w=>Math.abs((opening.position[0]-w.a[0])*w.dy-(opening.position[1]-w.a[1])*w.dx)<1e-4);
+}
+export function resizeOpening(opening:RoomOpening,side:-1|1,point:XY):Partial<RoomOpening> {
+ const a=opening.yaw*Math.PI/180,dx=Math.cos(a),dy=Math.sin(a);
+ const fixed:XY=[opening.position[0]-side*dx*opening.width/2,opening.position[1]-side*dy*opening.width/2];
+ const width=Math.max(.1,side*((point[0]-fixed[0])*dx+(point[1]-fixed[1])*dy));
+ return {width,position:[fixed[0]+side*dx*width/2,fixed[1]+side*dy*width/2,opening.position[2]]};
+}
+export function setOpeningOffset(room:Room,opening:RoomOpening,distance:number,hinge=false):Partial<RoomOpening> {
+ const w=openingWall(room,opening);if(!w || !Number.isFinite(distance))return {};
+ const current=hinge?openingSwing(room,opening).hinge:[opening.position[0]-w.dx*opening.width/2,opening.position[1]-w.dy*opening.width/2];
+ const old=(current[0]!-w.a[0])*w.dx+(current[1]!-w.a[1])*w.dy;
+ return {position:[opening.position[0]+w.dx*(distance-old),opening.position[1]+w.dy*(distance-old),opening.position[2]]};
+}
