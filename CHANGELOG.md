@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/scottt732/activity-levels/compare/v0.25.2...v0.26.0) (2026-09-13)
+
+
+### Added
+
+* **panel:** add wall snapping and ceiling fixture layouts ([#73](https://github.com/scottt732/activity-levels/issues/73)) ([09eba50](https://github.com/scottt732/activity-levels/commit/09eba509cb6e511ce0b048fc3f307444c1bc7776))
+
 ## [0.25.2](https://github.com/scottt732/activity-levels/compare/v0.25.1...v0.25.2) (2026-09-13)
 
 
