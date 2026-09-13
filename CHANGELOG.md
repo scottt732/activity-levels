@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/scottt732/activity-levels/compare/v0.24.0...v0.25.0) (2026-09-13)
+
+
+### Added
+
+* **panel:** architectural floorplan editor, stairs, and measured openings ([#67](https://github.com/scottt732/activity-levels/issues/67)) ([a9dc89b](https://github.com/scottt732/activity-levels/commit/a9dc89b22ca6a75d802958d2cc8180c1a04cf6a6))
+
 ## [0.24.0](https://github.com/scottt732/activity-levels/compare/v0.23.0...v0.24.0) (2026-09-13)
 
 
