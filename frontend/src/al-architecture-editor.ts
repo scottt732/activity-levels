@@ -388,6 +388,8 @@ export class AlArchitectureEditor extends LitElement {
       target.fixtures=[...new Map([...(target.fixtures??[]),...(space.fixtures??[])].map(o=>[o.entity,o])).values()];
       target.architecture=[...new Map([...(target.architecture??[]),...(space.architecture??[])].map(o=>[o.id,o])).values()];
       entry.parent!.children=entry.parent!.children.filter(g=>g.id!==space.id);
+      for(const {group} of walkGroups(next))for(const object of group.architecture??[])
+        if(object.under_room===space.id)object.under_room=target.id;
     } else {
       delete space.geometry_only;space.area_id=this.association.slice(5);target=space;
     }

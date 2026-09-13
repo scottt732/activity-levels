@@ -74,12 +74,12 @@ it('selects chimney floors even when floor bounds are inferred from rooms',async
 import {expandSpaces,collapseSpaces} from '../src/floorplan-spaces';
 it('associates a drawn space with an existing activity group without duplicating it or losing inputs',async()=>{
  const el=new AlArchitectureEditor(),config=roomsConfig(),target={...newGroup('bathroom','area'),area_id:'ha_bath',name:'Bathroom',gain:2};
- config.groups=[{...newGroup('floor','floor'),children:[target]}];config.spaces=[{id:'space',name:'Bathroom outline',parent_id:'floor',bounds:[[1,2,0],[3,4,3]]}];
+ config.groups=[{...newGroup('floor','floor'),architecture:[{id:'stairs',name:'Stairs',kind:'stairs',position:[1,2,0],width:1,run:3,height:3,yaw:0,steps:14,landing_bottom:0,landing_top:0,under_room:'space'}],children:[target]}];config.spaces=[{id:'space',name:'Bathroom outline',parent_id:'floor',bounds:[[1,2,0],[3,4,3]]}];
  el.config=expandSpaces(config);el.room='space';document.body.append(el);await el.updateComplete;
  const association=el.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Activity association"]')!;association.value='group:bathroom';association.dispatchEvent(new Event('change'));await el.updateComplete;
  [...el.shadowRoot!.querySelectorAll('button')].find(b=>b.textContent?.trim()==='Associate space')!.click();await el.updateComplete;
  const saved=collapseSpaces(el.config!),groups=walkGroups(saved);expect(groups).toHaveLength(2);expect(saved.spaces).toBeUndefined();
- expect(groups[1]!.group).toMatchObject({id:'bathroom',area_id:'ha_bath',gain:2,bounds:[[1,2,0],[3,4,3]]});expect(el.room).toBe('bathroom');
+ expect(groups[1]!.group).toMatchObject({id:'bathroom',area_id:'ha_bath',gain:2,bounds:[[1,2,0],[3,4,3]]});expect(el.room).toBe('bathroom');expect(saved.groups[0]!.architecture![0]!.under_room).toBe('bathroom');
 });
 it('converts a space to a newly associated Home Assistant area only when explicitly chosen',async()=>{
  const el=new AlArchitectureEditor(),config=roomsConfig();config.groups=[newGroup('floor','floor')];config.spaces=[{id:'closet',name:'Closet',parent_id:'floor',bounds:[[0,0,0],[1,1,3]]}];el.config=expandSpaces(config);el.room='closet';

@@ -9532,7 +9532,11 @@ var Q = class extends C {
 			this.error = "Choose an existing activity group.";
 			return;
 		}
-		r ? (r.bounds = n.bounds, r.points = n.points, r.openings = [...new Map([...r.openings ?? [], ...n.openings ?? []].map((e) => [e.id, e])).values()], r.fixtures = [...new Map([...r.fixtures ?? [], ...n.fixtures ?? []].map((e) => [e.entity, e])).values()], r.architecture = [...new Map([...r.architecture ?? [], ...n.architecture ?? []].map((e) => [e.id, e])).values()], t.parent.children = t.parent.children.filter((e) => e.id !== n.id)) : (delete n.geometry_only, n.area_id = this.association.slice(5), r = n), this.selectedRoom(r.id), this.commit(e);
+		if (r) {
+			r.bounds = n.bounds, r.points = n.points, r.openings = [...new Map([...r.openings ?? [], ...n.openings ?? []].map((e) => [e.id, e])).values()], r.fixtures = [...new Map([...r.fixtures ?? [], ...n.fixtures ?? []].map((e) => [e.entity, e])).values()], r.architecture = [...new Map([...r.architecture ?? [], ...n.architecture ?? []].map((e) => [e.id, e])).values()], t.parent.children = t.parent.children.filter((e) => e.id !== n.id);
+			for (let { group: t } of w(e)) for (let e of t.architecture ?? []) e.under_room === n.id && (e.under_room = r.id);
+		} else delete n.geometry_only, n.area_id = this.association.slice(5), r = n;
+		this.selectedRoom(r.id), this.commit(e);
 	}
 	underRoom() {
 		if (!this.config || !this.object) return;
