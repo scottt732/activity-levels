@@ -125,7 +125,7 @@ def test_a_parked_phone_is_explained_away_and_the_watch_wins(topo) -> None:
         obs = PersonObservation(
             t=t,
             devices={
-                "phone": frame("dining_room", jitter=False, still_room_empty=True),
+                "phone": frame("dining_room", jitter=False, charging=True),
                 "watch": frame("kitchen", jitter=True),
             },
             activity={
@@ -159,6 +159,60 @@ def test_a_charging_phone_is_probably_parked(topo) -> None:
     # ... but its readings still say where it is, and with nothing else to go on the
     # person is still most likely beside it
     assert out.room == "kitchen"
+
+
+def test_unrelated_motion_cannot_relocate_a_device_or_its_owner(topo) -> None:
+    quiet_device, busy_device = device(topo), device(topo)
+    quiet = person(topo, {"phone": quiet_device})
+    busy = person(topo, {"phone": busy_device})
+    activity = {room: RoomActivity(level=float(room == "bedroom"), slope=0.0) for room in ROOMS}
+    for t in range(120):
+        for owner, tracked, evidence in ((quiet, quiet_device, {}), (busy, busy_device, activity)):
+            owner.update(
+                PersonObservation(
+                    t=float(t), devices={"phone": frame("kitchen")}, activity=evidence
+                )
+            )
+            tracked.update(Observation(t=float(t), distances=near("kitchen"), activity=evidence))
+    assert np.allclose(quiet_device.belief, busy_device.belief)
+    assert np.allclose(quiet.belief, busy.belief)
+
+
+def test_parked_location_fades_and_carried_evidence_recovers(topo) -> None:
+    phone = device(topo)
+    est = person(topo, {"phone": phone})
+    for t in range(0, 1800, 10):
+        est.update(
+            PersonObservation(t=float(t), devices={"phone": frame("kitchen", charging=True)})
+        )
+        phone.update(Observation(t=float(t), distances=near("kitchen")))
+    assert est.outputs().confidence < 0.6
+    assert phone.outputs().confidence > 0.9
+    for t in range(1800, 3600, 10):
+        est.update(
+            PersonObservation(
+                t=float(t), devices={"phone": frame("kitchen", moving=True, jitter=True)}
+            )
+        )
+        phone.update(Observation(t=float(t), distances=near("kitchen")))
+    assert est.outputs().room == "kitchen"
+    assert est.outputs().confidence > 0.9
+
+
+def test_all_parked_bound_preserves_flags_and_user_corrections(topo) -> None:
+    est = person(topo, {"phone": device(topo), "watch": device(topo)})
+    est.belief[:] = 0.0
+    est.belief[est.states.index("kitchen"), 0] = 1.0
+    before = est.carried()
+    est._bound_parked_confidence()
+    bounded = est.belief.copy()
+    assert est.belief.sum() == pytest.approx(1.0)
+    assert est.carried() == before
+    assert est.outputs().confidence < 0.6
+    est._bound_parked_confidence()
+    assert np.allclose(est.belief, bounded)
+    est.locate("bedroom", 0.0)
+    assert est.outputs().confidence == 1.0
 
 
 def test_a_device_missing_from_a_frame_is_no_evidence_either_way(topo) -> None:

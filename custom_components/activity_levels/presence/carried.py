@@ -20,8 +20,8 @@ class Signals:
     ``charging``: the battery is charging or full -- a phone on a cable is on a table.
     ``moving``: the companion app reports walking (or driving, cycling), or the step
     count rose lately -- a device that moves is being carried.
-    ``still_room_empty``: the device's own room reads an activity level of zero and the
-    device has not moved -- nobody is where the device is, so nobody has it.
+    ``still_room_empty``: legacy input, no longer supplied by the coordinator because
+    a quiet room cannot establish whether a device is carried.
     ``jitter``: its closest distance wandered lately -- a device in a pocket does; one on
     a shelf does not.
     """

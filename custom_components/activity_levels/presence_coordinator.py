@@ -913,16 +913,12 @@ class PresenceCoordinator:
         if len(window) >= 2:
             jitter = (max(window) - min(window)) > self.settings["scale"] / 3.0
 
-        still_room_empty: bool | None = None
-        if moving is not True and track.outputs is not None and track.outputs.room != AWAY:
-            level = activity.get(track.outputs.room)
-            if level is not None:
-                still_room_empty = level.level <= 0.0
-
         return Signals(
             charging=None if charging is None else charging in CHARGING_STATES,
             moving=moving,
-            still_room_empty=still_room_empty,
+            # A quiet room does not mean its occupant left their device behind.
+            # Keep the legacy signal unset; charging and device motion have identity.
+            still_room_empty=None,
             jitter=jitter,
         )
 
