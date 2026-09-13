@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.1](https://github.com/scottt732/activity-levels/compare/v0.25.0...v0.25.1) (2026-09-13)
+
+
+### Fixed
+
+* **panel:** prevent oversized circles when focusing room corners ([#69](https://github.com/scottt732/activity-levels/issues/69)) ([65b5a21](https://github.com/scottt732/activity-levels/commit/65b5a2103d73ab5d95ea09b7fd74a56a1deb61dd))
+
 ## [0.25.0](https://github.com/scottt732/activity-levels/compare/v0.24.0...v0.25.0) (2026-09-13)
 
 
