@@ -16,3 +16,15 @@ it("adds stairs, validates landings, and creates a named space below in the draf
  const closet=walkGroups(el.config!).find(e=>e.group.id===objects[0]!.under_room)!;
  expect(closet.group.name).toBe("Server closet");expect(closet.parent!.id).toBe("building");
 });
+
+it("uses a non-scaling corner focus highlight and preserves keyboard movement",async()=>{
+ const el=new AlArchitectureEditor(),config=roomsConfig();
+ config.groups=[{...newGroup("room","area"),bounds:[[0,0,0],[5,5,3]]}];el.config=config;el.room="room";
+ document.body.append(el);await el.updateComplete;
+ const corner=el.shadowRoot!.querySelector<SVGCircleElement>('circle[aria-label="Corner 1"]')!;
+ expect(corner.getAttribute("tabindex")).toBe("0");
+ const rule=AlArchitectureEditor.styles.cssText.match(/\.grip:focus\s*\{([^}]+)\}/)?.[1];
+ expect(rule).toMatch(/outline:\s*none/);expect(rule).toMatch(/stroke:\s*white/);expect(rule).toMatch(/vector-effect:\s*non-scaling-stroke/);
+ corner.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));await el.updateComplete;
+ expect(el.config!.groups[0]!.points![0]).toEqual([.01,0]);
+});
