@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/scottt732/activity-levels/compare/v0.27.0...v0.27.1) (2026-09-13)
+
+
+### Fixed
+
+* **presence:** keep shared motion out of owned location estimates ([#77](https://github.com/scottt732/activity-levels/issues/77)) ([609a41b](https://github.com/scottt732/activity-levels/commit/609a41bf4de3bbe5bec3f08aa042afecf32a8c0b))
+
 ## [0.27.0](https://github.com/scottt732/activity-levels/compare/v0.26.0...v0.27.0) (2026-09-13)
 
 
