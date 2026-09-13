@@ -100,6 +100,7 @@ export class FloorplanRenderer {
     private readonly fail: (message: string) => void,
     private readonly hover?: (id: string) => void,
     private readonly place?: (position: [number,number,number]) => void,
+    private readonly orientation?: (matrix:number[]) => void,
   ) {
     this.renderer = new WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -140,8 +141,10 @@ export class FloorplanRenderer {
   };
 
   private readonly draw = (): void => {
-    if (!this.disposed && !this.lost && document.visibilityState === "visible")
+    if (!this.disposed && !this.lost && document.visibilityState === "visible") {
       this.renderer.render(this.scene, this.camera);
+      this.orientation?.([...this.camera.matrixWorldInverse.elements]);
+    }
   };
 
   setParts(parts: ScenePart[], groundZ?: number, site?: SiteLayout, focusRoom?:string): void {

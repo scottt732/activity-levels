@@ -17,3 +17,14 @@ it("places inside the actual polygon, aims visually, and supports keyboard marke
   el.shadowRoot!.querySelector("circle")!.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter"}));expect(select).toHaveBeenCalledOnce();
   el.disabled=true;await el.updateComplete;canvas.dispatchEvent(new MouseEvent("click",{clientX:1,clientY:-1}));expect(aim).toHaveBeenCalledOnce();
 });
+
+
+it("aims with a dedicated handle without switching placement mode",async()=>{
+ const el=new AlRoomPlan();el.group={...newGroup("room","area"),bounds:[[0,0,0],[4,4,3]]};el.fixture={...newFixture("binary_sensor.motion"),position:[1,1,2]};el.minimal=true;
+ document.body.append(el);await el.updateComplete;
+ const aim=vi.fn();el.addEventListener("al-fixture-aim",aim);
+ el.shadowRoot!.querySelector('[aria-label="Aim sensor"]')!.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowLeft",shiftKey:true}));
+ expect(aim.mock.calls[0]![0].detail).toBe(15);
+ expect(el.shadowRoot!.querySelector("p")!.hidden).toBe(true);
+ expect(el.mode).toBe("place");
+});

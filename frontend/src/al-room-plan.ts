@@ -17,6 +17,7 @@ export class AlRoomPlan extends LitElement {
     .selected { fill:#ffcd69; } .marker:focus, .opening-marker:focus { stroke:white; stroke-width:2; vector-effect:non-scaling-stroke; outline:none; }
     .coverage { fill:#ffcd6929; stroke:#ffcd6988; vector-effect:non-scaling-stroke; }
     .aim { stroke:#ffcd69; stroke-width:2; vector-effect:non-scaling-stroke; }
+    [hidden] { display:none!important; }
     p { color:var(--secondary-text-color); font-size:13px; } .error { color:var(--error-color,#f77); }
   `;
   @property({attribute:false}) hass?:HomeAssistant;
@@ -26,6 +27,8 @@ export class AlRoomPlan extends LitElement {
   @property({attribute:false}) fixture?:RoomFixture;
   @property({type:String}) mode:"place"|"aim"="place";
   @property({type:Boolean}) disabled=false;
+  @property({type:Boolean}) minimal=false;
+  @state() private aimingHandle=false;
   @state() private error="";
   private drag?:number;
   private movingMarker=false;
@@ -44,7 +47,7 @@ export class AlRoomPlan extends LitElement {
     this.error="";
     if(this.opening){this.emit("al-opening-position",[point[0],point[1],this.opening.position[2]]);return;}
     if(!this.fixture)return;
-    if(this.mode==="aim" && this.fixture.kind!=="window" && !this.movingMarker) {
+    if((this.aimingHandle || this.mode==="aim") && this.fixture.kind!=="window" && !this.movingMarker) {
       const [x,y]=this.fixture.position;
       if(Math.hypot(point[0]-x,point[1]-y)>.001)this.emit("al-fixture-aim",Math.atan2(point[1]-y,point[0]-x)*180/Math.PI);
       return;
@@ -66,12 +69,12 @@ export class AlRoomPlan extends LitElement {
       const appearance=fixtureAppearance(f.kind,this.hass?.states[f.entity]?.state);
       coverage=svg`<polygon class="coverage" style=${`fill:${appearance.color};fill-opacity:${appearance.opacity};stroke:${appearance.color};stroke-dasharray:4 4`} points=${arc.map(([x,y])=>`${x},${-y}`).join(" ")} />`;
     }
-    return html`<svg viewBox=${`${b[0][0]-pad} ${-b[1][1]-pad} ${width+pad*2} ${height+pad*2}`} aria-label="Top-down room placement" role="group" class=${this.mode==="aim"?"aiming":""}
+    return html`<svg viewBox=${`${b[0][0]-pad} ${-b[1][1]-pad} ${width+pad*2} ${height+pad*2}`} aria-label="Top-down room placement" role="group" class=${this.aimingHandle || this.mode==="aim"?"aiming":""}
       @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;this.movingMarker=false;this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);this.place(e);}}
       @click=${(e:MouseEvent)=>{if(this.suppressClick){this.suppressClick=false;return;}this.place(e);}}
       @pointermove=${(e:PointerEvent)=>{if(this.drag===e.pointerId){this.dragged=true;this.place(e);}}}
-      @pointerup=${()=>{this.suppressClick=this.dragged;this.drag=undefined;this.dragged=false;this.movingMarker=false;}}
-      @pointercancel=${()=>{this.drag=undefined;this.dragged=false;this.movingMarker=false;}}>
+      @pointerup=${()=>{this.suppressClick=this.dragged || this.aimingHandle;this.aimingHandle=false;this.drag=undefined;this.dragged=false;this.movingMarker=false;}}
+      @pointercancel=${()=>{this.aimingHandle=false;this.drag=undefined;this.dragged=false;this.movingMarker=false;}}>
       ${this.neighbors.filter(g=>g.id!==group.id && g.bounds).map(g=>svg`<polygon fill="#25374444" stroke="#607584" stroke-width="1" vector-effect="non-scaling-stroke" points=${footprint(g).map(([x,y])=>`${x},${-y}`).join(" ")}/><text fill="#94acb7" text-anchor="middle" font-size=${radius*1.8} x=${(g.bounds![0][0]+g.bounds![1][0])/2} y=${-(g.bounds![0][1]+g.bounds![1][1])/2}>${g.name || g.id}</text>`)}
       <polygon class="outline" points=${points.map(([x,y])=>`${x},${-y}`).join(" ")} />
       ${coverage}
@@ -96,7 +99,11 @@ export class AlRoomPlan extends LitElement {
           @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-fixture-select",item.entity);}}}><title>${item.name || item.entity}</title></circle>
         ${item.entity===f?.entity && item.kind!=="window"?svg`<line class="aim" x1=${item.position[0]} y1=${-item.position[1]} x2=${item.position[0]+radius*5*Math.cos(item.yaw*Math.PI/180)} y2=${-item.position[1]-radius*5*Math.sin(item.yaw*Math.PI/180)}/>`:nothing}
       </g>`)}
-    </svg><p>${this.opening?"Place opening: click near a wall or drag its marker":this.fixture?.entity?(this.fixture.kind==="window"?"Click near a wall to place a window · drag its marker to move it":this.mode==="place"?"Click to place · drag a marker to move it · select Aim to set direction":"AIM MODE — press and drag toward the direction the sensor faces"):"Select a device to start placing it."} · Top = +Y</p>
+      ${f?.entity && !this.opening && ["motion","occupancy"].includes(f.kind)?svg`<circle class="marker selected" role="button" tabindex=${this.disabled?-1:0} aria-label="Aim sensor" cx=${f.position[0]+radius*5*Math.cos(f.yaw*Math.PI/180)} cy=${-f.position[1]-radius*5*Math.sin(f.yaw*Math.PI/180)} r=${radius*.75}
+        @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.aimingHandle=true;this.movingMarker=false;this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}}
+        @click=${(e:Event)=>e.stopPropagation()}
+        @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["ArrowLeft","ArrowRight"].includes(e.key)){e.preventDefault();this.emit("al-fixture-aim",f.yaw+(e.key==="ArrowLeft"?1:-1)*(e.shiftKey?15:1));}}}><title>Drag to aim</title></circle>`:nothing}
+    </svg><p ?hidden=${this.minimal}>${this.opening?"Place opening: click near a wall or drag its marker":this.fixture?.entity?(this.fixture.kind==="window"?"Click near a wall to place a window · drag its marker to move it":this.mode==="place"?"Click to place · drag a marker to move it · select Aim to set direction":"AIM MODE — press and drag toward the direction the sensor faces"):"Select a device to start placing it."} · Top = +Y</p>
     ${this.error?html`<p class="error" role="alert">${this.error}</p>`:nothing}`;
   }
 }

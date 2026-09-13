@@ -62,3 +62,12 @@ describe("coverage shell clipping", () => {
     for (const point of footprint.slice(1)) expect(Math.hypot(point[0] - 1, point[1] - 2)).toBeCloseTo(1);
   });
 });
+
+
+it("keeps downward fan coverage broad at floor level without upward rays",()=>{
+ const fan=coverageRays({...fixture,coverage_shape:"fan",vertical_fov:75},[room])[0]!;
+ expect(fan.rim.every(p=>p[2]<=fixture.position[2]+1e-6)).toBe(true);
+ const floor=fan.rim.filter(p=>Math.abs(p[2])<1e-6);
+ expect(floor.length).toBeGreaterThan(16);
+ expect(Math.max(...floor.map(p=>p[1]))-Math.min(...floor.map(p=>p[1]))).toBeGreaterThan(1);
+});

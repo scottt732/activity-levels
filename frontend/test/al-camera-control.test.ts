@@ -12,13 +12,13 @@ function pointer(target: HTMLElement, type: string, x: number, y: number, id = 1
 it("provides all camera actions as accessible buttons", async () => {
   const element = new AlCameraControl();document.body.append(element);await element.updateComplete;
   expect([...element.shadowRoot!.querySelectorAll("button")].map(button => button.getAttribute("aria-label"))).toEqual([
-    "Tilt up", "Rotate left", "Reset view", "Rotate right", "Tilt down", "Zoom out", "Zoom in", "Top view",
+    "Tilt up", "Rotate left", "Rotate right", "Tilt down", "Zoom out", "Zoom in", "Reset view", "Top view",
   ]);
   expect(element.shadowRoot!.querySelector('[role="status"]')!.textContent).toBe("");
   const actions:string[] = [];
   element.addEventListener("al-camera-action", event => actions.push((event as CustomEvent<string>).detail));
   for (const button of element.shadowRoot!.querySelectorAll("button")) button.click();
-  expect(actions).toEqual(["up", "left", "reset", "right", "down", "out", "in", "top"]);
+  expect(actions).toEqual(["up", "left", "right", "down", "out", "in", "reset", "top"]);
   element.disabled = true;await element.updateComplete;
   for (const button of element.shadowRoot!.querySelectorAll("button")) button.click();
   expect(actions).toHaveLength(8);
@@ -52,4 +52,14 @@ it("orbits continuously after a drag threshold and suppresses the following clic
   expect(actions).toHaveBeenCalledTimes(5);
   pointer(orbit, "pointermove", 200, 200);
   expect(actions).toHaveBeenCalledTimes(5);
+});
+
+
+it("rotates the cube from camera data and only shows configured north",async()=>{
+ const el=new AlCameraControl();document.body.append(el);await el.updateComplete;
+ const before=el.shadowRoot!.querySelector(".cube")!.innerHTML;
+ expect(el.shadowRoot!.querySelector(".compass")).toBeNull();
+ el.matrix=[0,0,1,0,0,1,0,0,-1,0,0,0,0,0,0,1];el.north=0;await el.updateComplete;
+ expect(el.shadowRoot!.querySelector(".cube")!.innerHTML).not.toBe(before);
+ expect(el.shadowRoot!.querySelector(".compass")).not.toBeNull();
 });

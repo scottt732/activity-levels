@@ -171,9 +171,23 @@ it("uses category pages and replaces the object list with the selected form",asy
  button("Add door").click();await el.updateComplete;
  expect(el.shadowRoot!.querySelector("#save-opening")).not.toBeNull();
  expect(el.shadowRoot!.querySelector(".add-menu")).toBeNull();
- button("← List").click();await el.updateComplete;
+ el.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Close object editor"]')!.click();await el.updateComplete;
  expect(el.shadowRoot!.querySelector("#save-opening")).toBeNull();
  el.section="sensors";await el.updateComplete;
  expect(el.shadowRoot!.querySelectorAll(".object-category")).toHaveLength(2);
  expect(el.shadowRoot!.textContent).not.toContain("Windows (0)");
+});
+
+
+it("updates workspace drafts immediately and refuses invalid geometry",async()=>{
+ const el=new AlRoomDeviceEditor();el.workspace=true;el.section="sensors";el.room="room";el.config=roomsConfig();el.config.groups=[{...newGroup("room","area"),bounds:[[0,0,0],[4,4,3]],fixtures:[{...newFixture("binary_sensor.motion"),position:[2,2,1.5]}]}];
+ document.body.append(el);await el.updateComplete;
+ el.shadowRoot!.querySelector<HTMLButtonElement>('[data-entity="binary_sensor.motion"]')!.click();await el.updateComplete;
+ const changed=vi.fn();el.addEventListener("al-change",changed);
+ const plan=el.shadowRoot!.querySelector("al-room-plan")!;
+ plan.dispatchEvent(new CustomEvent("al-fixture-position",{detail:[1,1,1.5]}));await el.updateComplete;
+ expect(changed).toHaveBeenCalledOnce();expect(el.config.groups[0]!.fixtures![0]!.position).toEqual([1,1,1.5]);
+ plan.dispatchEvent(new CustomEvent("al-fixture-position",{detail:[20,20,1.5]}));await el.updateComplete;
+ expect(el.flushDraft()).toBe(false);expect(changed).toHaveBeenCalledOnce();
+ el.resetDraft();await el.updateComplete;expect(el.shadowRoot!.querySelector("#save-fixture")).toBeNull();
 });

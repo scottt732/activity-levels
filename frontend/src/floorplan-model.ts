@@ -5,7 +5,7 @@ import type { Bounds, GroupLive, Path, SiteLayout, RoomOpening, RoomFixture } fr
 
 export interface ActivityFrame { now: number; groups: Record<string, Pick<GroupLive,"value" | "max_value"> & Partial<Pick<GroupLive,"last_activity">>> }
 export interface FloorplanNode { id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[]; fixtures?: RoomFixture[]; openings?:RoomOpening[] }
-export interface FloorplanConfig { site?: SiteLayout; groups: FloorplanNode[] }
+export interface FloorplanConfig { gps?: {rotation?:number}; site?: SiteLayout; groups: FloorplanNode[] }
 
 export interface FloorplanGroup {
   id: string;

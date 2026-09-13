@@ -1,5 +1,5 @@
-import { $ as e, A as t, At as n, B as r, Bt as i, C as a, Ct as o, D as s, Dt as c, E as l, Et as u, F as d, Ft as f, G as p, H as m, Ht as ee, I as te, It as h, J as ne, K as re, L as ie, Lt as g, M as ae, Mt as oe, N as se, Nt as ce, O as le, Ot as ue, P as _, Pt as de, Q as fe, R as pe, Rt as v, S as me, St as he, T as y, Tt as ge, U as _e, Ut as b, V as ve, Vt as x, W as S, Wt as C, X as ye, Y as be, Z as xe, _ as Se, _t as Ce, at as we, b as Te, bt as Ee, c as De, ct as Oe, d as ke, dt as Ae, et as je, f as Me, ft as Ne, g as Pe, gt as Fe, h as Ie, ht as w, i as Le, it as Re, j as ze, jt as Be, k as Ve, kt as He, l as Ue, lt as We, m as Ge, mt as Ke, nt as qe, o as Je, ot as Ye, p as Xe, pt as Ze, q as Qe, rt as $e, st as et, t as tt, tt as T, u as nt, ut as E, v as rt, vt as it, w as at, wt as ot, x as st, xt as ct, y as lt, yt as ut, z as dt, zt as D } from "./shared-CW-USVUA.js";
-import { t as ft } from "./shared-IIYdNIav.js";
+import { $ as e, A as t, At as n, B as r, Bt as i, C as a, Ct as o, D as s, Dt as c, E as l, Et as u, F as d, Ft as f, G as p, H as m, Ht as ee, I as te, It as h, J as ne, K as re, L as ie, Lt as g, M as ae, Mt as oe, N as se, Nt as ce, O as le, Ot as ue, P as _, Pt as de, Q as fe, R as pe, Rt as v, S as me, St as he, T as y, Tt as ge, U as _e, Ut as b, V as ve, Vt as x, W as S, Wt as C, X as ye, Y as be, Z as xe, _ as Se, _t as Ce, at as we, b as Te, bt as Ee, c as De, ct as Oe, d as ke, dt as Ae, et as je, f as Me, ft as Ne, g as Pe, gt as Fe, h as Ie, ht as w, i as Le, it as Re, j as ze, jt as Be, k as Ve, kt as He, l as Ue, lt as We, m as Ge, mt as Ke, nt as qe, o as Je, ot as Ye, p as Xe, pt as Ze, q as Qe, rt as $e, st as et, t as tt, tt as T, u as nt, ut as E, v as rt, vt as it, w as at, wt as ot, x as st, xt as ct, y as lt, yt as ut, z as dt, zt as D } from "./shared-Ct4v5opF.js";
+import { t as ft } from "./shared-BBNy9uad.js";
 //#region src/entities.ts
 var pt = (e) => `switch.${e}_presence_simulation`, mt = (e) => `sensor.${e}_expected_activity`, ht = (e) => `sensor.${e}_activity_anomaly`, gt = [
 	"ha-card",
@@ -772,7 +772,7 @@ var O = class extends v {
       <ha-top-app-bar-fixed .narrow=${this.narrow}>
         <ha-menu-button slot="navigationIcon"></ha-menu-button>
         <div slot="title">Activity Levels</div>
-        <div slot="actionItems" class="row">
+        <div slot="actionItems" class="row" style=${this.tab === "floorplans" ? "display:none" : ""}>
           ${this.renderLiveToggle()}
           <ha-icon-button .disabled=${!e?.canUndo} @click=${this.undo} title="Undo">
             <ha-icon icon="mdi:undo"></ha-icon>
@@ -785,8 +785,8 @@ var O = class extends v {
             >${e?.dirty ? "Save" : "Saved"}</ha-button
           >
         </div>
-        ${this.renderBanner()} ${this.renderInferred()} ${this.renderWarnings()}
-        <div class="tabs" role="tablist" aria-label="Sections" @keydown=${this.onTabsKeydown}>
+        ${this.tab === "floorplans" ? D : x`${this.renderBanner()} ${this.renderInferred()} ${this.renderWarnings()}`}
+        <div class="tabs" style=${this.tab === "floorplans" ? "display:none" : ""} role="tablist" aria-label="Sections" @keydown=${this.onTabsKeydown}>
           ${this.tabs.map((e, t) => x`<button
               type="button"
               id="tab-${e}"
@@ -7860,6 +7860,7 @@ function Ss(e, t) {
 function Cs(e, t) {
 	return {
 		...e,
+		coverage_shape: t.coverage_shape ?? "cone",
 		look_down: t.look_down ?? !1,
 		profile_id: t.id,
 		kind: t.kind,
@@ -7914,6 +7915,7 @@ function ws(e) {
 		if (!t.match || typeof t.match != "object" || Array.isArray(t.match)) throw Error("Invalid identification rules.");
 		for (let [e, n] of Object.entries(t.match)) if (!bs.includes(e) || typeof n != "string" || !n.trim() || n.length > 200) throw Error("Invalid identification rule.");
 		return n.add(t.id), {
+			...t.coverage_shape === void 0 ? {} : { coverage_shape: t.coverage_shape },
 			...t.look_down === void 0 ? {} : { look_down: t.look_down },
 			id: t.id,
 			name: t.name,
@@ -7996,7 +7998,7 @@ function ks(e, t) {
 //#region src/al-orientation-control.ts
 var As = class extends v {
 	constructor(...e) {
-		super(...e), this.yaw = 0, this.pitch = 0, this.disabled = !1, this.aiming = !1;
+		super(...e), this.yaw = 0, this.pitch = 0, this.disabled = !1, this.snap = 0, this.aiming = !1;
 	}
 	static {
 		this.styles = C`
@@ -8012,13 +8014,15 @@ var As = class extends v {
     .buttons { display:grid; gap:8px; }
     .row { display:flex; align-items:center; gap:8px; }
     output { min-width:92px; font-variant-numeric:tabular-nums; }
-    button { min-width:44px; min-height:44px; border:1px solid #638b9e; border-radius:8px; background:var(--secondary-background-color,#243c4b); color:var(--primary-text-color,#fff); cursor:pointer; }
+    button { min-width:28px; min-height:28px; border:1px solid #638b9e; border-radius:8px; background:var(--secondary-background-color,#243c4b); color:var(--primary-text-color,#fff); cursor:pointer; }
     button:disabled, [aria-disabled="true"] { opacity:.45; cursor:default; }
+    select { font:inherit; color:inherit; background:#16313f; border:1px solid #638b9e; margin:6px; }
+    @media(pointer:coarse){button{min-width:44px;min-height:44px;}}
     p { margin:8px 0; font-size:12px; color:var(--secondary-text-color,#bdd7e0); }
   `;
 	}
 	change(e, t) {
-		this.disabled || (this.yaw = (e % 360 + 360) % 360, this.pitch = Math.max(-90, Math.min(90, t)), this.dispatchEvent(new CustomEvent("al-orientation-change", {
+		this.disabled || (this.snap && (e !== this.yaw && (e = Math.round(e / this.snap) * this.snap), t !== this.pitch && (t = Math.round(t / this.snap) * this.snap)), this.yaw = (e % 360 + 360) % 360, this.pitch = Math.max(-90, Math.min(90, t)), this.dispatchEvent(new CustomEvent("al-orientation-change", {
 			detail: {
 				yaw: this.yaw,
 				pitch: this.pitch
@@ -8041,12 +8045,18 @@ var As = class extends v {
 	}
 	key(e) {
 		if (this.disabled) return;
-		let t = e.shiftKey ? 15 : 1;
+		let t = this.snap || (e.shiftKey ? 15 : 1);
 		e.key === "ArrowLeft" || e.key === "ArrowRight" ? (e.preventDefault(), this.change(this.yaw + (e.key === "ArrowLeft" ? t : -t), this.pitch)) : e.key === "ArrowUp" || e.key === "ArrowDown" ? (e.preventDefault(), this.change(this.yaw, this.pitch + (e.key === "ArrowUp" ? t : -t))) : e.key === "Home" && (e.preventDefault(), this.change(0, 0));
 	}
 	render() {
 		let e = this.yaw * Math.PI / 180, t = 66 + 42 * Math.cos(e), n = 66 - 42 * Math.sin(e);
-		return x`<div class="controls">
+		return x`<label>Snap <select aria-label="Aim snap" .value=${String(this.snap)} @change=${(e) => {
+			this.snap = Number(e.target.value), this.dispatchEvent(new CustomEvent("al-aim-snap", {
+				detail: this.snap,
+				bubbles: !0,
+				composed: !0
+			}));
+		}}><option value="0">Free</option><option value="15">15°</option><option value="45">45°</option></select></label><div class="controls">
       <svg viewBox="0 0 132 132" role="slider" tabindex=${this.disabled ? -1 : 0}
         aria-label="Sensor direction" aria-valuemin="0" aria-valuemax="359" aria-valuenow=${Math.round(this.yaw)}
         aria-valuetext=${`${Math.round(this.yaw)} degrees; tilt ${Math.round(this.pitch)} degrees`}
@@ -8061,16 +8071,16 @@ var As = class extends v {
         <line x1="66" y1="66" x2=${t} y2=${n} /><circle class="tip" cx=${t} cy=${n} r="5" />
       </svg>
       <div class="buttons">
-        <div class="row"><button aria-label="Decrease direction" ?disabled=${this.disabled} @click=${() => this.change(this.yaw - 5, this.pitch)}>−</button>
-          <output>Yaw ${Math.round(this.yaw)}°</output><button aria-label="Increase direction" ?disabled=${this.disabled} @click=${() => this.change(this.yaw + 5, this.pitch)}>+</button></div>
-        <div class="row"><button aria-label="Tilt down" ?disabled=${this.disabled} @click=${() => this.change(this.yaw, this.pitch - 5)}>−</button>
-          <output>Tilt ${Math.round(this.pitch)}°</output><button aria-label="Tilt up" ?disabled=${this.disabled} @click=${() => this.change(this.yaw, this.pitch + 5)}>+</button></div>
+        <div class="row"><button aria-label="Decrease direction" ?disabled=${this.disabled} @click=${() => this.change(this.yaw - (this.snap || 5), this.pitch)}>−</button>
+          <output>Yaw ${Math.round(this.yaw)}°</output><button aria-label="Increase direction" ?disabled=${this.disabled} @click=${() => this.change(this.yaw + (this.snap || 5), this.pitch)}>+</button></div>
+        <div class="row"><button aria-label="Tilt down" ?disabled=${this.disabled} @click=${() => this.change(this.yaw, this.pitch - (this.snap || 5))}>−</button>
+          <output>Tilt ${Math.round(this.pitch)}°</output><button aria-label="Tilt up" ?disabled=${this.disabled} @click=${() => this.change(this.yaw, this.pitch + (this.snap || 5))}>+</button></div>
         <button ?disabled=${this.disabled} @click=${() => this.change(0, 0)}>Reset aim</button>
       </div>
     </div><p role="status">${this.aiming ? "Aiming — drag to rotate" : "Drag the dial to aim. Arrow keys adjust direction and tilt; Shift makes larger steps."}</p>`;
 	}
 };
-y([h({ type: Number })], As.prototype, "yaw", void 0), y([h({ type: Number })], As.prototype, "pitch", void 0), y([h({ type: Boolean })], As.prototype, "disabled", void 0), y([f()], As.prototype, "aiming", void 0), As = y([g("al-orientation-control")], As);
+y([h({ type: Number })], As.prototype, "yaw", void 0), y([h({ type: Number })], As.prototype, "pitch", void 0), y([h({ type: Boolean })], As.prototype, "disabled", void 0), y([h({ type: Number })], As.prototype, "snap", void 0), y([f()], As.prototype, "aiming", void 0), As = y([g("al-orientation-control")], As);
 //#endregion
 //#region src/sensor-catalog.ts
 var js = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intruder-detector/co-289-ga/BlueLine_Gen_2_Data_sheet_enUS_2603228171.pdf", Ms = [{
@@ -8107,10 +8117,11 @@ var js = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 ].map(({ id: e, name: t, model: n, mode: r }) => ({
 	id: e,
 	name: t,
-	look_down: !e.endsWith("pet-on"),
+	coverage_shape: "fan",
+	look_down: !0,
 	kind: "motion",
 	fov: 94,
-	vertical_fov: 45,
+	vertical_fov: 75,
 	range: 12,
 	technology: "Wired PIR / NC alarm relay",
 	mount: "Wall / corner",
@@ -8118,11 +8129,11 @@ var js = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 		manufacturer: "Bosch",
 		model: n
 	},
-	notes: r + " Bosch specifies 12 m × 12 m coverage; the coverage diagram shows a 94° horizontal spread. Mount level on a wall or in a corner, 2.2–2.75 m above the floor; set your actual height and aim separately. The 45° vertical angle is an illustrative editor default, not a Bosch specification. The overlay approximates the footprint, not the individual segmented PIR beams or a pet exclusion volume. A separate look-down lobe is an illustrative near-floor approximation: confirm the physical look-down lens setting and toggle it to match your installation. Select the alarm/motion binary sensor, not tamper. Wired alarm/ESPHome bridges may expose their own manufacturer and model, so confirm the label and select this profile manually when needed. ",
+	notes: r + " Bosch specifies 12 m × 12 m coverage; the coverage diagram shows a 94° horizontal spread. Mount level on a wall or in a corner, 2.2–2.75 m above the floor; set your actual height and aim separately. The fan extends downward 75° from its level top as an illustrative envelope, not a Bosch-specified vertical angle. The overlay approximates the footprint, not the individual segmented PIR beams or a pet exclusion volume. A separate look-down lobe is an illustrative near-floor approximation: confirm the physical look-down lens setting and toggle it to match your installation. Select the alarm/motion binary sensor, not tamper. Wired alarm/ESPHome bridges may expose their own manufacturer and model, so confirm the label and select this profile manually when needed. ",
 	source: js
 }))], Z = class extends v {
 	constructor(...e) {
-		super(...e), this.neighbors = [], this.mode = "place", this.disabled = !1, this.error = "", this.movingMarker = !1, this.dragged = !1, this.suppressClick = !1;
+		super(...e), this.neighbors = [], this.mode = "place", this.disabled = !1, this.minimal = !1, this.aimingHandle = !1, this.error = "", this.movingMarker = !1, this.dragged = !1, this.suppressClick = !1;
 	}
 	static {
 		this.styles = C`
@@ -8133,6 +8144,7 @@ var js = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
     .selected { fill:#ffcd69; } .marker:focus, .opening-marker:focus { stroke:white; stroke-width:2; vector-effect:non-scaling-stroke; outline:none; }
     .coverage { fill:#ffcd6929; stroke:#ffcd6988; vector-effect:non-scaling-stroke; }
     .aim { stroke:#ffcd69; stroke-width:2; vector-effect:non-scaling-stroke; }
+    [hidden] { display:none!important; }
     p { color:var(--secondary-text-color); font-size:13px; } .error { color:var(--error-color,#f77); }
   `;
 	}
@@ -8162,7 +8174,7 @@ var js = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 			return;
 		}
 		if (!this.fixture) return;
-		if (this.mode === "aim" && this.fixture.kind !== "window" && !this.movingMarker) {
+		if ((this.aimingHandle || this.mode === "aim") && this.fixture.kind !== "window" && !this.movingMarker) {
 			let [e, n] = this.fixture.position;
 			Math.hypot(t[0] - e, t[1] - n) > .001 && this.emit("al-fixture-aim", Math.atan2(t[1] - n, t[0] - e) * 180 / Math.PI);
 			return;
@@ -8196,7 +8208,7 @@ var js = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 			})), this.hass?.states), n = Je(c.kind, this.hass?.states[c.entity]?.state);
 			l = b`<polygon class="coverage" style=${`fill:${n.color};fill-opacity:${n.opacity};stroke:${n.color};stroke-dasharray:4 4`} points=${t.map(([e, t]) => `${e},${-t}`).join(" ")} />`;
 		}
-		return x`<svg viewBox=${`${t[0][0] - a} ${-t[1][1] - a} ${r + a * 2} ${i + a * 2}`} aria-label="Top-down room placement" role="group" class=${this.mode === "aim" ? "aiming" : ""}
+		return x`<svg viewBox=${`${t[0][0] - a} ${-t[1][1] - a} ${r + a * 2} ${i + a * 2}`} aria-label="Top-down room placement" role="group" class=${this.aimingHandle || this.mode === "aim" ? "aiming" : ""}
       @pointerdown=${(e) => {
 			this.disabled || e.button !== 0 || (this.movingMarker = !1, this.drag = e.pointerId, this.dragged = !1, this.renderRoot.querySelector("svg").setPointerCapture(e.pointerId), this.place(e));
 		}}
@@ -8211,10 +8223,10 @@ var js = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 			this.drag === e.pointerId && (this.dragged = !0, this.place(e));
 		}}
       @pointerup=${() => {
-			this.suppressClick = this.dragged, this.drag = void 0, this.dragged = !1, this.movingMarker = !1;
+			this.suppressClick = this.dragged || this.aimingHandle, this.aimingHandle = !1, this.drag = void 0, this.dragged = !1, this.movingMarker = !1;
 		}}
       @pointercancel=${() => {
-			this.drag = void 0, this.dragged = !1, this.movingMarker = !1;
+			this.aimingHandle = !1, this.drag = void 0, this.dragged = !1, this.movingMarker = !1;
 		}}>
       ${this.neighbors.filter((t) => t.id !== e.id && t.bounds).map((e) => b`<polygon fill="#25374444" stroke="#607584" stroke-width="1" vector-effect="non-scaling-stroke" points=${fs(e).map(([e, t]) => `${e},${-t}`).join(" ")}/><text fill="#94acb7" text-anchor="middle" font-size=${o * 1.8} x=${(e.bounds[0][0] + e.bounds[1][0]) / 2} y=${-(e.bounds[0][1] + e.bounds[1][1]) / 2}>${e.name || e.id}</text>`)}
       <polygon class="outline" points=${n.map(([e, t]) => `${e},${-t}`).join(" ")} />
@@ -8254,16 +8266,24 @@ var js = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 		}}><title>${t.name || t.entity}</title></circle>
         ${t.entity === c?.entity && t.kind !== "window" ? b`<line class="aim" x1=${t.position[0]} y1=${-t.position[1]} x2=${t.position[0] + o * 5 * Math.cos(t.yaw * Math.PI / 180)} y2=${-t.position[1] - o * 5 * Math.sin(t.yaw * Math.PI / 180)}/>` : D}
       </g>`)}
-    </svg><p>${this.opening ? "Place opening: click near a wall or drag its marker" : this.fixture?.entity ? this.fixture.kind === "window" ? "Click near a wall to place a window · drag its marker to move it" : this.mode === "place" ? "Click to place · drag a marker to move it · select Aim to set direction" : "AIM MODE — press and drag toward the direction the sensor faces" : "Select a device to start placing it."} · Top = +Y</p>
+      ${c?.entity && !this.opening && ["motion", "occupancy"].includes(c.kind) ? b`<circle class="marker selected" role="button" tabindex=${this.disabled ? -1 : 0} aria-label="Aim sensor" cx=${c.position[0] + o * 5 * Math.cos(c.yaw * Math.PI / 180)} cy=${-c.position[1] - o * 5 * Math.sin(c.yaw * Math.PI / 180)} r=${o * .75}
+        @pointerdown=${(e) => {
+			this.disabled || e.button !== 0 || (e.stopPropagation(), this.aimingHandle = !0, this.movingMarker = !1, this.drag = e.pointerId, this.dragged = !1, this.renderRoot.querySelector("svg").setPointerCapture(e.pointerId));
+		}}
+        @click=${(e) => e.stopPropagation()}
+        @keydown=${(e) => {
+			!this.disabled && ["ArrowLeft", "ArrowRight"].includes(e.key) && (e.preventDefault(), this.emit("al-fixture-aim", c.yaw + (e.key === "ArrowLeft" ? 1 : -1) * (e.shiftKey ? 15 : 1)));
+		}}><title>Drag to aim</title></circle>` : D}
+    </svg><p ?hidden=${this.minimal}>${this.opening ? "Place opening: click near a wall or drag its marker" : this.fixture?.entity ? this.fixture.kind === "window" ? "Click near a wall to place a window · drag its marker to move it" : this.mode === "place" ? "Click to place · drag a marker to move it · select Aim to set direction" : "AIM MODE — press and drag toward the direction the sensor faces" : "Select a device to start placing it."} · Top = +Y</p>
     ${this.error ? x`<p class="error" role="alert">${this.error}</p>` : D}`;
 	}
 };
-y([h({ attribute: !1 })], Z.prototype, "hass", void 0), y([h({ attribute: !1 })], Z.prototype, "group", void 0), y([h({ attribute: !1 })], Z.prototype, "neighbors", void 0), y([h({ attribute: !1 })], Z.prototype, "opening", void 0), y([h({ attribute: !1 })], Z.prototype, "fixture", void 0), y([h({ type: String })], Z.prototype, "mode", void 0), y([h({ type: Boolean })], Z.prototype, "disabled", void 0), y([f()], Z.prototype, "error", void 0), Z = y([g("al-room-plan")], Z);
+y([h({ attribute: !1 })], Z.prototype, "hass", void 0), y([h({ attribute: !1 })], Z.prototype, "group", void 0), y([h({ attribute: !1 })], Z.prototype, "neighbors", void 0), y([h({ attribute: !1 })], Z.prototype, "opening", void 0), y([h({ attribute: !1 })], Z.prototype, "fixture", void 0), y([h({ type: String })], Z.prototype, "mode", void 0), y([h({ type: Boolean })], Z.prototype, "disabled", void 0), y([h({ type: Boolean })], Z.prototype, "minimal", void 0), y([f()], Z.prototype, "aimingHandle", void 0), y([f()], Z.prototype, "error", void 0), Z = y([g("al-room-plan")], Z);
 //#endregion
 //#region src/al-room-device-editor.ts
 var Q = class extends v {
 	constructor(...e) {
-		super(...e), this.workspace = !1, this.section = "all", this.adding = !1, this.profilesPage = !1, this.lights = {}, this.live = null, this.disabled = !1, this.room = "", this.unitChoice = "auto", this.contactSearch = "", this.allContacts = !1, this.addKind = "", this.fixture = nt(), this.mode = "place", this.error = "", this.notice = "", this.registry = [], this.registryError = "", this.loading = !1, this.search = "", this.profile = "", this.profileName = "", this.profileText = "", this.sequence = 0, this.previewError = "";
+		super(...e), this.workspace = !1, this.section = "all", this.aimSnap = 0, this.information = !1, this.adding = !1, this.profilesPage = !1, this.lights = {}, this.live = null, this.disabled = !1, this.room = "", this.unitChoice = "auto", this.contactSearch = "", this.allContacts = !1, this.addKind = "", this.fixture = nt(), this.mode = "place", this.error = "", this.notice = "", this.registry = [], this.registryError = "", this.loading = !1, this.search = "", this.profile = "", this.profileName = "", this.profileText = "", this.sequence = 0, this.previewError = "";
 	}
 	static {
 		this.styles = C`
@@ -8288,7 +8308,8 @@ var Q = class extends v {
     :host([workspace]) fieldset, :host([workspace]) .workspace { height:100%; min-height:0; }
     :host([workspace]) .workspace { display:grid; grid-template-columns:58% 42%; border:0; border-radius:0; }
     :host([workspace]) .scene-pane { height:100%; }
-    :host([workspace]) .plan-pane { height:100%; box-sizing:border-box; padding:66px 12px 12px; --room-plan-height:calc(100dvh - 180px); }
+    :host([workspace]) .plan-pane { height:100%; box-sizing:border-box; padding:66px 12px 12px; --room-plan-height:calc(100% - 1px); }
+    :host([workspace]) .plan-pane > div, :host([workspace]) al-room-plan { height:100%; }
     :host([workspace]) .plan-pane h3 { font-size:12px; text-transform:uppercase; letter-spacing:.15em; margin:0 0 8px; }
     :host([workspace]) .editor-controls { position:absolute; top:60px; left:62px; width:260px; max-width:none; max-height:calc(100% - 78px); margin:0; padding:10px; border-radius:8px; background:#102633f2; }
     :host([workspace]) button, :host([workspace]) select, :host([workspace]) input, :host([workspace]) textarea { padding:4px 6px; font-size:12px; border-radius:3px; background:#163140; border-color:#355365; }
@@ -8298,6 +8319,10 @@ var Q = class extends v {
     :host([workspace]) .device { background:transparent; border-color:transparent; padding:5px 4px; margin:0; }
     :host([workspace]) .device:hover { background:#244652; } :host([workspace]) .device small { font-size:10px; color:#91adba; }
     :host([workspace]) .editor-controls input[type=checkbox] { width:auto; }
+    :host([workspace]) label.check, .check { display:flex; flex-direction:row; align-items:center; gap:6px; }
+    .device-information { position:absolute; z-index:6; top:60px; left:340px; width:280px; max-height:calc(100% - 90px); overflow:auto; padding:12px; background:#102633f5; border:1px solid #80ddeb; border-radius:8px; font-size:12px; }
+    .device-information header { display:flex; justify-content:space-between; align-items:center; }
+    @media(max-width:760px){.device-information{left:76px;right:12px;width:auto;}}
     .view-toggle { display:none; }
     .page-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0; }
     .page-heading h3 { font-size:14px; margin:0; }
@@ -8395,7 +8420,7 @@ var Q = class extends v {
 		}
 	}
 	reset() {
-		this.adding = !1, this.profilesPage = !1, this.legacyWindow = void 0, this.addKind = "", this.fixture = {
+		this.information = !1, this.adding = !1, this.profilesPage = !1, this.legacyWindow = void 0, this.addKind = "", this.fixture = {
 			...nt(),
 			position: this.group ? De(this.group) : [
 				0,
@@ -8441,13 +8466,26 @@ var Q = class extends v {
 			let t = this.candidates.find((t) => t.entity === e), n = t ? this.profiles.filter((e) => e.kind === "light" == (this.fixture.kind === "light") && Ss(e, t)) : [];
 			this.profile = n.length === 1 ? n[0].id : "";
 		}
-		this.addKind = "", this.error = "", this.notice = "", this.profileName = "", this.mode = "place";
+		this.addKind = "", this.error = "", this.notice = "", this.profileName = "", this.mode = "place", this.workspace && this.flushDraft();
+	}
+	resetDraft() {
+		this.reset();
+	}
+	flushDraft() {
+		if (this.disabled || !this.validLengths()) return !1;
+		if (!this.workspace || !this.fixture.entity && !this.opening) return !0;
+		try {
+			let e = this.opening ? me(this.openingConfig(), this.room, this.opening, this.originalOpening) : Me(this.config, this.room, this.fixture, this.original);
+			return JSON.stringify(e) !== JSON.stringify(this.config) && (this.config = e, this.dispatchEvent(P(e))), this.opening ? (this.originalOpening = this.opening.id, this.legacyWindow = void 0) : this.original = this.fixture.entity, this.error = "", !0;
+		} catch (e) {
+			return this.error = e.message, !1;
+		}
 	}
 	patch(e) {
 		this.disabled || (this.fixture = {
 			...this.fixture,
 			...e
-		}, this.error = "", this.notice = "");
+		}, this.error = "", this.notice = "", this.workspace && this.flushDraft());
 	}
 	save() {
 		if (!(!this.config || this.disabled || !this.validLengths())) try {
@@ -8484,6 +8522,7 @@ var Q = class extends v {
 			let r = ws(JSON.stringify([{
 				id: t?.id ?? `personal:${crypto.randomUUID()}`,
 				name: this.profileName,
+				coverage_shape: this.fixture.coverage_shape,
 				kind: this.fixture.kind,
 				fov: this.fixture.fov,
 				vertical_fov: this.fixture.vertical_fov,
@@ -8532,7 +8571,7 @@ var Q = class extends v {
 			(n[0][0] + n[1][0]) / 2,
 			(n[0][1] + n[1][1]) / 2,
 			n[0][2] + (t === "window" ? Math.max(0, (n[1][2] - n[0][2] - r.height) / 2) : 0)
-		], r.width)), this.opening = r, this.originalOpening = e?.id;
+		], r.width)), this.opening = r, this.originalOpening = e?.id, this.workspace && !e && this.flushDraft();
 	}
 	openingConfig() {
 		let e = structuredClone(this.config);
@@ -8603,7 +8642,7 @@ var Q = class extends v {
 		this.opening && !this.disabled && (this.opening = {
 			...this.opening,
 			...e
-		}, this.error = "");
+		}, this.error = "", this.workspace && this.flushDraft());
 	}
 	saveDoor() {
 		if (!(!this.config || !this.opening || this.disabled || !this.validLengths())) try {
@@ -8634,7 +8673,7 @@ var Q = class extends v {
         ` : D}
       ${e.kind === "open_wall" ? D : this.contactsControl(e)}
       <p class="muted">Click near a wall to place and align the opening. An open wall always lets coverage pass.</p>
-      <button id="save-opening" type="button" @click=${() => this.saveDoor()}>${this.originalOpening ? "Update" : "Add"} opening to draft</button>
+      <button ?hidden=${this.workspace} id="save-opening" type="button" @click=${() => this.saveDoor()}>${this.originalOpening ? "Update" : "Add"} opening to draft</button>
       ${this.originalOpening || this.legacyWindow ? x`<button type="button" @click=${() => {
 			if (!this.config || this.disabled) return;
 			let e = this.openingConfig(), t = T(e).find((e) => e.group.id === this.room)?.group;
@@ -8671,18 +8710,18 @@ var Q = class extends v {
 			focus_activity: !1,
 			auto_rotate: !1
 		}}></al-floorplan-viewer></div>
-        <div class="plan-pane"><h3>Top-down placement</h3><div>
-        <div><button type="button" aria-pressed=${this.mode === "place"} @click=${() => {
+        <div class="plan-pane"><h3 ?hidden=${this.workspace}>Top-down placement</h3><div>
+        <div ?hidden=${this.workspace}><button type="button" aria-pressed=${this.mode === "place"} @click=${() => {
 			this.mode = "place";
 		}}>Place / move</button>
           <button type="button" aria-pressed=${this.mode === "aim"} ?disabled=${!this.fixture.entity || this.fixture.kind === "light" || this.fixture.kind === "window"} @click=${() => {
 			this.mode = "aim";
 		}}>Aim</button></div>
-        <al-room-plan .group=${i} .neighbors=${r} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
+        <al-room-plan .minimal=${this.workspace} .group=${i} .neighbors=${r} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
           @al-fixture-position=${(e) => {
 			e.stopPropagation(), this.patch(this.fixture.kind === "window" && this.group ? Xe(this.group, e.detail, this.fixture.width) : { position: e.detail });
 		}}
-          @al-fixture-aim=${(e) => this.patch({ yaw: Number(e.detail.toFixed(1)) })}
+          @al-fixture-aim=${(e) => this.patch({ yaw: this.aimSnap ? Math.round(e.detail / this.aimSnap) * this.aimSnap : Number(e.detail.toFixed(1)) })}
           @al-opening-position=${(e) => {
 			this.opening && this.group && this.patchOpening(a(this.group, e.detail, this.opening.width));
 		}}
@@ -8692,7 +8731,7 @@ var Q = class extends v {
 		}}
           @al-fixture-select=${(e) => this.select(e.detail)}></al-room-plan>
       </div></div><div class="editor-controls">
-        ${this.workspace ? x`<div class="room-tools">      <label><select aria-label="Room" id="device-room" .value=${this.room} @change=${(e) => {
+        ${this.workspace && !this.fixture.entity && !this.opening ? x`<div class="room-tools">      <label><select aria-label="Room" id="device-room" .value=${this.room} @change=${(e) => {
 			this.room = e.target.value, this.reset(), this.dispatchEvent(new CustomEvent("al-editor-room", {
 				detail: this.room,
 				bubbles: !0,
@@ -8703,9 +8742,9 @@ var Q = class extends v {
       <label><select aria-label="Measurements" id="length-unit" .value=${this.unitChoice} @change=${(e) => {
 			this.unitChoice = e.target.value;
 		}}><option value="auto" .selected=${this.unitChoice === "auto"}>HA (${Es(this.hass)})</option><option value="m" .selected=${this.unitChoice === "m"}>Meters</option><option value="ft" .selected=${this.unitChoice === "ft"}>Feet & inches</option></select></label>
-</div><button type="button" class="view-toggle" aria-label="Toggle 2D view on narrow screens" @click=${() => this.toggleAttribute("plan-view")}>2D / 3D</button>` : x`<h3>Room editor</h3>`}
-        <div class="page-heading"><h3>${this.section === "openings" ? "Doors & windows" : this.section === "sensors" ? "Motion & occupancy" : this.section === "lights" ? "Lights" : "Devices & windows"}</h3>
-          ${this.workspace && (this.fixture.entity || this.opening || this.adding || this.profilesPage) ? x`<button type="button" @click=${() => this.reset()}>← List</button>` : this.workspace ? x`<button type="button" @click=${() => {
+</div><button type="button" class="view-toggle" aria-label="Toggle 2D view on narrow screens" @click=${() => this.toggleAttribute("plan-view")}>2D / 3D</button>` : this.workspace ? D : x`<h3>Room editor</h3>`}
+        <div class="page-heading">${this.workspace && this.original ? x`<button type="button" aria-label="Delete device" title="Delete device" @click=${() => this.removeFixture()}>⌫</button>` : D}<h3>${this.section === "openings" ? "Doors & windows" : this.section === "sensors" ? "Motion & occupancy" : this.section === "lights" ? "Lights" : "Devices & windows"}</h3>
+          ${this.workspace && (this.fixture.entity || this.opening || this.adding || this.profilesPage) ? x`<button type="button" aria-label="Close object editor" @click=${() => this.reset()}>×</button>` : this.workspace ? x`<button type="button" @click=${() => {
 			this.adding = !0;
 		}}>+ Add</button>` : D}
         </div>
@@ -8761,9 +8800,13 @@ var Q = class extends v {
             <option value="">Choose a profile</option>${this.profiles.filter((e) => e.kind === "light" === this.fixture.entity.startsWith("light.") && e.kind === "window" == (this.fixture.kind === "window")).map((e) => x`<option value=${e.id} .selected=${e.id === this.profile}>${c.includes(e) ? "Suggested · " : ""}${e.name}</option>`)}</select></label>
           <button type="button" ?disabled=${!l} @click=${() => this.useProfile()}>Apply profile</button></div>
         ${c.length ? x`<p class="muted">Suggested from device metadata: ${c.map((e) => e.name).join(", ")}. Confirm the model and sensor entity before applying.</p>` : D}
-        ${l ? x`<p class="muted">${l.notes}</p>${/^https?:\/\//.test(l.source) ? x`<a href=${l.source} target="_blank" rel="noopener noreferrer">Profile source</a>` : D}` : D}
-        ${this.fixture.kind === "motion" || this.fixture.kind === "occupancy" ? x`<al-orientation-control .yaw=${this.fixture.yaw} .pitch=${this.fixture.pitch} .disabled=${this.disabled} @al-orientation-change=${(e) => this.patch(e.detail)}></al-orientation-control>
-        <label><input type="checkbox" .checked=${this.fixture.look_down ?? !1} @change=${(e) => this.patch({ look_down: e.target.checked })}>Separate look-down coverage</label><p class="muted">Look-down shape is approximate. Match the physical lens setting.</p>` : D}
+        ${l ? x`<button type="button" @click=${() => {
+			this.information = !this.information;
+		}}>Device information</button>` : D}
+        ${this.fixture.kind === "motion" || this.fixture.kind === "occupancy" ? x`<al-orientation-control .snap=${this.aimSnap} @al-aim-snap=${(e) => {
+			this.aimSnap = e.detail;
+		}} .yaw=${this.fixture.yaw} .pitch=${this.fixture.pitch} .disabled=${this.disabled} @al-orientation-change=${(e) => this.patch(e.detail)}></al-orientation-control>
+        <label class="check"><input type="checkbox" .checked=${this.fixture.look_down ?? !1} @change=${(e) => this.patch({ look_down: e.target.checked })}>Separate look-down coverage</label><p class="muted">Look-down shape is approximate. Match the physical lens setting.</p>` : D}
         <details><summary>Adjust characteristics and precise position</summary><div class="fields">
           <label>Type<select id="fixture-kind" .value=${this.fixture.kind} @change=${(e) => {
 			let t = e.target.value;
@@ -8792,8 +8835,8 @@ var Q = class extends v {
 			this.profileName = e.target.value;
 		}}></label>
         <button id="save-profile" type="button" @click=${() => this.saveProfile()}>${this.config.sensor_profiles?.some((e) => e.id === this.profile) ? "Update" : "Save"} personal model profile</button></details>
-        <button id="save-fixture" type="button" @click=${() => this.save()}>${this.original ? "Update" : "Add"} placement to draft</button>
-        ${this.original ? x`<button type="button" @click=${() => this.removeFixture()}>Remove placement</button>` : D}
+        <button ?hidden=${this.workspace} id="save-fixture" type="button" @click=${() => this.save()}>${this.original ? "Update" : "Add"} placement to draft</button>
+        ${this.original ? x`<button ?hidden=${this.workspace} type="button" @click=${() => this.removeFixture()}>Remove placement</button>` : D}
       ` : D}
       ${this.previewError ? x`<p class="error" role="status">Placement needs adjustment: ${this.previewError}</p>` : D}
       <p class="status" role="status">${this.notice}</p>${this.error ? x`<p class="error" role="alert">${this.error}</p>` : D}
@@ -8805,14 +8848,18 @@ var Q = class extends v {
 			this.profileText = JSON.stringify(ws(JSON.stringify(this.config?.sensor_profiles ?? [])), null, 2);
 		}}>Export personal profiles</button>
         <button type="button" @click=${() => this.importProfiles()}>Import profiles to draft</button>
-      </details></div></div>` : x`<p class="muted">Choose a room with floorplan dimensions first.</p>`}
+      </details></div>
+      ${this.information && l ? x`<aside class="device-information" aria-label="Device information"><header>Device information <button type="button" aria-label="Close device information" @click=${() => {
+			this.information = !1;
+		}}>×</button></header><h3>${l.name}</h3><p>${l.notes}</p>${/^https?:\/\//.test(l.source) ? x`<a href=${l.source} target="_blank" rel="noopener noreferrer">Profile source</a>` : D}</aside>` : D}
+      </div>` : x`<p class="muted">Choose a room with floorplan dimensions first.</p>`}
     </fieldset>`;
 	}
 };
 y([h({
 	type: Boolean,
 	reflect: !0
-})], Q.prototype, "workspace", void 0), y([h({ type: String })], Q.prototype, "section", void 0), y([f()], Q.prototype, "adding", void 0), y([f()], Q.prototype, "profilesPage", void 0), y([h({ attribute: !1 })], Q.prototype, "config", void 0), y([h({ attribute: !1 })], Q.prototype, "lights", void 0), y([h({ attribute: !1 })], Q.prototype, "hass", void 0), y([h({ attribute: !1 })], Q.prototype, "live", void 0), y([h({ type: Boolean })], Q.prototype, "disabled", void 0), y([h({ type: String })], Q.prototype, "room", void 0), y([f()], Q.prototype, "unitChoice", void 0), y([f()], Q.prototype, "contactSearch", void 0), y([f()], Q.prototype, "allContacts", void 0), y([f()], Q.prototype, "legacyWindow", void 0), y([f()], Q.prototype, "addKind", void 0), y([f()], Q.prototype, "opening", void 0), y([f()], Q.prototype, "originalOpening", void 0), y([f()], Q.prototype, "fixture", void 0), y([f()], Q.prototype, "original", void 0), y([f()], Q.prototype, "mode", void 0), y([f()], Q.prototype, "error", void 0), y([f()], Q.prototype, "notice", void 0), y([f()], Q.prototype, "registry", void 0), y([f()], Q.prototype, "registryError", void 0), y([f()], Q.prototype, "loading", void 0), y([f()], Q.prototype, "search", void 0), y([f()], Q.prototype, "profile", void 0), y([f()], Q.prototype, "profileName", void 0), y([f()], Q.prototype, "profileText", void 0), Q = y([g("al-room-device-editor")], Q);
+})], Q.prototype, "workspace", void 0), y([h({ type: String })], Q.prototype, "section", void 0), y([f()], Q.prototype, "aimSnap", void 0), y([f()], Q.prototype, "information", void 0), y([f()], Q.prototype, "adding", void 0), y([f()], Q.prototype, "profilesPage", void 0), y([h({ attribute: !1 })], Q.prototype, "config", void 0), y([h({ attribute: !1 })], Q.prototype, "lights", void 0), y([h({ attribute: !1 })], Q.prototype, "hass", void 0), y([h({ attribute: !1 })], Q.prototype, "live", void 0), y([h({ type: Boolean })], Q.prototype, "disabled", void 0), y([h({ type: String })], Q.prototype, "room", void 0), y([f()], Q.prototype, "unitChoice", void 0), y([f()], Q.prototype, "contactSearch", void 0), y([f()], Q.prototype, "allContacts", void 0), y([f()], Q.prototype, "legacyWindow", void 0), y([f()], Q.prototype, "addKind", void 0), y([f()], Q.prototype, "opening", void 0), y([f()], Q.prototype, "originalOpening", void 0), y([f()], Q.prototype, "fixture", void 0), y([f()], Q.prototype, "original", void 0), y([f()], Q.prototype, "mode", void 0), y([f()], Q.prototype, "error", void 0), y([f()], Q.prototype, "notice", void 0), y([f()], Q.prototype, "registry", void 0), y([f()], Q.prototype, "registryError", void 0), y([f()], Q.prototype, "loading", void 0), y([f()], Q.prototype, "search", void 0), y([f()], Q.prototype, "profile", void 0), y([f()], Q.prototype, "profileName", void 0), y([f()], Q.prototype, "profileText", void 0), Q = y([g("al-room-device-editor")], Q);
 //#endregion
 //#region src/al-floorplans.ts
 var $ = class extends v {
@@ -8821,7 +8868,9 @@ var $ = class extends v {
 	}
 	static {
 		this.styles = C`
-    :host { display:block; position:fixed; inset:0; z-index:20; color:#d8edf2; background:#101d27; --primary-text-color:#d8edf2; --secondary-text-color:#91adba; --card-background-color:#142b38; --secondary-background-color:#1b3a48; --divider-color:#345261; --primary-color:#80ddeb; }
+    :host { display:block; position:relative; height:calc(100dvh - 64px); min-height:400px; overflow:hidden; color:#d8edf2; background:#101d27; --primary-text-color:#d8edf2; --secondary-text-color:#91adba; --card-background-color:#142b38; --secondary-background-color:#1b3a48; --divider-color:#345261; --primary-color:#80ddeb; }
+    :host(:fullscreen) { height:100dvh; }
+    .fullscreen { position:absolute; right:54px; top:12px; z-index:8; height:32px; }
     .scene { position:absolute; inset:0; } .scene.shifted { left:400px; }
     al-floorplan-viewer, al-room-device-editor { display:block; height:100%; }
     [hidden] { display:none !important; }
@@ -8886,10 +8935,11 @@ var $ = class extends v {
 		}
 	}
 	action(e) {
-		this.dispatchEvent(new CustomEvent(e, {
+		let t = this.renderRoot.querySelector("al-room-device-editor");
+		e === "al-save-config" && t && !t.flushDraft() || (e === "al-discard-config" && t?.resetDraft(), this.dispatchEvent(new CustomEvent(e, {
 			bubbles: !0,
 			composed: !0
-		}));
+		})));
 	}
 	render() {
 		if (!this.config) return D;
@@ -8913,6 +8963,13 @@ var $ = class extends v {
       ${e ? x`<al-room-device-editor @al-editor-room=${(e) => {
 			this.editRoom = e.detail;
 		}} workspace .section=${this.page} .room=${this.editRoom} .lights=${this.lights} .live=${this.live} .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor>` : D}
+      <button class="fullscreen" aria-label="Toggle fullscreen" title="Fullscreen" @click=${async () => {
+			try {
+				this.matches(":fullscreen") ? await document.exitFullscreen() : await this.requestFullscreen();
+			} catch {
+				this.preferenceError = "Fullscreen is unavailable in this browser.";
+			}
+		}}>⛶</button>
       <nav class="rail" aria-label="Floorplan tools">
         <button aria-label="Exit floorplan" title="Back to Activity Levels" @click=${() => this.action("al-exit-floorplan")}>←</button>
         ${[

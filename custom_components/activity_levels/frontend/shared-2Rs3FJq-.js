@@ -1,5 +1,5 @@
-import { _ as e, a as t, b as n, i as r, m as i, n as a, o, r as s, s as c, v as l, y as u } from "./shared-CW-USVUA.js";
-import { n as d } from "./shared-IIYdNIav.js";
+import { _ as e, a as t, b as n, i as r, m as i, n as a, o, r as s, s as c, v as l, y as u } from "./shared-Ct4v5opF.js";
+import { n as d } from "./shared-BBNy9uad.js";
 import { F as f, G as p, H as m, I as h, K as g, N as _, P as v, Sn as y, T as b, Ut as x, V as S, Wt as C, _ as w, cn as T, d as E, et as D, i as O, in as k, k as A, l as j, nt as ee, o as M, on as te, r as N, rn as P, rt as F, sn as I, tn as ne, tt as L, w as R, x as z, xn as B } from "./shared-DVWk8t-w.js";
 import { t as V } from "./shared-mmljZPXC.js";
 //#region node_modules/.pnpm/three@0.185.1/node_modules/three/examples/jsm/controls/OrbitControls.js
@@ -467,13 +467,13 @@ function ge() {
 	return t.magFilter = t.minFilter = h, t.needsUpdate = !0, t;
 }
 var _e = class {
-	constructor(e, t, n, i, a) {
-		this.host = e, this.select = t, this.fail = n, this.hover = i, this.place = a, this.scene = new ne(), this.camera = new D(38, 1, .01, 1e3), this.raycaster = new C(), this.volumes = [], this.boundsKey = "", this.origin = new y(), this.markers = [], this.coverageRooms = [], this.doors = [], this.siteMeshes = [], this.radius = 1, this.options = r(), this.lastTick = 0, this.pauseUntil = 0, this.focusUntil = 0, this.focusDistance = 0, this.focusEvents = /* @__PURE__ */ new Map(), this.alertKey = "", this.lastSelected = "", this.lastFocus = 0, this.reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)"), this.disposed = !1, this.lost = !1, this.pointer = null, this.resize = () => {
+	constructor(e, t, n, i, a, o) {
+		this.host = e, this.select = t, this.fail = n, this.hover = i, this.place = a, this.orientation = o, this.scene = new ne(), this.camera = new D(38, 1, .01, 1e3), this.raycaster = new C(), this.volumes = [], this.boundsKey = "", this.origin = new y(), this.markers = [], this.coverageRooms = [], this.doors = [], this.siteMeshes = [], this.radius = 1, this.options = r(), this.lastTick = 0, this.pauseUntil = 0, this.focusUntil = 0, this.focusDistance = 0, this.focusEvents = /* @__PURE__ */ new Map(), this.alertKey = "", this.lastSelected = "", this.lastFocus = 0, this.reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)"), this.disposed = !1, this.lost = !1, this.pointer = null, this.resize = () => {
 			if (this.disposed) return;
 			let e = Math.max(1, this.host.clientWidth), t = Math.max(1, this.host.clientHeight);
 			this.camera.aspect = e / t, this.camera.updateProjectionMatrix(), this.renderer.setSize(e, t, !1), this.draw();
 		}, this.draw = () => {
-			!this.disposed && !this.lost && document.visibilityState === "visible" && this.renderer.render(this.scene, this.camera);
+			!this.disposed && !this.lost && document.visibilityState === "visible" && (this.renderer.render(this.scene, this.camera), this.orientation?.([...this.camera.matrixWorldInverse.elements]));
 		}, this.pauseMotion = () => {
 			this.pauseUntil = Date.now() + 3e4, this.focusTarget = void 0;
 		}, this.scheduleMotion = () => {
@@ -538,8 +538,8 @@ var _e = class {
 			antialias: !0,
 			alpha: !0
 		}), this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)), this.renderer.setClearColor(0, 0);
-		let o = this.renderer.domElement;
-		o.style.width = "100%", o.style.height = "100%", o.style.display = "block", o.setAttribute("aria-label", "3D house. Drag to rotate; use the camera controls and group list for keyboard access."), o.setAttribute("role", "img"), this.host.append(o), this.controls = new Q(this.camera, o), this.controls.enableDamping = !1, this.controls.maxPolarAngle = Math.PI * .49, this.controls.addEventListener("change", this.draw), this.controls.addEventListener("start", this.pauseMotion), document.addEventListener("visibilitychange", this.scheduleMotion), this.reduced?.addEventListener("change", this.scheduleMotion), o.addEventListener("pointerdown", this.onPointerDown), o.addEventListener("pointermove", this.onPointerMove), o.addEventListener("pointerup", this.onPointerUp), o.addEventListener("pointercancel", this.onPointerCancel), o.addEventListener("pointerleave", this.onPointerLeave), o.addEventListener("webglcontextlost", this.onContextLost), this.observer = new ResizeObserver(this.resize), this.observer.observe(e), this.resize();
+		let s = this.renderer.domElement;
+		s.style.width = "100%", s.style.height = "100%", s.style.display = "block", s.setAttribute("aria-label", "3D house. Drag to rotate; use the camera controls and group list for keyboard access."), s.setAttribute("role", "img"), this.host.append(s), this.controls = new Q(this.camera, s), this.controls.enableDamping = !1, this.controls.maxPolarAngle = Math.PI * .49, this.controls.addEventListener("change", this.draw), this.controls.addEventListener("start", this.pauseMotion), document.addEventListener("visibilitychange", this.scheduleMotion), this.reduced?.addEventListener("change", this.scheduleMotion), s.addEventListener("pointerdown", this.onPointerDown), s.addEventListener("pointermove", this.onPointerMove), s.addEventListener("pointerup", this.onPointerUp), s.addEventListener("pointercancel", this.onPointerCancel), s.addEventListener("pointerleave", this.onPointerLeave), s.addEventListener("webglcontextlost", this.onContextLost), this.observer = new ResizeObserver(this.resize), this.observer.observe(e), this.resize();
 	}
 	setParts(e, t, n, r) {
 		if (this.clearParts(), this.coverageRooms = e.filter((e) => !e.container), this.focusTarget = void 0, this.focusEvents.clear(), !e.length && !n?.features.length) {

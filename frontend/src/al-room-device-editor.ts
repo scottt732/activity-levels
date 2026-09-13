@@ -39,7 +39,8 @@ export class AlRoomDeviceEditor extends LitElement {
     :host([workspace]) fieldset, :host([workspace]) .workspace { height:100%; min-height:0; }
     :host([workspace]) .workspace { display:grid; grid-template-columns:58% 42%; border:0; border-radius:0; }
     :host([workspace]) .scene-pane { height:100%; }
-    :host([workspace]) .plan-pane { height:100%; box-sizing:border-box; padding:66px 12px 12px; --room-plan-height:calc(100dvh - 180px); }
+    :host([workspace]) .plan-pane { height:100%; box-sizing:border-box; padding:66px 12px 12px; --room-plan-height:calc(100% - 1px); }
+    :host([workspace]) .plan-pane > div, :host([workspace]) al-room-plan { height:100%; }
     :host([workspace]) .plan-pane h3 { font-size:12px; text-transform:uppercase; letter-spacing:.15em; margin:0 0 8px; }
     :host([workspace]) .editor-controls { position:absolute; top:60px; left:62px; width:260px; max-width:none; max-height:calc(100% - 78px); margin:0; padding:10px; border-radius:8px; background:#102633f2; }
     :host([workspace]) button, :host([workspace]) select, :host([workspace]) input, :host([workspace]) textarea { padding:4px 6px; font-size:12px; border-radius:3px; background:#163140; border-color:#355365; }
@@ -49,6 +50,10 @@ export class AlRoomDeviceEditor extends LitElement {
     :host([workspace]) .device { background:transparent; border-color:transparent; padding:5px 4px; margin:0; }
     :host([workspace]) .device:hover { background:#244652; } :host([workspace]) .device small { font-size:10px; color:#91adba; }
     :host([workspace]) .editor-controls input[type=checkbox] { width:auto; }
+    :host([workspace]) label.check, .check { display:flex; flex-direction:row; align-items:center; gap:6px; }
+    .device-information { position:absolute; z-index:6; top:60px; left:340px; width:280px; max-height:calc(100% - 90px); overflow:auto; padding:12px; background:#102633f5; border:1px solid #80ddeb; border-radius:8px; font-size:12px; }
+    .device-information header { display:flex; justify-content:space-between; align-items:center; }
+    @media(max-width:760px){.device-information{left:76px;right:12px;width:auto;}}
     .view-toggle { display:none; }
     .page-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0; }
     .page-heading h3 { font-size:14px; margin:0; }
@@ -61,6 +66,8 @@ export class AlRoomDeviceEditor extends LitElement {
   `;
   @property({type:Boolean,reflect:true}) workspace=false;
   @property({type:String}) section:"all"|"openings"|"sensors"|"lights"="all";
+  @state() private aimSnap=0;
+  @state() private information=false;
   @state() private adding=false;
   @state() private profilesPage=false;
   @property({attribute:false}) config?:Config;
@@ -148,7 +155,7 @@ export class AlRoomDeviceEditor extends LitElement {
     finally {if(sequence===this.sequence)this.loading=false;}
   }
   private reset():void {
-    this.adding=false;this.profilesPage=false;this.legacyWindow=undefined;this.addKind="";
+    this.information=false;this.adding=false;this.profilesPage=false;this.legacyWindow=undefined;this.addKind="";
     this.fixture={...newFixture(),position:this.group?initialFixturePosition(this.group):[0,0,0]};
     this.opening=undefined;this.originalOpening=undefined;this.original=undefined;this.error="";this.notice="";this.mode="place";this.profile="";this.profileName="";this.search="";
   }
@@ -173,9 +180,21 @@ export class AlRoomDeviceEditor extends LitElement {
       const matches=candidate?this.profiles.filter(p=>(p.kind==="light")===(this.fixture.kind==="light") && matchesProfile(p,candidate)):[];
       this.profile=matches.length===1?matches[0]!.id:"";
     }
-    this.addKind="";this.error="";this.notice="";this.profileName="";this.mode="place";
+    this.addKind="";this.error="";this.notice="";this.profileName="";this.mode="place";if(this.workspace)this.flushDraft();
   }
-  private patch(patch:Partial<RoomFixture>):void {if(!this.disabled){this.fixture={...this.fixture,...patch};this.error="";this.notice="";}}
+  public resetDraft():void {this.reset();}
+  public flushDraft():boolean {
+    if(this.disabled)return false;
+    if(!this.validLengths())return false;
+    if(!this.workspace || (!this.fixture.entity && !this.opening))return true;
+    try {
+      const next=this.opening?saveOpening(this.openingConfig(),this.room,this.opening,this.originalOpening):saveFixture(this.config!,this.room,this.fixture,this.original);
+      if(JSON.stringify(next)!==JSON.stringify(this.config)){this.config=next;this.dispatchEvent(alChange(next));}
+      if(this.opening){this.originalOpening=this.opening.id;this.legacyWindow=undefined;}else this.original=this.fixture.entity;
+      this.error="";return true;
+    } catch(error){this.error=(error as Error).message;return false;}
+  }
+  private patch(patch:Partial<RoomFixture>):void {if(!this.disabled){this.fixture={...this.fixture,...patch};this.error="";this.notice="";if(this.workspace)this.flushDraft();}}
   private save():void {
     if(!this.config || this.disabled || !this.validLengths())return;
     try {this.dispatchEvent(alChange(saveFixture(this.config,this.room,this.fixture,this.original)));this.original=this.fixture.entity;this.notice="Placement added to draft. Use Save in the panel to persist it.";this.error="";}
@@ -200,7 +219,7 @@ export class AlRoomDeviceEditor extends LitElement {
       const match:SensorProfile["match"]={};
       for(const key of ["manufacturer","model","platform","device_class","entity_name"] as const)if(device?.[key])match[key]=device[key];
       const profile=parseProfiles(JSON.stringify([{id:existing?.id ?? `personal:${crypto.randomUUID()}`,name:this.profileName,
-        kind:this.fixture.kind,fov:this.fixture.fov,vertical_fov:this.fixture.vertical_fov,range:this.fixture.range,
+        coverage_shape:this.fixture.coverage_shape,kind:this.fixture.kind,fov:this.fixture.fov,vertical_fov:this.fixture.vertical_fov,range:this.fixture.range,
         technology:this.fixture.technology,mount:this.fixture.mount,...(this.fixture.look_down===undefined?{}:{look_down:this.fixture.look_down}),notes:existing?.notes ?? "",source:existing?.source ?? "",match:existing?.match ?? match}]))[0]!;
       const profiles=[...(this.config.sensor_profiles ?? []).filter(p=>p.id!==profile.id),profile];
       parseProfiles(JSON.stringify(profiles));this.dispatchEvent(alChange({...this.config,sensor_profiles:profiles}));
@@ -227,7 +246,7 @@ export class AlRoomDeviceEditor extends LitElement {
     const b=this.group.bounds;
     const opening=value?structuredClone(value):newOpening(kind);
     if(!value)Object.assign(opening,snapOpening(this.group,[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,b[0][2]+(kind==="window"?Math.max(0,(b[1][2]-b[0][2]-opening.height)/2):0)],opening.width));
-    this.opening=opening;this.originalOpening=value?.id;
+    this.opening=opening;this.originalOpening=value?.id;if(this.workspace && !value)this.flushDraft();
   }
   private openingConfig():Config {
     const config=structuredClone(this.config!);
@@ -259,7 +278,7 @@ export class AlRoomDeviceEditor extends LitElement {
       <div class="devices">${ids.map(id=>html`<label><input type="checkbox" data-contact=${id} .checked=${selected.includes(id)} @change=${(e:Event)=>this.patchOpening({entity:undefined,entities:(e.target as HTMLInputElement).checked?[...selected,id]:selected.filter(v=>v!==id)})}>${this.hass?.states[id]?.attributes.friendly_name ?? id}<small>${id} · ${this.hass?.states[id]?.state ?? "unavailable"}</small></label>`)}</div>
       ${!selected.length?html`<label><input type="checkbox" .checked=${o.open} @change=${(e:Event)=>this.patchOpening({open:(e.target as HTMLInputElement).checked})}>Manually open</label>`:html`<p class="muted">State: ${openingState(o,this.hass?.states ?? {})}. All contacts must be off to show closed; unavailable contacts leave the state unknown.</p>`}`;
   }
-  private patchOpening(patch:Partial<RoomOpening>):void {if(this.opening && !this.disabled){this.opening={...this.opening,...patch};this.error="";}}
+  private patchOpening(patch:Partial<RoomOpening>):void {if(this.opening && !this.disabled){this.opening={...this.opening,...patch};this.error="";if(this.workspace)this.flushDraft();}}
   private saveDoor():void {
     if(!this.config || !this.opening || this.disabled || !this.validLengths())return;
     try{this.dispatchEvent(alChange(saveOpening(this.openingConfig(),this.room,this.opening,this.originalOpening)));this.legacyWindow=undefined;this.originalOpening=this.opening.id;this.notice="Opening added to draft. Use the panel's Save to persist it.";this.error="";}
@@ -278,7 +297,7 @@ export class AlRoomDeviceEditor extends LitElement {
         `:nothing}
       ${o.kind!=="open_wall"?this.contactsControl(o):nothing}
       <p class="muted">Click near a wall to place and align the opening. An open wall always lets coverage pass.</p>
-      <button id="save-opening" type="button" @click=${()=>this.saveDoor()}>${this.originalOpening?"Update":"Add"} opening to draft</button>
+      <button ?hidden=${this.workspace} id="save-opening" type="button" @click=${()=>this.saveDoor()}>${this.originalOpening?"Update":"Add"} opening to draft</button>
       ${this.originalOpening || this.legacyWindow?html`<button type="button" @click=${()=>{if(!this.config || this.disabled)return;const next=this.openingConfig(),g=walkGroups(next).find(e=>e.group.id===this.room)?.group;if(g)g.openings=g.openings?.filter(v=>v.id!==this.originalOpening);this.dispatchEvent(alChange(next));this.opening=undefined;this.originalOpening=undefined;this.legacyWindow=undefined;}}>Remove opening</button>`:nothing}`;
   }
   protected override render() {
@@ -299,22 +318,22 @@ export class AlRoomDeviceEditor extends LitElement {
 `:nothing}
       ${b?html`<div class="workspace">
         <div class="scene-pane"><al-floorplan-viewer .workspace=${this.workspace} editing-preview .context=${true} .config=${this.preview} .room=${this.room} .live=${this.live} .hass=${this.hass} .lights=${this.lights} .settings=${{focus_activity:false,auto_rotate:false}}></al-floorplan-viewer></div>
-        <div class="plan-pane"><h3>Top-down placement</h3><div>
-        <div><button type="button" aria-pressed=${this.mode==="place"} @click=${()=>{this.mode="place";}}>Place / move</button>
+        <div class="plan-pane"><h3 ?hidden=${this.workspace}>Top-down placement</h3><div>
+        <div ?hidden=${this.workspace}><button type="button" aria-pressed=${this.mode==="place"} @click=${()=>{this.mode="place";}}>Place / move</button>
           <button type="button" aria-pressed=${this.mode==="aim"} ?disabled=${!this.fixture.entity || (this.fixture.kind==="light" || this.fixture.kind==="window")} @click=${()=>{this.mode="aim";}}>Aim</button></div>
-        <al-room-plan .group=${previewGroup} .neighbors=${contextGroups} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
+        <al-room-plan .minimal=${this.workspace} .group=${previewGroup} .neighbors=${contextGroups} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
           @al-fixture-position=${(e:CustomEvent<[number,number,number]>)=>{e.stopPropagation();this.patch(this.fixture.kind==="window" && this.group?snapWindow(this.group,e.detail,this.fixture.width):{position:e.detail});}}
-          @al-fixture-aim=${(e:CustomEvent<number>)=>this.patch({yaw:Number(e.detail.toFixed(1))})}
+          @al-fixture-aim=${(e:CustomEvent<number>)=>this.patch({yaw:this.aimSnap?Math.round(e.detail/this.aimSnap)*this.aimSnap:Number(e.detail.toFixed(1))})}
           @al-opening-position=${(e:CustomEvent<[number,number,number]>)=>{if(this.opening && this.group)this.patchOpening(snapOpening(this.group,e.detail,this.opening.width));}}
           @al-opening-select=${(e:CustomEvent<string>)=>{const opening=group?.openings?.find(o=>o.id===e.detail);if(opening)this.editOpening(opening);}}
           @al-fixture-select=${(e:CustomEvent<string>)=>this.select(e.detail)}></al-room-plan>
       </div></div><div class="editor-controls">
-        ${this.workspace?html`<div class="room-tools">      <label><select aria-label="Room" id="device-room" .value=${this.room} @change=${(e:Event)=>{this.room=(e.target as HTMLSelectElement).value;this.reset();this.dispatchEvent(new CustomEvent("al-editor-room",{detail:this.room,bubbles:true,composed:true}));}}>
+        ${this.workspace && !this.fixture.entity && !this.opening?html`<div class="room-tools">      <label><select aria-label="Room" id="device-room" .value=${this.room} @change=${(e:Event)=>{this.room=(e.target as HTMLSelectElement).value;this.reset();this.dispatchEvent(new CustomEvent("al-editor-room",{detail:this.room,bubbles:true,composed:true}));}}>
         <option value="" disabled>Choose a room</option>${rooms.map(e=>html`<option value=${e.group.id} .selected=${e.group.id===this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
       <label><select aria-label="Measurements" id="length-unit" .value=${this.unitChoice} @change=${(e:Event)=>{this.unitChoice=(e.target as HTMLSelectElement).value as "auto"|LengthUnit;}}><option value="auto" .selected=${this.unitChoice==="auto"}>HA (${defaultLengthUnit(this.hass)})</option><option value="m" .selected=${this.unitChoice==="m"}>Meters</option><option value="ft" .selected=${this.unitChoice==="ft"}>Feet & inches</option></select></label>
-</div><button type="button" class="view-toggle" aria-label="Toggle 2D view on narrow screens" @click=${()=>this.toggleAttribute("plan-view")}>2D / 3D</button>`:html`<h3>Room editor</h3>`}
-        <div class="page-heading"><h3>${this.section==="openings"?"Doors & windows":this.section==="sensors"?"Motion & occupancy":this.section==="lights"?"Lights":"Devices & windows"}</h3>
-          ${this.workspace && (this.fixture.entity || this.opening || this.adding || this.profilesPage)?html`<button type="button" @click=${()=>this.reset()}>← List</button>`:this.workspace?html`<button type="button" @click=${()=>{this.adding=true;}}>+ Add</button>`:nothing}
+</div><button type="button" class="view-toggle" aria-label="Toggle 2D view on narrow screens" @click=${()=>this.toggleAttribute("plan-view")}>2D / 3D</button>`:this.workspace?nothing:html`<h3>Room editor</h3>`}
+        <div class="page-heading">${this.workspace && this.original?html`<button type="button" aria-label="Delete device" title="Delete device" @click=${()=>this.removeFixture()}>⌫</button>`:nothing}<h3>${this.section==="openings"?"Doors & windows":this.section==="sensors"?"Motion & occupancy":this.section==="lights"?"Lights":"Devices & windows"}</h3>
+          ${this.workspace && (this.fixture.entity || this.opening || this.adding || this.profilesPage)?html`<button type="button" aria-label="Close object editor" @click=${()=>this.reset()}>×</button>`:this.workspace?html`<button type="button" @click=${()=>{this.adding=true;}}>+ Add</button>`:nothing}
         </div>
         ${!this.workspace || (!this.fixture.entity && !this.opening && !this.profilesPage)?html`
         <details class="add-menu" ?hidden=${this.workspace && !this.adding} .open=${this.workspace && this.adding}><summary>Add…</summary>
@@ -346,9 +365,9 @@ export class AlRoomDeviceEditor extends LitElement {
             <option value="">Choose a profile</option>${this.profiles.filter(p=>(p.kind==="light")===this.fixture.entity.startsWith("light.") && (p.kind==="window")===(this.fixture.kind==="window")).map(p=>html`<option value=${p.id} .selected=${p.id===this.profile}>${suggestions.includes(p)?"Suggested · ":""}${p.name}</option>`)}</select></label>
           <button type="button" ?disabled=${!profile} @click=${()=>this.useProfile()}>Apply profile</button></div>
         ${suggestions.length?html`<p class="muted">Suggested from device metadata: ${suggestions.map(p=>p.name).join(", ")}. Confirm the model and sensor entity before applying.</p>`:nothing}
-        ${profile?html`<p class="muted">${profile.notes}</p>${/^https?:\/\//.test(profile.source)?html`<a href=${profile.source} target="_blank" rel="noopener noreferrer">Profile source</a>`:nothing}`:nothing}
-        ${(this.fixture.kind==="motion" || this.fixture.kind==="occupancy")?html`<al-orientation-control .yaw=${this.fixture.yaw} .pitch=${this.fixture.pitch} .disabled=${this.disabled} @al-orientation-change=${(e:CustomEvent<{yaw:number;pitch:number}>)=>this.patch(e.detail)}></al-orientation-control>
-        <label><input type="checkbox" .checked=${this.fixture.look_down ?? false} @change=${(e:Event)=>this.patch({look_down:(e.target as HTMLInputElement).checked})}>Separate look-down coverage</label><p class="muted">Look-down shape is approximate. Match the physical lens setting.</p>`:nothing}
+        ${profile?html`<button type="button" @click=${()=>{this.information=!this.information;}}>Device information</button>`:nothing}
+        ${(this.fixture.kind==="motion" || this.fixture.kind==="occupancy")?html`<al-orientation-control .snap=${this.aimSnap} @al-aim-snap=${(e:CustomEvent<number>)=>{this.aimSnap=e.detail;}} .yaw=${this.fixture.yaw} .pitch=${this.fixture.pitch} .disabled=${this.disabled} @al-orientation-change=${(e:CustomEvent<{yaw:number;pitch:number}>)=>this.patch(e.detail)}></al-orientation-control>
+        <label class="check"><input type="checkbox" .checked=${this.fixture.look_down ?? false} @change=${(e:Event)=>this.patch({look_down:(e.target as HTMLInputElement).checked})}>Separate look-down coverage</label><p class="muted">Look-down shape is approximate. Match the physical lens setting.</p>`:nothing}
         <details><summary>Adjust characteristics and precise position</summary><div class="fields">
           <label>Type<select id="fixture-kind" .value=${this.fixture.kind} @change=${(e:Event)=>{const kind=(e.target as HTMLSelectElement).value as RoomFixture["kind"];this.patch({kind,profile_id:undefined,...(kind==="window" && this.group?snapWindow(this.group,this.fixture.position,this.fixture.width):{})});this.profile="";}}>${["motion","occupancy","light","window"].map(k=>html`<option value=${k} .selected=${k===this.fixture.kind}>${k}</option>`)}</select></label>
           <label>Label<input maxlength="100" .value=${this.fixture.name} @input=${(e:Event)=>this.patch({name:(e.target as HTMLInputElement).value})}></label>
@@ -360,8 +379,8 @@ export class AlRoomDeviceEditor extends LitElement {
         </div><p class="muted">Coverage is approximate and clipped by solid room boundaries. The top-down sector illustrates horizontal coverage; use 3D to inspect tilt.</p>
         <label>Personal model name<input id="profile-name" maxlength="100" .value=${this.profileName} @input=${(e:Event)=>{this.profileName=(e.target as HTMLInputElement).value;}}></label>
         <button id="save-profile" type="button" @click=${()=>this.saveProfile()}>${this.config.sensor_profiles?.some(p=>p.id===this.profile)?"Update":"Save"} personal model profile</button></details>
-        <button id="save-fixture" type="button" @click=${()=>this.save()}>${this.original?"Update":"Add"} placement to draft</button>
-        ${this.original?html`<button type="button" @click=${()=>this.removeFixture()}>Remove placement</button>`:nothing}
+        <button ?hidden=${this.workspace} id="save-fixture" type="button" @click=${()=>this.save()}>${this.original?"Update":"Add"} placement to draft</button>
+        ${this.original?html`<button ?hidden=${this.workspace} type="button" @click=${()=>this.removeFixture()}>Remove placement</button>`:nothing}
       `:nothing}
       ${this.previewError?html`<p class="error" role="status">Placement needs adjustment: ${this.previewError}</p>`:nothing}
       <p class="status" role="status">${this.notice}</p>${this.error?html`<p class="error" role="alert">${this.error}</p>`:nothing}
@@ -369,7 +388,9 @@ export class AlRoomDeviceEditor extends LitElement {
         <textarea aria-label="Profile JSON" .value=${this.profileText} @input=${(e:Event)=>{this.profileText=(e.target as HTMLTextAreaElement).value;}}></textarea>
         <button type="button" @click=${()=>{this.profileText=JSON.stringify(parseProfiles(JSON.stringify(this.config?.sensor_profiles ?? [])),null,2);}}>Export personal profiles</button>
         <button type="button" @click=${()=>this.importProfiles()}>Import profiles to draft</button>
-      </details></div></div>`:html`<p class="muted">Choose a room with floorplan dimensions first.</p>`}
+      </details></div>
+      ${this.information && profile?html`<aside class="device-information" aria-label="Device information"><header>Device information <button type="button" aria-label="Close device information" @click=${()=>{this.information=false;}}>×</button></header><h3>${profile.name}</h3><p>${profile.notes}</p>${/^https?:\/\//.test(profile.source)?html`<a href=${profile.source} target="_blank" rel="noopener noreferrer">Profile source</a>`:nothing}</aside>`:nothing}
+      </div>`:html`<p class="muted">Choose a room with floorplan dimensions first.</p>`}
     </fieldset>`;
   }
 }

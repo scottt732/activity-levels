@@ -73,6 +73,7 @@ export interface Gps {
 }
 
 export interface SensorProfile {
+  coverage_shape?:"cone"|"fan";
   look_down?:boolean;
   id:string; name:string; kind:RoomFixture["kind"]; fov:number; vertical_fov:number; range:number;
   technology:string; mount:string; notes:string; source:string;
@@ -83,6 +84,7 @@ export interface RoomDevice {
   platform:string; device_class:string|null; entity_name:string;
 }
 export interface RoomFixture {
+  coverage_shape?:"cone"|"fan";
   look_down?:boolean;
   profile_id?: string;
   width?: number; height?: number;

@@ -103,6 +103,7 @@ def position(value: Any) -> list[float]:
 FIXTURE_SCHEMA = vol.Schema(
     {
         vol.Optional("look_down"): bool,
+        vol.Optional("coverage_shape"): vol.In(["cone", "fan"]),
         vol.Optional("profile_id"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Required("entity"): vol.Match(r"^(binary_sensor|light)\.[a-z0-9_]+$"),
         vol.Required("kind"): vol.In(["motion", "occupancy", "light", "window"]),
@@ -143,6 +144,7 @@ SENSOR_PROFILE_SCHEMA = vol.Schema(
         vol.Required("name"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Required("kind"): vol.In(["motion", "occupancy", "light", "window"]),
         vol.Optional("look_down"): bool,
+        vol.Optional("coverage_shape"): vol.In(["cone", "fan"]),
         vol.Required("fov"): vol.All(coordinate, vol.Range(min=1, max=170)),
         vol.Required("vertical_fov"): vol.All(coordinate, vol.Range(min=1, max=170)),
         vol.Required("range"): vol.All(coordinate, vol.Range(min=0, max=100)),

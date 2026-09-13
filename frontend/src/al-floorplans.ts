@@ -16,7 +16,9 @@ import type { Config, HomeAssistant, LiveState } from "./types";
 @customElement("al-floorplans")
 export class AlFloorplans extends LitElement {
   static styles = css`
-    :host { display:block; position:fixed; inset:0; z-index:20; color:#d8edf2; background:#101d27; --primary-text-color:#d8edf2; --secondary-text-color:#91adba; --card-background-color:#142b38; --secondary-background-color:#1b3a48; --divider-color:#345261; --primary-color:#80ddeb; }
+    :host { display:block; position:relative; height:calc(100dvh - 64px); min-height:400px; overflow:hidden; color:#d8edf2; background:#101d27; --primary-text-color:#d8edf2; --secondary-text-color:#91adba; --card-background-color:#142b38; --secondary-background-color:#1b3a48; --divider-color:#345261; --primary-color:#80ddeb; }
+    :host(:fullscreen) { height:100dvh; }
+    .fullscreen { position:absolute; right:54px; top:12px; z-index:8; height:32px; }
     .scene { position:absolute; inset:0; } .scene.shifted { left:400px; }
     al-floorplan-viewer, al-room-device-editor { display:block; height:100%; }
     [hidden] { display:none !important; }
@@ -83,7 +85,11 @@ export class AlFloorplans extends LitElement {
       if (!this.editRoom) this.page="import";
     }
   }
-  private action(name:string):void {this.dispatchEvent(new CustomEvent(name,{bubbles:true,composed:true}));}
+  private action(name:string):void {
+    const editor=this.renderRoot.querySelector("al-room-device-editor") as import("./al-room-device-editor").AlRoomDeviceEditor|null;
+    if(name==="al-save-config" && editor && !editor.flushDraft())return;
+    if(name==="al-discard-config")editor?.resetDraft();
+    this.dispatchEvent(new CustomEvent(name,{bubbles:true,composed:true}));}
   protected override render() {
     if (!this.config) return nothing;
     const editing=["openings","sensors","lights"].includes(this.page),panel=this.page==="property" || this.page==="import";
@@ -96,6 +102,7 @@ export class AlFloorplans extends LitElement {
           .telemetry=${this.error ? undefined : this.telemetry} .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
       </div>
       ${editing?html`<al-room-device-editor @al-editor-room=${(e:CustomEvent<string>)=>{this.editRoom=e.detail;}} workspace .section=${this.page} .room=${this.editRoom} .lights=${this.lights} .live=${this.live} .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor>`:nothing}
+      <button class="fullscreen" aria-label="Toggle fullscreen" title="Fullscreen" @click=${async()=>{try{if(this.matches(":fullscreen"))await document.exitFullscreen();else await this.requestFullscreen();}catch{this.preferenceError="Fullscreen is unavailable in this browser.";}}}>⛶</button>
       <nav class="rail" aria-label="Floorplan tools">
         <button aria-label="Exit floorplan" title="Back to Activity Levels" @click=${()=>this.action("al-exit-floorplan")}>←</button>
         ${([ ["live","◈","Live telemetry"],["openings","▣","Doors & windows"],["sensors","◎","Motion & occupancy"],["lights","☼","Lights"],["property","⌖","Property layout"],["import","⇧","Import floorplan"],["settings","⚙","Viewer settings"] ] as const).map(([page,icon,label])=>html`<button aria-label=${label} title=${label} aria-pressed=${this.page===page} @click=${()=>this.navigate(page)}>${icon}</button>`)}

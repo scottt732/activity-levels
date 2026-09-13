@@ -190,3 +190,13 @@ def test_opening_ids_are_unique_and_count_is_bounded():
         openings([{**door, "id": str(index)} for index in range(129)])
     with pytest.raises(vol.Invalid):
         fixtures([fixture(look_down="true")])
+
+
+def test_coverage_shape_round_trip():
+    source = house_config()
+    source["groups"][0]["fixtures"] = [fixture(coverage_shape="fan")]
+    config = validate_config(source)
+    assert config["groups"][0]["fixtures"][0]["coverage_shape"] == "fan"
+    assert validate_config(config) == config
+    with pytest.raises(vol.Invalid):
+        fixtures([fixture(coverage_shape="invalid")])

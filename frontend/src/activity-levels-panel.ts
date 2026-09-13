@@ -569,7 +569,7 @@ export class ActivityLevelsPanel extends LitElement {
       <ha-top-app-bar-fixed .narrow=${this.narrow}>
         <ha-menu-button slot="navigationIcon"></ha-menu-button>
         <div slot="title">Activity Levels</div>
-        <div slot="actionItems" class="row">
+        <div slot="actionItems" class="row" style=${this.tab==="floorplans"?"display:none":""}>
           ${this.renderLiveToggle()}
           <ha-icon-button .disabled=${!d?.canUndo} @click=${this.undo} title="Undo">
             <ha-icon icon="mdi:undo"></ha-icon>
@@ -582,8 +582,8 @@ export class ActivityLevelsPanel extends LitElement {
             >${d?.dirty ? "Save" : "Saved"}</ha-button
           >
         </div>
-        ${this.renderBanner()} ${this.renderInferred()} ${this.renderWarnings()}
-        <div class="tabs" role="tablist" aria-label="Sections" @keydown=${this.onTabsKeydown}>
+        ${this.tab==="floorplans"?nothing:html`${this.renderBanner()} ${this.renderInferred()} ${this.renderWarnings()}`}
+        <div class="tabs" style=${this.tab==="floorplans"?"display:none":""} role="tablist" aria-label="Sections" @keydown=${this.onTabsKeydown}>
           ${this.tabs.map(
             (t, i) => html`<button
               type="button"

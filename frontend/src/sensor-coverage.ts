@@ -122,7 +122,19 @@ export function coverageRays(fixture: RoomFixture, rooms: CoverageRoom[], states
         (pitch + Math.sin(angle) * vertical / 2) * RAD), range, rooms, states);
     }),
   });
-  const lobes = [lobe(fixture.pitch, fixture.fov, fixture.vertical_fov, fixture.range)];
+  // A PIR fan has independent horizontal and downward extents. An elliptical
+  // cone incorrectly narrows the downward coverage to a point along its centerline.
+  const fan:CoverageLobe = {
+    origin:[...fixture.position],
+    center:clipCoverageRay(fixture.position,direction(fixture.yaw*RAD,(fixture.pitch-fixture.vertical_fov/2)*RAD),fixture.range,rooms,states),
+    rim:Array.from({length:64},(_,i)=>{
+      const side=Math.floor(i/16),t=(i%16)/16;
+      const horizontal=side===0?-0.5+t:side===1?0.5:side===2?0.5-t:-0.5;
+      const down=side===0?0:side===1?t:side===2?1:1-t;
+      return clipCoverageRay(fixture.position,direction((fixture.yaw+horizontal*fixture.fov)*RAD,Math.max(-90,Math.min(90,fixture.pitch-down*fixture.vertical_fov))*RAD),fixture.range,rooms,states);
+    }),
+  };
+  const lobes = [fixture.coverage_shape==="fan"?fan:lobe(fixture.pitch, fixture.fov, fixture.vertical_fov, fixture.range)];
   if (fixture.look_down) {
     const room = rooms.find(candidate => contains(candidate, fixture.position) ||
       (fixture.position[2] >= candidate.low && fixture.position[2] <= candidate.high &&
