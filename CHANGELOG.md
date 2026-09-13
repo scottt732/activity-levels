@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/scottt732/activity-levels/compare/v0.23.0...v0.24.0) (2026-09-13)
+
+
+### Added
+
+* **panel:** refine room inspectors, sensor fans, and ambient navigation ([#65](https://github.com/scottt732/activity-levels/issues/65)) ([16b54b1](https://github.com/scottt732/activity-levels/commit/16b54b12203d42ef5f930457534573383d34a441))
+
 ## [0.23.0](https://github.com/scottt732/activity-levels/compare/v0.22.0...v0.23.0) (2026-09-13)
 
 
