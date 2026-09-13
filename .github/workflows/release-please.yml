@@ -24,7 +24,26 @@ jobs:
       # fine-grained PAT (contents + pull requests: read/write) whose PRs run CI like
       # anyone else's; without it the job still runs, but the release PR gets no checks.
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      # Use the PAT so merging the release PR triggers release-please again, which
+      # publishes the tag and starts the HACS ZIP workflow. Native auto-merge waits
+      # for the repository's required checks; never use an administrator bypass.
+      - name: Enable auto-merge on generated release PRs
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          while IFS= read -r number; do
+            gh pr edit "$number" --add-label automerge
+            head_sha=$(gh pr view "$number" --json headRefOid --jq .headRefOid)
+            gh pr merge "$number" --auto --squash --match-head-commit "$head_sha"
+          done < <(jq -er '.[] | .number | select(type == "number")' <<< "$RELEASE_PRS")

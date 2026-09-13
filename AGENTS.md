@@ -107,3 +107,11 @@ sentences; match that when you add to it.
 
 Don't commit `.DS_Store`, `coverage.xml` or `frontend/coverage/` — all three are ignored
 and one has a hook to say so.
+
+## Automatic merge and release
+
+For user-requested changes in this repository, label the PR `automerge` and enable
+GitHub squash auto-merge when opening it, unless the user asks to hold it. Required
+CI checks remain the merge gate; never use `--admin` or bypass checks. Continue to
+watch and address failures. The release-please workflow enables auto-merge on its
+generated release PRs, then publishes the release and HACS ZIP after they merge.
