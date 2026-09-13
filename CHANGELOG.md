@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/scottt732/activity-levels/compare/v0.21.0...v0.22.0) (2026-09-13)
+
+
+### Added
+
+* **panel:** categorized room objects, shared sensors and editor fixes ([#60](https://github.com/scottt732/activity-levels/issues/60)) ([b98b76f](https://github.com/scottt732/activity-levels/commit/b98b76fc118a79d09b6b58a872cf6079c904b1c1))
+
 ## [0.21.0](https://github.com/scottt732/activity-levels/compare/v0.20.0...v0.21.0) (2026-09-12)
 
 
