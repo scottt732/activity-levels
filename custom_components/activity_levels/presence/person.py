@@ -7,8 +7,8 @@ ranges over ``(room, c)`` with ``c`` a bit per device, and a device's readings a
 explained by the *person's* room when its bit is set and by the device's own filter
 -- wherever it thinks the object is -- when it is not. "Phone parked in the theater,
 person in the kitchen with the watch" is then a hypothesis the filter holds, and the
-phone's flat readings and the theater's empty activity level argue for it without any
-heuristic having to notice first.
+phone's charging signal and the watch's movement argue for it. Shared room motion
+cannot identify which person caused it.
 
 Cost: ``R`` rooms times ``2**D`` devices. Twenty rooms and three devices is a 21x8
 belief and two small matrix products per update. Pure numpy; no ``homeassistant``.
@@ -33,7 +33,6 @@ from .estimator import (
     BUFFER,
     Estimator,
     Outputs,
-    log_activity,
     summarise,
     viterbi,
 )
@@ -191,11 +190,11 @@ class PersonEstimator:
         whole weight, a one-second frame a hundred-and-twentieth of it, so the answer
         does not depend on how often Bermuda happens to report.
 
-        The house's activity term is added on the room axis.
+        Ambient room activity has no identity and therefore contributes no location
+        likelihood. Motion remains available for corroborating explicit corrections.
         """
         rooms = len(self.states)
-        activity = log_activity(obs.activity, self._position, rooms, self.activity_floor)
-        out = np.repeat(activity[:, None], self._bits.shape[0], axis=1)
+        out = np.zeros((rooms, self._bits.shape[0]), dtype=np.float64)
         rate = min(max(dt, 0.0), self.recent) / self.recent
         for d, device in enumerate(self.device_ids):
             frame = obs.devices.get(device)
@@ -241,9 +240,30 @@ class PersonEstimator:
             self.belief = likelihood / float(likelihood.sum())
             self._buffer.clear()
             self.resets += 1
+        self._bound_parked_confidence()
         self.apply_corrections(obs.t)
         self.last_t = obs.t
         return self.outputs(obs.t)
+
+    def _bound_parked_confidence(self) -> None:
+        """Keep the nearby assumption from compounding into a location assertion.
+
+        Column zero means every device is parked. Its room distribution may retain
+        a nearby preference, but repeated radio samples cannot identify the owner.
+        Mix only as much uniform uncertainty into that column as needed to bound
+        its peak. Carried marginals and relative room ordering are preserved, and
+        explicit user corrections are applied afterwards so they still take priority.
+        """
+        parked = self.belief[:, 0]
+        mass = float(parked.sum())
+        if mass <= 0.0:
+            return
+        uniform = 1.0 / len(self.states)
+        ceiling = uniform + self.nearby * (1.0 - uniform)
+        peak = float(parked.max()) / mass
+        if peak > ceiling:
+            retain = (ceiling - uniform) / (peak - uniform)
+            parked[:] = retain * parked + (1.0 - retain) * mass * uniform
 
     def locate(self, room: str, t: float | None = None) -> None:
         """A correction: the person *is* in ``room``. The carried marginals are kept --

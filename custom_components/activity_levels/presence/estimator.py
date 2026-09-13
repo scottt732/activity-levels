@@ -108,14 +108,8 @@ class Estimator:
         does not -- worse than any room, so only the transition model can put us there
         while we are home.
 
-        A room's own activity level is the other kind of evidence, and it only ever
-        counts against: ``log(ε + (1 - ε)·a)`` with ``a`` the level in ``[0, 1]``, or 1
-        while the level is rising, shifted so the busiest room scores zero. With other
-        people home, a busy room is weak evidence that *this* person is there, so a busy
-        room scores nothing; a room at ``0.0`` beside a busy one is strong evidence they
-        are not, and scores ``log ε`` -- the same footing as a room with no scanner.
-        ``away`` has no level and takes no term, which is why the shift matters: see
-        :func:`log_activity`.
+        Room activity is deliberately excluded: motion may belong to any occupant,
+        and a stationary object can remain in a quiet room indefinitely.
 
         A learned signature (see :mod:`.signatures`) replaces the distance half of this
         for the ``(room, scanner)`` pairs it has been fitted for -- a proper log-normal
@@ -153,7 +147,8 @@ class Estimator:
             heard[position] = True
         out[~heard] = log_floor
         out[self._position[AWAY]] = 2.0 * log_floor if obs.home else 0.0
-        out += log_activity(obs.activity, self._position, len(self.states), self.activity_floor)
+        # Ambient motion can belong to another person or a guest. It cannot move an
+        # owned object; only its radio readings and the topology predict its room.
         return out
 
     def log_marginal(self, obs: Observation) -> float:

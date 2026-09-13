@@ -307,6 +307,7 @@ async def test_a_charging_phone_is_read_as_parked(
     frame = presence._frame(presence.people["Scott"].devices[device], presence.coordinator.now())
     assert frame.signals.charging is True
     assert frame.signals.moving is False
+    assert frame.signals.still_room_empty is None
 
 
 async def test_walking_and_rising_steps_read_as_moving(
@@ -359,11 +360,12 @@ async def test_the_parked_phone_scenario_end_to_end(
     """The phone stays in the dining room; the watch and the motion go to the kitchen."""
     bermuda = fake_bermuda(hass)
     watch = fake_watch(hass, bermuda)
+    companion = fake_companion(hass)
     entry = await add_entry(
         hass,
         people_config(
             devices=[
-                {"tracker": bermuda.tracker, "kind": "phone"},
+                {"tracker": bermuda.tracker, "kind": "phone", "companion": companion.tracker},
                 {"tracker": watch.tracker, "kind": "watch"},
             ]
         ),
@@ -391,6 +393,7 @@ async def test_the_parked_phone_scenario_end_to_end(
     assert presence.people["Scott"].outputs.room == "dining_room"
 
     hass.states.async_set("binary_sensor.dining_motion", "off")
+    hass.states.async_set(companion.signals["battery_state"], "charging")
     hass.states.async_set("binary_sensor.kitchen_motion", "on")
     freezer.tick(timedelta(hours=3))  # the dining room's level runs out
     async_fire_time_changed(hass)
@@ -399,6 +402,7 @@ async def test_the_parked_phone_scenario_end_to_end(
     hass.states.async_set("binary_sensor.kitchen_motion", "on")
     out = None
     for i in range(30):
+        freezer.tick(timedelta(seconds=30))
         await tick("dining_room", "kitchen", 0.3 * (i % 2))
         out = presence.people["Scott"].outputs
         phone = next(d for d in presence.people["Scott"].devices.values() if d.kind == "phone")
@@ -985,10 +989,10 @@ async def test_an_active_room_reads_as_active_evidence(hass: HomeAssistant) -> N
     assert activity["kitchen"].level == 0.0
 
 
-async def test_an_empty_room_loses_a_distance_tie(
+async def test_shared_motion_does_not_resolve_a_distance_tie(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Kitchen and dining room read the same; only the dining room shows any life."""
+    """Motion in one of two equally heard rooms does not identify this person."""
     bermuda = fake_bermuda(hass)
     entry = await add_entry(hass)
     presence = entry.runtime_data.presence
@@ -1002,7 +1006,7 @@ async def test_an_empty_room_loses_a_distance_tie(
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
     out = presence.devices["Scott"].outputs
-    assert out is not None and out.room == "dining_room"
+    assert out is not None and out.confidence < 0.6
 
 
 async def test_a_room_emptying_out_is_a_frame_of_its_own(

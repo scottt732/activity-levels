@@ -450,15 +450,11 @@ all. `escape` is the small leftover probability of appearing somewhere with no p
 here, and it exists purely so a wrong guess is not permanent: without it, an estimate that
 starts (or is nudged) wrong could never recover.
 
-The rooms' own activity levels are the other kind of evidence. A room at `0.0` while another
-is busy is somewhere nobody is, however many people are home, so it costs a candidate as
-much as having no scanner at all (`activity.floor`); a room whose level is rising has a stimulus firing right
-now and costs nothing; anything in between decays at the envelope's own rate. A busy room is
-never a *reward* — with more than one person home it could be anyone — so this only ever
-rules rooms out. The level the estimator reads leaves out the room's own `presence` channel,
-so it can never confirm itself. The one place the rule fails is a room somebody is asleep
-in: a still sleeper trips no motion, and `0.0` there means nothing. Give such a room its own
-`presence.activity_floor: 1.0` and the estimator leaves it alone.
+Radio evidence drives device locations; topology smooths transitions. Shared room motion
+cannot identify an owner or move their devices. A quiet room does not imply that its
+occupants left their devices behind. The legacy activity-floor settings remain accepted
+for configuration compatibility but no longer change location likelihoods. Motion can
+still corroborate a carried device's route when reconsidering an explicit correction.
 
 **People and their devices.** A person is followed by every device they own — a phone,
 a watch, later a wallet tag — and whether each one is actually *on* them is something the
@@ -466,10 +462,13 @@ estimate works out rather than assumes. It holds one belief per person over both
 and a carried flag per device: a device's readings are explained by the person's room while
 it is carried, and by wherever the device itself sits while it is not. So "phone parked on
 the theater couch, person in the kitchen with the watch" is a hypothesis the filter can
-hold, and the phone's flat readings plus the theater's `0.0` level argue for it on their
-own. The companion app helps it along: a phone that is charging is on a table, one that
+hold. The companion app helps it along: a phone that is charging is likely on a table, one that
 reports walking is in a pocket, and a device whose distances never wander is not being
-carried around. `presence.carried` holds the weights.
+carried around. These are probabilistic signals: another person can move an owned device.
+When every device is probably parked, the nearby assumption is bounded so repeated
+readings cannot build certainty about the owner. Confidence can recover with credible
+carrying evidence. `presence.carried` holds the weights; `still_room_empty` is retained
+for compatibility but is no longer supplied by the integration.
 
 **Correcting presence.** Tap a person to correct their room. Tap a device chip to
 correct the device's room or say whether you carry it. You can also mark devices
@@ -851,11 +850,11 @@ presence:                    # absent or enabled: false = the whole feature is o
     flip: 5m                 # mean time between carried <-> parked changes
     recent: 2m               # how far back "moved lately" looks; a signal held this
                              #   long is worth its whole weight
-    nearby: 0.3              # P(a parked device is in the same room as its person)
+    nearby: 0.3              # nearby preference; also bounds all-parked room concentration
     weights:                 # log-odds each signal adds while it is true; 0 disables one
       charging: -3.0
       moving: 2.0
-      still_room_empty: -2.0
+      still_room_empty: -2.0 # legacy; no longer supplied by the integration
       jitter: 1.0
   envelope: default          # preset the presence channels start from
   threshold: 0.6             # confidence needed before somebody counts as in the room
@@ -865,7 +864,7 @@ presence:                    # absent or enabled: false = the whole feature is o
   floor: 0.05                # likelihood of a room with no scanner
   stuck_after: 60s           # implausible readings for this long reset the estimate
   activity:
-    floor: 0.05              # likelihood of a room whose activity level is 0.0
+    floor: 0.05              # legacy; no longer changes location likelihoods
   labels:
     keep: 5000               # corrections kept, newest first, for the learner
   signatures:                # what the learner fits from those corrections

@@ -108,7 +108,7 @@ def test_a_close_reading_is_evidence_against_every_other_room(topo) -> None:
     assert log_far[topo.index("kitchen")] == pytest.approx(log_far[topo.index("hall")])
 
 
-def test_an_empty_room_is_penalised_and_a_busy_one_is_not(topo) -> None:
+def test_ambient_activity_does_not_penalise_a_devices_room(topo) -> None:
     est = make(topo)
     plain = est.log_emission(at("kitchen", 0.0))
     obs = Observation(
@@ -122,7 +122,7 @@ def test_an_empty_room_is_penalised_and_a_busy_one_is_not(topo) -> None:
     )
     log_e = est.log_emission(obs)
     kitchen, hall = topo.index("kitchen"), topo.index("hall")
-    assert log_e[kitchen] == pytest.approx(plain[kitchen] + np.log(0.05))
+    assert log_e[kitchen] == pytest.approx(plain[kitchen])
     assert log_e[hall] == pytest.approx(plain[hall])
     # rooms with no reading, and away, are untouched
     assert log_e[topo.index("bedroom")] == pytest.approx(plain[topo.index("bedroom")])
@@ -142,7 +142,7 @@ def test_a_rising_room_counts_as_fully_active(topo) -> None:
     assert est.log_emission(obs)[kitchen] == pytest.approx(plain[kitchen])
 
 
-def test_activity_floor_is_configurable(topo) -> None:
+def test_legacy_activity_floor_does_not_change_radio_evidence(topo) -> None:
     est = make(topo, activity_floor=0.5)
     plain = est.log_emission(at("kitchen", 0.0))
     obs = Observation(
@@ -155,11 +155,11 @@ def test_activity_floor_is_configurable(topo) -> None:
         },
     )
     kitchen = topo.index("kitchen")
-    assert est.log_emission(obs)[kitchen] == pytest.approx(plain[kitchen] + np.log(0.5))
+    assert est.log_emission(obs)[kitchen] == pytest.approx(plain[kitchen])
 
 
-def test_a_room_may_carry_its_own_activity_floor(topo) -> None:
-    """A room people sleep in reads 0.0 with somebody in it; it can opt out."""
+def test_legacy_room_activity_floor_does_not_change_radio_evidence(topo) -> None:
+    """Existing room overrides remain loadable without affecting device location."""
     est = make(topo)
     plain = est.log_emission(at("kitchen", 0.0))
     obs = Observation(
@@ -174,9 +174,7 @@ def test_a_room_may_carry_its_own_activity_floor(topo) -> None:
     )
     log_e = est.log_emission(obs)
     assert log_e[topo.index("kitchen")] == pytest.approx(plain[topo.index("kitchen")])
-    assert log_e[topo.index("bedroom")] == pytest.approx(
-        plain[topo.index("bedroom")] + np.log(0.05)
-    )
+    assert log_e[topo.index("bedroom")] == pytest.approx(plain[topo.index("bedroom")])
 
 
 def test_a_house_with_every_room_empty_is_not_evidence_for_away(topo) -> None:
@@ -194,14 +192,15 @@ def test_a_house_with_every_room_empty_is_not_evidence_for_away(topo) -> None:
     assert np.allclose(asleep, plain)
 
 
-def test_an_empty_room_loses_a_distance_tie(topo) -> None:
-    """Kitchen and dining room read the same; the kitchen's level is 0.0."""
+def test_ambient_motion_cannot_break_a_radio_tie(topo) -> None:
+    """Shared motion cannot identify which room contains this device."""
     est = make(topo)
+    control = make(topo)
     distances = {
         key: (0.5 if room in ("kitchen", "dining_room") else 8.0) for key, room in SCANNERS.items()
     }
     for t in range(6):
-        out = est.update(
+        est.update(
             Observation(
                 t=float(t),
                 distances=distances,
@@ -212,7 +211,8 @@ def test_an_empty_room_loses_a_distance_tie(topo) -> None:
                 },
             )
         )
-    assert out.room == "dining_room"
+        control.update(Observation(t=float(t), distances=distances, home=True))
+    assert np.allclose(est.belief, control.belief)
 
 
 def test_a_walk_is_recovered(topo) -> None:
