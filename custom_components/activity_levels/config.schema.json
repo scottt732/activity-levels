@@ -111,6 +111,12 @@
           "look_down": {
             "type": "boolean"
           },
+          "coverage_shape": {
+            "enum": [
+              "cone",
+              "fan"
+            ]
+          },
           "fov": {
             "type": "number",
             "minimum": 1,
@@ -966,6 +972,12 @@
             "properties": {
               "look_down": {
                 "type": "boolean"
+              },
+              "coverage_shape": {
+                "enum": [
+                  "cone",
+                  "fan"
+                ]
               },
               "profile_id": {
                 "type": "string",
