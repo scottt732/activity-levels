@@ -58,7 +58,8 @@ it("defaults to HA feet without moving geometry and saves a snapped exterior doo
   document.body.append(el);await el.updateComplete;
   [...el.shadowRoot!.querySelectorAll("button")].find(b=>b.textContent==="Add door")!.click();await el.updateComplete;
   const width=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
-  expect(width.value).toBe('2\'11.4331"');
+  expect(width.value).toBe('2\'6"');
+  expect(el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening height"]')!.value).toBe('6\'8"');
   width.value="3";width.dispatchEvent(new Event("change"));await el.updateComplete;
   for(const [label,value] of [["Opening type","exterior_door"],["Door hinge","right"],["Door swing","out"]]){
     const select=el.shadowRoot!.querySelector<HTMLSelectElement>(`[aria-label="${label}"]`)!;
@@ -190,4 +191,24 @@ it("updates workspace drafts immediately and refuses invalid geometry",async()=>
  plan.dispatchEvent(new CustomEvent("al-fixture-position",{detail:[20,20,1.5]}));await el.updateComplete;
  expect(el.flushDraft()).toBe(false);expect(changed).toHaveBeenCalledOnce();
  el.resetDraft();await el.updateComplete;expect(el.shadowRoot!.querySelector("#save-fixture")).toBeNull();
+});
+
+it("uses standard imperial widths for new door types without replacing a custom width",async()=>{
+ const el=new AlRoomDeviceEditor();el.room="room";el.config=roomsConfig();
+ el.config.groups=[{...newGroup("room","area"),bounds:[[0,0,0],[4,4,3]]}];
+ el.hass={config:{unit_system:{length:"ft"}},states:{},callWS:vi.fn().mockResolvedValue([])} as unknown as HomeAssistant;
+ document.body.append(el);await el.updateComplete;
+ el.shadowRoot!.querySelector<HTMLButtonElement>("#new-door")!.click();await el.updateComplete;
+ const select=el.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Opening type"]')!;
+ select.value="exterior_door";select.dispatchEvent(new Event("change"));await el.updateComplete;
+ const width=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
+ expect(width.value).toBe('3\'0"');
+ width.value='32"';width.dispatchEvent(new Event("change"));await el.updateComplete;
+ select.value="interior_door";select.dispatchEvent(new Event("change"));await el.updateComplete;
+ expect(width.value).toBe('2\'8"');
+ const units=el.shadowRoot!.querySelector<HTMLSelectElement>("#length-unit")!;
+ units.value="m";units.dispatchEvent(new Event("change"));await el.updateComplete;
+ el.shadowRoot!.querySelector<HTMLButtonElement>("#new-door")!.click();await el.updateComplete;
+ expect(el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!.value).toBe("0.9");
+ expect(el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening height"]')!.value).toBe("2");
 });

@@ -24,3 +24,19 @@ it("resizes either jamb while fixing the opposite and measures hinge offsets",()
  const shifted={...door,...setOpeningOffset(room,door,.25,true)};
  expect(openingSwing(room,shifted).hinge[0]).toBeCloseTo(.25);
 });
+
+it("centers symmetric ceiling grids with safe spacing and height",async()=>{
+ const {makeCeilingFixtures}=await import("../src/architecture");
+ const room={bounds:[[10,20,0],[16,24,3]] as [[number,number,number],[number,number,number]]};
+ const fixtures=makeCeilingFixtures(room,"recessed_light",2,3);
+ expect(fixtures).toHaveLength(6);expect(new Set(fixtures.map(o=>o.id)).size).toBe(6);
+ expect(fixtures.map(o=>o.position[0]+o.width/2)).toEqual([11,13,15,11,13,15]);
+ expect(fixtures.map(o=>o.position[1]+o.run/2)).toEqual([21,21,21,23,23,23]);
+ expect(fixtures.every(o=>o.position[2]===3 && o.drop===0)).toBe(true);
+ expect(makeCeilingFixtures(room,"pendant_light")[0]).toMatchObject({drop:.5,shape:"globe",height:.3});
+ expect(()=>makeCeilingFixtures(room,"ceiling_fan",10,10)).toThrow(/spacing/);
+ expect(()=>makeCeilingFixtures(room,"recessed_light",1.5,2)).toThrow(/128/);
+ expect(()=>makeCeilingFixtures({...room,points:[[10,20],[16,20],[16,21],[11,21],[11,24],[10,24]]},"pendant_light")).toThrow(/outside/);
+ expect(readArchitecture({...fixtures[0],floors:["first","first"]})).toBeNull();
+ expect(readArchitecture({...fixtures[0],drop:-1})).toBeNull();
+});

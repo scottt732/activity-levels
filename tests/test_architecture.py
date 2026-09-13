@@ -47,3 +47,19 @@ def test_architecture_invalid(patch):
 def test_architecture_duplicate_ids():
     with pytest.raises(vol.Invalid):
         architecture([OBJECT, OBJECT])
+
+
+@pytest.mark.parametrize(
+    "kind", ["ceiling_fan", "recessed_light", "pendant_light", "recessed_speaker"]
+)
+def test_ceiling_fixture_roundtrip(kind):
+    fixture = {**OBJECT, "kind": kind, "drop": 0.5, "shape": "globe", "entity": "light.ceiling"}
+    assert architecture(architecture([fixture])) == architecture([fixture])
+
+
+def test_chimney_floor_list():
+    chimney = {**OBJECT, "kind": "chimney", "floors": ["basement", "first", "second"]}
+    assert architecture([chimney])[0]["floors"] == chimney["floors"]
+    for patch in ({"floors": ["first", "first"]}, {"drop": -1}, {"shape": "unknown"}):
+        with pytest.raises(vol.Invalid):
+            architecture([{**chimney, **patch}])

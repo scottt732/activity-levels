@@ -314,3 +314,18 @@ it("renders stair treads and tall solids and releases them on rebuild",()=>{
  const solid=scene.getObjectByName("architectural-solid") as Mesh;
  const dispose=vi.spyOn(solid.geometry,"dispose");renderer.setParts([part()]);expect(dispose).toHaveBeenCalledOnce();renderer.dispose();
 });
+
+it("renders ceiling fixture bodies below their mounting plane with a pendant stem",async()=>{
+ const {makeCeilingFixtures}=await import("../src/architecture");
+ const renderer=new FloorplanRenderer(host(),vi.fn(),vi.fn());
+ const room={bounds:[[4,5,11.8],[7,8,13.8]] as [[number,number,number],[number,number,number]]};
+ const objects=(["pendant_light","ceiling_fan","recessed_light","recessed_speaker"] as const).flatMap(k=>makeCeilingFixtures(room,k));
+ renderer.setParts([{...part(),architecture:objects}]);
+ const scene=gpu.render.mock.calls.at(-1)![0] as Scene;
+ const pendant=scene.getObjectByName("pendant-light") as Mesh;
+ const stems=scene.children.filter(o=>o.name==="ceiling-stem");
+ expect(stems).toHaveLength(2);expect(scene.children.filter(o=>o.name==="ceiling-fan-blade")).toHaveLength(4);
+ expect(scene.getObjectByName("speaker-grille")).toBeDefined();
+ expect(pendant.position.y).toBeLessThan(stems[0]!.position.y);
+ const dispose=vi.spyOn(pendant.geometry,"dispose");renderer.setParts([part()]);expect(dispose).toHaveBeenCalledOnce();renderer.dispose();
+});

@@ -1,4 +1,5 @@
-import type { ArchitecturalObject, Group } from "./types";
+import { insideRoom } from "./room-fixtures";
+import type { ArchitecturalObject, CeilingKind, Group } from "./types";
 export function objectFootprint(o: ArchitecturalObject): [number, number][] {
   const a = (o.yaw * Math.PI) / 180,
     c = Math.cos(a),
@@ -32,7 +33,11 @@ export function readArchitecture(value: unknown): ArchitecturalObject | null {
     o.id.length > 100 ||
     typeof o.name !== "string" ||
     o.name.length > 100 ||
-    !["stairs", "chimney", "column", "shaft", "solid"].includes(o.kind) ||
+    !["stairs", "chimney", "column", "shaft", "solid", "ceiling_fan", "recessed_light", "pendant_light", "recessed_speaker"].includes(o.kind) ||
+    (o.drop !== undefined && (!Number.isFinite(o.drop) || o.drop < 0 || o.drop > 100)) ||
+    (o.shape !== undefined && !["globe", "cone", "cylinder"].includes(o.shape)) ||
+    (o.entity !== undefined && !/^(light|fan|media_player)\.[a-z0-9_]+$/.test(o.entity)) ||
+    (o.floors !== undefined && (!Array.isArray(o.floors) || o.floors.length > 128 || new Set(o.floors).size !== o.floors.length || o.floors.some(f => typeof f !== "string" || !f || f.length > 100))) ||
     !Array.isArray(o.position) ||
     o.position.length !== 3 ||
     ![
@@ -142,4 +147,41 @@ export function outlineBounds(
       high,
     ],
   ];
+}
+
+/** Ceiling positions refer to the mounting plane; drop is measured down from it. */
+export function isCeilingFixture(kind: ArchitecturalObject["kind"]): kind is CeilingKind {
+  return ["ceiling_fan", "recessed_light", "pendant_light", "recessed_speaker"].includes(kind);
+}
+export function makeCeilingFixtures(group: Pick<Group,"bounds"|"points"|"architecture">, kind: CeilingKind, rows=1, columns=1): ArchitecturalObject[] {
+  if (!group.bounds) throw new Error("Choose a placed room.");
+  if (![rows,columns].every(n=>Number.isInteger(n) && n>=1 && n<=128) || rows*columns+(group.architecture?.length ?? 0)>128)
+    throw new Error("Use a grid with at most 128 total room objects.");
+  const [low,high]=group.bounds, size=kind==="ceiling_fan"?1.2:kind==="pendant_light"?.3:.18;
+  const height=kind==="pendant_light"?.3:kind==="ceiling_fan"?.15:.04;
+  const drop=kind==="pendant_light"?.5:kind==="ceiling_fan"?.3:0;
+  if (drop+height>high[2]-low[2]) throw new Error("The fixture must fit below the ceiling.");
+  const dx=(high[0]-low[0])/columns,dy=(high[1]-low[1])/rows;
+  if(dx<size || dy<size) throw new Error("The fixtures do not fit this grid spacing.");
+  const result:ArchitecturalObject[]=[];
+  for(let row=0;row<rows;row++)for(let column=0;column<columns;column++){
+    const o:ArchitecturalObject={id:crypto.randomUUID(),name:kind.replaceAll("_"," "),kind,
+      position:[low[0]+dx*(column+.5)-size/2,low[1]+dy*(row+.5)-size/2,high[2]],
+      yaw:0,width:size,run:size,height,steps:14,landing_bottom:0,landing_top:0,drop,shape:"globe"};
+    const footprint=objectFootprint(o);
+    // All corners inside is insufficient for a concave room: a notch may cross
+    // a fixture edge or end inside its body. Reject both cases exactly.
+    const points=group.points ?? [[low[0],low[1]],[high[0],low[1]],[high[0],high[1]],[low[0],high[1]]];
+    const cross=(a:number[],b:number[],p:number[])=>(b[0]!-a[0]!)*(p[1]!-a[1]!)-(b[1]!-a[1]!)*(p[0]!-a[0]!);
+    const crosses=points.some((a,i)=>{
+      const b=points[(i+1)%points.length]!;
+      return footprint.some((p,j)=>{
+        const q=footprint[(j+1)%4]!;
+        return cross(a,b,p)*cross(a,b,q)<-1e-12 && cross(p,q,a)*cross(p,q,b)<-1e-12;
+      }) || (a[0]!>o.position[0]+1e-8 && a[0]!<o.position[0]+size-1e-8 && a[1]!>o.position[1]+1e-8 && a[1]!<o.position[1]+size-1e-8);
+    });
+    if(crosses || !footprint.every(([x,y])=>insideRoom(group,[x,y,high[2]]))) throw new Error("This grid extends outside the room. Use fewer fixtures or place them individually.");
+    result.push(o);
+  }
+  return result;
 }

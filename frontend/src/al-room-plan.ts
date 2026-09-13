@@ -55,6 +55,25 @@ export class AlRoomPlan extends LitElement {
     const point=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
     return [point.x,-point.y];
   }
+  private snapSensor(point:[number,number]):[number,number] {
+    const matrix=this.renderRoot.querySelector("svg")?.getScreenCTM();
+    if(!matrix || !this.group)return point;
+    const scale=Math.hypot(matrix.a,matrix.b);
+    if(!Number.isFinite(scale) || scale<=0)return point;
+    const tolerance=12/scale,points=footprint(this.group);
+    let nearest:[number,number]|undefined,distance=tolerance;
+    // Corners win over wall projections so a sensor can sit exactly at a junction.
+    for(const corner of points){const d=Math.hypot(corner[0]-point[0],corner[1]-point[1]);if(d<=distance){nearest=corner;distance=d;}}
+    if(nearest)return nearest;
+    for(let i=0;i<points.length;i++){
+      const a=points[i]!,b=points[(i+1)%points.length]!,dx=b[0]-a[0],dy=b[1]-a[1],length2=dx*dx+dy*dy;
+      if(length2===0)continue;
+      const t=Math.max(0,Math.min(1,((point[0]-a[0])*dx+(point[1]-a[1])*dy)/length2));
+      const candidate:[number,number]=[a[0]+t*dx,a[1]+t*dy],d=Math.hypot(candidate[0]-point[0],candidate[1]-point[1]);
+      if(d<=distance){nearest=candidate;distance=d;}
+    }
+    return nearest ?? point;
+  }
   private place(event:MouseEvent):void {
     if(this.disabled || (!this.fixture?.entity && !this.opening) || !this.group)return;
     const point=this.point(event);if(!point)return;
@@ -67,7 +86,8 @@ export class AlRoomPlan extends LitElement {
       if(Math.hypot(point[0]-x,point[1]-y)>.001)this.emit("al-fixture-aim",Math.atan2(point[1]-y,point[0]-x)*180/Math.PI);
       return;
     }
-    const position:[number,number,number]=[Number(point[0].toFixed(3)),Number(point[1].toFixed(3)),this.fixture.position[2]];
+    const xy=this.fixture.kind==="motion" || this.fixture.kind==="occupancy"?this.snapSensor(point):point;
+    const position:[number,number,number]=[xy[0],xy[1],this.fixture.position[2]];
     if(this.fixture.kind==="window"){this.emit("al-fixture-position",snapWindow(this.group,position,this.fixture.width).position);return;}
     if(!insideRoom(this.group,position)){this.error="Choose a point inside the room outline.";return;}
     this.emit("al-fixture-position",position);

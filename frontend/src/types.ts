@@ -97,8 +97,10 @@ export interface RoomOpening {
   position:[number,number,number]; yaw:number; width:number; height:number;
   hinge:"left"|"right"; swing:"in"|"out"; open:boolean; entity?:string; entities?:string[];
 }
+export type CeilingKind = "ceiling_fan"|"recessed_light"|"pendant_light"|"recessed_speaker";
 export interface ArchitecturalObject {
- id:string;name:string;kind:"stairs"|"chimney"|"column"|"shaft"|"solid";
+ id:string;name:string;kind:"stairs"|"chimney"|"column"|"shaft"|"solid"|CeilingKind;
+ drop?:number;shape?:"globe"|"cone"|"cylinder";entity?:string;floors?:string[];
  position:[number,number,number];yaw:number;width:number;run:number;height:number;
  steps:number;landing_bottom:number;landing_top:number;under_room?:string;to_floor?:string;
 }

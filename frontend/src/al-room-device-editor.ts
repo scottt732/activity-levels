@@ -85,6 +85,7 @@ export class AlRoomDeviceEditor extends LitElement {
   @state() private addKind:RoomFixture["kind"]|""="";
   @state() private opening?:RoomOpening;
   @state() private originalOpening?:string;
+  private createdOpening?:string;
   @state() private fixture=newFixture();
   @state() private original?:string;
   @state() private mode:"place"|"aim"="place";
@@ -247,6 +248,8 @@ export class AlRoomDeviceEditor extends LitElement {
     this.legacyWindow=undefined;this.contactSearch="";this.allContacts=false;this.addKind="";this.fixture=newFixture();this.original=undefined;this.mode="place";this.error="";
     const b=this.group.bounds;
     const opening=value?structuredClone(value):newOpening(kind);
+    this.createdOpening=value?undefined:opening.id;
+    if(!value && this.unit==="ft" && kind.includes("door")){opening.width=(kind==="exterior_door"?36:30)*.0254;opening.height=80*.0254;}
     if(!value)Object.assign(opening,snapOpening(this.group,[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,b[0][2]+(kind==="window"?Math.max(0,(b[1][2]-b[0][2]-opening.height)/2):0)],opening.width));
     this.opening=opening;this.originalOpening=value?.id;if(this.workspace && !value)this.flushDraft();
   }
@@ -287,6 +290,15 @@ export class AlRoomDeviceEditor extends LitElement {
       <div class="devices">${ids.map(id=>html`<label><input type="checkbox" data-contact=${id} .checked=${selected.includes(id)} @change=${(e:Event)=>this.patchOpening({entity:undefined,entities:(e.target as HTMLInputElement).checked?[...selected,id]:selected.filter(v=>v!==id)})}>${this.hass?.states[id]?.attributes.friendly_name ?? id}<small>${id} · ${this.hass?.states[id]?.state ?? "unavailable"}</small></label>`)}</div>
       ${!selected.length?html`<label><input type="checkbox" .checked=${o.open} @change=${(e:Event)=>this.patchOpening({open:(e.target as HTMLInputElement).checked})}>Manually open</label>`:html`<p class="muted">State: ${openingState(o,this.hass?.states ?? {})}. All contacts must be off to show closed; unavailable contacts leave the state unknown.</p>`}`;
   }
+  private changeOpeningKind(kind:RoomOpening["kind"]):void {
+    const o=this.opening;
+    const patch:Partial<RoomOpening>={kind};
+    if(o && o.id===this.createdOpening && this.unit==="ft" && o.kind.includes("door") && kind.includes("door")){
+      const defaultWidth=(o.kind==="exterior_door"?36:30)*.0254;
+      if(Math.abs(o.width-defaultWidth)<1e-9)patch.width=(kind==="exterior_door"?36:30)*.0254;
+    }
+    this.patchOpening(patch);
+  }
   private patchOpening(patch:Partial<RoomOpening>):void {if(this.opening && !this.disabled){this.opening={...this.opening,...patch};this.error="";if(this.workspace)this.flushDraft();}}
   private saveDoor():void {
     if(!this.config || !this.opening || this.disabled || !this.validLengths())return;
@@ -299,7 +311,7 @@ export class AlRoomDeviceEditor extends LitElement {
       ${wall?html`<label>Jamb from wall start (${this.unit})${this.lengthInput("Opening from wall start",(o.position[0]-wall.a[0])*wall.dx+(o.position[1]-wall.a[1])*wall.dy-o.width/2,v=>this.patchOpening(setOpeningOffset(this.group!,o,v)),0)}</label>${o.kind.includes("door")?html`<label>Hinge from wall start (${this.unit})${this.lengthInput("Hinge from wall start",(openingSwing(this.group!,o).hinge[0]-wall.a[0])*wall.dx+(openingSwing(this.group!,o).hinge[1]-wall.a[1])*wall.dy,v=>this.patchOpening(setOpeningOffset(this.group!,o,v,true)),0)}</label>`:nothing}${o.kind==="open_wall"?html`<button type="button" @click=${()=>this.patchOpening({width:wall.length,height:this.group!.bounds![1][2]-this.group!.bounds![0][2],position:[wall.a[0]+wall.dx*wall.length/2,wall.a[1]+wall.dy*wall.length/2,this.group!.bounds![0][2]]})}>Open entire wall</button>`:nothing}`:nothing}
       <button type="button" @click=${()=>{this.wallView=!this.wallView;}}>${this.wallView?"Floor plan":"Wall elevation"}</button>
       <label>Name<input aria-label="Opening name" .value=${o.name} @input=${(e:Event)=>this.patchOpening({name:(e.target as HTMLInputElement).value})}></label>
-      <label>Opening type<select aria-label="Opening type" .value=${o.kind} @change=${(e:Event)=>this.patchOpening({kind:(e.target as HTMLSelectElement).value as RoomOpening["kind"]})}>${["interior_door","exterior_door","open_wall","window"].map(kind=>html`<option value=${kind} .selected=${o.kind===kind}>${kind.replaceAll("_"," ")}</option>`)}</select></label>
+      <label>Opening type<select aria-label="Opening type" .value=${o.kind} @change=${(e:Event)=>this.changeOpeningKind((e.target as HTMLSelectElement).value as RoomOpening["kind"])}>${["interior_door","exterior_door","open_wall","window"].map(kind=>html`<option value=${kind} .selected=${o.kind===kind}>${kind.replaceAll("_"," ")}</option>`)}</select></label>
       ${(["width","height"] as const).map(key=>html`<label>${key} (${this.unit})${this.lengthInput(`Opening ${key}`,o[key],v=>this.patchOpening({[key]:v}),.1,20)}</label>`)}
       <label>Bottom above floor (${this.unit})${this.lengthInput("Opening elevation",o.position[2]-(this.group?.bounds?.[0][2] ?? 0),v=>this.patchOpening({position:[o.position[0],o.position[1],(this.group?.bounds?.[0][2] ?? 0)+v]}),0)}</label>
       ${o.kind!=="open_wall" && o.kind!=="window"?html`<p class="muted">Hinge left/right is viewed from inside this room facing the doorway.</p>
