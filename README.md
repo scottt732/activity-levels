@@ -1075,8 +1075,11 @@ The 75° downward extent is an illustration, not a manufacturer-specified detect
 ### Editing architectural geometry
 
 In **Floorplans → Architecture**, select a room and drag its corner grips, insert a
-corner for a diagonal wall, or enter wall lengths. **Draw room** creates an outline
-from clicks; 45° snapping and undo are available. New plans get a property/building
+corner for a diagonal wall, or enter wall lengths. Drag a wall to extend it; nearby
+parallel walls provide alignment snaps, and attached openings and sensors follow it.
+**Draw room** defaults to a rectangle from two opposite corners, snapping to nearby
+room corners. Disable Rectangle for polygon drawing with optional right-angle snapping
+and undo. New plans get a property/building
 container automatically. Use **2D / 3D** to expand the plan while drawing.
 
 Add a straight staircase with its width, total run, rise, step count, and optional
@@ -1087,14 +1090,25 @@ room called *Server closet*, whose ceiling follows the underside of the stair ru
 Its outline remains independently editable; adjust it if you later move the stairs.
 Chimneys, columns, shafts, and other solid objects have independent dimensions and
 base elevations; a tall object can span several floors without becoming an activity
-room. These are schematic architectural volumes, not construction drawings.
+room. For a chimney, select **Floors crossed** to span their elevations and cut its
+footprint through the horizontal surfaces on those floors. These are schematic
+architectural volumes, not construction drawings.
+
+**Architecture → Ceiling fixtures** adds ceiling fans, recessed lights, pendant
+lights, and recessed speakers individually or in a centered rows-by-columns grid.
+Each fixture is independently editable after creation. Pendants offer globe, cone,
+and cylinder shapes with a drop measured from the ceiling to the top of the body.
+An optional light, fan, or media-player entity links live state to the symbol.
+Grids must fit inside the room; concave rooms may need individual placement.
 
 In **Doors & windows**, use the two end grips to resize an opening while keeping
 the opposite end fixed. Numeric jamb/hinge offsets locate it along its wall. **Wall
 elevation** adds vertical movement and top/bottom resize grips; invalid placements
 remain red until corrected. **Open entire wall** removes the shared vertical faces
 from both adjacent activity volumes, preserving their separate activity readings.
-Measurements follow Home Assistant's units and accept feet/inches. Changes join the
+New imperial doors start at 30 inches wide (interior), 36 inches (exterior), and
+80 inches high. Motion and occupancy placements snap to nearby room corners before
+wall edges. Measurements follow Home Assistant's units and accept feet/inches. Changes join the
 configuration draft; use the common **Save changes** or **Discard** buttons.
 
 Wall dimensions currently edit geometry directly; they are not persistent constraints.

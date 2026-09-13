@@ -190,3 +190,11 @@ describe("floorplan viewer", () => {
     expect(scene.dispose).toHaveBeenCalledOnce();
   });
 });
+
+it('keeps ceiling fixtures below their mounting plane when switching floors',async()=>{
+ const config=modelConfig(),kitchen=config.groups[0]!.children[0]!.children[0]!.children[0]!;
+ kitchen.architecture=[{id:'pendant',name:'Pendant',kind:'pendant_light',position:[1,1,3],width:.3,run:.3,height:.3,drop:.5,yaw:0,steps:14,landing_bottom:0,landing_top:0}];
+ const el=await mount(config);el.room='bedroom';await settle(el);
+ expect(scene.setParts.mock.calls.at(-1)![4]).toEqual([]);
+ el.room='kitchen';await settle(el);expect(scene.setParts.mock.calls.at(-1)![4]).toHaveLength(1);
+});

@@ -1,3 +1,4 @@
+import { isCeilingFixture } from "./architecture";
 import { LitElement, css, html, nothing } from "lit";
 import type { PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -212,7 +213,7 @@ export class AlFloorplanViewer extends LitElement {
       return;
     }
     if (changed.has("config") || changed.has("scope") || changed.has("room") || changed.has("context") || this.groundZ !== this.options.ground_z) {
-      this.renderer?.setParts(parts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined,this.model.parts.flatMap(p=>p.architecture ?? []).filter(o=>parts.some(p=>o.position[2]<=p.high && o.position[2]+o.height>=p.low))); this.groundZ=this.options.ground_z;
+      this.renderer?.setParts(parts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined,this.visibleArchitecture); this.groundZ=this.options.ground_z;
     }
     this.updateAppearance();
   }
@@ -220,6 +221,13 @@ export class AlFloorplanViewer extends LitElement {
   private get visibleParts() {
     const selected=this.model.parts.find(p=>p.id===this.room);
     return this.context && selected ? this.model.parts.filter(p=>!p.container && p.low<selected.high-0.01 && p.high>selected.low+0.01) : inScope(this.model.parts,this.room || this.scope);
+  }
+  private get visibleArchitecture() {
+    const parts=this.visibleParts;
+    return this.model.parts.flatMap(owner=>(owner.architecture??[]).filter(o=>parts.some(p=>
+      isCeilingFixture(o.kind)
+        ? (p.id===owner.id || p.ancestors.includes(owner.id)) && o.position[2]>p.low && o.position[2]-(o.drop??0)-o.height<p.high
+        : o.position[2]<=p.high && o.position[2]+o.height>=p.low)));
   }
   private stopRenderer(): void {
     this.sequence++;
@@ -239,7 +247,7 @@ export class AlFloorplanViewer extends LitElement {
       this.renderer = new FloorplanRenderer(host, (id) => { this.selectRoom(id); }, (message) => {
         this.stopRenderer(); this.error = message;
       }, (id)=>{this.hovered=id;}, (position)=>{this.dispatchEvent(new CustomEvent("al-fixture-position",{detail:position,bubbles:true,composed:true}));},matrix=>{if(matrix.some((v,i)=>Math.abs(v-(this.cameraMatrix[i] ?? Infinity))>1e-7)){this.cameraMatrix=matrix;const control=this.renderRoot.querySelector("al-camera-control") as import("./al-camera-control").AlCameraControl|null;if(control)control.matrix=matrix;}});
-      this.renderer.setParts(this.visibleParts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined);
+      this.renderer.setParts(this.visibleParts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined,this.visibleArchitecture);
       this.groundZ=this.options.ground_z;
       this.updateAppearance();
     } catch {

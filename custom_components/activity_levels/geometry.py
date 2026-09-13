@@ -195,7 +195,19 @@ ARCHITECTURE_SCHEMA = vol.Schema(
     {
         vol.Required("id"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Optional("name", default=""): vol.All(str, vol.Length(max=100)),
-        vol.Required("kind"): vol.In(["stairs", "chimney", "column", "shaft", "solid"]),
+        vol.Required("kind"): vol.In(
+            [
+                "stairs",
+                "chimney",
+                "column",
+                "shaft",
+                "solid",
+                "ceiling_fan",
+                "recessed_light",
+                "pendant_light",
+                "recessed_speaker",
+            ]
+        ),
         vol.Required("position"): position,
         vol.Optional("yaw", default=0): coordinate,
         vol.Required("width"): vol.All(coordinate, vol.Range(min=0.01, max=100)),
@@ -206,6 +218,12 @@ ARCHITECTURE_SCHEMA = vol.Schema(
         vol.Optional("landing_top", default=0): vol.All(coordinate, vol.Range(min=0)),
         vol.Optional("under_room"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Optional("to_floor"): vol.All(str, vol.Length(min=1, max=100)),
+        vol.Optional("drop"): vol.All(coordinate, vol.Range(min=0, max=100)),
+        vol.Optional("shape"): vol.In(["globe", "cone", "cylinder"]),
+        vol.Optional("entity"): vol.Match(r"^(light|fan|media_player)\.[a-z0-9_]+$"),
+        vol.Optional("floors"): vol.All(
+            [vol.All(str, vol.Length(min=1, max=100))], vol.Length(max=128), vol.Unique()
+        ),
     }
 )
 

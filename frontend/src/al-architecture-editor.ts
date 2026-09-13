@@ -6,15 +6,19 @@ import {
   objectFootprint,
   outlineBounds,
   readArchitecture,
+  makeCeilingFixtures,
+  isCeilingFixture,
 } from "./architecture";
 import {
   defaultLengthUnit,
   formatLengthInput,
   parseLength,
 } from "./measurement-units";
+import { snapPlanPoint, moveRoomWall } from "./plan-snapping";
 import { alChange } from "./events";
 import type {
   ArchitecturalObject,
+  CeilingKind,
   Config,
   HomeAssistant,
   Group,
@@ -77,6 +81,8 @@ export class AlArchitectureEditor extends LitElement {
       stroke-width: 2;
       vector-effect: non-scaling-stroke;
     }
+    .wall { stroke: transparent; stroke-width: 12; vector-effect: non-scaling-stroke; cursor: move; }
+    .wall:hover, .wall:focus { outline:none; stroke: #ffd16a; stroke-width: 3; }
     .object {
       fill: #85939c88;
       stroke: #a8c3ce;
@@ -199,15 +205,34 @@ export class AlArchitectureEditor extends LitElement {
   @state() private error = "";
   @state() private planOnly = false;
   @state() private snap = true;
+  @state() private rectangle = true;
+  @state() private ceilingKind: CeilingKind = "recessed_light";
+  @state() private rows = 2;
+  @state() private columns = 2;
   @state() private scale = 1;
   private drag?: {
     pointer: number;
     corner?: number;
+    wall?: number;
+    start?: [number, number];
+    original?: Group;
     object?: string;
     offset?: [number, number];
   };
+  private suppressClick = false;
   private get groups() {
     return this.config ? walkGroups(this.config) : [];
+  }
+  private get floors() {
+    const descendants=(g:Group):Group[]=>[g,...g.children.flatMap(descendants)];
+    return this.groups.filter(e=>e.group.kind==="floor").flatMap(({group})=>{
+      const bounds=descendants(group).flatMap(g=>g.bounds?[g.bounds]:[]);
+      if(!bounds.length)return [];
+      return [{...group,bounds:group.bounds ?? [
+        [Math.min(...bounds.map(b=>b[0][0])),Math.min(...bounds.map(b=>b[0][1])),Math.min(...bounds.map(b=>b[0][2]))],
+        [Math.max(...bounds.map(b=>b[1][0])),Math.max(...bounds.map(b=>b[1][1])),Math.max(...bounds.map(b=>b[1][2]))]
+      ] as NonNullable<Group["bounds"]>}];
+    });
   }
   private get group() {
     return this.groups.find((e) => e.group.id === this.room)?.group;
@@ -260,6 +285,9 @@ export class AlArchitectureEditor extends LitElement {
         "Check dimensions: landings must leave a positive stair run.";
       return;
     }
+    if(isCeilingFixture(o.kind) && this.group?.bounds && o.position[2]-(o.drop??0)-o.height<this.group.bounds[0][2]) {
+      this.error="The fixture must fit above the floor.";return;
+    }
     const next = structuredClone(this.config),
       g = walkGroups(next).find((e) => e.group.id === this.room)!.group;
     g.architecture = g.architecture!.map((v) => (v.id === o.id ? o : v));
@@ -288,12 +316,14 @@ export class AlArchitectureEditor extends LitElement {
     this.selected = o.id;
     this.commit(next);
   }
-  private saveOutline(points: [number, number][]) {
+  private saveOutline(points: [number, number][], source?: Group) {
     if (!this.config || !this.group?.bounds) return;
     try {
       const next = structuredClone(this.config),
         g = walkGroups(next).find((e) => e.group.id === this.room)!.group;
-      g.bounds = outlineBounds(points, g.bounds![0][2], g.bounds![1][2]);
+      const bounds = outlineBounds(points, g.bounds![0][2], g.bounds![1][2]);
+      if(source)Object.assign(g,source);
+      g.bounds = bounds;
       g.points = points;
       this.commit(next);
     } catch (e) {
@@ -319,8 +349,8 @@ export class AlArchitectureEditor extends LitElement {
       const g = {
         ...newGroup(`room_${crypto.randomUUID().slice(0, 8)}`, "area"),
         name: this.name,
-        points: this.points,
-        bounds: outlineBounds(this.points, low, low + 2.4),
+        points: this.drawnPoints(),
+        bounds: outlineBounds(this.drawnPoints(), low, low + 2.4),
       };
       parent.children.push(g);
       this.room = g.id;
@@ -356,22 +386,44 @@ export class AlArchitectureEditor extends LitElement {
     );
     return [Math.round(p.x * 100) / 100, Math.round(-p.y * 100) / 100];
   }
+  private tolerance() {
+    const m=this.renderRoot.querySelector("svg")?.getScreenCTM();
+    const scale=m?Math.hypot(m.a,m.b):0;
+    return scale>0 ? 12/scale : .15;
+  }
+  private neighbors() {
+    const b=this.group?.bounds;
+    return this.groups.filter(({group:g})=>g.id!==this.room && g.bounds && !["property","structure","floor"].includes(g.kind) && (!b || g.bounds[0][2]<b[1][2] && g.bounds[1][2]>b[0][2])).map(({group})=>footprint(group));
+  }
+  private drawnPoints():[number,number][] {
+    if(!this.rectangle || this.points.length!==2)return this.points;
+    const [a,b]=this.points as [[number,number],[number,number]];
+    return [a,[b[0],a[1]],b,[a[0],b[1]]];
+  }
+  private addCeiling(grid:boolean) {
+    if(!this.config || !this.group?.bounds)return;
+    try {
+      const objects=makeCeilingFixtures(this.group,this.ceilingKind,grid?this.rows:1,grid?this.columns:1);
+      const next=structuredClone(this.config), g=walkGroups(next).find(e=>e.group.id===this.room)!.group;
+      g.architecture=[...(g.architecture??[]),...objects];
+      this.selected=objects[0]!.id;
+      this.commit(next);
+    }catch(e){this.error=(e as Error).message;}
+  }
+  private chimneyFloors(ids:string[]) {
+    const floors=this.floors.filter(g=>ids.includes(g.id));
+    if(!floors.length){this.patch({floors:[]});return;}
+    const low=Math.min(...floors.map(g=>g.bounds![0][2])),high=Math.max(...floors.map(g=>g.bounds![1][2]));
+    this.patch({floors:ids,position:[this.object!.position[0],this.object!.position[1],low],height:high-low});
+  }
   private clicked(e: MouseEvent) {
+    if(this.suppressClick){this.suppressClick=false;return;}
     if (this.disabled || !this.drawing) return;
     let p = this.point(e);
     if (!p) return;
-    const last = this.points.at(-1);
-    if (this.snap && last) {
-      const length = Math.hypot(p[0] - last[0], p[1] - last[1]),
-        a =
-          (Math.round(
-            Math.atan2(p[1] - last[1], p[0] - last[0]) / (Math.PI / 4),
-          ) *
-            Math.PI) /
-          4;
-      p = [last[0] + length * Math.cos(a), last[1] + length * Math.sin(a)];
-    }
-    this.points = [...this.points, p];
+    const outlines=[...this.neighbors(),...(this.group?[footprint(this.group)]:[])];
+    p=snapPlanPoint(p,outlines,this.tolerance(),this.snap && !this.rectangle?this.points.at(-1):undefined);
+    this.points=this.rectangle && this.points.length===2?[p]:[...this.points,p];
   }
   private move(e: PointerEvent) {
     if (this.disabled || this.drag?.pointer !== e.pointerId) return;
@@ -381,8 +433,13 @@ export class AlArchitectureEditor extends LitElement {
       const points = footprint(this.group).map(
         (v) => [...v] as [number, number],
       );
-      points[this.drag.corner] = p;
+      points[this.drag.corner] = snapPlanPoint(p,this.neighbors(),this.tolerance());
+      this.suppressClick=true;
       this.saveOutline(points);
+    } else if(this.drag.wall!==undefined && this.drag.original && this.drag.start) {
+      const next=moveRoomWall(this.drag.original,this.drag.wall,[p[0]-this.drag.start[0],p[1]-this.drag.start[1]],this.neighbors(),this.tolerance());
+      this.suppressClick=true;
+      this.saveOutline(next.points!,next);
     } else if (this.drag.object && this.object)
       this.patch({
         position: [
@@ -442,13 +499,28 @@ export class AlArchitectureEditor extends LitElement {
        )
          .map(([x, y]) => `${x},${-y}`)
          .join(" ")} @click=${(e: Event) => {
+         if(this.suppressClick){e.stopPropagation();this.suppressClick=false;return;}
          if (!this.drawing) {
            e.stopPropagation();
            this.room = group.id;
            this.selected = "";
          }
-       }}/>`,
+       }} />`,
    )}
+          ${g?.bounds && !this.drawing && !o ? footprint(g).map((a,i,ps)=> {
+            const b=ps[(i+1)%ps.length]!;
+            return svg`<line class="wall" x1=${a[0]} y1=${-a[1]} x2=${b[0]} y2=${-b[1]} tabindex="0" role="button" aria-label=${`Move wall ${i+1}`} @keydown=${(e:KeyboardEvent)=>{
+              const amount=(e.key==="ArrowUp" || e.key==="ArrowRight")?.01:(e.key==="ArrowDown" || e.key==="ArrowLeft")?-.01:0;
+              if(!amount || this.disabled)return;e.preventDefault();
+              const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
+              const next=moveRoomWall(g,i,[-(b[1]-a[1])/length*amount,(b[0]-a[0])/length*amount],[],0);
+              this.saveOutline(next.points!,next);
+            }} @pointerdown=${(e:PointerEvent)=>{
+              if(this.disabled)return;e.stopPropagation();
+              this.drag={pointer:e.pointerId,wall:i,start:this.point(e),original:structuredClone(g)};
+              this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);
+            }} /> `;
+          }):nothing}
           ${
    g?.bounds && !this.drawing && !o
      ? footprint(g).map(
@@ -478,10 +550,11 @@ export class AlArchitectureEditor extends LitElement {
              this.renderRoot
                .querySelector("svg")!
                .setPointerCapture(e.pointerId);
-           }}/><text x=${(x + ps[(i + 1) % ps.length]![0]) / 2} y=${-(y + ps[(i + 1) % ps.length]![1]) / 2 - 0.15}>${this.length(Math.hypot(x - ps[(i + 1) % ps.length]![0], y - ps[(i + 1) % ps.length]![1]))}</text>`,
+           }} /><text x=${(x + ps[(i + 1) % ps.length]![0]) / 2} y=${-(y + ps[(i + 1) % ps.length]![1]) / 2 - 0.15}>${this.length(Math.hypot(x - ps[(i + 1) % ps.length]![0], y - ps[(i + 1) % ps.length]![1]))}</text>`,
        )
      : nothing
  }
+          ${this.groups.flatMap(({group:owner})=>owner.id===this.room?[]:(owner.architecture??[]).filter(obj=>obj.kind==="chimney" && obj.floors?.some(id=>{let entry=this.groups.find(e=>e.group.id===this.room);while(entry){if(entry.group.id===id)return true;entry=entry.parent?this.groups.find(e=>e.group.id===entry!.parent!.id):undefined;}return false;})).map(obj=>svg`<polygon class="object" style="pointer-events:none;fill:#283440" points=${objectFootprint(obj).map(([x,y])=>`${x},${-y}`).join(" ")} />`))}
           ${g?.architecture?.map((obj) => {
    const pts = objectFootprint(obj);
    return svg`<g>${
@@ -514,9 +587,9 @@ export class AlArchitectureEditor extends LitElement {
        offset: p ? [p[0] - obj.position[0], p[1] - obj.position[1]] : [0, 0],
      };
      this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);
-   }}/><text x=${pts.reduce((sum, p) => sum + p[0], 0) / 4} y=${-pts.reduce((sum, p) => sum + p[1], 0) / 4}>${obj.name}</text></g>`;
+   }} />${isCeilingFixture(obj.kind)?svg`<g style="pointer-events:none" transform=${`translate(${pts.reduce((sum,p)=>sum+p[0],0)/4},${-pts.reduce((sum,p)=>sum+p[1],0)/4})`}><circle r=${Math.min(obj.width,obj.run)*.4} fill="none" stroke="#ffe2a1" stroke-width="1" vector-effect="non-scaling-stroke"/>${obj.kind==="ceiling_fan"?svg`<path d=${`M ${-obj.width*.4} 0 H ${obj.width*.4} M 0 ${-obj.run*.4} V ${obj.run*.4}`} stroke="#ffe2a1" stroke-width="2" vector-effect="non-scaling-stroke"/>`:nothing}</g>`:nothing}<text x=${pts.reduce((sum, p) => sum + p[0], 0) / 4} y=${-pts.reduce((sum, p) => sum + p[1], 0) / 4}>${obj.name}</text></g>`;
  })}
-          ${this.drawing ? svg`<polyline class="selected room" points=${this.points.map(([x, y]) => `${x},${-y}`).join(" ")}/>` : nothing}
+          ${this.drawing ? svg`<polygon class="selected room" points=${this.drawnPoints().map(([x, y]) => `${x},${-y}`).join(" ")} />` : nothing}
         </svg>
       </div>
       <div class="panel">
@@ -570,14 +643,14 @@ export class AlArchitectureEditor extends LitElement {
              @input=${(e: Event) => {
                this.name = (e.target as HTMLInputElement).value;
              }} /></label
-         ><label
+         ><label><input type="checkbox" .checked=${this.rectangle} @change=${(e:Event)=>{this.rectangle=(e.target as HTMLInputElement).checked;this.points=[];}} />Rectangle · pick opposite corners</label><label
            ><input
              type="checkbox"
              .checked=${this.snap}
              @change=${(e: Event) => {
                this.snap = (e.target as HTMLInputElement).checked;
              }}
-           />45° angle snap</label
+           />Right-angle polygon walls</label
          ><button @click=${() => this.finishRoom()}>Finish room</button
          ><button @click=${() => this.resetDraft()}>Cancel</button
          ><button
@@ -603,13 +676,19 @@ export class AlArchitectureEditor extends LitElement {
                .value=${o.name}
                @change=${(e: Event) => this.patch({ name: (e.target as HTMLInputElement).value })}
            /></label>
-           ${this.field("X", o.position[0], (v) => this.patch({ position: [v, o.position[1], o.position[2]] }))}${this.field("Y", o.position[1], (v) => this.patch({ position: [o.position[0], v, o.position[2]] }))}${this.field("Width", o.width, (v) => this.patch({ width: v }))}${this.field(o.kind === "stairs" ? "Total run" : "Depth", o.run, (v) => this.patch({ run: v }))}${this.field(o.kind === "stairs" ? "Rise" : "Height", o.height, (v) => this.patch({ height: v }))}${this.field("Base elevation", o.position[2], (v) => this.patch({ position: [o.position[0], o.position[1], v] }))}
+           ${this.field("X", o.position[0], (v) => this.patch({ position: [v, o.position[1], o.position[2]] }))}${this.field("Y", o.position[1], (v) => this.patch({ position: [o.position[0], v, o.position[2]] }))}${this.field("Width", o.width, (v) => this.patch({ width: v }))}${this.field(o.kind === "stairs" ? "Total run" : "Depth", o.run, (v) => this.patch({ run: v }))}${this.field(o.kind === "stairs" ? "Rise" : "Height", o.height, (v) => this.patch({ height: v }))}${this.field(isCeilingFixture(o.kind)?"Ceiling elevation":"Base elevation", o.position[2], (v) => this.patch({ position: [o.position[0], o.position[1], v] }))}
            <label
              >Direction (°)<input
                type="number"
                .value=${String(o.yaw)}
                @change=${(e: Event) => this.patch({ yaw: (e.target as HTMLInputElement).valueAsNumber })}
            /></label>
+           ${isCeilingFixture(o.kind)?html`
+             ${this.field("Drop from ceiling",o.drop??0,v=>this.patch({drop:v}))}
+             ${o.kind==="pendant_light"?html`<label>Shape<select aria-label="Pendant shape" .value=${o.shape??"globe"} @change=${(e:Event)=>this.patch({shape:(e.target as HTMLSelectElement).value as ArchitecturalObject["shape"]})}>${["globe","cone","cylinder"].map(shape=>html`<option value=${shape} .selected=${shape===o.shape}>${shape}</option>`)}</select></label>`:nothing}
+             <label>Home Assistant entity (optional)<input .value=${o.entity??""} @change=${(e:Event)=>this.patch({entity:(e.target as HTMLInputElement).value||undefined})} /></label>
+           `:nothing}
+           ${o.kind==="chimney"?html`<details open><summary>Floors crossed</summary>${this.floors.map(floor=>html`<label><input type="checkbox" .checked=${o.floors?.includes(floor.id)??false} @change=${(e:Event)=>this.chimneyFloors((e.target as HTMLInputElement).checked?[...(o.floors??[]),floor.id]:(o.floors??[]).filter(id=>id!==floor.id))} />${floor.name??floor.id}</label>`)}</details>`:nothing}
            ${
    o.kind === "stairs"
      ? html`<label
@@ -668,6 +747,13 @@ export class AlArchitectureEditor extends LitElement {
                ? html`<div class="tools">
                      ${(["stairs", "chimney", "column", "shaft", "solid"] as const).map((kind) => html`<button @click=${() => this.addObject(kind)}>Add ${kind}</button>`)}
                    </div>
+                   <details><summary>Ceiling fixtures</summary>
+                     <label>Type<select aria-label="Ceiling fixture type" .value=${this.ceilingKind} @change=${(e:Event)=>{this.ceilingKind=(e.target as HTMLSelectElement).value as CeilingKind;}}>${(["ceiling_fan","recessed_light","pendant_light","recessed_speaker"] as const).map(kind=>html`<option value=${kind} .selected=${kind===this.ceilingKind}>${kind.replaceAll("_"," ")}</option>`)}</select></label>
+                     <button @click=${()=>this.addCeiling(false)}>Add individual</button>
+                     <label>Rows<input aria-label="Grid rows" type="number" min="1" max="12" .value=${String(this.rows)} @change=${(e:Event)=>{this.rows=(e.target as HTMLInputElement).valueAsNumber;}} /></label>
+                     <label>Columns<input aria-label="Grid columns" type="number" min="1" max="12" .value=${String(this.columns)} @change=${(e:Event)=>{this.columns=(e.target as HTMLInputElement).valueAsNumber;}} /></label>
+                     <button @click=${()=>this.addCeiling(true)}>Add symmetric grid</button>
+                   </details>
                    <div class="list">
                      ${g.architecture?.map(
                        (obj) =>

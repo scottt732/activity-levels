@@ -1,5 +1,5 @@
 import {
-  Box3, BoxGeometry, LineDashedMaterial, DoubleSide, EdgesGeometry, ExtrudeGeometry, GridHelper, LineBasicMaterial,
+  Box3, BoxGeometry, CylinderGeometry, ConeGeometry, LineDashedMaterial, DoubleSide, EdgesGeometry, ExtrudeGeometry, GridHelper, LineBasicMaterial,
   LineSegments, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Scene, Shape,
   Vector2, Vector3, WebGLRenderer, PlaneGeometry, ShapeGeometry, Float32BufferAttribute, Color, DataTexture, LinearFilter, SphereGeometry, Plane, BufferGeometry,
 } from "three";
@@ -7,7 +7,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { activityReading } from "./floorplan-model";
 import type { ScenePart, ActivityFrame } from "./floorplan-model";
 import { viewerOptions, thresholdColor, roomLight } from "./floorplan-style";
-import {objectFootprint,stairHeight} from "./architecture";
+import {objectFootprint,stairHeight,isCeilingFixture} from "./architecture";
 import {coverageRays} from "./sensor-coverage";
 import {openingIsOpen,openingSwing,openingFitsRoom,openingState} from "./room-openings";
 import { fixtureAppearance, fixtureDirection, windowFitsRoom } from "./room-fixtures";
@@ -54,7 +54,7 @@ export function cutStairwells(geometry:BufferGeometry,origin:Vector3,stairs:Arch
  type Point=[number,number];
  for(let i=0;i<p.count;i+=3){
   const level=p.getY(i), horizontal=[1,2].every(j=>Math.abs(p.getY(i+j)-level)<1e-5);
-  const cuts=horizontal?stairs.filter(o=>o.position[2]<level+origin.y-1e-5 && o.position[2]+o.height>=level+origin.y-1e-5):[];
+  const cuts=horizontal?stairs.filter(o=>(o.kind==="chimney"?o.position[2]<=level+origin.y+1e-5:o.position[2]<level+origin.y-1e-5) && o.position[2]+o.height>=level+origin.y-1e-5):[];
   if(!cuts.length){for(let j=0;j<3;j++)vertices.push(p.getX(i+j),p.getY(i+j),p.getZ(i+j));continue;}
   let polygons:Point[][]=[[0,1,2].map(j=>[p.getX(i+j)+origin.x,-p.getZ(i+j)-origin.z])];
   for(const o of cuts){
@@ -224,7 +224,7 @@ export class FloorplanRenderer {
     }
     const architecture=objects ?? parts.flatMap(p=>p.architecture ?? []);
     const portals=parts.flatMap(p=>p.openings ?? []);
-    for(const o of architecture)for(const [x,y] of objectFootprint(o)){box.expandByPoint(new Vector3(x,o.position[2],-y));box.expandByPoint(new Vector3(x,o.position[2]+o.height,-y));}
+    for(const o of architecture)for(const [x,y] of objectFootprint(o)){box.expandByPoint(new Vector3(x,o.position[2],-y));box.expandByPoint(new Vector3(x,isCeilingFixture(o.kind)?o.position[2]-(o.drop ?? 0)-o.height:o.position[2]+o.height,-y));}
     groundZ ??= site?.ground_z;
     for (const feature of site?.features ?? []) for (const [x, y] of feature.points)
       box.expandByPoint(new Vector3(x, site!.ground_z, -y));
@@ -242,7 +242,7 @@ export class FloorplanRenderer {
     this.radius = Math.max(focusBox.getSize(new Vector3()).length() / 2, 0.1);
     for (const part of parts) {
       const under=architecture.find(o=>o.kind==="stairs" && o.under_room===part.id);
-      const geometry = volumeGeometry(part, origin,portals,under,architecture.filter(o=>o.kind==="stairs" && o.under_room!==part.id));
+      const geometry = volumeGeometry(part, origin,portals,under,architecture.filter(o=>(o.kind==="stairs" && o.under_room!==part.id) || (o.kind==="chimney" && !!o.floors?.some(id=>id===part.id || part.ancestors.includes(id)))));
       const mesh = new Mesh(geometry, new MeshBasicMaterial({
         color: 0x60c8e5, transparent: true, opacity: 0.025, side: DoubleSide, depthWrite: false,
       }));
@@ -260,7 +260,7 @@ export class FloorplanRenderer {
         volume.liquid = new Mesh(geometry.clone(), new MeshBasicMaterial({
           transparent: true, opacity: 0.015, side: DoubleSide, depthWrite: false,
         }));
-        volume.ceiling = new Mesh(surfaceGeometry(part, origin, architecture.filter(o=>o.kind==="stairs" && o.under_room!==part.id)), new MeshBasicMaterial({
+        volume.ceiling = new Mesh(surfaceGeometry(part, origin, architecture.filter(o=>(o.kind==="stairs" && o.under_room!==part.id) || (o.kind==="chimney" && !!o.floors?.some(id=>id===part.id || part.ancestors.includes(id))))), new MeshBasicMaterial({
           transparent: true, opacity: 0, side: DoubleSide, depthWrite: false,
         }));
         volume.ceiling.position.y = part.high - origin.y;
@@ -323,7 +323,31 @@ export class FloorplanRenderer {
         mesh.position.set(o.position[0]+o.width/2*c-(start+run/2)*s-origin.x,o.position[2]+base+height/2-origin.y,-o.position[1]-o.width/2*s-(start+run/2)*c-origin.z);
         mesh.name=o.kind==="stairs"?"stair-step":"architectural-solid";this.structures.push(mesh);this.scene.add(mesh);
       };
-      if(o.kind!=="stairs")block(0,o.run,o.height);
+      if(isCeilingFixture(o.kind)) {
+        const x=o.position[0]+o.width/2*c-o.run/2*s-origin.x,
+          z=-o.position[1]-o.width/2*s-o.run/2*c-origin.z,
+          ceiling=o.position[2]-origin.y,drop=o.drop ?? 0;
+        const add=(geometry:BufferGeometry,y:number,color:number,name:string)=>{
+          const mesh=new Mesh(geometry,new MeshBasicMaterial({color,transparent:true,opacity:.9}));
+          mesh.position.set(x,y,z);mesh.name=name;mesh.userData.entity=o.entity;
+          mesh.userData.baseColor=color;this.structures.push(mesh);this.scene.add(mesh);return mesh;
+        };
+        if(drop>0)add(new CylinderGeometry(.012,.012,drop,8),ceiling-drop/2,0x65747e,"ceiling-stem");
+        const y=ceiling-drop-o.height/2,radius=Math.min(o.width,o.run)/2;
+        if(o.kind==="ceiling_fan") {
+          add(new CylinderGeometry(.09,.09,o.height,16),y,0x9aadb5,"ceiling-fan-hub");
+          for(let blade=0;blade<4;blade++) {
+            const angle=a+blade*Math.PI/2,mesh=add(new BoxGeometry(radius*.85,.025,.12),y,0x718b98,"ceiling-fan-blade");
+            mesh.position.x+=Math.cos(angle)*radius*.52;mesh.position.z-=Math.sin(angle)*radius*.52;mesh.rotation.y=angle;
+          }
+        } else if(o.kind==="pendant_light") {
+          const shape=o.shape ?? "globe",geometry=shape==="cone"?new ConeGeometry(radius,o.height,24):shape==="cylinder"?new CylinderGeometry(radius,radius,o.height,24):new SphereGeometry(1,24,12);
+          const mesh=add(geometry,y,0xffd891,"pendant-light");if(shape==="globe")mesh.scale.set(o.width/2,o.height/2,o.run/2);
+        } else {
+          add(new CylinderGeometry(radius,radius,o.height,24),y,o.kind==="recessed_light"?0xffe5ac:0x7a8d96,o.kind);
+          if(o.kind==="recessed_speaker")add(new CylinderGeometry(radius*.8,radius*.8,.005,24),y-o.height/2-.003,0x34454c,"speaker-grille");
+        }
+      } else if(o.kind!=="stairs")block(0,o.run,o.height);
       else {
         const run=(o.run-o.landing_bottom-o.landing_top)/o.steps;
         for(let step=0;step<o.steps;step++){
@@ -372,6 +396,7 @@ export class FloorplanRenderer {
   }
 
   setActivity(live: ActivityFrame | null, now: number, selected: string, options: ViewerOptions = viewerOptions(), fills: Record<string,RoomLight> = {}, alert?: AlertRule, states: Record<string,HassEntity> = {}): void {
+    for(const mesh of this.structures)if(mesh.userData.entity){const state=states[mesh.userData.entity]?.state;mesh.material.color.set(state==="on"?0xffce62:mesh.userData.baseColor);}
     if (selected !== this.lastSelected) { this.pauseMotion(); this.lastSelected=selected; }
     this.options = options;
     if (!options.focus_activity) this.focusTarget=undefined;

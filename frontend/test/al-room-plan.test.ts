@@ -48,3 +48,22 @@ it("switches to a perpendicular wall and skips walls too short for the window",(
  const narrow={bounds:[[0,0,0],[1,4,3]] as typeof room.bounds};
  expect(Math.abs(snapOpening(narrow,[.8,.1,1],2).yaw)).toBe(90);
 });
+
+it("snaps sensors to corners before walls within twelve screen pixels",async()=>{
+ const el=new AlRoomPlan();el.group={...newGroup("room","area"),bounds:[[10,10,0],[14,14,3]]};el.fixture={...newFixture("binary_sensor.motion"),position:[12,12,2]};
+ document.body.append(el);await el.updateComplete;
+ vi.stubGlobal("DOMPoint",class {constructor(public x:number,public y:number){}matrixTransform(){return {x:this.x/100,y:this.y/100};}});
+ const canvas=el.shadowRoot!.querySelector("svg")!;Object.defineProperty(canvas,"getScreenCTM",{value:()=>({a:100,b:0,inverse:()=>({})})});
+ const placed=vi.fn();el.addEventListener("al-fixture-position",placed);
+ canvas.dispatchEvent(new MouseEvent("click",{clientX:1006,clientY:-1006}));
+ expect(placed.mock.calls.at(-1)![0].detail).toEqual([10,10,2]);
+ // Slightly outside the room can still snap to its exact boundary.
+ canvas.dispatchEvent(new MouseEvent("click",{clientX:994,clientY:-1200}));
+ expect(placed.mock.calls.at(-1)![0].detail).toEqual([10,12,2]);
+ canvas.dispatchEvent(new MouseEvent("click",{clientX:1030,clientY:-1030}));
+ expect(placed.mock.calls.at(-1)![0].detail).toEqual([10.3,10.3,2]);
+ // Light placement remains free even close to a wall.
+ el.fixture={...el.fixture,kind:"light"};await el.updateComplete;
+ canvas.dispatchEvent(new MouseEvent("click",{clientX:1006,clientY:-1006}));
+ expect(placed.mock.calls.at(-1)![0].detail).toEqual([10.06,10.06,2]);
+});
