@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/scottt732/activity-levels/compare/v0.26.0...v0.27.0) (2026-09-13)
+
+
+### Added
+
+* **panel:** add geometry-only spaces and room associations ([#75](https://github.com/scottt732/activity-levels/issues/75)) ([5dd4e87](https://github.com/scottt732/activity-levels/commit/5dd4e87cde4c3d7db746b26d0e91a60c1f5450a4))
+
 ## [0.26.0](https://github.com/scottt732/activity-levels/compare/v0.25.2...v0.26.0) (2026-09-13)
 
 
