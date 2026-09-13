@@ -34,7 +34,35 @@ export class AlRoomDeviceEditor extends LitElement {
     .device small { display:block; } details { margin:16px 0; } summary { cursor:pointer; padding:8px 0; }
     textarea { width:100%; min-height:100px; } .status { min-height:20px; } h3 { margin:8px 0; }
     @media(max-width:1100px) { .workspace { display:flex; flex-direction:column; } .editor-controls { position:static; order:-1; width:auto; max-width:none; max-height:420px; margin:12px; } .scene-pane { height:450px; } .plan-pane { width:100%; box-sizing:border-box; } }
+    [hidden] { display:none !important; }
+    :host([workspace]) { height:100%; font-size:12px; color:#d8edf2; }
+    :host([workspace]) fieldset, :host([workspace]) .workspace { height:100%; min-height:0; }
+    :host([workspace]) .workspace { display:grid; grid-template-columns:58% 42%; border:0; border-radius:0; }
+    :host([workspace]) .scene-pane { height:100%; }
+    :host([workspace]) .plan-pane { height:100%; box-sizing:border-box; padding:66px 12px 12px; --room-plan-height:calc(100dvh - 180px); }
+    :host([workspace]) .plan-pane h3 { font-size:12px; text-transform:uppercase; letter-spacing:.15em; margin:0 0 8px; }
+    :host([workspace]) .editor-controls { position:absolute; top:60px; left:62px; width:260px; max-width:none; max-height:calc(100% - 78px); margin:0; padding:10px; border-radius:8px; background:#102633f2; }
+    :host([workspace]) button, :host([workspace]) select, :host([workspace]) input, :host([workspace]) textarea { padding:4px 6px; font-size:12px; border-radius:3px; background:#163140; border-color:#355365; }
+    :host([workspace]) button { margin:3px 3px 3px 0; min-height:28px; }
+    :host([workspace]) details { margin:4px 0; } :host([workspace]) summary { padding:5px 0; }
+    :host([workspace]) label { margin:5px 0; } :host([workspace]) .muted { font-size:11px; }
+    :host([workspace]) .device { background:transparent; border-color:transparent; padding:5px 4px; margin:0; }
+    :host([workspace]) .device:hover { background:#244652; } :host([workspace]) .device small { font-size:10px; color:#91adba; }
+    :host([workspace]) .editor-controls input[type=checkbox] { width:auto; }
+    .view-toggle { display:none; }
+    .page-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0; }
+    .page-heading h3 { font-size:14px; margin:0; }
+    .room-tools { display:grid; grid-template-columns:minmax(0,1fr) 95px; align-items:center; gap:5px; } .room-tools > label:first-child { flex:1; }
+    .room-tools label { min-width:0; } .room-tools select { width:100%; }
+    :host([workspace]) .status:empty { display:none; }
+    @media(pointer:coarse) { :host([workspace]) button, :host([workspace]) select, :host([workspace]) input:not([type=checkbox]) { min-height:44px; font-size:14px; } :host([workspace]) .editor-controls { left:76px; } }
+    @media(max-width:760px) { .view-toggle { display:inline-block; } :host([workspace]) .workspace { grid-template-columns:100%; } :host([workspace]) .scene-pane { height:100%; } :host([workspace]) .plan-pane { display:none; } :host([workspace][plan-view]) .scene-pane { display:none; } :host([workspace][plan-view]) .plan-pane { display:block; } :host([workspace]) .editor-controls { top:60px; width:230px; max-height:42%; } }
+
   `;
+  @property({type:Boolean,reflect:true}) workspace=false;
+  @property({type:String}) section:"all"|"openings"|"sensors"|"lights"="all";
+  @state() private adding=false;
+  @state() private profilesPage=false;
   @property({attribute:false}) config?:Config;
   @property({attribute:false}) lights:Record<string,string[]>={};
   @property({attribute:false}) hass?:HomeAssistant;
@@ -85,7 +113,7 @@ export class AlRoomDeviceEditor extends LitElement {
   private get candidates() {return this.config?roomCandidates(this.config,this.room,this.registry,this.hass,this.live):[];}
   private get profiles() {return [...(this.config?.sensor_profiles ?? []),...SENSOR_CATALOG];}
   protected override willUpdate(changed:PropertyValues):void {
-    if(changed.has("room"))this.reset();
+    if(changed.has("room") || changed.has("section"))this.reset();
     // Live telemetry must not recreate every mesh or discard sensor state transitions.
     if(this.config && ["config","fixture","room","original","opening","originalOpening"].some(key=>changed.has(key))) {
       let preview=this.opening?this.openingConfig():this.config;this.previewError="";
@@ -120,7 +148,7 @@ export class AlRoomDeviceEditor extends LitElement {
     finally {if(sequence===this.sequence)this.loading=false;}
   }
   private reset():void {
-    this.legacyWindow=undefined;this.addKind="";
+    this.adding=false;this.profilesPage=false;this.legacyWindow=undefined;this.addKind="";
     this.fixture={...newFixture(),position:this.group?initialFixturePosition(this.group):[0,0,0]};
     this.opening=undefined;this.originalOpening=undefined;this.original=undefined;this.error="";this.notice="";this.mode="place";this.profile="";this.profileName="";this.search="";
   }
@@ -213,6 +241,7 @@ export class AlRoomDeviceEditor extends LitElement {
   private objectTree() {
     const g=this.group;if(!g)return nothing;
     return ([ ["Windows",["window"]],["Doors",["interior_door","exterior_door"]],["Openings",["open_wall"]],["Motion sensors",["motion"]],["Occupancy sensors",["occupancy"]],["Lights",["light"]] ] as [string,string[]][]).map(([label,kinds])=>{
+      if(this.section==="openings" && !["Windows","Doors","Openings"].includes(label) || this.section==="sensors" && !["Motion sensors","Occupancy sensors"].includes(label) || this.section==="lights" && label!=="Lights")return nothing;
       const openings=(g.openings ?? []).filter(o=>kinds.includes(o.kind)),fixtures=(g.fixtures ?? []).filter(f=>kinds.includes(f.kind));
       return html`<details open class="object-category"><summary>${label} (${openings.length+fixtures.length})</summary>
         ${openings.map(o=>html`<button class="device" type="button" data-object=${o.id} aria-pressed=${this.opening?.id===o.id} @click=${()=>this.editOpening(o)}>${o.name || o.kind.replaceAll("_"," ")}<small>${openingEntities(o).length} linked sensors · ${openingState(o,this.hass?.states ?? {})}</small></button>`)}
@@ -263,12 +292,13 @@ export class AlRoomDeviceEditor extends LitElement {
     const suggestions=device?this.profiles.filter(p=>matchesProfile(p,device)):[];
     const profile=this.profiles.find(p=>p.id===this.profile);
     return html`<fieldset ?disabled=${this.disabled}>
-      <label>Measurements<select id="length-unit" .value=${this.unitChoice} @change=${(e:Event)=>{this.unitChoice=(e.target as HTMLSelectElement).value as "auto"|LengthUnit;}}><option value="auto" .selected=${this.unitChoice==="auto"}>Home Assistant (${defaultLengthUnit(this.hass)})</option><option value="m" .selected=${this.unitChoice==="m"}>Meters</option><option value="ft" .selected=${this.unitChoice==="ft"}>Feet & inches</option></select></label>
+      ${!this.workspace?html`      <label>Measurements<select id="length-unit" .value=${this.unitChoice} @change=${(e:Event)=>{this.unitChoice=(e.target as HTMLSelectElement).value as "auto"|LengthUnit;}}><option value="auto" .selected=${this.unitChoice==="auto"}>HA (${defaultLengthUnit(this.hass)})</option><option value="m" .selected=${this.unitChoice==="m"}>Meters</option><option value="ft" .selected=${this.unitChoice==="ft"}>Feet & inches</option></select></label>
       ${this.unit==="ft"?html`<p class="muted">Enter feet and inches (2′6″), inches (30″), or decimal feet (2.5).</p>`:nothing}
-      <label>Room<select id="device-room" .value=${this.room} @change=${(e:Event)=>{this.room=(e.target as HTMLSelectElement).value;this.reset();}}>
-        <option value="">Choose a room</option>${rooms.map(e=>html`<option value=${e.group.id} .selected=${e.group.id===this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
+      <label>Room<select id="device-room" .value=${this.room} @change=${(e:Event)=>{this.room=(e.target as HTMLSelectElement).value;this.reset();this.dispatchEvent(new CustomEvent("al-editor-room",{detail:this.room,bubbles:true,composed:true}));}}>
+        <option value="" disabled>Choose a room</option>${rooms.map(e=>html`<option value=${e.group.id} .selected=${e.group.id===this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
+`:nothing}
       ${b?html`<div class="workspace">
-        <div class="scene-pane"><al-floorplan-viewer editing-preview .context=${true} .config=${this.preview} .room=${this.room} .live=${this.live} .hass=${this.hass} .lights=${this.lights} .settings=${{focus_activity:false,auto_rotate:false}}></al-floorplan-viewer></div>
+        <div class="scene-pane"><al-floorplan-viewer .workspace=${this.workspace} editing-preview .context=${true} .config=${this.preview} .room=${this.room} .live=${this.live} .hass=${this.hass} .lights=${this.lights} .settings=${{focus_activity:false,auto_rotate:false}}></al-floorplan-viewer></div>
         <div class="plan-pane"><h3>Top-down placement</h3><div>
         <div><button type="button" aria-pressed=${this.mode==="place"} @click=${()=>{this.mode="place";}}>Place / move</button>
           <button type="button" aria-pressed=${this.mode==="aim"} ?disabled=${!this.fixture.entity || (this.fixture.kind==="light" || this.fixture.kind==="window")} @click=${()=>{this.mode="aim";}}>Aim</button></div>
@@ -278,16 +308,23 @@ export class AlRoomDeviceEditor extends LitElement {
           @al-opening-position=${(e:CustomEvent<[number,number,number]>)=>{if(this.opening && this.group)this.patchOpening(snapOpening(this.group,e.detail,this.opening.width));}}
           @al-opening-select=${(e:CustomEvent<string>)=>{const opening=group?.openings?.find(o=>o.id===e.detail);if(opening)this.editOpening(opening);}}
           @al-fixture-select=${(e:CustomEvent<string>)=>this.select(e.detail)}></al-room-plan>
-      </div></div><div class="editor-controls"><h3>Room editor</h3>
-        <h3>Devices & windows</h3>
-        <details class="add-menu"><summary>Add…</summary>
-          <button id="new-door" type="button" @click=${()=>this.editOpening()}>Add door</button><button id="new-open-wall" type="button" @click=${()=>this.editOpening(undefined,"open_wall")}>Add open wall</button>
-          <button type="button" data-add-window @click=${()=>this.editOpening(undefined,"window")}>Add window</button>
-          ${(["motion","occupancy","light"] as const).map(kind=>html`<button type="button" data-add-kind=${kind} @click=${()=>{this.reset();this.addKind=kind;}}>Add ${kind==="motion"?"motion sensor":kind==="occupancy"?"occupancy sensor":kind}</button>`)}
+      </div></div><div class="editor-controls">
+        ${this.workspace?html`<div class="room-tools">      <label><select aria-label="Room" id="device-room" .value=${this.room} @change=${(e:Event)=>{this.room=(e.target as HTMLSelectElement).value;this.reset();this.dispatchEvent(new CustomEvent("al-editor-room",{detail:this.room,bubbles:true,composed:true}));}}>
+        <option value="" disabled>Choose a room</option>${rooms.map(e=>html`<option value=${e.group.id} .selected=${e.group.id===this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
+      <label><select aria-label="Measurements" id="length-unit" .value=${this.unitChoice} @change=${(e:Event)=>{this.unitChoice=(e.target as HTMLSelectElement).value as "auto"|LengthUnit;}}><option value="auto" .selected=${this.unitChoice==="auto"}>HA (${defaultLengthUnit(this.hass)})</option><option value="m" .selected=${this.unitChoice==="m"}>Meters</option><option value="ft" .selected=${this.unitChoice==="ft"}>Feet & inches</option></select></label>
+</div><button type="button" class="view-toggle" aria-label="Toggle 2D view on narrow screens" @click=${()=>this.toggleAttribute("plan-view")}>2D / 3D</button>`:html`<h3>Room editor</h3>`}
+        <div class="page-heading"><h3>${this.section==="openings"?"Doors & windows":this.section==="sensors"?"Motion & occupancy":this.section==="lights"?"Lights":"Devices & windows"}</h3>
+          ${this.workspace && (this.fixture.entity || this.opening || this.adding || this.profilesPage)?html`<button type="button" @click=${()=>this.reset()}>← List</button>`:this.workspace?html`<button type="button" @click=${()=>{this.adding=true;}}>+ Add</button>`:nothing}
+        </div>
+        ${!this.workspace || (!this.fixture.entity && !this.opening && !this.profilesPage)?html`
+        <details class="add-menu" ?hidden=${this.workspace && !this.adding} .open=${this.workspace && this.adding}><summary>Add…</summary>
+          <button ?hidden=${this.section!=="all" && this.section!=="openings"} id="new-door" type="button" @click=${()=>this.editOpening()}>Add door</button><button ?hidden=${this.section!=="all" && this.section!=="openings"} id="new-open-wall" type="button" @click=${()=>this.editOpening(undefined,"open_wall")}>Add open wall</button>
+          <button ?hidden=${this.section!=="all" && this.section!=="openings"} type="button" data-add-window @click=${()=>this.editOpening(undefined,"window")}>Add window</button>
+          ${(["motion","occupancy","light"] as const).map(kind=>html`<button ?hidden=${this.section!=="all" && (kind==="light"?this.section!=="lights":this.section!=="sensors")} type="button" data-add-kind=${kind} @click=${()=>{this.reset();this.adding=true;this.addKind=kind;}}>Add ${kind==="motion"?"motion sensor":kind==="occupancy"?"occupancy sensor":kind}</button>`)}
         </details>
         ${this.addKind?html`<p>Choose a room entity for the new ${this.addKind} placement.</p><button @click=${()=>{this.addKind="";}}>Show all devices</button>`:nothing}
-        ${this.objectTree()}
-        <details class="available-entities" ?open=${!!this.addKind}><summary>Available room entities to add</summary>
+        ${!this.workspace || !this.adding?this.objectTree():nothing}
+        <details class="available-entities" ?hidden=${this.workspace && !this.adding} ?open=${!!this.addKind}><summary>Available room entities to add</summary>
         <input aria-label="Find room device" placeholder="Find a sensor or light…" .value=${this.search} @input=${(e:Event)=>{this.search=(e.target as HTMLInputElement).value;}}>
         <p class="muted">Activity inputs first, then contributing now, then most recently changed.</p>
         <div class="devices">${candidates.map(d=>html`<button type="button" class="device" data-entity=${d.entity} aria-pressed=${this.fixture.entity===d.entity} @click=${()=>this.select(d.entity)}>
@@ -297,6 +334,8 @@ export class AlRoomDeviceEditor extends LitElement {
         </details>
         ${this.registryError?html`<p class="error" role="alert">${this.registryError}</p>`:nothing}
         <button type="button" ?disabled=${this.loading} @click=${()=>void this.loadDevices()}>${this.loading?"Loading devices…":"Refresh room devices"}</button>
+        ${this.workspace && this.section==="sensors"?html`<button type="button" @click=${()=>{this.profilesPage=true;}}>Model profiles</button>`:nothing}
+        `:nothing}
         ${this.openingControl()}
         ${device?html`<p class="muted">${[device.manufacturer,device.model,device.platform].filter(Boolean).join(" · ")}</p>`:nothing}
       ${this.fixture.entity?html`<h3>${this.fixture.name || this.fixture.entity}</h3>
@@ -326,7 +365,7 @@ export class AlRoomDeviceEditor extends LitElement {
       `:nothing}
       ${this.previewError?html`<p class="error" role="status">Placement needs adjustment: ${this.previewError}</p>`:nothing}
       <p class="status" role="status">${this.notice}</p>${this.error?html`<p class="error" role="alert">${this.error}</p>`:nothing}
-      <details><summary>Personal profiles · import / export</summary><p class="muted">Copy profiles between installations or contribute them to the bundled community catalog. Placement coordinates, linked entity ids and aiming angles are excluded. Import updates matching profile ids in the draft.</p>
+      <details ?hidden=${this.workspace && !this.profilesPage} .open=${this.workspace && this.profilesPage}><summary>Personal profiles · import / export</summary><p class="muted">Copy profiles between installations or contribute them to the bundled community catalog. Placement coordinates, linked entity ids and aiming angles are excluded. Import updates matching profile ids in the draft.</p>
         <textarea aria-label="Profile JSON" .value=${this.profileText} @input=${(e:Event)=>{this.profileText=(e.target as HTMLTextAreaElement).value;}}></textarea>
         <button type="button" @click=${()=>{this.profileText=JSON.stringify(parseProfiles(JSON.stringify(this.config?.sensor_profiles ?? [])),null,2);}}>Export personal profiles</button>
         <button type="button" @click=${()=>this.importProfiles()}>Import profiles to draft</button>

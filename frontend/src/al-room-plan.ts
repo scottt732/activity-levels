@@ -10,7 +10,7 @@ import { fixtureAppearance, insideRoom, snapWindow, windowFitsRoom } from "./roo
 @customElement("al-room-plan")
 export class AlRoomPlan extends LitElement {
   static styles=css`
-    :host { display:block; min-width:0; } svg { width:100%; height:clamp(320px,48vh,550px); display:block; background:radial-gradient(#203b4b,#102330); border:1px solid #4c7186; border-radius:12px; touch-action:none; }
+    :host { display:block; min-width:0; } svg { width:100%; height:var(--room-plan-height,clamp(320px,48vh,550px)); display:block; background:radial-gradient(#203b4b,#102330); border:1px solid #4c7186; border-radius:12px; touch-action:none; }
     svg.aiming { cursor:crosshair; border-color:#ffcd69; box-shadow:0 0 0 2px #ffcd69; }
     .outline { fill:#2b536177; stroke:#8ed9ea; stroke-width:2; vector-effect:non-scaling-stroke; }
     .marker { fill:#8ed9ea; stroke:#102330; stroke-width:2; vector-effect:non-scaling-stroke; cursor:grab; }

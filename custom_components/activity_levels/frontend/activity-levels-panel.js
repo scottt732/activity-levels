@@ -1,4 +1,4 @@
-import { $ as e, A as t, At as n, B as r, Bt as i, C as a, Ct as o, D as s, Dt as c, E as l, Et as u, F as d, Ft as f, G as p, H as m, Ht as ee, I as te, It as h, J as ne, K as re, L as ie, Lt as g, M as ae, Mt as oe, N as se, Nt as ce, O as le, Ot as ue, P as _, Pt as de, Q as fe, R as pe, Rt as v, S as me, St as he, T as y, Tt as ge, U as _e, Ut as b, V as ve, Vt as x, W as S, Wt as C, X as ye, Y as be, Z as xe, _ as Se, _t as Ce, at as we, b as Te, bt as Ee, c as De, ct as Oe, d as ke, dt as Ae, et as je, f as Me, ft as Ne, g as Pe, gt as Fe, h as Ie, ht as w, i as Le, it as Re, j as ze, jt as Be, k as Ve, kt as He, l as Ue, lt as We, m as Ge, mt as Ke, nt as qe, o as Je, ot as Ye, p as Xe, pt as Ze, q as Qe, rt as $e, st as et, t as tt, tt as T, u as nt, ut as E, v as rt, vt as it, w as at, wt as ot, x as st, xt as ct, y as lt, yt as ut, z as dt, zt as D } from "./shared-BYgiAqxy.js";
+import { $ as e, A as t, At as n, B as r, Bt as i, C as a, Ct as o, D as s, Dt as c, E as l, Et as u, F as d, Ft as f, G as p, H as m, Ht as ee, I as te, It as h, J as ne, K as re, L as ie, Lt as g, M as ae, Mt as oe, N as se, Nt as ce, O as le, Ot as ue, P as _, Pt as de, Q as fe, R as pe, Rt as v, S as me, St as he, T as y, Tt as ge, U as _e, Ut as b, V as ve, Vt as x, W as S, Wt as C, X as ye, Y as be, Z as xe, _ as Se, _t as Ce, at as we, b as Te, bt as Ee, c as De, ct as Oe, d as ke, dt as Ae, et as je, f as Me, ft as Ne, g as Pe, gt as Fe, h as Ie, ht as w, i as Le, it as Re, j as ze, jt as Be, k as Ve, kt as He, l as Ue, lt as We, m as Ge, mt as Ke, nt as qe, o as Je, ot as Ye, p as Xe, pt as Ze, q as Qe, rt as $e, st as et, t as tt, tt as T, u as nt, ut as E, v as rt, vt as it, w as at, wt as ot, x as st, xt as ct, y as lt, yt as ut, z as dt, zt as D } from "./shared-CW-USVUA.js";
 import { t as ft } from "./shared-IIYdNIav.js";
 //#region src/entities.ts
 var pt = (e) => `switch.${e}_presence_simulation`, mt = (e) => `sensor.${e}_expected_activity`, ht = (e) => `sensor.${e}_activity_anomaly`, gt = [
@@ -903,7 +903,10 @@ var O = class extends v {
           @al-code-status=${this.onCodeStatus}
         ></al-code>`;
 			case "floorplans": return x`<al-floorplans .hass=${this.hass} .config=${e.config} .live=${this.live}
-          .disabled=${this.busy} @al-change=${this.onChange} @al-open-group=${this.openMixerGroup}></al-floorplans>`;
+          .disabled=${this.busy} .dirty=${e.dirty} .blocked=${this.blocked} .status=${this.banner?.text ?? ""}
+          @al-save-config=${() => void this.save()} @al-discard-config=${() => this.discard()}
+          @al-exit-floorplan=${() => this.selectTab(this.tabs.indexOf("mixer"))}
+          @al-change=${this.onChange} @al-open-group=${this.openMixerGroup}></al-floorplans>`;
 			case "paths": return x`<al-paths .hass=${this.hass} .config=${e.config} .narrow=${this.narrow}></al-paths>`;
 			case "presence": return x`<al-presence
           .hass=${this.hass}
@@ -8123,7 +8126,7 @@ var js = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 	}
 	static {
 		this.styles = C`
-    :host { display:block; min-width:0; } svg { width:100%; height:clamp(320px,48vh,550px); display:block; background:radial-gradient(#203b4b,#102330); border:1px solid #4c7186; border-radius:12px; touch-action:none; }
+    :host { display:block; min-width:0; } svg { width:100%; height:var(--room-plan-height,clamp(320px,48vh,550px)); display:block; background:radial-gradient(#203b4b,#102330); border:1px solid #4c7186; border-radius:12px; touch-action:none; }
     svg.aiming { cursor:crosshair; border-color:#ffcd69; box-shadow:0 0 0 2px #ffcd69; }
     .outline { fill:#2b536177; stroke:#8ed9ea; stroke-width:2; vector-effect:non-scaling-stroke; }
     .marker { fill:#8ed9ea; stroke:#102330; stroke-width:2; vector-effect:non-scaling-stroke; cursor:grab; }
@@ -8260,7 +8263,7 @@ y([h({ attribute: !1 })], Z.prototype, "hass", void 0), y([h({ attribute: !1 })]
 //#region src/al-room-device-editor.ts
 var Q = class extends v {
 	constructor(...e) {
-		super(...e), this.lights = {}, this.live = null, this.disabled = !1, this.room = "", this.unitChoice = "auto", this.contactSearch = "", this.allContacts = !1, this.addKind = "", this.fixture = nt(), this.mode = "place", this.error = "", this.notice = "", this.registry = [], this.registryError = "", this.loading = !1, this.search = "", this.profile = "", this.profileName = "", this.profileText = "", this.sequence = 0, this.previewError = "";
+		super(...e), this.workspace = !1, this.section = "all", this.adding = !1, this.profilesPage = !1, this.lights = {}, this.live = null, this.disabled = !1, this.room = "", this.unitChoice = "auto", this.contactSearch = "", this.allContacts = !1, this.addKind = "", this.fixture = nt(), this.mode = "place", this.error = "", this.notice = "", this.registry = [], this.registryError = "", this.loading = !1, this.search = "", this.profile = "", this.profileName = "", this.profileText = "", this.sequence = 0, this.previewError = "";
 	}
 	static {
 		this.styles = C`
@@ -8280,6 +8283,30 @@ var Q = class extends v {
     .device small { display:block; } details { margin:16px 0; } summary { cursor:pointer; padding:8px 0; }
     textarea { width:100%; min-height:100px; } .status { min-height:20px; } h3 { margin:8px 0; }
     @media(max-width:1100px) { .workspace { display:flex; flex-direction:column; } .editor-controls { position:static; order:-1; width:auto; max-width:none; max-height:420px; margin:12px; } .scene-pane { height:450px; } .plan-pane { width:100%; box-sizing:border-box; } }
+    [hidden] { display:none !important; }
+    :host([workspace]) { height:100%; font-size:12px; color:#d8edf2; }
+    :host([workspace]) fieldset, :host([workspace]) .workspace { height:100%; min-height:0; }
+    :host([workspace]) .workspace { display:grid; grid-template-columns:58% 42%; border:0; border-radius:0; }
+    :host([workspace]) .scene-pane { height:100%; }
+    :host([workspace]) .plan-pane { height:100%; box-sizing:border-box; padding:66px 12px 12px; --room-plan-height:calc(100dvh - 180px); }
+    :host([workspace]) .plan-pane h3 { font-size:12px; text-transform:uppercase; letter-spacing:.15em; margin:0 0 8px; }
+    :host([workspace]) .editor-controls { position:absolute; top:60px; left:62px; width:260px; max-width:none; max-height:calc(100% - 78px); margin:0; padding:10px; border-radius:8px; background:#102633f2; }
+    :host([workspace]) button, :host([workspace]) select, :host([workspace]) input, :host([workspace]) textarea { padding:4px 6px; font-size:12px; border-radius:3px; background:#163140; border-color:#355365; }
+    :host([workspace]) button { margin:3px 3px 3px 0; min-height:28px; }
+    :host([workspace]) details { margin:4px 0; } :host([workspace]) summary { padding:5px 0; }
+    :host([workspace]) label { margin:5px 0; } :host([workspace]) .muted { font-size:11px; }
+    :host([workspace]) .device { background:transparent; border-color:transparent; padding:5px 4px; margin:0; }
+    :host([workspace]) .device:hover { background:#244652; } :host([workspace]) .device small { font-size:10px; color:#91adba; }
+    :host([workspace]) .editor-controls input[type=checkbox] { width:auto; }
+    .view-toggle { display:none; }
+    .page-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0; }
+    .page-heading h3 { font-size:14px; margin:0; }
+    .room-tools { display:grid; grid-template-columns:minmax(0,1fr) 95px; align-items:center; gap:5px; } .room-tools > label:first-child { flex:1; }
+    .room-tools label { min-width:0; } .room-tools select { width:100%; }
+    :host([workspace]) .status:empty { display:none; }
+    @media(pointer:coarse) { :host([workspace]) button, :host([workspace]) select, :host([workspace]) input:not([type=checkbox]) { min-height:44px; font-size:14px; } :host([workspace]) .editor-controls { left:76px; } }
+    @media(max-width:760px) { .view-toggle { display:inline-block; } :host([workspace]) .workspace { grid-template-columns:100%; } :host([workspace]) .scene-pane { height:100%; } :host([workspace]) .plan-pane { display:none; } :host([workspace][plan-view]) .scene-pane { display:none; } :host([workspace][plan-view]) .plan-pane { display:block; } :host([workspace]) .editor-controls { top:60px; width:230px; max-height:42%; } }
+
   `;
 	}
 	get unit() {
@@ -8319,7 +8346,7 @@ var Q = class extends v {
 		return [...this.config?.sensor_profiles ?? [], ...Ms];
 	}
 	willUpdate(e) {
-		if (e.has("room") && this.reset(), this.config && [
+		if ((e.has("room") || e.has("section")) && this.reset(), this.config && [
 			"config",
 			"fixture",
 			"room",
@@ -8368,7 +8395,7 @@ var Q = class extends v {
 		}
 	}
 	reset() {
-		this.legacyWindow = void 0, this.addKind = "", this.fixture = {
+		this.adding = !1, this.profilesPage = !1, this.legacyWindow = void 0, this.addKind = "", this.fixture = {
 			...nt(),
 			position: this.group ? De(this.group) : [
 				0,
@@ -8540,6 +8567,11 @@ var Q = class extends v {
 			["Occupancy sensors", ["occupancy"]],
 			["Lights", ["light"]]
 		].map(([t, n]) => {
+			if (this.section === "openings" && ![
+				"Windows",
+				"Doors",
+				"Openings"
+			].includes(t) || this.section === "sensors" && !["Motion sensors", "Occupancy sensors"].includes(t) || this.section === "lights" && t !== "Lights") return D;
 			let r = (e.openings ?? []).filter((e) => n.includes(e.kind)), i = (e.fixtures ?? []).filter((e) => n.includes(e.kind));
 			return x`<details open class="object-category"><summary>${t} (${r.length + i.length})</summary>
         ${r.map((e) => x`<button class="device" type="button" data-object=${e.id} aria-pressed=${this.opening?.id === e.id} @click=${() => this.editOpening(e)}>${e.name || e.kind.replaceAll("_", " ")}<small>${Pe(e).length} linked sensors · ${lt(e, this.hass?.states ?? {})}</small></button>`)}
@@ -8621,16 +8653,21 @@ var Q = class extends v {
 			"floor"
 		].includes(e.kind) && (!n || e.bounds[0][2] < n[1][2] - .01 && e.bounds[1][2] > n[0][2] + .01)) : [], i = r.find((e) => e.id === this.room) ?? t, o = this.candidates.filter((e) => !e.placed && (!this.addKind || this.addKind === "light" === e.entity.startsWith("light."))).filter((e) => `${e.name} ${e.entity}`.toLowerCase().includes(this.search.toLowerCase())), s = this.candidates.find((e) => e.entity === this.fixture.entity), c = s ? this.profiles.filter((e) => Ss(e, s)) : [], l = this.profiles.find((e) => e.id === this.profile);
 		return x`<fieldset ?disabled=${this.disabled}>
-      <label>Measurements<select id="length-unit" .value=${this.unitChoice} @change=${(e) => {
+      ${this.workspace ? D : x`      <label>Measurements<select id="length-unit" .value=${this.unitChoice} @change=${(e) => {
 			this.unitChoice = e.target.value;
-		}}><option value="auto" .selected=${this.unitChoice === "auto"}>Home Assistant (${Es(this.hass)})</option><option value="m" .selected=${this.unitChoice === "m"}>Meters</option><option value="ft" .selected=${this.unitChoice === "ft"}>Feet & inches</option></select></label>
+		}}><option value="auto" .selected=${this.unitChoice === "auto"}>HA (${Es(this.hass)})</option><option value="m" .selected=${this.unitChoice === "m"}>Meters</option><option value="ft" .selected=${this.unitChoice === "ft"}>Feet & inches</option></select></label>
       ${this.unit === "ft" ? x`<p class="muted">Enter feet and inches (2′6″), inches (30″), or decimal feet (2.5).</p>` : D}
       <label>Room<select id="device-room" .value=${this.room} @change=${(e) => {
-			this.room = e.target.value, this.reset();
+			this.room = e.target.value, this.reset(), this.dispatchEvent(new CustomEvent("al-editor-room", {
+				detail: this.room,
+				bubbles: !0,
+				composed: !0
+			}));
 		}}>
-        <option value="">Choose a room</option>${e.map((e) => x`<option value=${e.group.id} .selected=${e.group.id === this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
+        <option value="" disabled>Choose a room</option>${e.map((e) => x`<option value=${e.group.id} .selected=${e.group.id === this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
+`}
       ${n ? x`<div class="workspace">
-        <div class="scene-pane"><al-floorplan-viewer editing-preview .context=${!0} .config=${this.preview} .room=${this.room} .live=${this.live} .hass=${this.hass} .lights=${this.lights} .settings=${{
+        <div class="scene-pane"><al-floorplan-viewer .workspace=${this.workspace} editing-preview .context=${!0} .config=${this.preview} .room=${this.room} .live=${this.live} .hass=${this.hass} .lights=${this.lights} .settings=${{
 			focus_activity: !1,
 			auto_rotate: !1
 		}}></al-floorplan-viewer></div>
@@ -8654,24 +8691,41 @@ var Q = class extends v {
 			n && this.editOpening(n);
 		}}
           @al-fixture-select=${(e) => this.select(e.detail)}></al-room-plan>
-      </div></div><div class="editor-controls"><h3>Room editor</h3>
-        <h3>Devices & windows</h3>
-        <details class="add-menu"><summary>Add…</summary>
-          <button id="new-door" type="button" @click=${() => this.editOpening()}>Add door</button><button id="new-open-wall" type="button" @click=${() => this.editOpening(void 0, "open_wall")}>Add open wall</button>
-          <button type="button" data-add-window @click=${() => this.editOpening(void 0, "window")}>Add window</button>
+      </div></div><div class="editor-controls">
+        ${this.workspace ? x`<div class="room-tools">      <label><select aria-label="Room" id="device-room" .value=${this.room} @change=${(e) => {
+			this.room = e.target.value, this.reset(), this.dispatchEvent(new CustomEvent("al-editor-room", {
+				detail: this.room,
+				bubbles: !0,
+				composed: !0
+			}));
+		}}>
+        <option value="" disabled>Choose a room</option>${e.map((e) => x`<option value=${e.group.id} .selected=${e.group.id === this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
+      <label><select aria-label="Measurements" id="length-unit" .value=${this.unitChoice} @change=${(e) => {
+			this.unitChoice = e.target.value;
+		}}><option value="auto" .selected=${this.unitChoice === "auto"}>HA (${Es(this.hass)})</option><option value="m" .selected=${this.unitChoice === "m"}>Meters</option><option value="ft" .selected=${this.unitChoice === "ft"}>Feet & inches</option></select></label>
+</div><button type="button" class="view-toggle" aria-label="Toggle 2D view on narrow screens" @click=${() => this.toggleAttribute("plan-view")}>2D / 3D</button>` : x`<h3>Room editor</h3>`}
+        <div class="page-heading"><h3>${this.section === "openings" ? "Doors & windows" : this.section === "sensors" ? "Motion & occupancy" : this.section === "lights" ? "Lights" : "Devices & windows"}</h3>
+          ${this.workspace && (this.fixture.entity || this.opening || this.adding || this.profilesPage) ? x`<button type="button" @click=${() => this.reset()}>← List</button>` : this.workspace ? x`<button type="button" @click=${() => {
+			this.adding = !0;
+		}}>+ Add</button>` : D}
+        </div>
+        ${!this.workspace || !this.fixture.entity && !this.opening && !this.profilesPage ? x`
+        <details class="add-menu" ?hidden=${this.workspace && !this.adding} .open=${this.workspace && this.adding}><summary>Add…</summary>
+          <button ?hidden=${this.section !== "all" && this.section !== "openings"} id="new-door" type="button" @click=${() => this.editOpening()}>Add door</button><button ?hidden=${this.section !== "all" && this.section !== "openings"} id="new-open-wall" type="button" @click=${() => this.editOpening(void 0, "open_wall")}>Add open wall</button>
+          <button ?hidden=${this.section !== "all" && this.section !== "openings"} type="button" data-add-window @click=${() => this.editOpening(void 0, "window")}>Add window</button>
           ${[
 			"motion",
 			"occupancy",
 			"light"
-		].map((e) => x`<button type="button" data-add-kind=${e} @click=${() => {
-			this.reset(), this.addKind = e;
+		].map((e) => x`<button ?hidden=${this.section !== "all" && (e === "light" ? this.section !== "lights" : this.section !== "sensors")} type="button" data-add-kind=${e} @click=${() => {
+			this.reset(), this.adding = !0, this.addKind = e;
 		}}>Add ${e === "motion" ? "motion sensor" : e === "occupancy" ? "occupancy sensor" : e}</button>`)}
         </details>
         ${this.addKind ? x`<p>Choose a room entity for the new ${this.addKind} placement.</p><button @click=${() => {
 			this.addKind = "";
 		}}>Show all devices</button>` : D}
-        ${this.objectTree()}
-        <details class="available-entities" ?open=${!!this.addKind}><summary>Available room entities to add</summary>
+        ${!this.workspace || !this.adding ? this.objectTree() : D}
+        <details class="available-entities" ?hidden=${this.workspace && !this.adding} ?open=${!!this.addKind}><summary>Available room entities to add</summary>
         <input aria-label="Find room device" placeholder="Find a sensor or light…" .value=${this.search} @input=${(e) => {
 			this.search = e.target.value;
 		}}>
@@ -8683,6 +8737,10 @@ var Q = class extends v {
         </details>
         ${this.registryError ? x`<p class="error" role="alert">${this.registryError}</p>` : D}
         <button type="button" ?disabled=${this.loading} @click=${() => void this.loadDevices()}>${this.loading ? "Loading devices…" : "Refresh room devices"}</button>
+        ${this.workspace && this.section === "sensors" ? x`<button type="button" @click=${() => {
+			this.profilesPage = !0;
+		}}>Model profiles</button>` : D}
+        ` : D}
         ${this.openingControl()}
         ${s ? x`<p class="muted">${[
 			s.manufacturer,
@@ -8739,7 +8797,7 @@ var Q = class extends v {
       ` : D}
       ${this.previewError ? x`<p class="error" role="status">Placement needs adjustment: ${this.previewError}</p>` : D}
       <p class="status" role="status">${this.notice}</p>${this.error ? x`<p class="error" role="alert">${this.error}</p>` : D}
-      <details><summary>Personal profiles · import / export</summary><p class="muted">Copy profiles between installations or contribute them to the bundled community catalog. Placement coordinates, linked entity ids and aiming angles are excluded. Import updates matching profile ids in the draft.</p>
+      <details ?hidden=${this.workspace && !this.profilesPage} .open=${this.workspace && this.profilesPage}><summary>Personal profiles · import / export</summary><p class="muted">Copy profiles between installations or contribute them to the bundled community catalog. Placement coordinates, linked entity ids and aiming angles are excluded. Import updates matching profile ids in the draft.</p>
         <textarea aria-label="Profile JSON" .value=${this.profileText} @input=${(e) => {
 			this.profileText = e.target.value;
 		}}></textarea>
@@ -8751,19 +8809,34 @@ var Q = class extends v {
     </fieldset>`;
 	}
 };
-y([h({ attribute: !1 })], Q.prototype, "config", void 0), y([h({ attribute: !1 })], Q.prototype, "lights", void 0), y([h({ attribute: !1 })], Q.prototype, "hass", void 0), y([h({ attribute: !1 })], Q.prototype, "live", void 0), y([h({ type: Boolean })], Q.prototype, "disabled", void 0), y([h({ type: String })], Q.prototype, "room", void 0), y([f()], Q.prototype, "unitChoice", void 0), y([f()], Q.prototype, "contactSearch", void 0), y([f()], Q.prototype, "allContacts", void 0), y([f()], Q.prototype, "legacyWindow", void 0), y([f()], Q.prototype, "addKind", void 0), y([f()], Q.prototype, "opening", void 0), y([f()], Q.prototype, "originalOpening", void 0), y([f()], Q.prototype, "fixture", void 0), y([f()], Q.prototype, "original", void 0), y([f()], Q.prototype, "mode", void 0), y([f()], Q.prototype, "error", void 0), y([f()], Q.prototype, "notice", void 0), y([f()], Q.prototype, "registry", void 0), y([f()], Q.prototype, "registryError", void 0), y([f()], Q.prototype, "loading", void 0), y([f()], Q.prototype, "search", void 0), y([f()], Q.prototype, "profile", void 0), y([f()], Q.prototype, "profileName", void 0), y([f()], Q.prototype, "profileText", void 0), Q = y([g("al-room-device-editor")], Q);
+y([h({
+	type: Boolean,
+	reflect: !0
+})], Q.prototype, "workspace", void 0), y([h({ type: String })], Q.prototype, "section", void 0), y([f()], Q.prototype, "adding", void 0), y([f()], Q.prototype, "profilesPage", void 0), y([h({ attribute: !1 })], Q.prototype, "config", void 0), y([h({ attribute: !1 })], Q.prototype, "lights", void 0), y([h({ attribute: !1 })], Q.prototype, "hass", void 0), y([h({ attribute: !1 })], Q.prototype, "live", void 0), y([h({ type: Boolean })], Q.prototype, "disabled", void 0), y([h({ type: String })], Q.prototype, "room", void 0), y([f()], Q.prototype, "unitChoice", void 0), y([f()], Q.prototype, "contactSearch", void 0), y([f()], Q.prototype, "allContacts", void 0), y([f()], Q.prototype, "legacyWindow", void 0), y([f()], Q.prototype, "addKind", void 0), y([f()], Q.prototype, "opening", void 0), y([f()], Q.prototype, "originalOpening", void 0), y([f()], Q.prototype, "fixture", void 0), y([f()], Q.prototype, "original", void 0), y([f()], Q.prototype, "mode", void 0), y([f()], Q.prototype, "error", void 0), y([f()], Q.prototype, "notice", void 0), y([f()], Q.prototype, "registry", void 0), y([f()], Q.prototype, "registryError", void 0), y([f()], Q.prototype, "loading", void 0), y([f()], Q.prototype, "search", void 0), y([f()], Q.prototype, "profile", void 0), y([f()], Q.prototype, "profileName", void 0), y([f()], Q.prototype, "profileText", void 0), Q = y([g("al-room-device-editor")], Q);
 //#endregion
 //#region src/al-floorplans.ts
 var $ = class extends v {
 	constructor(...e) {
-		super(...e), this.live = null, this.disabled = !1, this.editing = !1, this.editRoom = "", this.lights = {}, this.settings = {}, this.error = "", this.preferenceError = "", this.entry = "";
+		super(...e), this.live = null, this.disabled = !1, this.dirty = !1, this.blocked = !1, this.status = "", this.page = "live", this.editRoom = "", this.lights = {}, this.settings = {}, this.error = "", this.preferenceError = "", this.entry = "";
 	}
 	static {
 		this.styles = C`
-    :host { display: block; }
-    button { font:inherit; color:var(--primary-text-color); background:var(--card-background-color); border:1px solid var(--divider-color,#888); border-radius:6px; padding:8px 12px; cursor:pointer; }
-    details { margin: 0 16px 24px; border-top: 1px solid var(--divider-color, #aaa); }
-    summary { cursor: pointer; padding: 16px 0; font-weight: 500; }
+    :host { display:block; position:fixed; inset:0; z-index:20; color:#d8edf2; background:#101d27; --primary-text-color:#d8edf2; --secondary-text-color:#91adba; --card-background-color:#142b38; --secondary-background-color:#1b3a48; --divider-color:#345261; --primary-color:#80ddeb; }
+    .scene { position:absolute; inset:0; } .scene.shifted { left:400px; }
+    al-floorplan-viewer, al-room-device-editor { display:block; height:100%; }
+    [hidden] { display:none !important; }
+    .rail { position:absolute; left:10px; top:12px; z-index:8; display:flex; flex-direction:column; gap:6px; padding:6px; border:1px solid #426477; background:#10232ee8; border-radius:8px; }
+    button { font:inherit; color:inherit; background:#152d3bdd; border:1px solid #36576b; border-radius:4px; padding:5px 8px; cursor:pointer; }
+    button:focus-visible { outline:2px solid #9be6f3; outline-offset:2px; } button:disabled { opacity:.45; cursor:default; }
+    .rail button { width:32px; height:32px; padding:0; font-size:18px; background:transparent; border-color:transparent; }
+    button[aria-pressed=true] { color:#aff4ff; border-color:#7cd7e8; background:#244654; }
+    .save { position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:9; display:flex; gap:6px; align-items:center; font-size:12px; }
+    .status { position:absolute; bottom:10px; left:70px; max-width:calc(100% - 140px); z-index:10; font-size:12px; background:#142b38ed; padding:6px 10px; }
+    .page { position:absolute; top:64px; bottom:16px; left:62px; width:330px; z-index:5; overflow:auto; border:1px solid #426477; border-left:2px solid #80ddeb; background:#102633f5; border-radius:8px; font-size:12px; }
+    .page > al-property-layout, .page > al-floorplan-import { display:block; padding:0 12px; }
+    .page header { position:sticky; top:0; background:#102633; z-index:1; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
+    @media(pointer:coarse) { .rail button { width:44px; height:44px; } button { min-height:44px; } .page { left:76px; } }
+    @media(max-width:760px) { .scene.shifted { left:0; } .page { left:62px; right:12px; width:auto; } .save { left:auto; right:64px; transform:none; } }
   `;
 	}
 	connectedCallback() {
@@ -8798,23 +8871,93 @@ var $ = class extends v {
 			this.preferenceError = "Viewer settings changed, but this browser could not save them.";
 		}
 	}
+	navigate(e) {
+		if (this.page = e, [
+			"openings",
+			"sensors",
+			"lights"
+		].includes(e) && this.config) {
+			let e = T(this.config).filter((e) => e.group.bounds && ![
+				"property",
+				"structure",
+				"floor"
+			].includes(e.group.kind));
+			e.some((e) => e.group.id === this.editRoom) || (this.editRoom = e[0]?.group.id ?? ""), this.editRoom || (this.page = "import");
+		}
+	}
+	action(e) {
+		this.dispatchEvent(new CustomEvent(e, {
+			bubbles: !0,
+			composed: !0
+		}));
+	}
 	render() {
 		if (!this.config) return D;
-		let e = T(this.config).some(({ group: e }) => e.bounds || e.points);
+		let e = [
+			"openings",
+			"sensors",
+			"lights"
+		].includes(this.page), t = this.page === "property" || this.page === "import";
 		return x`
-      ${this.error || this.preferenceError ? x`<p role="status">${this.error || this.preferenceError}</p>` : D}
-      <div style="margin:0 16px 12px"><button type="button" @click=${() => {
-			this.editing = !this.editing;
-		}}>${this.editing ? "Done placing · return to live view" : "Place devices & windows"}</button><span> ${this.editing ? "Add placements to the draft, then use the panel’s Save to persist them." : ""}</span></div>
-      ${this.editing ? x`<al-room-device-editor style="margin:0 16px 24px" .room=${this.editRoom} .lights=${this.lights} .live=${this.live} .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor>` : x`<al-floorplan-viewer @al-edit-room=${(e) => {
-			this.editRoom = e.detail, this.editing = !0;
-		}} .config=${this.config} .live=${this.live} .hass=${this.hass} .lights=${this.lights}
-        .telemetry=${this.error ? void 0 : this.telemetry} .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>`}
-      <details><summary>Property layout</summary><al-property-layout .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-property-layout></details>
-      <details .open=${!e}><summary>Import or update floorplan</summary>
-        <al-floorplan-import .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-floorplan-import>
-      </details>`;
+      <div class=${`scene${t ? " shifted" : ""}`} ?hidden=${e}>
+        <al-floorplan-viewer workspace .settingsOpen=${this.page === "settings"} .hideHud=${t || this.page === "settings"}
+          @al-room-selected=${(e) => {
+			this.editRoom = e.detail;
+		}}
+          @al-edit-room=${(e) => {
+			this.editRoom = e.detail, this.navigate("openings");
+		}}
+          .config=${this.config} .live=${this.live} .hass=${this.hass} .lights=${this.lights}
+          .telemetry=${this.error ? void 0 : this.telemetry} .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
+      </div>
+      ${e ? x`<al-room-device-editor @al-editor-room=${(e) => {
+			this.editRoom = e.detail;
+		}} workspace .section=${this.page} .room=${this.editRoom} .lights=${this.lights} .live=${this.live} .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor>` : D}
+      <nav class="rail" aria-label="Floorplan tools">
+        <button aria-label="Exit floorplan" title="Back to Activity Levels" @click=${() => this.action("al-exit-floorplan")}>←</button>
+        ${[
+			[
+				"live",
+				"◈",
+				"Live telemetry"
+			],
+			[
+				"openings",
+				"▣",
+				"Doors & windows"
+			],
+			[
+				"sensors",
+				"◎",
+				"Motion & occupancy"
+			],
+			[
+				"lights",
+				"☼",
+				"Lights"
+			],
+			[
+				"property",
+				"⌖",
+				"Property layout"
+			],
+			[
+				"import",
+				"⇧",
+				"Import floorplan"
+			],
+			[
+				"settings",
+				"⚙",
+				"Viewer settings"
+			]
+		].map(([e, t, n]) => x`<button aria-label=${n} title=${n} aria-pressed=${this.page === e} @click=${() => this.navigate(e)}>${t}</button>`)}
+      </nav>
+      <div class="save"><button ?disabled=${!this.dirty || this.disabled} @click=${() => this.action("al-discard-config")}>Discard</button><button ?disabled=${!this.dirty || this.disabled || this.blocked} @click=${() => this.action("al-save-config")}>${this.disabled ? "Saving…" : this.dirty ? "Save changes" : "Saved"}</button></div>
+      <section class="page" aria-label="Property layout" ?hidden=${this.page !== "property"}><header>Property layout<button aria-label="Close property layout" @click=${() => this.navigate("live")}>×</button></header><al-property-layout .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-property-layout></section>
+      <section class="page" aria-label="Import floorplan" ?hidden=${this.page !== "import"}><header>Import floorplan<button aria-label="Close import" @click=${() => this.navigate("live")}>×</button></header><al-floorplan-import .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-floorplan-import></section>
+      ${this.error || this.preferenceError || this.status || this.blocked ? x`<div class="status" role="status">${this.error || this.preferenceError || this.status || "Configuration needs attention before saving. Exit to review validation errors."}</div>` : D}`;
 	}
 };
-y([h({ attribute: !1 })], $.prototype, "hass", void 0), y([h({ attribute: !1 })], $.prototype, "config", void 0), y([h({ attribute: !1 })], $.prototype, "live", void 0), y([h({ type: Boolean })], $.prototype, "disabled", void 0), y([f()], $.prototype, "editing", void 0), y([f()], $.prototype, "editRoom", void 0), y([f()], $.prototype, "telemetry", void 0), y([f()], $.prototype, "lights", void 0), y([f()], $.prototype, "settings", void 0), y([f()], $.prototype, "error", void 0), y([f()], $.prototype, "preferenceError", void 0), $ = y([g("al-floorplans")], $);
+y([h({ attribute: !1 })], $.prototype, "hass", void 0), y([h({ attribute: !1 })], $.prototype, "config", void 0), y([h({ attribute: !1 })], $.prototype, "live", void 0), y([h({ type: Boolean })], $.prototype, "disabled", void 0), y([h({ type: Boolean })], $.prototype, "dirty", void 0), y([h({ type: Boolean })], $.prototype, "blocked", void 0), y([h({ type: String })], $.prototype, "status", void 0), y([f()], $.prototype, "page", void 0), y([f()], $.prototype, "editRoom", void 0), y([f()], $.prototype, "telemetry", void 0), y([f()], $.prototype, "lights", void 0), y([f()], $.prototype, "settings", void 0), y([f()], $.prototype, "error", void 0), y([f()], $.prototype, "preferenceError", void 0), $ = y([g("al-floorplans")], $);
 //#endregion

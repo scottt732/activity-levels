@@ -45,6 +45,44 @@ beforeEach(() => { scene.fail = false; vi.clearAllMocks(); });
 afterEach(() => { document.body.innerHTML = ""; vi.useRealTimers(); delete (document as unknown as Record<string,unknown>).fullscreenElement; delete (document as unknown as Record<string,unknown>).exitFullscreen; });
 
 describe("floorplan viewer", () => {
+  it("overlays workspace controls and publishes room selection without requesting fullscreen", async () => {
+    const el=await mount();
+    const requestFullscreen=vi.fn();el.requestFullscreen=requestFullscreen;
+    el.workspace=true;el.settings={ambient:true};await settle(el);
+    const selected=vi.fn();el.addEventListener("al-room-selected",selected);
+    expect(el.hasAttribute("workspace")).toBe(true);
+    expect(el.hasAttribute("ambient")).toBe(false);
+    expect(el.shadowRoot!.querySelector("#exit-view")).toBeNull();
+    expect(el.shadowRoot!.querySelector<HTMLSelectElement>("#scope")!.getAttribute("aria-label")).toBe("Floor or building");
+    const drawer=el.shadowRoot!.querySelector<HTMLElement>("#room-drawer")!;
+    expect(drawer.hidden).toBe(true);
+    const toggle=el.shadowRoot!.querySelector<HTMLButtonElement>(".room-toggle")!;
+    toggle.click();await settle(el);expect(drawer.hidden).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    el.shadowRoot!.querySelector<HTMLButtonElement>('[data-group="kitchen"]')!.click();await settle(el);
+    expect(selected.mock.calls.at(-1)![0].detail).toBe("kitchen");
+    expect(drawer.hidden).toBe(true);
+    scene.select("bedroom");await settle(el);
+    expect(selected.mock.calls.at(-1)![0].detail).toBe("bedroom");
+    expect(requestFullscreen).not.toHaveBeenCalled();
+    el.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));await settle(el);
+    expect(el.settings.ambient).toBe(true);
+  });
+  it("opens workspace settings externally and preserves camera resources", async () => {
+    const el=await mount();el.workspace=true;await settle(el);
+    const builds=scene.setParts.mock.calls.length;
+    const settings=el.shadowRoot!.querySelector<HTMLDetailsElement>(".settings")!;
+    expect(settings.open).toBe(false);
+    scene.select("kitchen");await settle(el);
+    expect(el.shadowRoot!.querySelector("al-room-hud")).not.toBeNull();
+    el.settingsOpen=true;await settle(el);
+    expect(settings.open).toBe(true);
+    expect(el.shadowRoot!.querySelector("al-room-hud")).toBeNull();
+    el.settingsOpen=false;el.hideHud=true;await settle(el);
+    expect(settings.open).toBe(false);
+    expect(el.shadowRoot!.querySelector("al-room-hud")).toBeNull();
+    expect(scene.setParts).toHaveBeenCalledTimes(builds);
+  });
   it("publishes rotation speed changes without rebuilding the scene", async () => {
     const el=await mount();const builds=scene.setParts.mock.calls.length;
     const changed=vi.fn();el.addEventListener("al-viewer-settings",changed);
