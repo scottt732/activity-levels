@@ -1,10 +1,11 @@
+import {readArchitecture} from "./architecture";
 import { readOpening } from "./room-openings";
 import { readFixture } from "./room-fixtures";
 import type { Kind } from "./kinds";
-import type { Bounds, GroupLive, Path, SiteLayout, RoomOpening, RoomFixture } from "./types";
+import type { ArchitecturalObject, Bounds, GroupLive, Path, SiteLayout, RoomOpening, RoomFixture } from "./types";
 
 export interface ActivityFrame { now: number; groups: Record<string, Pick<GroupLive,"value" | "max_value"> & Partial<Pick<GroupLive,"last_activity">>> }
-export interface FloorplanNode { id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[]; fixtures?: RoomFixture[]; openings?:RoomOpening[] }
+export interface FloorplanNode { architecture?:ArchitecturalObject[]; id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[]; fixtures?: RoomFixture[]; openings?:RoomOpening[] }
 export interface FloorplanConfig { gps?: {rotation?:number}; site?: SiteLayout; groups: FloorplanNode[] }
 
 export interface FloorplanGroup {
@@ -15,6 +16,7 @@ export interface FloorplanGroup {
   ancestors: string[];
 }
 export interface ScenePart extends FloorplanGroup {
+  architecture?:ArchitecturalObject[];
   footprint: [number, number][];
   low: number;
   high: number;
@@ -98,7 +100,7 @@ export function floorplanModel(config: FloorplanConfig): FloorplanModel {
     if(group.fixtures!==undefined && (!Array.isArray(group.fixtures) || fixtures.length!==group.fixtures.length))
       invalid("Some device placements are invalid and could not be displayed.");
     const openings=Array.isArray(group.openings)?group.openings.slice(0,128).map(readOpening).filter(o=>o!==null):[];
-    parts.push({ ...info, openings, fixtures, footprint, low: b[0][2], high: b[1][2],
+    parts.push({ ...info, architecture:Array.isArray(group.architecture)?group.architecture.slice(0,128).map(readArchitecture).filter(o=>o!==null):[], openings, fixtures, footprint, low: b[0][2], high: b[1][2],
       container: ["property", "structure", "floor"].includes(group.kind) });
   }
   const groups = [...all.values()].filter((group) => relevant.has(group.id));

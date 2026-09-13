@@ -189,3 +189,35 @@ def openings(value: Any) -> list[dict[str, Any]]:
             raise vol.Invalid("an opening id can only occur once per room")
         ids.add(item["id"])
     return result
+
+
+ARCHITECTURE_SCHEMA = vol.Schema(
+    {
+        vol.Required("id"): vol.All(str, vol.Length(min=1, max=100)),
+        vol.Optional("name", default=""): vol.All(str, vol.Length(max=100)),
+        vol.Required("kind"): vol.In(["stairs", "chimney", "column", "shaft", "solid"]),
+        vol.Required("position"): position,
+        vol.Optional("yaw", default=0): coordinate,
+        vol.Required("width"): vol.All(coordinate, vol.Range(min=0.01, max=100)),
+        vol.Required("run"): vol.All(coordinate, vol.Range(min=0.01, max=100)),
+        vol.Required("height"): vol.All(coordinate, vol.Range(min=0.01, max=100)),
+        vol.Optional("steps", default=14): vol.All(int, vol.Range(min=1, max=100)),
+        vol.Optional("landing_bottom", default=0): vol.All(coordinate, vol.Range(min=0)),
+        vol.Optional("landing_top", default=0): vol.All(coordinate, vol.Range(min=0)),
+        vol.Optional("under_room"): vol.All(str, vol.Length(min=1, max=100)),
+        vol.Optional("to_floor"): vol.All(str, vol.Length(min=1, max=100)),
+    }
+)
+
+
+def architecture(value: Any) -> list[dict[str, Any]]:
+    """Keep building objects separate from sensor fixtures and activity nodes."""
+    if not isinstance(value, list) or len(value) > 128:
+        raise vol.Invalid("expected at most 128 architectural objects")
+    result = [ARCHITECTURE_SCHEMA(item) for item in value]
+    if len({item["id"] for item in result}) != len(result):
+        raise vol.Invalid("architectural object ids must be unique")
+    for item in result:
+        if item["landing_bottom"] + item["landing_top"] >= item["run"]:
+            raise vol.Invalid("landings must leave space for the stair run")
+    return result

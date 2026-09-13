@@ -7,21 +7,83 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { activityReading } from "./floorplan-model";
 import type { ScenePart, ActivityFrame } from "./floorplan-model";
 import { viewerOptions, thresholdColor, roomLight } from "./floorplan-style";
+import {objectFootprint,stairHeight} from "./architecture";
 import {coverageRays} from "./sensor-coverage";
 import {openingIsOpen,openingSwing,openingFitsRoom,openingState} from "./room-openings";
 import { fixtureAppearance, fixtureDirection, windowFitsRoom } from "./room-fixtures";
-import type { SiteLayout, RoomOpening, RoomFixture, HassEntity } from "./types";
+import type { ArchitecturalObject, SiteLayout, RoomOpening, RoomFixture, HassEntity } from "./types";
 import type { ViewerOptions, RoomLight, AlertRule } from "./floorplan-style";
 
 export type CameraAction = "reset" | "top" | "left" | "right" | "up" | "down" | "in" | "out";
 
 /** Recenter before uploading float32 vertices; the geographic origin never moves a room. */
-export function volumeGeometry(part: ScenePart, origin: Vector3): ExtrudeGeometry {
+export function volumeGeometry(part: ScenePart, origin: Vector3, portals:RoomOpening[]=part.openings ?? [], under?:ArchitecturalObject, stairs:ArchitecturalObject[]=[]): ExtrudeGeometry {
   const shape = new Shape(part.footprint.map(([x, y]) => new Vector2(x - origin.x, y + origin.z)));
   const geometry = new ExtrudeGeometry(shape, { depth: part.high - part.low, bevelEnabled: false, steps: 1 });
   geometry.rotateX(-Math.PI / 2);
   geometry.translate(0, part.low - origin.y, 0);
+  const openings=portals.filter(o=>o.kind==="open_wall");
+  if(openings.length){
+    const source=geometry.getAttribute("position"),normals=geometry.getAttribute("normal"),vertices:number[]=[];
+    for(let i=0;i<source.count;i+=3)if(Math.abs(normals.getY(i))>.99)for(let j=0;j<3;j++)vertices.push(source.getX(i+j),source.getY(i+j),source.getZ(i+j));
+    for(let i=0;i<part.footprint.length;i++){
+      const a=part.footprint[i]!,b=part.footprint[(i+1)%part.footprint.length]!,length=Math.hypot(b[0]-a[0],b[1]-a[1]),dx=(b[0]-a[0])/length,dy=(b[1]-a[1])/length;
+      const cuts=openings.filter(o=>Math.abs((o.position[0]-a[0])*dy-(o.position[1]-a[1])*dx)<1e-5 && Math.abs(Math.sin(o.yaw*Math.PI/180)*dx-Math.cos(o.yaw*Math.PI/180)*dy)<1e-5).map(o=>{const t=(o.position[0]-a[0])*dx+(o.position[1]-a[1])*dy;return {left:Math.max(0,t-o.width/2),right:Math.min(length,t+o.width/2),low:Math.max(part.low,o.position[2]),high:Math.min(part.high,o.position[2]+o.height)};}).filter(o=>o.left<o.right && o.low<o.high);
+      const xs=[...new Set([0,length,...cuts.flatMap(c=>[c.left,c.right])])].sort((a,b)=>a-b),zs=[...new Set([part.low,part.high,...cuts.flatMap(c=>[c.low,c.high])])].sort((a,b)=>a-b);
+      for(let x=0;x<xs.length-1;x++)for(let z=0;z<zs.length-1;z++){
+        const l=xs[x]!,r=xs[x+1]!,low=zs[z]!,high=zs[z+1]!;
+        if(cuts.some(c=>(l+r)/2>c.left && (l+r)/2<c.right && (low+high)/2>c.low && (low+high)/2<c.high))continue;
+        const point=(t:number,h:number)=>[a[0]+dx*t-origin.x,h-origin.y,-a[1]-dy*t-origin.z];
+        vertices.push(...point(l,low),...point(r,low),...point(r,high),...point(l,low),...point(r,high),...point(l,high));
+      }
+    }
+    geometry.setAttribute("position",new Float32BufferAttribute(vertices,3));geometry.deleteAttribute("uv");geometry.clearGroups();geometry.deleteAttribute("normal");geometry.computeVertexNormals();
+  }
+  cutStairwells(geometry, origin, stairs);
+  if(under){const positions=geometry.getAttribute("position");for(let i=0;i<positions.count;i++){const roof=Math.max(part.low,stairHeight(under,positions.getX(i)+origin.x,-positions.getZ(i)-origin.z)-.15);positions.setY(i,Math.min(positions.getY(i),roof-origin.y));}geometry.computeVertexNormals();}
   return geometry;
+}
+
+/** Subtract a straight stair footprint from horizontal faces it passes through.
+ * Convex clipping works on individual triangles, including concave room caps.
+ */
+export function cutStairwells(geometry:BufferGeometry,origin:Vector3,stairs:ArchitecturalObject[]):void {
+ if(!stairs.length)return;
+ const expanded=geometry.index?geometry.toNonIndexed():geometry;
+ const p=expanded.getAttribute("position"),vertices:number[]=[];
+ type Point=[number,number];
+ for(let i=0;i<p.count;i+=3){
+  const level=p.getY(i), horizontal=[1,2].every(j=>Math.abs(p.getY(i+j)-level)<1e-5);
+  const cuts=horizontal?stairs.filter(o=>o.position[2]<level+origin.y-1e-5 && o.position[2]+o.height>=level+origin.y-1e-5):[];
+  if(!cuts.length){for(let j=0;j<3;j++)vertices.push(p.getX(i+j),p.getY(i+j),p.getZ(i+j));continue;}
+  let polygons:Point[][]=[[0,1,2].map(j=>[p.getX(i+j)+origin.x,-p.getZ(i+j)-origin.z])];
+  for(const o of cuts){
+   const rectangle=objectFootprint(o),remaining:Point[][]=[];
+   for(const polygon of polygons){
+    let inside=polygon;
+    for(let edge=0;edge<4 && inside.length;edge++){
+     const a=rectangle[edge]!,b=rectangle[(edge+1)%4]!;
+     const distance=(v:Point)=>(b[0]-a[0])*(v[1]-a[1])-(b[1]-a[1])*(v[0]-a[0]);
+     const clip=(positive:boolean):Point[]=>{
+      const out:Point[]=[];
+      for(let j=0;j<inside.length;j++){
+       const v=inside[j]!,w=inside[(j+1)%inside.length]!,dv=distance(v),dw=distance(w),iv=positive?dv>=0:dv<=0,iw=positive?dw>=0:dw<=0;
+       if(iv)out.push(v);
+       if(iv!==iw){const t=dv/(dv-dw);out.push([v[0]+t*(w[0]-v[0]),v[1]+t*(w[1]-v[1])]);}
+      }
+      return out;
+     };
+     const outside=clip(false),next=clip(true);
+     if(outside.length>=3)remaining.push(outside);
+     inside=next;
+    }
+   }
+   polygons=remaining;
+  }
+  for(const polygon of polygons)for(let j=1;j<polygon.length-1;j++)for(const v of [polygon[0]!,polygon[j]!,polygon[j+1]!])vertices.push(v[0]-origin.x,level,-v[1]-origin.z);
+ }
+ geometry.setIndex(null);geometry.setAttribute("position",new Float32BufferAttribute(vertices,3));geometry.deleteAttribute("uv");geometry.clearGroups();geometry.deleteAttribute("normal");geometry.computeVertexNormals();
+ if(expanded!==geometry)expanded.dispose();
 }
 
 interface Volume {
@@ -36,11 +98,13 @@ interface Volume {
 }
 
 /** Surfaces follow the actual polygon, including concave rooms. */
-function surfaceGeometry(part: Pick<ScenePart, "footprint">, origin: Vector3): ShapeGeometry {
+function surfaceGeometry(part: Pick<ScenePart, "footprint"> & {high?:number}, origin: Vector3, stairs:ArchitecturalObject[]=[]): ShapeGeometry {
   const geometry = new ShapeGeometry(new Shape(part.footprint.map(
     ([x, y]) => new Vector2(x - origin.x, y + origin.z),
   )));
   geometry.rotateX(-Math.PI / 2);
+  cutStairwells(geometry, new Vector3(origin.x, part.high ?? 0, origin.z), stairs);
+  if(stairs.length){const p=geometry.getAttribute("position"),uv:number[]=[];for(let i=0;i<p.count;i++)uv.push(p.getX(i),-p.getZ(i));geometry.setAttribute("uv",new Float32BufferAttribute(uv,2));}
   return geometry;
 }
 
@@ -72,6 +136,7 @@ export class FloorplanRenderer {
   private boundsKey = "";
   private origin = new Vector3();
   private placementHeight?: number;
+  private structures:Mesh<BufferGeometry,MeshBasicMaterial>[]=[];
   private markers: {room:string; fixture:RoomFixture; marker:Mesh<BufferGeometry,MeshBasicMaterial>; coverage?:Mesh<BufferGeometry,MeshBasicMaterial>; boundary?:LineSegments<BufferGeometry,LineDashedMaterial>; previous?:string;coverageKey?:string;invalid?:boolean}[] = [];
   private coverageRooms:ScenePart[]=[];
   private doors:{part:ScenePart;opening:RoomOpening;leaf:Mesh<BufferGeometry,MeshBasicMaterial>;frame:LineSegments<BufferGeometry,LineBasicMaterial>;arc:LineSegments<BufferGeometry,LineBasicMaterial>;key?:string}[]=[];
@@ -147,7 +212,7 @@ export class FloorplanRenderer {
     }
   };
 
-  setParts(parts: ScenePart[], groundZ?: number, site?: SiteLayout, focusRoom?:string): void {
+  setParts(parts: ScenePart[], groundZ?: number, site?: SiteLayout, focusRoom?:string, objects?:ArchitecturalObject[]): void {
     this.clearParts();
     this.coverageRooms=parts.filter(p=>!p.container);
     this.focusTarget=undefined; this.focusEvents.clear();
@@ -157,6 +222,9 @@ export class FloorplanRenderer {
       box.expandByPoint(new Vector3(x, part.low, -y));
       box.expandByPoint(new Vector3(x, part.high, -y));
     }
+    const architecture=objects ?? parts.flatMap(p=>p.architecture ?? []);
+    const portals=parts.flatMap(p=>p.openings ?? []);
+    for(const o of architecture)for(const [x,y] of objectFootprint(o)){box.expandByPoint(new Vector3(x,o.position[2],-y));box.expandByPoint(new Vector3(x,o.position[2]+o.height,-y));}
     groundZ ??= site?.ground_z;
     for (const feature of site?.features ?? []) for (const [x, y] of feature.points)
       box.expandByPoint(new Vector3(x, site!.ground_z, -y));
@@ -173,7 +241,8 @@ export class FloorplanRenderer {
     this.origin.copy(origin);
     this.radius = Math.max(focusBox.getSize(new Vector3()).length() / 2, 0.1);
     for (const part of parts) {
-      const geometry = volumeGeometry(part, origin);
+      const under=architecture.find(o=>o.kind==="stairs" && o.under_room===part.id);
+      const geometry = volumeGeometry(part, origin,portals,under,architecture.filter(o=>o.kind==="stairs" && o.under_room!==part.id));
       const mesh = new Mesh(geometry, new MeshBasicMaterial({
         color: 0x60c8e5, transparent: true, opacity: 0.025, side: DoubleSide, depthWrite: false,
       }));
@@ -191,10 +260,11 @@ export class FloorplanRenderer {
         volume.liquid = new Mesh(geometry.clone(), new MeshBasicMaterial({
           transparent: true, opacity: 0.015, side: DoubleSide, depthWrite: false,
         }));
-        volume.ceiling = new Mesh(surfaceGeometry(part, origin), new MeshBasicMaterial({
+        volume.ceiling = new Mesh(surfaceGeometry(part, origin, architecture.filter(o=>o.kind==="stairs" && o.under_room!==part.id)), new MeshBasicMaterial({
           transparent: true, opacity: 0, side: DoubleSide, depthWrite: false,
         }));
         volume.ceiling.position.y = part.high - origin.y;
+        if(under){const vertices=volume.ceiling.geometry.getAttribute("position");for(let i=0;i<vertices.count;i++)vertices.setY(i,Math.max(part.low,stairHeight(under,vertices.getX(i)+origin.x,-vertices.getZ(i)-origin.z)-.15)-part.high);volume.ceiling.geometry.computeVertexNormals();}
         const ceilingGeometry = volume.ceiling.geometry;
         ceilingGeometry.computeBoundingBox();
         const bounds = ceilingGeometry.boundingBox!;
@@ -242,6 +312,27 @@ export class FloorplanRenderer {
           this.scene.add(boundary);
         }
         this.markers.push({room:part.id,fixture,marker,coverage,boundary,invalid:fixture.kind==="window" && !windowFitsRoom({points:part.footprint,bounds:[[0,0,part.low],[0,0,part.high]]},fixture)});
+      }
+    }
+    for(const o of architecture){
+      const a=o.yaw*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
+      const block=(start:number,run:number,height:number,base=0)=>{
+        if(run<=0 || height<=0)return;
+        const mesh=new Mesh(new BoxGeometry(o.width,height,run),new MeshBasicMaterial({color:o.kind==="stairs"?0x7797a2:0x6b7077,transparent:true,opacity:.72}));
+        mesh.rotation.y=a;
+        mesh.position.set(o.position[0]+o.width/2*c-(start+run/2)*s-origin.x,o.position[2]+base+height/2-origin.y,-o.position[1]-o.width/2*s-(start+run/2)*c-origin.z);
+        mesh.name=o.kind==="stairs"?"stair-step":"architectural-solid";this.structures.push(mesh);this.scene.add(mesh);
+      };
+      if(o.kind!=="stairs")block(0,o.run,o.height);
+      else {
+        const run=(o.run-o.landing_bottom-o.landing_top)/o.steps;
+        for(let step=0;step<o.steps;step++){
+          const height=o.height*(step+1)/o.steps,start=o.landing_bottom+step*run;
+          // Open beneath the treads so an under-stair room remains visible.
+          const mesh=new Mesh(new BoxGeometry(o.width,.12,run),new MeshBasicMaterial({color:0x7797a2,transparent:true,opacity:.8}));mesh.rotation.y=a;
+          mesh.position.set(o.position[0]+o.width/2*c-(start+run/2)*s-origin.x,o.position[2]+height-.06-origin.y,-o.position[1]-o.width/2*s-(start+run/2)*c-origin.z);mesh.name="stair-step";this.structures.push(mesh);this.scene.add(mesh);
+        }
+        block(0,o.landing_bottom,.12);block(o.run-o.landing_top,o.landing_top,.12,o.height-.12);
       }
     }
     for(const part of this.coverageRooms)for(const opening of part.openings ?? []) {
@@ -537,6 +628,7 @@ export class FloorplanRenderer {
   };
 
   private clearParts(): void {
+    for(const mesh of this.structures){this.scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();}this.structures=[];
     for (const item of this.markers) for (const mesh of [item.marker,item.coverage,item.boundary]) {
       if (mesh) {this.scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();}
     }

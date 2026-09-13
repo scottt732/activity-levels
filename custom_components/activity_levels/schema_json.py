@@ -31,9 +31,11 @@ from homeassistant.helpers import config_validation as cv
 from .const import SCHEMA_NAME
 from .duration import parse_duration
 from .geometry import (
+    ARCHITECTURE_SCHEMA,
     FIXTURE_SCHEMA,
     MAX_POINTS,
     OPENING_SCHEMA,
+    architecture,
     bounds,
     coordinate,
     fixtures,
@@ -318,6 +320,8 @@ def _translate(validator: Any) -> JsonSchema:
         return {"type": "string", "pattern": validator.pattern.pattern}
     if isinstance(validator, vol.Unique):
         return {"uniqueItems": True}
+    if validator is architecture:
+        return {"type": "array", "maxItems": 128, "items": _translate(ARCHITECTURE_SCHEMA)}
     if validator is openings:
         return {"type": "array", "maxItems": 128, "items": _translate(OPENING_SCHEMA)}
     if validator is fixtures:

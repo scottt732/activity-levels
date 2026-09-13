@@ -1069,3 +1069,32 @@ Bosch profiles use an approximate downward fan envelope (94° horizontal, 12 m r
 with separately selectable look-down coverage in either pet mode. Reapply the updated
 profile to an existing placement to use this shape; saved geometry is not silently changed.
 The 75° downward extent is an illustration, not a manufacturer-specified detection boundary.
+
+### Editing architectural geometry
+
+In **Floorplans → Architecture**, select a room and drag its corner grips, insert a
+corner for a diagonal wall, or enter wall lengths. **Draw room** creates an outline
+from clicks; 45° snapping and undo are available. New plans get a property/building
+container automatically. Use **2D / 3D** to expand the plan while drawing.
+
+Add a straight staircase with its width, total run, rise, step count, and optional
+bottom/top landings. Total run includes the landings. Set rise from a destination
+floor or enter it directly. Stair footprints cut through horizontal room surfaces
+between the base and the top. **Create space below** creates a separate activity
+room called *Server closet*, whose ceiling follows the underside of the stair run.
+Its outline remains independently editable; adjust it if you later move the stairs.
+Chimneys, columns, shafts, and other solid objects have independent dimensions and
+base elevations; a tall object can span several floors without becoming an activity
+room. These are schematic architectural volumes, not construction drawings.
+
+In **Doors & windows**, use the two end grips to resize an opening while keeping
+the opposite end fixed. Numeric jamb/hinge offsets locate it along its wall. **Wall
+elevation** adds vertical movement and top/bottom resize grips; invalid placements
+remain red until corrected. **Open entire wall** removes the shared vertical faces
+from both adjacent activity volumes, preserving their separate activity readings.
+Measurements follow Home Assistant's units and accept feet/inches. Changes join the
+configuration draft; use the common **Save changes** or **Discard** buttons.
+
+Wall dimensions currently edit geometry directly; they are not persistent constraints.
+Stair destinations describe geometry and do not automatically add presence-estimation
+adjacency links. Solid objects do not yet clip sensor coverage.

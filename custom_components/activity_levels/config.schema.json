@@ -1068,6 +1068,96 @@
             "additionalProperties": false
           }
         },
+        "architecture": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 100,
+                "default": ""
+              },
+              "kind": {
+                "enum": [
+                  "stairs",
+                  "chimney",
+                  "column",
+                  "shaft",
+                  "solid"
+                ]
+              },
+              "position": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              },
+              "yaw": {
+                "type": "number",
+                "default": 0
+              },
+              "width": {
+                "type": "number",
+                "minimum": 0.01,
+                "maximum": 100
+              },
+              "run": {
+                "type": "number",
+                "minimum": 0.01,
+                "maximum": 100
+              },
+              "height": {
+                "type": "number",
+                "minimum": 0.01,
+                "maximum": 100
+              },
+              "steps": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 14
+              },
+              "landing_bottom": {
+                "type": "number",
+                "minimum": 0,
+                "default": 0
+              },
+              "landing_top": {
+                "type": "number",
+                "minimum": 0,
+                "default": 0
+              },
+              "under_room": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "to_floor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "position",
+              "width",
+              "run",
+              "height"
+            ],
+            "additionalProperties": false
+          }
+        },
         "openings": {
           "type": "array",
           "maxItems": 128,

@@ -519,3 +519,29 @@ async def test_floorplan_devices_requires_admin(
     result = await client.receive_json()
     assert not result["success"]
     assert result["error"]["code"] == "unauthorized"
+
+
+async def test_floorplan_dashboard_projects_architecture_and_openings(hass, hass_ws_client, entry):
+    config = dict(entry.options)
+    from copy import deepcopy
+
+    config = deepcopy(config)
+    node = config["groups"][0]
+    node["architecture"] = [
+        {
+            "id": "chimney",
+            "kind": "chimney",
+            "position": [1, 2, 0],
+            "width": 0.6,
+            "run": 0.6,
+            "height": 8,
+        }
+    ]
+    node["openings"] = [{"id": "shared", "kind": "open_wall", "position": [2, 0, 0], "width": 4}]
+    hass.config_entries.async_update_entry(entry, options=config)
+    await hass.async_block_till_done()
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/floorplan/dashboard"})
+    result = (await client.receive_json())["result"]["config"]["groups"][0]
+    assert result["architecture"] == node["architecture"]
+    assert result["openings"] == node["openings"]

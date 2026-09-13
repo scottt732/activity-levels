@@ -212,7 +212,7 @@ export class AlFloorplanViewer extends LitElement {
       return;
     }
     if (changed.has("config") || changed.has("scope") || changed.has("room") || changed.has("context") || this.groundZ !== this.options.ground_z) {
-      this.renderer?.setParts(parts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined); this.groundZ=this.options.ground_z;
+      this.renderer?.setParts(parts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined,this.model.parts.flatMap(p=>p.architecture ?? []).filter(o=>parts.some(p=>o.position[2]<=p.high && o.position[2]+o.height>=p.low))); this.groundZ=this.options.ground_z;
     }
     this.updateAppearance();
   }
