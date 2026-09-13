@@ -9088,6 +9088,13 @@ var Q = class extends p {
       vector-effect: non-scaling-stroke;
       cursor: grab;
     }
+    /* Native SVG focus outlines scale with the plan's meter coordinates. */
+    .grip:focus {
+      outline: none;
+      stroke: white;
+      stroke-width: 2;
+      vector-effect: non-scaling-stroke;
+    }
     .object {
       fill: #85939c88;
       stroke: #a8c3ce;
