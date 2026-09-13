@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.2](https://github.com/scottt732/activity-levels/compare/v0.25.1...v0.25.2) (2026-09-13)
+
+
+### Fixed
+
+* **panel:** separate opening selection from dragging ([#71](https://github.com/scottt732/activity-levels/issues/71)) ([decb1f1](https://github.com/scottt732/activity-levels/commit/decb1f187c6d50d429482d8cb96b5cf69e4be7f7))
+
 ## [0.25.1](https://github.com/scottt732/activity-levels/compare/v0.25.0...v0.25.1) (2026-09-13)
 
 
