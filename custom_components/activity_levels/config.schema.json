@@ -85,6 +85,379 @@
       },
       "additionalProperties": false
     },
+    "spaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "parent_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "A group id: lowercase letters, digits and underscores, starting with a letter."
+          },
+          "bounds": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "type": "number"
+              }
+            },
+            "description": "Two XYZ corners in meters, increasing along every axis."
+          },
+          "points": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 4096,
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            },
+            "description": "XY polygon in meters with at least three distinct vertices and non-zero area."
+          },
+          "fixtures": {
+            "type": "array",
+            "maxItems": 128,
+            "items": {
+              "type": "object",
+              "properties": {
+                "look_down": {
+                  "type": "boolean"
+                },
+                "coverage_shape": {
+                  "enum": [
+                    "cone",
+                    "fan"
+                  ]
+                },
+                "profile_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "entity": {
+                  "type": "string",
+                  "pattern": "^(binary_sensor|light)\\.[a-z0-9_]+$"
+                },
+                "kind": {
+                  "enum": [
+                    "motion",
+                    "occupancy",
+                    "light",
+                    "window"
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 100,
+                  "default": ""
+                },
+                "position": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "width": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 20
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 20
+                },
+                "yaw": {
+                  "type": "number",
+                  "minimum": -360,
+                  "maximum": 360,
+                  "default": 0
+                },
+                "pitch": {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90,
+                  "default": 0
+                },
+                "fov": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 170,
+                  "default": 60
+                },
+                "vertical_fov": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 170,
+                  "default": 45
+                },
+                "range": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100,
+                  "default": 0
+                },
+                "mount": {
+                  "type": "string",
+                  "maxLength": 60,
+                  "default": ""
+                },
+                "technology": {
+                  "type": "string",
+                  "maxLength": 60,
+                  "default": ""
+                }
+              },
+              "required": [
+                "entity",
+                "kind",
+                "position"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "openings": {
+            "type": "array",
+            "maxItems": 128,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 100,
+                  "default": ""
+                },
+                "kind": {
+                  "enum": [
+                    "interior_door",
+                    "exterior_door",
+                    "open_wall",
+                    "window"
+                  ]
+                },
+                "position": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "yaw": {
+                  "type": "number",
+                  "minimum": -360,
+                  "maximum": 360,
+                  "default": 0
+                },
+                "width": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 20,
+                  "default": 0.9
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 20,
+                  "default": 2
+                },
+                "hinge": {
+                  "enum": [
+                    "left",
+                    "right"
+                  ],
+                  "default": "left"
+                },
+                "swing": {
+                  "enum": [
+                    "in",
+                    "out"
+                  ],
+                  "default": "in"
+                },
+                "open": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "entity": {
+                  "type": "string",
+                  "pattern": "^binary_sensor\\.[a-z0-9_]+$"
+                },
+                "entities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^binary_sensor\\.[a-z0-9_]+$"
+                  },
+                  "uniqueItems": true,
+                  "maxItems": 128
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "position"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "architecture": {
+            "type": "array",
+            "maxItems": 128,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 100,
+                  "default": ""
+                },
+                "kind": {
+                  "enum": [
+                    "stairs",
+                    "chimney",
+                    "column",
+                    "shaft",
+                    "solid",
+                    "ceiling_fan",
+                    "recessed_light",
+                    "pendant_light",
+                    "recessed_speaker"
+                  ]
+                },
+                "position": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "yaw": {
+                  "type": "number",
+                  "default": 0
+                },
+                "width": {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 100
+                },
+                "run": {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 100
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 100
+                },
+                "steps": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100,
+                  "default": 14
+                },
+                "landing_bottom": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 0
+                },
+                "landing_top": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 0
+                },
+                "under_room": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "to_floor": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "drop": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "shape": {
+                  "enum": [
+                    "globe",
+                    "cone",
+                    "cylinder"
+                  ]
+                },
+                "entity": {
+                  "type": "string",
+                  "pattern": "^(light|fan|media_player)\\.[a-z0-9_]+$"
+                },
+                "floors": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "uniqueItems": true,
+                  "maxItems": 128
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "position",
+                "width",
+                "run",
+                "height"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "parent_id",
+          "bounds"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 512
+    },
     "sensor_profiles": {
       "type": "array",
       "items": {

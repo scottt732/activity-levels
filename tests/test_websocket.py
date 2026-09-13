@@ -545,3 +545,26 @@ async def test_floorplan_dashboard_projects_architecture_and_openings(hass, hass
     result = (await client.receive_json())["result"]["config"]["groups"][0]
     assert result["architecture"] == node["architecture"]
     assert result["openings"] == node["openings"]
+
+
+async def test_floorplan_spaces_save_without_activity_entities(hass, hass_ws_client, entry):
+    from tests.test_floorplan_spaces import SPACE
+
+    config = {**validate_config(house_config()), "spaces": [SPACE]}
+    groups_before = set(entry.runtime_data.coordinator.tree.groups)
+    states_before = set(hass.states.async_entity_ids())
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": "activity_levels/config/save", "config": config})
+    response = await client.receive_json()
+    assert response["success"] and response["result"]["ok"]
+    await hass.async_block_till_done()
+    assert entry.options["spaces"][0]["id"] == "coat_closet"
+    assert set(entry.runtime_data.coordinator.tree.groups) == groups_before
+    assert set(hass.states.async_entity_ids()) == states_before
+    await client.send_json_auto_id({"type": "activity_levels/floorplan/dashboard"})
+    response = await client.receive_json()
+    assert response["success"]
+    dashboard = response["result"]
+    assert dashboard["config"]["spaces"] == entry.options["spaces"]
+    assert "coat_closet" not in dashboard["live"]["groups"]
+    assert "coat_closet" not in dashboard["telemetry"]["rooms"]

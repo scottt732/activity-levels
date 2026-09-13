@@ -202,6 +202,7 @@ export class AlArchitectureEditor extends LitElement {
   @state() private drawing = false;
   @state() private points: [number, number][] = [];
   @state() private name = "New room";
+  @state() private association = "none";
   @state() private error = "";
   @state() private planOnly = false;
   @state() private snap = true;
@@ -254,6 +255,7 @@ export class AlArchitectureEditor extends LitElement {
   }
   public resetDraft() {
     this.selected = "";
+    this.association = "none";
     this.drawing = false;
     this.points = [];
     this.error = "";
@@ -340,26 +342,58 @@ export class AlArchitectureEditor extends LitElement {
     if(!building){building=newGroup(`building_${crypto.randomUUID().slice(0,8)}`,"structure");building.name="Building";property.children.push(building);}
     return building;
   }
+  private associationPicker() {
+    const groups=this.groups.filter(e=>!e.group.geometry_only && ["area","outside"].includes(e.group.kind));
+    return html`<label>Activity association<select aria-label="Activity association" .value=${this.association} @change=${(e:Event)=>{this.association=(e.target as HTMLSelectElement).value;if(this.name==="New room" && this.association.startsWith("area:"))this.name=this.hass?.areas[this.association.slice(5)]?.name??this.name;}}>
+      <option value="none">None · floorplan only</option>
+      <optgroup label="Existing Activity Levels groups">${groups.map(({group:g})=>html`<option value=${`group:${g.id}`}>${g.name??g.id}</option>`)}</optgroup>
+      <optgroup label="Home Assistant areas">${Object.values(this.hass?.areas??{}).map(area=>html`<option value=${`area:${area.area_id}`}>${area.name}</option>`)}</optgroup>
+    </select></label>${this.association!=="none"?html`<p class="note">Uses this outline for the selected group or area. Existing activity inputs are preserved.</p>`:nothing}`;
+  }
+  private associatedGroup(config:Config):Group|undefined {
+    if(this.association.startsWith("group:"))return walkGroups(config).find(e=>e.group.id===this.association.slice(6) && !e.group.geometry_only)?.group;
+    if(this.association.startsWith("area:"))return walkGroups(config).find(e=>e.group.area_id===this.association.slice(5) && !e.group.geometry_only)?.group;
+    return undefined;
+  }
+  private selectedRoom(id:string) {
+    this.room=id;this.selected="";this.association="none";
+    this.dispatchEvent(new CustomEvent("al-editor-room",{detail:id,bubbles:true,composed:true}));
+  }
   private finishRoom() {
     if (!this.config) return;
     try {
-      const next = structuredClone(this.config),
-        parent = this.roomParent(next);
-      const low = this.group?.bounds?.[0][2] ?? 0;
-      const g = {
-        ...newGroup(`room_${crypto.randomUUID().slice(0, 8)}`, "area"),
-        name: this.name,
-        points: this.drawnPoints(),
-        bounds: outlineBounds(this.drawnPoints(), low, low + 2.4),
-      };
-      parent.children.push(g);
-      this.room = g.id;
-      this.drawing = false;
-      this.points = [];
-      this.commit(next);
-    } catch (e) {
-      this.error = (e as Error).message;
+      const next = structuredClone(this.config), target=this.associatedGroup(next);
+      if(this.association.startsWith("group:") && !target)throw new Error("Choose an existing activity group.");
+      const low = target?.bounds?.[0][2] ?? this.group?.bounds?.[0][2] ?? 0;
+      const high = target?.bounds?.[1][2] ?? this.group?.bounds?.[1][2] ?? low+2.4;
+      const points=this.drawnPoints(), bounds=outlineBounds(points,low,high);
+      let room=target;
+      if(room){room.points=points;room.bounds=bounds;}
+      else {
+        const parent=this.roomParent(next), area=this.association.startsWith("area:")?this.association.slice(5):null;
+        room={...newGroup(`room_${crypto.randomUUID().slice(0,8)}`,"area"),name:this.name,points,bounds,area_id:area,...(!area?{geometry_only:true}:{})};
+        parent.children.push(room);
+      }
+      this.drawing=false;this.points=[];this.selectedRoom(room.id);this.commit(next);
+    } catch (e) {this.error=(e as Error).message;}
+  }
+  private associateSpace() {
+    if(!this.config || !this.group?.geometry_only || this.association==="none")return;
+    const next=structuredClone(this.config), entry=walkGroups(next).find(e=>e.group.id===this.room)!, space=entry.group;
+    let target=this.associatedGroup(next);
+    if(this.association.startsWith("group:") && !target){this.error="Choose an existing activity group.";return;}
+    if(target) {
+      target.bounds=space.bounds;target.points=space.points;
+      target.openings=[...new Map([...(target.openings??[]),...(space.openings??[])].map(o=>[o.id,o])).values()];
+      target.fixtures=[...new Map([...(target.fixtures??[]),...(space.fixtures??[])].map(o=>[o.entity,o])).values()];
+      target.architecture=[...new Map([...(target.architecture??[]),...(space.architecture??[])].map(o=>[o.id,o])).values()];
+      entry.parent!.children=entry.parent!.children.filter(g=>g.id!==space.id);
+      for(const {group} of walkGroups(next))for(const object of group.architecture??[])
+        if(object.under_room===space.id)object.under_room=target.id;
+    } else {
+      delete space.geometry_only;space.area_id=this.association.slice(5);target=space;
     }
+    this.selectedRoom(target.id);this.commit(next);
   }
   private underRoom() {
     if (!this.config || !this.object) return;
@@ -502,8 +536,7 @@ export class AlArchitectureEditor extends LitElement {
          if(this.suppressClick){e.stopPropagation();this.suppressClick=false;return;}
          if (!this.drawing) {
            e.stopPropagation();
-           this.room = group.id;
-           this.selected = "";
+           this.selectedRoom(group.id);
          }
        }} />`,
    )}
@@ -612,7 +645,7 @@ export class AlArchitectureEditor extends LitElement {
               aria-label="Architecture room"
               .value=${this.room}
               @change=${(e: Event) => {
-   this.room = (e.target as HTMLSelectElement).value;
+   this.selectedRoom((e.target as HTMLSelectElement).value);
    this.resetDraft();
  }}
             >
@@ -643,7 +676,7 @@ export class AlArchitectureEditor extends LitElement {
              @input=${(e: Event) => {
                this.name = (e.target as HTMLInputElement).value;
              }} /></label
-         ><label><input type="checkbox" .checked=${this.rectangle} @change=${(e:Event)=>{this.rectangle=(e.target as HTMLInputElement).checked;this.points=[];}} />Rectangle · pick opposite corners</label><label
+         >${this.associationPicker()}<label><input type="checkbox" .checked=${this.rectangle} @change=${(e:Event)=>{this.rectangle=(e.target as HTMLInputElement).checked;this.points=[];}} />Rectangle · pick opposite corners</label><label
            ><input
              type="checkbox"
              .checked=${this.snap}
@@ -738,13 +771,14 @@ export class AlArchitectureEditor extends LitElement {
        : html`<button
              @click=${() => {
                this.drawing = true;
+               this.association="none";
                this.points = [];
              }}
            >
              Draw room</button
            >${
              g?.bounds
-               ? html`<div class="tools">
+               ? html`${g.geometry_only?html`<label>Space name<input aria-label="Space name" .value=${g.name??""} @change=${(e:Event)=>{const next=structuredClone(this.config!),room=walkGroups(next).find(x=>x.group.id===g.id)!.group;room.name=(e.target as HTMLInputElement).value;this.commit(next);}} /></label>${this.associationPicker()}<button ?disabled=${this.association==="none"} @click=${()=>this.associateSpace()}>Associate space</button><button @click=${()=>{const next=structuredClone(this.config!),entry=walkGroups(next).find(x=>x.group.id===g.id)!;entry.parent!.children=entry.parent!.children.filter(x=>x.id!==g.id);this.selectedRoom(entry.parent!.id);this.commit(next);}}>Delete floorplan space</button>`:nothing}<div class="tools">
                      ${(["stairs", "chimney", "column", "shaft", "solid"] as const).map((kind) => html`<button @click=${() => this.addObject(kind)}>Add ${kind}</button>`)}
                    </div>
                    <details><summary>Ceiling fixtures</summary>

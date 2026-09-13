@@ -1082,6 +1082,15 @@ room corners. Disable Rectangle for polygon drawing with optional right-angle sn
 and undo. New plans get a property/building
 container automatically. Use **2D / 3D** to expand the plan while drawing.
 
+New outlines default to **None · floorplan only** under **Activity association**.
+These spaces (closets, bathrooms, and similar geometry) are stored outside the
+activity tree and create no Activity Levels group or Home Assistant entities.
+They still support outlines, doors, windows, and fixtures. Select an existing
+Activity Levels group or a Home Assistant area to associate an outline while drawing,
+or select a saved space and use **Associate space** later. An existing group's
+outline is replaced while its configured activity inputs are preserved. Selecting
+an area reuses its existing group when present, otherwise creates an associated group.
+
 Add a straight staircase with its width, total run, rise, step count, and optional
 bottom/top landings. Total run includes the landings. Set rise from a destination
 floor or enter it directly. Stair footprints cut through horizontal room surfaces

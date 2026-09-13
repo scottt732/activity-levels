@@ -697,6 +697,29 @@ def ws_floorplan_dashboard(
             "telemetry": {"now": now, "rooms": room_details},
             "config": {
                 "groups": geometry(entry.options.get("groups", [])),
+                **(
+                    {
+                        "spaces": [
+                            {
+                                key: space[key]
+                                for key in (
+                                    "id",
+                                    "name",
+                                    "parent_id",
+                                    "bounds",
+                                    "points",
+                                    "fixtures",
+                                    "openings",
+                                    "architecture",
+                                )
+                                if key in space
+                            }
+                            for space in entry.options["spaces"]
+                        ]
+                    }
+                    if "spaces" in entry.options
+                    else {}
+                ),
                 **({"site": entry.options["site"]} if "site" in entry.options else {}),
             },
             "lights": runtime.patterns.lights,

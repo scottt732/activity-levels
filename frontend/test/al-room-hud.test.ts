@@ -19,3 +19,7 @@ it("shows conditional idle timing, estimated people and held input without a fal
   expect(el.shadowRoot!.textContent).toContain("Idle forecast unavailable");
   expect(el.shadowRoot!.textContent).not.toContain("Scott");
 });
+it('identifies unassociated spaces without missing-data or activity telemetry',async()=>{
+ const el=new AlRoomHud();el.room={id:'closet',label:'Coat closet',kind:'area',path:[],ancestors:[],footprint:[],low:0,high:3,container:false,geometry_only:true};document.body.append(el);await el.updateComplete;
+ expect(el.shadowRoot!.textContent).toContain('Floorplan space');expect(el.shadowRoot!.textContent).toContain('Coat closet');expect(el.shadowRoot!.textContent).not.toContain('awaiting update');expect(el.shadowRoot!.querySelector('.meter')).toBeNull();
+});

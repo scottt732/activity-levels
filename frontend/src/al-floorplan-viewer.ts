@@ -297,6 +297,7 @@ export class AlFloorplanViewer extends LitElement {
   }
 
   private reading(group: FloorplanGroup): string {
+    if(group.geometry_only)return "Floorplan only";
     const reading = activityReading(this.live, group.id, this.now);
     return reading.status === "live" ? `${format(reading.value!)} / ${format(reading.max!)}` :
       reading.status === "stale" ? "Stale" : "No reading";
@@ -364,9 +365,9 @@ export class AlFloorplanViewer extends LitElement {
           </div>
           ${selected ? html`<section class="selection" aria-label="Selected group">
             <h3>${selected.label}</h3><p>${KIND_DEFS[selected.kind]?.label ?? "Group"} · ${selected.id}</p>
-            <p>Activity: <strong>${this.reading(selected)}</strong></p>
+            <p>${selected.geometry_only?"Floorplan only":html`Activity: <strong>${this.reading(selected)}</strong>`}</p>
             <p>${roomLight(this.lights[selected.id],this.hass?.states ?? {}).unknown ? "Some light readings unavailable" : `Lights: ${Math.round(roomLight(this.lights[selected.id],this.hass?.states ?? {}).brightness*100)}%`}</p>
-            ${!this.dashboard ? html`<button id="edit-room" type="button" @click=${()=>this.dispatchEvent(new CustomEvent("al-edit-room",{detail:selected.id,bubbles:true,composed:true}))}>Place devices & windows</button><button id="open-group" type="button" @click=${() => this.openGroup(selected)}>Open group settings</button>` : nothing}
+            ${!this.dashboard ? html`<button id="edit-room" type="button" @click=${()=>this.dispatchEvent(new CustomEvent("al-edit-room",{detail:selected.id,bubbles:true,composed:true}))}>Place devices & windows</button>${!selected.geometry_only?html`<button id="open-group" type="button" @click=${() => this.openGroup(selected)}>Open group settings</button>`:nothing}` : nothing}
           </section>` : html`<p class="muted">Select a room in the scene or a group in this list.</p>`}
         </aside>
       </div>
