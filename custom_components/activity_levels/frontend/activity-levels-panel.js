@@ -8143,10 +8143,21 @@ var Rs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
     .marker { fill:#8ed9ea; stroke:#102330; stroke-width:2; vector-effect:non-scaling-stroke; cursor:grab; }
     .selected { fill:#ffcd69; } .marker:focus, .opening-marker:focus { stroke:white; stroke-width:2; vector-effect:non-scaling-stroke; outline:none; }
     .coverage { fill:#ffcd6929; stroke:#ffcd6988; vector-effect:non-scaling-stroke; }
+    .coverage, .aim, text { pointer-events:none; }
+    .neighbor:focus { stroke:white;stroke-width:2;vector-effect:non-scaling-stroke; }
     .aim { stroke:#ffcd69; stroke-width:2; vector-effect:non-scaling-stroke; }
     [hidden] { display:none!important; }
     p { color:var(--secondary-text-color); font-size:13px; } .error { color:var(--error-color,#f77); }
   `;
+	}
+	beginDrag(e) {
+		this.drag = e.pointerId, this.dragged = !1, this.dragStart = [e.clientX, e.clientY], this.renderRoot.querySelector("svg").setPointerCapture(e.pointerId);
+	}
+	selectPlan(e, t) {
+		this.disabled || this.emit("al-plan-select", {
+			room: e,
+			opening: t
+		});
 	}
 	emit(e, t) {
 		this.dispatchEvent(new CustomEvent(e, {
@@ -8214,17 +8225,20 @@ var Rs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 		}
 		return h`<svg viewBox=${`${t[0][0] - a} ${-t[1][1] - a} ${r + a * 2} ${i + a * 2}`} aria-label="Top-down room placement" role="group" class=${this.aimingHandle || this.mode === "aim" ? "aiming" : ""}
       @pointerdown=${(e) => {
-			this.disabled || e.button !== 0 || (this.movingMarker = !1, this.drag = e.pointerId, this.dragged = !1, this.renderRoot.querySelector("svg").setPointerCapture(e.pointerId), this.place(e));
+			this.disabled || e.button !== 0 || this.opening || this.fixture?.kind === "window" || (this.movingMarker = !1, this.beginDrag(e), this.place(e));
 		}}
       @click=${(e) => {
 			if (this.suppressClick) {
 				this.suppressClick = !1;
 				return;
 			}
-			this.place(e);
+			!this.opening && this.fixture?.kind !== "window" && this.place(e);
 		}}
       @pointermove=${(e) => {
-			this.drag === e.pointerId && (this.dragged = !0, this.place(e));
+			if (this.drag === e.pointerId) {
+				if (!this.dragged && this.dragStart && Math.hypot(e.clientX - this.dragStart[0], e.clientY - this.dragStart[1]) < 4) return;
+				this.dragged = !0, this.place(e);
+			}
 		}}
       @pointerup=${() => {
 			this.suppressClick = this.dragged || this.aimingHandle || !!this.resizeSide, this.resizeSide = void 0, this.aimingHandle = !1, this.drag = void 0, this.dragged = !1, this.movingMarker = !1;
@@ -8232,7 +8246,11 @@ var Rs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
       @pointercancel=${() => {
 			this.aimingHandle = !1, this.resizeSide = void 0, this.drag = void 0, this.dragged = !1, this.movingMarker = !1;
 		}}>
-      ${this.neighbors.filter((t) => t.id !== e.id && t.bounds).map((e) => C`<polygon fill="#25374444" stroke="#607584" stroke-width="1" vector-effect="non-scaling-stroke" points=${q(e).map(([e, t]) => `${e},${-t}`).join(" ")}/><text fill="#94acb7" text-anchor="middle" font-size=${o * 1.8} x=${(e.bounds[0][0] + e.bounds[1][0]) / 2} y=${-(e.bounds[0][1] + e.bounds[1][1]) / 2}>${e.name || e.id}</text>`)}
+      ${this.neighbors.filter((t) => t.id !== e.id && t.bounds).map((e) => C`<polygon class="neighbor" role="button" tabindex=${this.disabled ? -1 : 0} aria-label=${`Select room ${e.name || e.id}`} style="outline:none;cursor:pointer" @pointerdown=${(e) => e.stopPropagation()} @click=${(t) => {
+			t.stopPropagation(), this.selectPlan(e.id);
+		}} @keydown=${(t) => {
+			["Enter", " "].includes(t.key) && (t.preventDefault(), this.selectPlan(e.id));
+		}} fill="#25374444" stroke="#607584" stroke-width="1" vector-effect="non-scaling-stroke" points=${q(e).map(([e, t]) => `${e},${-t}`).join(" ")}/><text style="pointer-events:none" fill="#94acb7" text-anchor="middle" font-size=${o * 1.8} x=${(e.bounds[0][0] + e.bounds[1][0]) / 2} y=${-(e.bounds[0][1] + e.bounds[1][1]) / 2}>${e.name || e.id}</text>`)}
       <polygon class="outline" points=${n.map(([e, t]) => `${e},${-t}`).join(" ")} />
       ${l}
       ${(this.neighbors.length ? this.neighbors : [e]).flatMap((e) => (e.openings ?? []).filter((e) => e.id !== this.opening?.id).map((t) => ({
@@ -8243,11 +8261,15 @@ var Rs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 			o: this.opening
 		}] : []).map(({ g: t, o: n }) => {
 			let r = Te(t, n), i = mt(n, this.hass?.states ?? {}), a = !r || i === "on" ? "#ff3535" : i === "unknown" ? "#7a8790" : "#53b6ce", s = De(t, n), c = ct(n, this.hass?.states ?? {}) ? s.open : s.closed, l = Math.atan2(s.closed[1] - s.hinge[1], s.closed[0] - s.hinge[0]), u = Math.atan2(s.open[1] - s.hinge[1], s.open[0] - s.hinge[0]), d = Math.atan2(Math.sin(u - l), Math.cos(u - l)), f = Array.from({ length: 17 }, (e, t) => `${s.hinge[0] + n.width * Math.cos(l + d * t / 16)},${-s.hinge[1] - n.width * Math.sin(l + d * t / 16)}`).join(" ");
-			return C`<g><line x1=${s.hinge[0]} y1=${-s.hinge[1]} x2=${s.closed[0]} y2=${-s.closed[1]} stroke="#102330" stroke-width="8" vector-effect="non-scaling-stroke"/>
+			return C`<g @pointerdown=${(r) => {
+				r.stopPropagation(), !(this.disabled || r.button !== 0) && t.id === e.id && (this.emit("al-opening-select", n.id), this.beginDrag(r));
+			}} @click=${(e) => {
+				e.stopPropagation(), this.dragged || this.selectPlan(t.id, n.id);
+			}}><line x1=${s.hinge[0]} y1=${-s.hinge[1]} x2=${s.closed[0]} y2=${-s.closed[1]} stroke="#102330" stroke-width="8" vector-effect="non-scaling-stroke"/>
           <line x1=${s.hinge[0]} y1=${-s.hinge[1]} x2=${n.kind === "open_wall" ? s.closed[0] : c[0]} y2=${-(n.kind === "open_wall" ? s.closed[1] : c[1])} stroke=${a} stroke-width="3" stroke-dasharray=${n.kind === "open_wall" ? "4 4" : "none"} vector-effect="non-scaling-stroke"/>
           ${n.kind !== "open_wall" && n.kind !== "window" ? C`<polyline points=${f} fill="none" stroke=${a} stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>` : g}
           ${t.id === e.id ? C`<circle class="opening-marker" cx=${n.position[0]} cy=${-n.position[1]} r=${o} fill=${a} role="button" tabindex=${this.disabled ? -1 : 0} aria-label=${`Select ${n.name || n.kind}`} @pointerdown=${(e) => {
-				this.disabled || (e.stopPropagation(), this.emit("al-opening-select", n.id), this.drag = e.pointerId, this.dragged = !1, this.renderRoot.querySelector("svg").setPointerCapture(e.pointerId));
+				this.disabled || (e.stopPropagation(), this.emit("al-opening-select", n.id), this.beginDrag(e));
 			}} @click=${(e) => {
 				e.stopPropagation(), this.disabled || this.emit("al-opening-select", n.id);
 			}} @keydown=${(e) => {
@@ -8260,7 +8282,7 @@ var Rs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
           x2=${t.position[0] + (t.width ?? 1) / 2 * Math.cos(t.yaw * Math.PI / 180)} y2=${-t.position[1] - (t.width ?? 1) / 2 * Math.sin(t.yaw * Math.PI / 180)}/>` : g}
         <circle class=${`marker ${t.entity === c?.entity ? "selected" : ""}`} cx=${t.position[0]} cy=${-t.position[1]} r=${o} role="button" tabindex=${this.disabled ? -1 : 0} aria-label=${`Select ${t.name || t.entity}`}
           @pointerdown=${(e) => {
-			this.disabled || e.button !== 0 || (e.stopPropagation(), this.emit("al-fixture-select", t.entity), this.movingMarker = !0, this.drag = e.pointerId, this.dragged = !1, this.renderRoot.querySelector("svg").setPointerCapture(e.pointerId));
+			this.disabled || e.button !== 0 || (e.stopPropagation(), this.emit("al-fixture-select", t.entity), this.movingMarker = !0, this.beginDrag(e));
 		}}
           @click=${(e) => {
 			e.stopPropagation(), this.disabled || this.emit("al-fixture-select", t.entity);
@@ -8271,17 +8293,17 @@ var Rs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
         ${t.entity === c?.entity && t.kind !== "window" ? C`<line class="aim" x1=${t.position[0]} y1=${-t.position[1]} x2=${t.position[0] + o * 5 * Math.cos(t.yaw * Math.PI / 180)} y2=${-t.position[1] - o * 5 * Math.sin(t.yaw * Math.PI / 180)}/>` : g}
       </g>`)}
       ${this.opening ? C`<g>${[-1, 1].map((e) => C`<circle class="marker selected" cx=${this.opening.position[0] + e * this.opening.width / 2 * Math.cos(this.opening.yaw * Math.PI / 180)} cy=${-this.opening.position[1] - e * this.opening.width / 2 * Math.sin(this.opening.yaw * Math.PI / 180)} r=${o} aria-label=${e < 0 ? "Resize opening start" : "Resize opening end"} @pointerdown=${(t) => {
-			this.disabled || t.button !== 0 || (t.stopPropagation(), this.resizeSide = e, this.drag = t.pointerId, this.dragged = !1, this.renderRoot.querySelector("svg").setPointerCapture(t.pointerId));
+			this.disabled || t.button !== 0 || (t.stopPropagation(), this.resizeSide = e, this.beginDrag(t));
 		}} @click=${(e) => e.stopPropagation()}/>`)}<text x=${this.opening.position[0]} y=${-this.opening.position[1] - o * 3} fill="#d8edf2" font-size=${o * 2} text-anchor="middle">${Is(this.opening.width, this.unit)}</text></g>` : g}
       ${c?.entity && !this.opening && ["motion", "occupancy"].includes(c.kind) ? C`<circle class="marker selected" role="button" tabindex=${this.disabled ? -1 : 0} aria-label="Aim sensor" cx=${c.position[0] + o * 5 * Math.cos(c.yaw * Math.PI / 180)} cy=${-c.position[1] - o * 5 * Math.sin(c.yaw * Math.PI / 180)} r=${o * .75}
         @pointerdown=${(e) => {
-			this.disabled || e.button !== 0 || (e.stopPropagation(), this.aimingHandle = !0, this.movingMarker = !1, this.drag = e.pointerId, this.dragged = !1, this.renderRoot.querySelector("svg").setPointerCapture(e.pointerId));
+			this.disabled || e.button !== 0 || (e.stopPropagation(), this.aimingHandle = !0, this.movingMarker = !1, this.beginDrag(e));
 		}}
         @click=${(e) => e.stopPropagation()}
         @keydown=${(e) => {
 			!this.disabled && ["ArrowLeft", "ArrowRight"].includes(e.key) && (e.preventDefault(), this.emit("al-fixture-aim", c.yaw + (e.key === "ArrowLeft" ? 1 : -1) * (e.shiftKey ? 15 : 1)));
 		}}><title>Drag to aim</title></circle>` : g}
-    </svg><p ?hidden=${this.minimal}>${this.opening ? "Place opening: click near a wall or drag its marker" : this.fixture?.entity ? this.fixture.kind === "window" ? "Click near a wall to place a window · drag its marker to move it" : this.mode === "place" ? "Click to place · drag a marker to move it · select Aim to set direction" : "AIM MODE — press and drag toward the direction the sensor faces" : "Select a device to start placing it."} · Top = +Y</p>
+    </svg><p ?hidden=${this.minimal}>${this.opening ? "Drag the opening or its marker to move it; drag either end to resize" : this.fixture?.entity ? this.fixture.kind === "window" ? "Click near a wall to place a window · drag its marker to move it" : this.mode === "place" ? "Click to place · drag a marker to move it · select Aim to set direction" : "AIM MODE — press and drag toward the direction the sensor faces" : "Select a device to start placing it."} · Top = +Y</p>
     ${this.error ? h`<p class="error" role="alert">${this.error}</p>` : g}`;
 	}
 };
@@ -8733,6 +8755,18 @@ var Z = class extends p {
 			n[0][2] + (t === "window" ? Math.max(0, (n[1][2] - n[0][2] - r.height) / 2) : 0)
 		], r.width)), this.opening = r, this.originalOpening = e?.id, this.workspace && !e && this.flushDraft();
 	}
+	selectPlan(e, t) {
+		if (this.disabled) return;
+		let n = this.config && D(this.config).find((t) => t.group.id === e)?.group;
+		if (!n?.bounds) return;
+		e !== this.room && (this.room = e, this.reset(), this.dispatchEvent(new CustomEvent("al-editor-room", {
+			detail: e,
+			bubbles: !0,
+			composed: !0
+		})));
+		let r = n.openings?.find((e) => e.id === t);
+		r && this.editOpening(r);
+	}
 	openingConfig() {
 		let e = structuredClone(this.config);
 		if (this.legacyWindow) {
@@ -8892,7 +8926,7 @@ var Z = class extends p {
 			this.mode = "aim";
 		}}>Aim</button></div>
         ${this.wallView && this.opening ? h`<al-wall-elevation .group=${i} .opening=${this.opening} .unit=${this.unit} .disabled=${this.disabled} @al-opening-resize=${(e) => this.patchOpening(e.detail)}></al-wall-elevation>` : g}
-        <al-room-plan ?hidden=${this.wallView && !!this.opening} .unit=${this.unit} @al-opening-resize=${(e) => this.patchOpening(e.detail)} .minimal=${this.workspace} .group=${i} .neighbors=${r} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
+        <al-room-plan @al-plan-select=${(e) => this.selectPlan(e.detail.room, e.detail.opening)} ?hidden=${this.wallView && !!this.opening} .unit=${this.unit} @al-opening-resize=${(e) => this.patchOpening(e.detail)} .minimal=${this.workspace} .group=${i} .neighbors=${r} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
           @al-fixture-position=${(e) => {
 			e.stopPropagation(), this.patch(this.fixture.kind === "window" && this.group ? Qe(this.group, e.detail, this.fixture.width) : { position: e.detail });
 		}}

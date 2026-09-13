@@ -250,6 +250,13 @@ export class AlRoomDeviceEditor extends LitElement {
     if(!value)Object.assign(opening,snapOpening(this.group,[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,b[0][2]+(kind==="window"?Math.max(0,(b[1][2]-b[0][2]-opening.height)/2):0)],opening.width));
     this.opening=opening;this.originalOpening=value?.id;if(this.workspace && !value)this.flushDraft();
   }
+  private selectPlan(room:string,opening?:string):void {
+    if(this.disabled)return;
+    const group=this.config && walkGroups(this.config).find(e=>e.group.id===room)?.group;
+    if(!group?.bounds)return;
+    if(room!==this.room){this.room=room;this.reset();this.dispatchEvent(new CustomEvent("al-editor-room",{detail:room,bubbles:true,composed:true}));}
+    const selected=group.openings?.find(o=>o.id===opening);if(selected)this.editOpening(selected);
+  }
   private openingConfig():Config {
     const config=structuredClone(this.config!);
     if(this.legacyWindow){const group=walkGroups(config).find(e=>e.group.id===this.room)?.group;if(group)group.fixtures=group.fixtures?.filter(f=>f.entity!==this.legacyWindow);}
@@ -326,7 +333,7 @@ export class AlRoomDeviceEditor extends LitElement {
         <div ?hidden=${this.workspace}><button type="button" aria-pressed=${this.mode==="place"} @click=${()=>{this.mode="place";}}>Place / move</button>
           <button type="button" aria-pressed=${this.mode==="aim"} ?disabled=${!this.fixture.entity || (this.fixture.kind==="light" || this.fixture.kind==="window")} @click=${()=>{this.mode="aim";}}>Aim</button></div>
         ${this.wallView && this.opening?html`<al-wall-elevation .group=${previewGroup} .opening=${this.opening} .unit=${this.unit} .disabled=${this.disabled} @al-opening-resize=${(e:CustomEvent<Partial<RoomOpening>>)=>this.patchOpening(e.detail)}></al-wall-elevation>`:nothing}
-        <al-room-plan ?hidden=${this.wallView && !!this.opening} .unit=${this.unit} @al-opening-resize=${(e:CustomEvent<Partial<RoomOpening>>)=>this.patchOpening(e.detail)} .minimal=${this.workspace} .group=${previewGroup} .neighbors=${contextGroups} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
+        <al-room-plan @al-plan-select=${(e:CustomEvent<{room:string;opening?:string}>)=>this.selectPlan(e.detail.room,e.detail.opening)} ?hidden=${this.wallView && !!this.opening} .unit=${this.unit} @al-opening-resize=${(e:CustomEvent<Partial<RoomOpening>>)=>this.patchOpening(e.detail)} .minimal=${this.workspace} .group=${previewGroup} .neighbors=${contextGroups} .opening=${this.opening} .hass=${this.hass} .fixture=${this.fixture} .mode=${this.mode} .disabled=${this.disabled}
           @al-fixture-position=${(e:CustomEvent<[number,number,number]>)=>{e.stopPropagation();this.patch(this.fixture.kind==="window" && this.group?snapWindow(this.group,e.detail,this.fixture.width):{position:e.detail});}}
           @al-fixture-aim=${(e:CustomEvent<number>)=>this.patch({yaw:this.aimSnap?Math.round(e.detail/this.aimSnap)*this.aimSnap:Number(e.detail.toFixed(1))})}
           @al-opening-position=${(e:CustomEvent<[number,number,number]>)=>{if(this.opening && this.group)this.patchOpening(snapOpening(this.group,e.detail,this.opening.width));}}
