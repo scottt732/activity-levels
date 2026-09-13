@@ -41,12 +41,12 @@ it("opens an externally selected room and saves a window contact with wall geome
   el.hass={states:{},callWS:vi.fn().mockResolvedValue([{entity:"binary_sensor.window",area_id:"den",device_class:"window",entity_name:"Window"}])} as unknown as HomeAssistant;
   document.body.append(el);await el.updateComplete;await el.updateComplete;
   el.shadowRoot!.querySelector<HTMLButtonElement>('[data-entity="binary_sensor.window"]')!.click();await el.updateComplete;
-  expect(el.shadowRoot!.querySelector<HTMLSelectElement>("#fixture-kind")!.value).toBe("window");
-  el.shadowRoot!.querySelector("al-room-plan")!.dispatchEvent(new CustomEvent("al-fixture-position",{detail:[0.1,2,1.5],bubbles:true}));await el.updateComplete;
+  expect(el.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Opening type"]')!.value).toBe("window");
+  el.shadowRoot!.querySelector("al-room-plan")!.dispatchEvent(new CustomEvent("al-opening-position",{detail:[0.1,2,.9],bubbles:true}));await el.updateComplete;
   const changed=vi.fn();el.addEventListener("al-change",changed);
-  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-fixture")!.click();
-  const fixture=changed.mock.calls[0]![0].detail.groups[0].fixtures[0];
-  expect(fixture.kind).toBe("window");expect(fixture.position).toEqual([0,2,1.5]);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();
+  const fixture=changed.mock.calls[0]![0].detail.groups[0].openings[0];
+  expect(fixture.kind).toBe("window");expect(fixture.position).toEqual([0,2,.9]);
   expect(Math.abs(fixture.yaw)).toBe(90);
   expect(el.shadowRoot!.querySelector(".editor-controls")!.parentElement!.className).toBe("workspace");
 });
@@ -58,17 +58,105 @@ it("defaults to HA feet without moving geometry and saves a snapped exterior doo
   document.body.append(el);await el.updateComplete;
   [...el.shadowRoot!.querySelectorAll("button")].find(b=>b.textContent==="Add door")!.click();await el.updateComplete;
   const width=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
-  expect(Number(width.value)).toBeCloseTo(.9/.3048,3);
-  width.value="3";width.dispatchEvent(new Event("input"));await el.updateComplete;
+  expect(width.value).toBe('2\'11.4331"');
+  width.value="3";width.dispatchEvent(new Event("change"));await el.updateComplete;
   for(const [label,value] of [["Opening type","exterior_door"],["Door hinge","right"],["Door swing","out"]]){
     const select=el.shadowRoot!.querySelector<HTMLSelectElement>(`[aria-label="${label}"]`)!;
     select.value=value!;select.dispatchEvent(new Event("change"));await el.updateComplete;
   }
   el.shadowRoot!.querySelector("al-room-plan")!.dispatchEvent(new CustomEvent("al-opening-position",{detail:[4,2,0]}));await el.updateComplete;
   const units=el.shadowRoot!.querySelector<HTMLSelectElement>("#length-unit")!;units.value="m";units.dispatchEvent(new Event("change"));await el.updateComplete;
-  expect(Number(width.value)).toBeCloseTo(.9144);
+  expect(Number(el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!.value)).toBeCloseTo(.9144);
   const changed=vi.fn();el.addEventListener("al-change",changed);
   el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();
   expect(changed.mock.calls[0]![0].detail.groups[0].openings[0]).toMatchObject({kind:"exterior_door",width:.9144000000000001,hinge:"right",swing:"out",position:[4,2,0]});
   expect(config.groups[0]!.openings).toBeUndefined();
+});
+
+it("keeps partial imperial input out of geometry and refuses invalid lengths",async()=>{
+  const el=new AlRoomDeviceEditor();el.room="room";const config=roomsConfig();
+  config.groups=[{...newGroup("room","area"),bounds:[[0,0,0],[4,4,3]]}];el.config=config;
+  el.hass={config:{unit_system:{length:"mi"}},states:{},callWS:vi.fn().mockResolvedValue([])} as unknown as HomeAssistant;
+  document.body.append(el);await el.updateComplete;
+  [...el.shadowRoot!.querySelectorAll("button")].find(b=>b.textContent==="Add door")!.click();await el.updateComplete;
+  const width=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
+  const changed=vi.fn();el.addEventListener("al-change",changed);
+  width.value="2'6";width.dispatchEvent(new Event("input"));await el.updateComplete;
+  expect(width.value).toBe("2'6");expect(width.validity.valid).toBe(false);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();expect(changed).not.toHaveBeenCalled();
+  for(const text of ["2'6\"",'30"',"2.5"]){
+    width.value=text;width.dispatchEvent(new Event("input"));width.dispatchEvent(new Event("change"));await el.updateComplete;
+    expect(width.value).toBe("2'6\"");expect(width.validity.valid).toBe(true);
+    el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();
+    expect(changed.mock.calls.at(-1)![0].detail.groups[0].openings[0].width).toBeCloseTo(.762);
+  }
+  width.value='-30"';width.dispatchEvent(new Event("change"));await el.updateComplete;
+  expect(width.validity.valid).toBe(false);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();expect(changed).toHaveBeenCalledTimes(3);
+  const units=el.shadowRoot!.querySelector<HTMLSelectElement>("#length-unit")!;
+  units.value="m";units.dispatchEvent(new Event("change"));await el.updateComplete;
+  const metric=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
+  expect(metric.validity.valid).toBe(true);expect(Number(metric.value)).toBeCloseTo(.762);
+});
+
+it("starts a typed sensor inside the selected room after editing a door",async()=>{
+  const el=new AlRoomDeviceEditor();el.room="room";const config=roomsConfig();
+  config.groups=[{...newGroup("room","area"),area_id:"office",bounds:[[10,20,12],[14,24,15]]}];el.config=config;
+  el.hass={states:{},callWS:vi.fn().mockResolvedValue([{entity:"binary_sensor.motion",area_id:"office",device_class:"motion",entity_name:"Motion"}])} as unknown as HomeAssistant;
+  document.body.append(el);await el.updateComplete;await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#new-door")!.click();await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>('[data-add-kind="occupancy"]')!.click();await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>('[data-entity="binary_sensor.motion"]')!.click();await el.updateComplete;
+  const plan=el.shadowRoot!.querySelector("al-room-plan") as import("../src/al-room-plan").AlRoomPlan;
+  expect(plan.fixture!.kind).toBe("occupancy");expect(plan.fixture!.position).toEqual([12,22,13.5]);
+  plan.dispatchEvent(new CustomEvent("al-fixture-position",{detail:[10,24,13.5],bubbles:true}));await el.updateComplete;
+  const changed=vi.fn();el.addEventListener("al-change",changed);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-fixture")!.click();
+  expect(changed.mock.calls[0]![0].detail.groups[0].fixtures[0].position).toEqual([10,24,13.5]);
+});
+
+it("previews an oversized door but refuses to save it",async()=>{
+  const el=new AlRoomDeviceEditor();el.room="room";const config=roomsConfig();
+  config.groups=[{...newGroup("room","area"),bounds:[[0,0,0],[4,4,3]]}];el.config=config;
+  el.hass={states:{},callWS:vi.fn().mockResolvedValue([])} as unknown as HomeAssistant;
+  document.body.append(el);await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#new-door")!.click();await el.updateComplete;
+  const width=el.shadowRoot!.querySelector<HTMLInputElement>('[aria-label="Opening width"]')!;
+  width.value="6";width.dispatchEvent(new Event("change"));await el.updateComplete;
+  const viewer=el.shadowRoot!.querySelector("al-floorplan-viewer") as AlFloorplanViewer;
+  expect(viewer.config!.groups[0]!.openings![0]!.width).toBe(6);
+  expect(config.groups[0]!.openings).toBeUndefined();
+  const changed=vi.fn();el.addEventListener("al-change",changed);
+  el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();expect(changed).not.toHaveBeenCalled();
+});
+
+it("lists defined objects by category and links one remote circuit to multiple windows",async()=>{
+  const el=new AlRoomDeviceEditor();el.room="room";const config=roomsConfig();
+  config.groups=[{...newGroup("room","area"),area_id:"office",bounds:[[0,0,0],[4,4,3]]}];el.config=config;
+  el.hass={states:{"binary_sensor.bay":{state:"on",attributes:{friendly_name:"Bay circuit"}}},callWS:vi.fn().mockResolvedValue([{entity:"binary_sensor.bay",area_id:"alarm",device_class:"opening",entity_name:"Bay circuit"}])} as unknown as HomeAssistant;
+  document.body.append(el);await el.updateComplete;await el.updateComplete;
+  el.addEventListener("al-change",e=>{el.config=(e as CustomEvent).detail;});
+  for(let i=0;i<2;i++){
+    el.shadowRoot!.querySelector<HTMLButtonElement>('[data-add-window]')!.click();await el.updateComplete;
+    const scope=[...el.shadowRoot!.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(n=>n.parentElement!.textContent!.includes("outside this room"))!;
+    scope.checked=true;scope.dispatchEvent(new Event("change"));await el.updateComplete;
+    const contact=el.shadowRoot!.querySelector<HTMLInputElement>('[data-contact="binary_sensor.bay"]')!;contact.checked=true;contact.dispatchEvent(new Event("change"));await el.updateComplete;
+    el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();await el.updateComplete;
+  }
+  expect(el.config!.groups[0]!.openings).toHaveLength(2);
+  expect(el.config!.groups[0]!.openings!.every(o=>o.entities?.[0]==="binary_sensor.bay")).toBe(true);
+  expect(el.shadowRoot!.querySelector('.object-category')!.textContent).toContain("Windows (2)");
+  expect(config.groups[0]!.openings).toBeUndefined();
+});
+
+it("converts an edited legacy window without losing its position or contact",async()=>{
+  const el=new AlRoomDeviceEditor();el.room="room";const config=roomsConfig();
+  config.groups=[{...newGroup("room","area"),bounds:[[0,0,0],[4,4,3]],fixtures:[{...newFixture("binary_sensor.window","window"),name:"Bay",position:[0,2,1.5],yaw:90,width:1.1,height:1.2}]}];el.config=config;
+  el.hass={states:{},callWS:vi.fn().mockResolvedValue([])} as unknown as HomeAssistant;
+  document.body.append(el);await el.updateComplete;
+  el.shadowRoot!.querySelector<HTMLButtonElement>('[data-entity="binary_sensor.window"]')!.click();await el.updateComplete;
+  const changed=vi.fn();el.addEventListener("al-change",changed);el.shadowRoot!.querySelector<HTMLButtonElement>("#save-opening")!.click();
+  const room=changed.mock.calls[0]![0].detail.groups[0];
+  expect(room.fixtures).toEqual([]);expect(room.openings[0]).toMatchObject({kind:"window",name:"Bay",position:[0,2,.9],width:1.1,height:1.2,entities:["binary_sensor.window"]});
+  expect(config.groups[0]!.fixtures).toHaveLength(1);
 });

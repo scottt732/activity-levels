@@ -981,28 +981,45 @@ For a standalone preview with sample structures, run the frontend dev server and
 
 In **Floorplans → Place devices & windows**, choose a room, or select one in the
 live view and use its **Place devices & windows** button. Select a
-sensor or light from the room's device list, click inside the outline to place it, or
+sensor or light from the room's **Devices & windows** list. **Add…** offers doors, open
+walls, windows, motion sensors, occupancy sensors, and lights; choose a room entity
+for a sensor or light. New devices start inside the selected room, including its floor
+elevation. An out-of-room saved placement offers **Move into room** for recovery.
+Click inside the outline to place it, or
 drag a marker to move it. **Aim** updates direction continuously while pressing and dragging. A radial control
 also adjusts direction and tilt with touch, mouse, or keyboard. Measurements default to
-Home Assistant’s unit system; choose meters or feet without changing stored geometry.
+Home Assistant’s unit system; choose meters or feet and inches without changing stored
+geometry. Imperial fields accept `2'6"`, `30"`, or decimal feet such as `2.5` (all the
+same length), plus fractional inches such as `2'6 1/2"`. Finish editing a field to apply
+it; invalid or incomplete lengths cannot be saved.
 Height is measured above the room floor; **Adjust characteristics and precise position** provides
 keyboard-friendly coordinates, tilt, range and field of view. The adjacent 3D preview
 shows the same placement and neighboring rooms on the same level, centered on the
 selected room. Use the orbit pad, zoom buttons, Top, and reset to inspect coverage;
 automatic activity focus stays disabled while editing. Add the placement to the draft, then use the panel's **Save**.
 
-Window contacts use the **window** type (automatically suggested for HA window/opening
-sensors). Click near a wall to snap and align the window; set its width, height, and
-center above the floor. Windows show red when open, blue when closed, and gray when
-unavailable. They have no motion coverage cone. On smaller screens, controls and
-views stack vertically.
+The room tree lists **defined objects**, grouped as Windows, Doors, Openings, Motion
+sensors, Occupancy sensors, and Lights. Available Home Assistant entities are kept in
+a separate add list; they do not become placed objects until saved to the draft.
 
-Use **Add door** for an interior or exterior door, or **Add open wall** for a permanent
-opening. Click near a wall to snap its position, then set width and height. Hinge left/right
-is viewed from inside the selected room facing the doorway; swing can be inward or outward.
-A door can use a room contact sensor or a manual open/closed state. Unknown contact
-states block coverage. Open walls always pass coverage; closed doors and windows block it.
-The sampled projection illustrates room visibility, not material penetration or exact PIR optics.
+Windows and doors are independent architectural objects. They can have zero, one, or
+many associated binary-sensor entities. Link a shared alarm circuit to every window or
+door it covers: if any linked entity is on, all associated objects turn red. If none is
+on but a contact is unavailable, the object is unknown; all linked entities must be
+off to show closed. No alarm-zone hierarchy or wired/wireless distinction is required.
+The picker starts with room sensors; enable **Include sensors outside this room** for
+central alarm-panel circuits or shared zones. Unlinked objects support a manual state.
+Existing single-entity window placements retain their geometry and contact when edited
+and saved as independent windows.
+
+Use **Add door**, **Add window**, or **Add open wall**, then click near a wall to snap
+its position. Set width, height, and bottom elevation. Door hinge left/right is viewed
+from inside the selected room facing the doorway; swing can be inward or outward.
+Out-of-bounds objects remain visible in red in both previews; adjust them before saving.
+Open walls always pass coverage; closed doors and windows block it. A shared circuit's
+open indication is ambiguous and does not prove which particular opening is open.
+The sampled projection illustrates room visibility, not material penetration or exact
+PIR optics. On smaller screens, controls and views stack vertically.
 
 The list includes devices in the room's Home Assistant area, explicit activity inputs
 in the room's subtree, and saved placements. Entity area assignments override their

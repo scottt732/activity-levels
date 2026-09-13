@@ -316,6 +316,8 @@ def _translate(validator: Any) -> JsonSchema:
     """One voluptuous validator as one JSON Schema."""
     if isinstance(validator, vol.Match):
         return {"type": "string", "pattern": validator.pattern.pattern}
+    if isinstance(validator, vol.Unique):
+        return {"uniqueItems": True}
     if validator is openings:
         return {"type": "array", "maxItems": 128, "items": _translate(OPENING_SCHEMA)}
     if validator is fixtures:

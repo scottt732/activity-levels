@@ -91,9 +91,9 @@ export interface RoomFixture {
   fov: number; vertical_fov: number; range: number; mount: string; technology: string;
 }
 export interface RoomOpening {
-  id:string; name:string; kind:"interior_door"|"exterior_door"|"open_wall";
+  id:string; name:string; kind:"interior_door"|"exterior_door"|"open_wall"|"window";
   position:[number,number,number]; yaw:number; width:number; height:number;
-  hinge:"left"|"right"; swing:"in"|"out"; open:boolean; entity?:string;
+  hinge:"left"|"right"; swing:"in"|"out"; open:boolean; entity?:string; entities?:string[];
 }
 export interface Group {
   openings?:RoomOpening[];

@@ -49,3 +49,25 @@ describe("architectural openings",()=>{
     expect(()=>saveOpening(source,"room",{...opening,position:[3,3,0]})).toThrow(/wall/);
   });
 });
+
+import { openingFitsRoom } from "../src/room-openings";
+it("keeps oversized door geometry visible with invalid fit",()=>{
+  const room={bounds:[[0,0,0],[4,4,3]] as [[number,number,number],[number,number,number]]};
+  const door={...newOpening(),position:[4,2,0] as [number,number,number],yaw:90,width:6};
+  expect(openingFitsRoom(room,door)).toBe(false);
+  const shape=openingSwing(room,door);expect(Math.hypot(shape.closed[0]-shape.hinge[0],shape.closed[1]-shape.hinge[1])).toBe(6);
+});
+
+import { openingEntities, openingState } from "../src/room-openings";
+it("supports shared alarm circuits, multiple contacts and uninstrumented windows",()=>{
+  const bay=Array.from({length:4},()=>({...newOpening("window"),entities:["binary_sensor.bay"]}));
+  const states={"binary_sensor.bay":{state:"on"},"binary_sensor.second":{state:"off"}};
+  expect(bay.map(w=>openingState(w,states))).toEqual(["on","on","on","on"]);
+  expect(bay.every(w=>!openingIsOpen(w,states))).toBe(true);
+  const door={...newOpening(),entities:["binary_sensor.bay","binary_sensor.second"]};
+  expect(openingState(door,states)).toBe("on");
+  states["binary_sensor.bay"].state="unavailable";expect(openingState(door,states)).toBe("unknown");
+  states["binary_sensor.bay"].state="off";expect(openingState(door,states)).toBe("off");
+  expect(openingState(newOpening("window"),{})).toBe("off");
+  expect(openingEntities({...door,entity:"binary_sensor.bay"})).toHaveLength(2);
+});

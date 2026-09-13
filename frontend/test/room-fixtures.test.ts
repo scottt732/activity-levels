@@ -59,3 +59,10 @@ it("leaves sensor beams off when idle or unavailable and turns them red on detec
     expect(fixtureAppearance(kind,"on")).toEqual({color:"#ff3535",opacity:0.16});
   }
 });
+
+import { initialFixturePosition } from "../src/room-fixtures";
+it("starts inside an offset concave room at its floor elevation",()=>{
+  const room={bounds:[[10,20,12],[16,26,15]] as [[number,number,number],[number,number,number]],points:[[10,20],[16,20],[16,21],[11,21],[11,26],[10,26]] as [number,number][]};
+  const position=initialFixturePosition(room);
+  expect(insideRoom(room,position)).toBe(true);expect(position[2]).toBe(13.5);
+});

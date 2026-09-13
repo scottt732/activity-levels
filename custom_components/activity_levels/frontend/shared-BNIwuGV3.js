@@ -1,9 +1,9 @@
-import { a as e, h as t, i as n, m as r, n as i, o as a, r as o, s } from "./shared-BEZOj5n-.js";
-import { n as c } from "./shared-IIYdNIav.js";
-import { F as l, G as u, H as d, I as f, K as p, N as m, P as h, Sn as g, T as _, Ut as v, V as y, Wt as b, _ as x, cn as S, d as C, et as w, i as T, in as E, k as D, l as O, nt as k, o as A, on as j, r as M, rn as N, rt as P, sn as F, tn as ee, tt as I, w as L, x as R, xn as z } from "./shared-DVWk8t-w.js";
-import { t as te } from "./shared-mmljZPXC.js";
+import { _ as e, a as t, b as n, i as r, m as i, n as a, o, r as s, s as c, v as l, y as u } from "./shared-BYgiAqxy.js";
+import { n as d } from "./shared-IIYdNIav.js";
+import { F as f, G as p, H as m, I as h, K as g, N as _, P as v, Sn as y, T as b, Ut as x, V as S, Wt as C, _ as w, cn as T, d as E, et as D, i as O, in as k, k as A, l as j, nt as ee, o as M, on as te, r as N, rn as P, rt as F, sn as I, tn as ne, tt as L, w as R, x as z, xn as B } from "./shared-DVWk8t-w.js";
+import { t as V } from "./shared-mmljZPXC.js";
 //#region node_modules/.pnpm/three@0.185.1/node_modules/three/examples/jsm/controls/OrbitControls.js
-var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new v(), W = new I(), G = Math.cos(70 * d.DEG2RAD), K = new g(), q = 2 * Math.PI, J = {
+var H = { type: "change" }, U = { type: "start" }, W = { type: "end" }, G = new x(), K = new L(), q = Math.cos(70 * m.DEG2RAD), J = new y(), Y = 2 * Math.PI, X = {
 	NONE: -1,
 	ROTATE: 0,
 	DOLLY: 1,
@@ -12,21 +12,21 @@ var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new 
 	TOUCH_PAN: 4,
 	TOUCH_DOLLY_PAN: 5,
 	TOUCH_DOLLY_ROTATE: 6
-}, Y = 1e-6, X = class extends C {
+}, Z = 1e-6, Q = class extends E {
 	constructor(e, t = null) {
-		super(e, t), this.state = J.NONE, this.target = new g(), this.cursor = new g(), this.minDistance = 0, this.maxDistance = Infinity, this.minZoom = 0, this.maxZoom = Infinity, this.minTargetRadius = 0, this.maxTargetRadius = Infinity, this.minPolarAngle = 0, this.maxPolarAngle = Math.PI, this.minAzimuthAngle = -Infinity, this.maxAzimuthAngle = Infinity, this.enableDamping = !1, this.dampingFactor = .05, this.enableZoom = !0, this.zoomSpeed = 1, this.enableRotate = !0, this.rotateSpeed = 1, this.keyRotateSpeed = 1, this.enablePan = !0, this.panSpeed = 1, this.screenSpacePanning = !0, this.keyPanSpeed = 7, this.zoomToCursor = !1, this.autoRotate = !1, this.autoRotateSpeed = 2, this.keys = {
+		super(e, t), this.state = X.NONE, this.target = new y(), this.cursor = new y(), this.minDistance = 0, this.maxDistance = Infinity, this.minZoom = 0, this.maxZoom = Infinity, this.minTargetRadius = 0, this.maxTargetRadius = Infinity, this.minPolarAngle = 0, this.maxPolarAngle = Math.PI, this.minAzimuthAngle = -Infinity, this.maxAzimuthAngle = Infinity, this.enableDamping = !1, this.dampingFactor = .05, this.enableZoom = !0, this.zoomSpeed = 1, this.enableRotate = !0, this.rotateSpeed = 1, this.keyRotateSpeed = 1, this.enablePan = !0, this.panSpeed = 1, this.screenSpacePanning = !0, this.keyPanSpeed = 7, this.zoomToCursor = !1, this.autoRotate = !1, this.autoRotateSpeed = 2, this.keys = {
 			LEFT: "ArrowLeft",
 			UP: "ArrowUp",
 			RIGHT: "ArrowRight",
 			BOTTOM: "ArrowDown"
 		}, this.mouseButtons = {
-			LEFT: y.ROTATE,
-			MIDDLE: y.DOLLY,
-			RIGHT: y.PAN
+			LEFT: S.ROTATE,
+			MIDDLE: S.DOLLY,
+			RIGHT: S.PAN
 		}, this.touches = {
-			ONE: S.ROTATE,
-			TWO: S.DOLLY_PAN
-		}, this.target0 = this.target.clone(), this.position0 = this.object.position.clone(), this.zoom0 = this.object.zoom, this._cursorStyle = "auto", this._domElementKeyEvents = null, this._lastPosition = new g(), this._lastQuaternion = new P(), this._lastTargetPosition = new g(), this._quat = new P().setFromUnitVectors(e.up, new g(0, 1, 0)), this._quatInverse = this._quat.clone().invert(), this._spherical = new F(), this._sphericalDelta = new F(), this._scale = 1, this._panOffset = new g(), this._rotateStart = new z(), this._rotateEnd = new z(), this._rotateDelta = new z(), this._panStart = new z(), this._panEnd = new z(), this._panDelta = new z(), this._dollyStart = new z(), this._dollyEnd = new z(), this._dollyDelta = new z(), this._dollyDirection = new g(), this._mouse = new z(), this._performCursorZoom = !1, this._pointers = [], this._pointerPositions = {}, this._controlActive = !1, this._onPointerMove = ne.bind(this), this._onPointerDown = Z.bind(this), this._onPointerUp = re.bind(this), this._onContextMenu = Q.bind(this), this._onMouseWheel = oe.bind(this), this._onKeyDown = se.bind(this), this._onTouchStart = ce.bind(this), this._onTouchMove = le.bind(this), this._onMouseDown = ie.bind(this), this._onMouseMove = ae.bind(this), this._interceptControlDown = ue.bind(this), this._interceptControlUp = de.bind(this), this.domElement !== null && this.connect(this.domElement), this.update();
+			ONE: T.ROTATE,
+			TWO: T.DOLLY_PAN
+		}, this.target0 = this.target.clone(), this.position0 = this.object.position.clone(), this.zoom0 = this.object.zoom, this._cursorStyle = "auto", this._domElementKeyEvents = null, this._lastPosition = new y(), this._lastQuaternion = new F(), this._lastTargetPosition = new y(), this._quat = new F().setFromUnitVectors(e.up, new y(0, 1, 0)), this._quatInverse = this._quat.clone().invert(), this._spherical = new I(), this._sphericalDelta = new I(), this._scale = 1, this._panOffset = new y(), this._rotateStart = new B(), this._rotateEnd = new B(), this._rotateDelta = new B(), this._panStart = new B(), this._panEnd = new B(), this._panDelta = new B(), this._dollyStart = new B(), this._dollyEnd = new B(), this._dollyDelta = new B(), this._dollyDirection = new y(), this._mouse = new B(), this._performCursorZoom = !1, this._pointers = [], this._pointerPositions = {}, this._controlActive = !1, this._onPointerMove = ie.bind(this), this._onPointerDown = re.bind(this), this._onPointerUp = ae.bind(this), this._onContextMenu = fe.bind(this), this._onMouseWheel = ce.bind(this), this._onKeyDown = le.bind(this), this._onTouchStart = ue.bind(this), this._onTouchMove = de.bind(this), this._onMouseDown = oe.bind(this), this._onMouseMove = se.bind(this), this._interceptControlDown = pe.bind(this), this._interceptControlUp = me.bind(this), this.domElement !== null && this.connect(this.domElement), this.update();
 	}
 	set cursorStyle(e) {
 		this._cursorStyle = e, e === "grab" ? this.domElement.style.cursor = "grab" : this.domElement.style.cursor = "auto";
@@ -65,7 +65,7 @@ var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new 
 		this.target0.copy(this.target), this.position0.copy(this.object.position), this.zoom0 = this.object.zoom;
 	}
 	reset() {
-		this.target.copy(this.target0), this.object.position.copy(this.position0), this.object.zoom = this.zoom0, this.object.updateProjectionMatrix(), this.dispatchEvent(B), this.update(), this.state = J.NONE;
+		this.target.copy(this.target0), this.object.position.copy(this.position0), this.object.zoom = this.zoom0, this.object.updateProjectionMatrix(), this.dispatchEvent(H), this.update(), this.state = X.NONE;
 	}
 	pan(e, t) {
 		this._pan(e, t), this.update();
@@ -84,39 +84,39 @@ var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new 
 	}
 	update(e = null) {
 		let t = this.object.position;
-		K.copy(t).sub(this.target), K.applyQuaternion(this._quat), this._spherical.setFromVector3(K), this.autoRotate && this.state === J.NONE && this._rotateLeft(this._getAutoRotationAngle(e)), this.enableDamping ? (this._spherical.theta += this._sphericalDelta.theta * this.dampingFactor, this._spherical.phi += this._sphericalDelta.phi * this.dampingFactor) : (this._spherical.theta += this._sphericalDelta.theta, this._spherical.phi += this._sphericalDelta.phi);
+		J.copy(t).sub(this.target), J.applyQuaternion(this._quat), this._spherical.setFromVector3(J), this.autoRotate && this.state === X.NONE && this._rotateLeft(this._getAutoRotationAngle(e)), this.enableDamping ? (this._spherical.theta += this._sphericalDelta.theta * this.dampingFactor, this._spherical.phi += this._sphericalDelta.phi * this.dampingFactor) : (this._spherical.theta += this._sphericalDelta.theta, this._spherical.phi += this._sphericalDelta.phi);
 		let n = this.minAzimuthAngle, r = this.maxAzimuthAngle;
-		isFinite(n) && isFinite(r) && (n < -Math.PI ? n += q : n > Math.PI && (n -= q), r < -Math.PI ? r += q : r > Math.PI && (r -= q), n <= r ? this._spherical.theta = Math.max(n, Math.min(r, this._spherical.theta)) : this._spherical.theta = this._spherical.theta > (n + r) / 2 ? Math.max(n, this._spherical.theta) : Math.min(r, this._spherical.theta)), this._spherical.phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this._spherical.phi)), this._spherical.makeSafe(), this.enableDamping === !0 ? this.target.addScaledVector(this._panOffset, this.dampingFactor) : this.target.add(this._panOffset), this.target.sub(this.cursor), this.target.clampLength(this.minTargetRadius, this.maxTargetRadius), this.target.add(this.cursor);
+		isFinite(n) && isFinite(r) && (n < -Math.PI ? n += Y : n > Math.PI && (n -= Y), r < -Math.PI ? r += Y : r > Math.PI && (r -= Y), n <= r ? this._spherical.theta = Math.max(n, Math.min(r, this._spherical.theta)) : this._spherical.theta = this._spherical.theta > (n + r) / 2 ? Math.max(n, this._spherical.theta) : Math.min(r, this._spherical.theta)), this._spherical.phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this._spherical.phi)), this._spherical.makeSafe(), this.enableDamping === !0 ? this.target.addScaledVector(this._panOffset, this.dampingFactor) : this.target.add(this._panOffset), this.target.sub(this.cursor), this.target.clampLength(this.minTargetRadius, this.maxTargetRadius), this.target.add(this.cursor);
 		let i = !1;
 		if (this.zoomToCursor && this._performCursorZoom || this.object.isOrthographicCamera) this._spherical.radius = this._clampDistance(this._spherical.radius);
 		else {
 			let e = this._spherical.radius;
 			this._spherical.radius = this._clampDistance(this._spherical.radius * this._scale), i = e != this._spherical.radius;
 		}
-		if (K.setFromSpherical(this._spherical), K.applyQuaternion(this._quatInverse), t.copy(this.target).add(K), this.object.lookAt(this.target), this.enableDamping === !0 ? (this._sphericalDelta.theta *= 1 - this.dampingFactor, this._sphericalDelta.phi *= 1 - this.dampingFactor, this._panOffset.multiplyScalar(1 - this.dampingFactor)) : (this._sphericalDelta.set(0, 0, 0), this._panOffset.set(0, 0, 0)), this.zoomToCursor && this._performCursorZoom) {
+		if (J.setFromSpherical(this._spherical), J.applyQuaternion(this._quatInverse), t.copy(this.target).add(J), this.object.lookAt(this.target), this.enableDamping === !0 ? (this._sphericalDelta.theta *= 1 - this.dampingFactor, this._sphericalDelta.phi *= 1 - this.dampingFactor, this._panOffset.multiplyScalar(1 - this.dampingFactor)) : (this._sphericalDelta.set(0, 0, 0), this._panOffset.set(0, 0, 0)), this.zoomToCursor && this._performCursorZoom) {
 			let e = null;
 			if (this.object.isPerspectiveCamera) {
-				let t = K.length();
+				let t = J.length();
 				e = this._clampDistance(t * this._scale);
 				let n = t - e;
 				this.object.position.addScaledVector(this._dollyDirection, n), this.object.updateMatrixWorld(), i = !!n;
 			} else if (this.object.isOrthographicCamera) {
-				let t = new g(this._mouse.x, this._mouse.y, 0);
+				let t = new y(this._mouse.x, this._mouse.y, 0);
 				t.unproject(this.object);
 				let n = this.object.zoom;
 				this.object.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.object.zoom / this._scale)), this.object.updateProjectionMatrix(), i = n !== this.object.zoom;
-				let r = new g(this._mouse.x, this._mouse.y, 0);
-				r.unproject(this.object), this.object.position.sub(r).add(t), this.object.updateMatrixWorld(), e = K.length();
+				let r = new y(this._mouse.x, this._mouse.y, 0);
+				r.unproject(this.object), this.object.position.sub(r).add(t), this.object.updateMatrixWorld(), e = J.length();
 			} else console.warn("WARNING: OrbitControls.js encountered an unknown camera type - zoom to cursor disabled."), this.zoomToCursor = !1;
-			e !== null && (this.screenSpacePanning ? this.target.set(0, 0, -1).transformDirection(this.object.matrix).multiplyScalar(e).add(this.object.position) : (U.origin.copy(this.object.position), U.direction.set(0, 0, -1).transformDirection(this.object.matrix), Math.abs(this.object.up.dot(U.direction)) < G ? this.object.lookAt(this.target) : (W.setFromNormalAndCoplanarPoint(this.object.up, this.target), U.intersectPlane(W, this.target))));
+			e !== null && (this.screenSpacePanning ? this.target.set(0, 0, -1).transformDirection(this.object.matrix).multiplyScalar(e).add(this.object.position) : (G.origin.copy(this.object.position), G.direction.set(0, 0, -1).transformDirection(this.object.matrix), Math.abs(this.object.up.dot(G.direction)) < q ? this.object.lookAt(this.target) : (K.setFromNormalAndCoplanarPoint(this.object.up, this.target), G.intersectPlane(K, this.target))));
 		} else if (this.object.isOrthographicCamera) {
 			let e = this.object.zoom;
 			this.object.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.object.zoom / this._scale)), e !== this.object.zoom && (this.object.updateProjectionMatrix(), i = !0);
 		}
-		return this._scale = 1, this._performCursorZoom = !1, i || this._lastPosition.distanceToSquared(this.object.position) > Y || 8 * (1 - this._lastQuaternion.dot(this.object.quaternion)) > Y || this._lastTargetPosition.distanceToSquared(this.target) > Y ? (this.dispatchEvent(B), this._lastPosition.copy(this.object.position), this._lastQuaternion.copy(this.object.quaternion), this._lastTargetPosition.copy(this.target), !0) : !1;
+		return this._scale = 1, this._performCursorZoom = !1, i || this._lastPosition.distanceToSquared(this.object.position) > Z || 8 * (1 - this._lastQuaternion.dot(this.object.quaternion)) > Z || this._lastTargetPosition.distanceToSquared(this.target) > Z ? (this.dispatchEvent(H), this._lastPosition.copy(this.object.position), this._lastQuaternion.copy(this.object.quaternion), this._lastTargetPosition.copy(this.target), !0) : !1;
 	}
 	_getAutoRotationAngle(e) {
-		return e === null ? q / 60 / 60 * this.autoRotateSpeed : q / 60 * this.autoRotateSpeed * e;
+		return e === null ? Y / 60 / 60 * this.autoRotateSpeed : Y / 60 * this.autoRotateSpeed * e;
 	}
 	_getZoomScale(e) {
 		let t = Math.abs(e * .01);
@@ -129,17 +129,17 @@ var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new 
 		this._sphericalDelta.phi -= e;
 	}
 	_panLeft(e, t) {
-		K.setFromMatrixColumn(t, 0), K.multiplyScalar(-e), this._panOffset.add(K);
+		J.setFromMatrixColumn(t, 0), J.multiplyScalar(-e), this._panOffset.add(J);
 	}
 	_panUp(e, t) {
-		this.screenSpacePanning === !0 ? K.setFromMatrixColumn(t, 1) : (K.setFromMatrixColumn(t, 0), K.crossVectors(this.object.up, K)), K.multiplyScalar(e), this._panOffset.add(K);
+		this.screenSpacePanning === !0 ? J.setFromMatrixColumn(t, 1) : (J.setFromMatrixColumn(t, 0), J.crossVectors(this.object.up, J)), J.multiplyScalar(e), this._panOffset.add(J);
 	}
 	_pan(e, t) {
 		let n = this.domElement;
 		if (this.object.isPerspectiveCamera) {
 			let r = this.object.position;
-			K.copy(r).sub(this.target);
-			let i = K.length();
+			J.copy(r).sub(this.target);
+			let i = J.length();
 			i *= Math.tan(this.object.fov / 2 * Math.PI / 180), this._panLeft(2 * e * i / n.clientHeight, this.object.matrix), this._panUp(2 * t * i / n.clientHeight, this.object.matrix);
 		} else this.object.isOrthographicCamera ? (this._panLeft(e * (this.object.right - this.object.left) / this.object.zoom / n.clientWidth, this.object.matrix), this._panUp(t * (this.object.top - this.object.bottom) / this.object.zoom / n.clientHeight, this.object.matrix)) : (console.warn("WARNING: OrbitControls.js encountered an unknown camera type - pan disabled."), this.enablePan = !1);
 	}
@@ -170,7 +170,7 @@ var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new 
 	_handleMouseMoveRotate(e) {
 		this._rotateEnd.set(e.clientX, e.clientY), this._rotateDelta.subVectors(this._rotateEnd, this._rotateStart).multiplyScalar(this.rotateSpeed);
 		let t = this.domElement;
-		this._rotateLeft(q * this._rotateDelta.x / t.clientHeight), this._rotateUp(q * this._rotateDelta.y / t.clientHeight), this._rotateStart.copy(this._rotateEnd), this.update();
+		this._rotateLeft(Y * this._rotateDelta.x / t.clientHeight), this._rotateUp(Y * this._rotateDelta.y / t.clientHeight), this._rotateStart.copy(this._rotateEnd), this.update();
 	}
 	_handleMouseMoveDolly(e) {
 		this._dollyEnd.set(e.clientX, e.clientY), this._dollyDelta.subVectors(this._dollyEnd, this._dollyStart), this._dollyDelta.y > 0 ? this._dollyOut(this._getZoomScale(this._dollyDelta.y)) : this._dollyDelta.y < 0 && this._dollyIn(this._getZoomScale(this._dollyDelta.y)), this._dollyStart.copy(this._dollyEnd), this.update();
@@ -185,15 +185,15 @@ var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new 
 		let t = !1;
 		switch (e.code) {
 			case this.keys.UP:
-				e.ctrlKey || e.metaKey || e.shiftKey ? this.enableRotate && this._rotateUp(q * this.keyRotateSpeed / this.domElement.clientHeight) : this.enablePan && this._pan(0, this.keyPanSpeed), t = !0;
+				e.ctrlKey || e.metaKey || e.shiftKey ? this.enableRotate && this._rotateUp(Y * this.keyRotateSpeed / this.domElement.clientHeight) : this.enablePan && this._pan(0, this.keyPanSpeed), t = !0;
 				break;
 			case this.keys.BOTTOM:
-				e.ctrlKey || e.metaKey || e.shiftKey ? this.enableRotate && this._rotateUp(-q * this.keyRotateSpeed / this.domElement.clientHeight) : this.enablePan && this._pan(0, -this.keyPanSpeed), t = !0;
+				e.ctrlKey || e.metaKey || e.shiftKey ? this.enableRotate && this._rotateUp(-Y * this.keyRotateSpeed / this.domElement.clientHeight) : this.enablePan && this._pan(0, -this.keyPanSpeed), t = !0;
 				break;
 			case this.keys.LEFT:
-				e.ctrlKey || e.metaKey || e.shiftKey ? this.enableRotate && this._rotateLeft(q * this.keyRotateSpeed / this.domElement.clientHeight) : this.enablePan && this._pan(this.keyPanSpeed, 0), t = !0;
+				e.ctrlKey || e.metaKey || e.shiftKey ? this.enableRotate && this._rotateLeft(Y * this.keyRotateSpeed / this.domElement.clientHeight) : this.enablePan && this._pan(this.keyPanSpeed, 0), t = !0;
 				break;
-			case this.keys.RIGHT: e.ctrlKey || e.metaKey || e.shiftKey ? this.enableRotate && this._rotateLeft(-q * this.keyRotateSpeed / this.domElement.clientHeight) : this.enablePan && this._pan(-this.keyPanSpeed, 0), t = !0;
+			case this.keys.RIGHT: e.ctrlKey || e.metaKey || e.shiftKey ? this.enableRotate && this._rotateLeft(-Y * this.keyRotateSpeed / this.domElement.clientHeight) : this.enablePan && this._pan(-this.keyPanSpeed, 0), t = !0;
 		}
 		t && (e.preventDefault(), this.update());
 	}
@@ -229,7 +229,7 @@ var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new 
 		}
 		this._rotateDelta.subVectors(this._rotateEnd, this._rotateStart).multiplyScalar(this.rotateSpeed);
 		let t = this.domElement;
-		this._rotateLeft(q * this._rotateDelta.x / t.clientHeight), this._rotateUp(q * this._rotateDelta.y / t.clientHeight), this._rotateStart.copy(this._rotateEnd);
+		this._rotateLeft(Y * this._rotateDelta.x / t.clientHeight), this._rotateUp(Y * this._rotateDelta.y / t.clientHeight), this._rotateStart.copy(this._rotateEnd);
 	}
 	_handleTouchMovePan(e) {
 		if (this._pointers.length === 1) this._panEnd.set(e.pageX, e.pageY);
@@ -267,7 +267,7 @@ var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new 
 	}
 	_trackPointer(e) {
 		let t = this._pointerPositions[e.pointerId];
-		t === void 0 && (t = new z(), this._pointerPositions[e.pointerId] = t), t.set(e.pageX, e.pageY);
+		t === void 0 && (t = new B(), this._pointerPositions[e.pointerId] = t), t.set(e.pageX, e.pageY);
 	}
 	_getSecondPointerPosition(e) {
 		let t = e.pointerId === this._pointers[0] ? this._pointers[1] : this._pointers[0];
@@ -288,16 +288,16 @@ var B = { type: "change" }, V = { type: "start" }, H = { type: "end" }, U = new 
 		return e.ctrlKey && !this._controlActive && (n.deltaY *= 10), n;
 	}
 };
-function Z(e) {
+function re(e) {
 	this.enabled !== !1 && (this._pointers.length === 0 && (this.domElement.setPointerCapture(e.pointerId), this.domElement.ownerDocument.addEventListener("pointermove", this._onPointerMove), this.domElement.ownerDocument.addEventListener("pointerup", this._onPointerUp)), !this._isTrackingPointer(e) && (this._addPointer(e), e.pointerType === "touch" ? this._onTouchStart(e) : this._onMouseDown(e), this._cursorStyle === "grab" && (this.domElement.style.cursor = "grabbing")));
 }
-function ne(e) {
+function ie(e) {
 	this.enabled !== !1 && (e.pointerType === "touch" ? this._onTouchMove(e) : this._onMouseMove(e));
 }
-function re(e) {
+function ae(e) {
 	switch (this._removePointer(e), this._pointers.length) {
 		case 0:
-			this.domElement.releasePointerCapture(e.pointerId), this.domElement.ownerDocument.removeEventListener("pointermove", this._onPointerMove), this.domElement.ownerDocument.removeEventListener("pointerup", this._onPointerUp), this.dispatchEvent(H), this.state = J.NONE, this._cursorStyle === "grab" && (this.domElement.style.cursor = "grab");
+			this.domElement.releasePointerCapture(e.pointerId), this.domElement.ownerDocument.removeEventListener("pointermove", this._onPointerMove), this.domElement.ownerDocument.removeEventListener("pointerup", this._onPointerUp), this.dispatchEvent(W), this.state = X.NONE, this._cursorStyle === "grab" && (this.domElement.style.cursor = "grab");
 			break;
 		case 1:
 			let t = this._pointers[0], n = this._pointerPositions[t];
@@ -308,7 +308,7 @@ function re(e) {
 			});
 	}
 }
-function ie(e) {
+function oe(e) {
 	let t;
 	switch (e.button) {
 		case 0:
@@ -323,116 +323,116 @@ function ie(e) {
 		default: t = -1;
 	}
 	switch (t) {
-		case y.DOLLY:
+		case S.DOLLY:
 			if (this.enableZoom === !1) return;
-			this._handleMouseDownDolly(e), this.state = J.DOLLY;
+			this._handleMouseDownDolly(e), this.state = X.DOLLY;
 			break;
-		case y.ROTATE:
+		case S.ROTATE:
 			if (e.ctrlKey || e.metaKey || e.shiftKey) {
 				if (this.enablePan === !1) return;
-				this._handleMouseDownPan(e), this.state = J.PAN;
+				this._handleMouseDownPan(e), this.state = X.PAN;
 			} else {
 				if (this.enableRotate === !1) return;
-				this._handleMouseDownRotate(e), this.state = J.ROTATE;
+				this._handleMouseDownRotate(e), this.state = X.ROTATE;
 			}
 			break;
-		case y.PAN:
+		case S.PAN:
 			if (e.ctrlKey || e.metaKey || e.shiftKey) {
 				if (this.enableRotate === !1) return;
-				this._handleMouseDownRotate(e), this.state = J.ROTATE;
+				this._handleMouseDownRotate(e), this.state = X.ROTATE;
 			} else {
 				if (this.enablePan === !1) return;
-				this._handleMouseDownPan(e), this.state = J.PAN;
+				this._handleMouseDownPan(e), this.state = X.PAN;
 			}
 			break;
-		default: this.state = J.NONE;
+		default: this.state = X.NONE;
 	}
-	this.state !== J.NONE && this.dispatchEvent(V);
+	this.state !== X.NONE && this.dispatchEvent(U);
 }
-function ae(e) {
+function se(e) {
 	switch (this.state) {
-		case J.ROTATE:
+		case X.ROTATE:
 			if (this.enableRotate === !1) return;
 			this._handleMouseMoveRotate(e);
 			break;
-		case J.DOLLY:
+		case X.DOLLY:
 			if (this.enableZoom === !1) return;
 			this._handleMouseMoveDolly(e);
 			break;
-		case J.PAN:
+		case X.PAN:
 			if (this.enablePan === !1) return;
 			this._handleMouseMovePan(e);
 	}
 }
-function oe(e) {
-	this.enabled !== !1 && this.enableZoom !== !1 && this.state === J.NONE && (e.preventDefault(), this.dispatchEvent(V), this._handleMouseWheel(this._customWheelEvent(e)), this.dispatchEvent(H));
+function ce(e) {
+	this.enabled !== !1 && this.enableZoom !== !1 && this.state === X.NONE && (e.preventDefault(), this.dispatchEvent(U), this._handleMouseWheel(this._customWheelEvent(e)), this.dispatchEvent(W));
 }
-function se(e) {
+function le(e) {
 	this.enabled !== !1 && this._handleKeyDown(e);
 }
-function ce(e) {
+function ue(e) {
 	switch (this._trackPointer(e), this._pointers.length) {
 		case 1:
 			switch (this.touches.ONE) {
-				case S.ROTATE:
+				case T.ROTATE:
 					if (this.enableRotate === !1) return;
-					this._handleTouchStartRotate(e), this.state = J.TOUCH_ROTATE;
+					this._handleTouchStartRotate(e), this.state = X.TOUCH_ROTATE;
 					break;
-				case S.PAN:
+				case T.PAN:
 					if (this.enablePan === !1) return;
-					this._handleTouchStartPan(e), this.state = J.TOUCH_PAN;
+					this._handleTouchStartPan(e), this.state = X.TOUCH_PAN;
 					break;
-				default: this.state = J.NONE;
+				default: this.state = X.NONE;
 			}
 			break;
 		case 2:
 			switch (this.touches.TWO) {
-				case S.DOLLY_PAN:
+				case T.DOLLY_PAN:
 					if (this.enableZoom === !1 && this.enablePan === !1) return;
-					this._handleTouchStartDollyPan(e), this.state = J.TOUCH_DOLLY_PAN;
+					this._handleTouchStartDollyPan(e), this.state = X.TOUCH_DOLLY_PAN;
 					break;
-				case S.DOLLY_ROTATE:
+				case T.DOLLY_ROTATE:
 					if (this.enableZoom === !1 && this.enableRotate === !1) return;
-					this._handleTouchStartDollyRotate(e), this.state = J.TOUCH_DOLLY_ROTATE;
+					this._handleTouchStartDollyRotate(e), this.state = X.TOUCH_DOLLY_ROTATE;
 					break;
-				default: this.state = J.NONE;
+				default: this.state = X.NONE;
 			}
 			break;
-		default: this.state = J.NONE;
+		default: this.state = X.NONE;
 	}
-	this.state !== J.NONE && this.dispatchEvent(V);
+	this.state !== X.NONE && this.dispatchEvent(U);
 }
-function le(e) {
+function de(e) {
 	switch (this._trackPointer(e), this.state) {
-		case J.TOUCH_ROTATE:
+		case X.TOUCH_ROTATE:
 			if (this.enableRotate === !1) return;
 			this._handleTouchMoveRotate(e), this.update();
 			break;
-		case J.TOUCH_PAN:
+		case X.TOUCH_PAN:
 			if (this.enablePan === !1) return;
 			this._handleTouchMovePan(e), this.update();
 			break;
-		case J.TOUCH_DOLLY_PAN:
+		case X.TOUCH_DOLLY_PAN:
 			if (this.enableZoom === !1 && this.enablePan === !1) return;
 			this._handleTouchMoveDollyPan(e), this.update();
 			break;
-		case J.TOUCH_DOLLY_ROTATE:
+		case X.TOUCH_DOLLY_ROTATE:
 			if (this.enableZoom === !1 && this.enableRotate === !1) return;
 			this._handleTouchMoveDollyRotate(e), this.update();
 			break;
-		default: this.state = J.NONE;
+		default: this.state = X.NONE;
 	}
 }
-function Q(e) {
+function fe(e) {
 	this.enabled !== !1 && e.preventDefault();
 }
-function ue(e) {
+function pe(e) {
 	e.key === "Control" && (this._controlActive = !0, this.domElement.getRootNode().addEventListener("keyup", this._interceptControlUp, {
 		passive: !0,
 		capture: !0
 	}));
 }
-function de(e) {
+function me(e) {
 	e.key === "Control" && (this._controlActive = !1, this.domElement.getRootNode().removeEventListener("keyup", this._interceptControlUp, {
 		passive: !0,
 		capture: !0
@@ -440,8 +440,8 @@ function de(e) {
 }
 //#endregion
 //#region src/floorplan-renderer.ts
-function fe(e, t) {
-	let n = new N(e.footprint.map(([e, n]) => new z(e - t.x, n + t.z))), r = new L(n, {
+function he(e, t) {
+	let n = new P(e.footprint.map(([e, n]) => new B(e - t.x, n + t.z))), r = new R(n, {
 		depth: e.high - e.low,
 		bevelEnabled: !1,
 		steps: 1
@@ -449,10 +449,10 @@ function fe(e, t) {
 	return r.rotateX(-Math.PI / 2), r.translate(0, e.low - t.y, 0), r;
 }
 function $(e, t) {
-	let n = new E(new N(e.footprint.map(([e, n]) => new z(e - t.x, n + t.z))));
+	let n = new k(new P(e.footprint.map(([e, n]) => new B(e - t.x, n + t.z))));
 	return n.rotateX(-Math.PI / 2), n;
 }
-function pe() {
+function ge() {
 	let e = /* @__PURE__ */ new Uint8Array(4096);
 	for (let t = 0; t < 32; t++) for (let n = 0; n < 32; n++) {
 		let r = Math.hypot((n + .5) / 32 * 2 - 1, (t + .5) / 32 * 2 - 1), i = (t * 32 + n) * 4;
@@ -463,12 +463,12 @@ function pe() {
 			Math.round(255 * Math.max(0, 1 - r) ** 2)
 		], i);
 	}
-	let t = new x(e, 32, 32);
-	return t.magFilter = t.minFilter = f, t.needsUpdate = !0, t;
+	let t = new w(e, 32, 32);
+	return t.magFilter = t.minFilter = h, t.needsUpdate = !0, t;
 }
-var me = class {
-	constructor(e, t, r, i, a) {
-		this.host = e, this.select = t, this.fail = r, this.hover = i, this.place = a, this.scene = new ee(), this.camera = new w(38, 1, .01, 1e3), this.raycaster = new b(), this.volumes = [], this.boundsKey = "", this.origin = new g(), this.markers = [], this.coverageRooms = [], this.doors = [], this.siteMeshes = [], this.radius = 1, this.options = n(), this.lastTick = 0, this.pauseUntil = 0, this.focusUntil = 0, this.focusDistance = 0, this.focusEvents = /* @__PURE__ */ new Map(), this.alertKey = "", this.lastSelected = "", this.lastFocus = 0, this.reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)"), this.disposed = !1, this.lost = !1, this.pointer = null, this.resize = () => {
+var _e = class {
+	constructor(e, t, n, i, a) {
+		this.host = e, this.select = t, this.fail = n, this.hover = i, this.place = a, this.scene = new ne(), this.camera = new D(38, 1, .01, 1e3), this.raycaster = new C(), this.volumes = [], this.boundsKey = "", this.origin = new y(), this.markers = [], this.coverageRooms = [], this.doors = [], this.siteMeshes = [], this.radius = 1, this.options = r(), this.lastTick = 0, this.pauseUntil = 0, this.focusUntil = 0, this.focusDistance = 0, this.focusEvents = /* @__PURE__ */ new Map(), this.alertKey = "", this.lastSelected = "", this.lastFocus = 0, this.reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)"), this.disposed = !1, this.lost = !1, this.pointer = null, this.resize = () => {
 			if (this.disposed) return;
 			let e = Math.max(1, this.host.clientWidth), t = Math.max(1, this.host.clientHeight);
 			this.camera.aspect = e / t, this.camera.updateProjectionMatrix(), this.renderer.setSize(e, t, !1), this.draw();
@@ -485,7 +485,7 @@ var me = class {
 			for (let e of this.volumes) this.updateColor(e, 1 - Math.exp(-t * 8));
 			if (this.draw(), Date.now() >= this.pauseUntil) {
 				if (this.focusTarget) {
-					let e = Date.now() > this.focusUntil, n = e ? new g() : this.focusTarget, r = this.camera.position.clone().sub(this.controls.target), i = e ? this.fitDistance() : this.focusDistance;
+					let e = Date.now() > this.focusUntil, n = e ? new y() : this.focusTarget, r = this.camera.position.clone().sub(this.controls.target), i = e ? this.fitDistance() : this.focusDistance;
 					r.setLength(r.length() + (i - r.length()) * Math.min(1, t * 2)), this.controls.target.lerp(n, Math.min(1, t * 2)), this.camera.position.copy(this.controls.target).add(r), e && this.controls.target.length() < .01 && Math.abs(r.length() - i) < .01 && (this.focusTarget = void 0);
 				}
 				this.options.auto_rotate && this.controls.rotateLeft(t * 2 * Math.PI / this.options.rotation_period), this.controls.update(), this.draw();
@@ -508,7 +508,7 @@ var me = class {
 			if (!this.pointer && this.hover) {
 				let t = this.renderer.domElement.getBoundingClientRect();
 				if (t.width && t.height) {
-					this.raycaster.setFromCamera(new z((e.clientX - t.left) / t.width * 2 - 1, -(e.clientY - t.top) / t.height * 2 + 1), this.camera);
+					this.raycaster.setFromCamera(new B((e.clientX - t.left) / t.width * 2 - 1, -(e.clientY - t.top) / t.height * 2 + 1), this.camera);
 					let n = this.raycaster.intersectObjects(this.volumes.filter((e) => !e.part.container).map((e) => e.mesh))[0];
 					this.hover(this.volumes.find((e) => e.mesh === n?.object)?.part.id ?? "");
 				}
@@ -521,8 +521,8 @@ var me = class {
 			if (this.pointer = null, !t || t.id !== e.pointerId || t.moved) return;
 			let n = this.renderer.domElement.getBoundingClientRect();
 			if (!n.width || !n.height) return;
-			if (this.raycaster.setFromCamera(new z((e.clientX - n.left) / n.width * 2 - 1, -(e.clientY - n.top) / n.height * 2 + 1), this.camera), this.placementHeight !== void 0 && this.place) {
-				let e = this.raycaster.ray.intersectPlane(new I(new g(0, 1, 0), this.origin.y - this.placementHeight), new g());
+			if (this.raycaster.setFromCamera(new B((e.clientX - n.left) / n.width * 2 - 1, -(e.clientY - n.top) / n.height * 2 + 1), this.camera), this.placementHeight !== void 0 && this.place) {
+				let e = this.raycaster.ray.intersectPlane(new L(new y(0, 1, 0), this.origin.y - this.placementHeight), new y());
 				e && this.place([
 					e.x + this.origin.x,
 					-e.z - this.origin.z,
@@ -534,133 +534,145 @@ var me = class {
 			a && this.select(a.part.id);
 		}, this.onContextLost = (e) => {
 			e.preventDefault(), this.lost = !0, this.fail("The WebGL context was lost. You can still use the group list, or retry the 3D view.");
-		}, this.renderer = new te({
+		}, this.renderer = new V({
 			antialias: !0,
 			alpha: !0
 		}), this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)), this.renderer.setClearColor(0, 0);
 		let o = this.renderer.domElement;
-		o.style.width = "100%", o.style.height = "100%", o.style.display = "block", o.setAttribute("aria-label", "3D house. Drag to rotate; use the camera controls and group list for keyboard access."), o.setAttribute("role", "img"), this.host.append(o), this.controls = new X(this.camera, o), this.controls.enableDamping = !1, this.controls.maxPolarAngle = Math.PI * .49, this.controls.addEventListener("change", this.draw), this.controls.addEventListener("start", this.pauseMotion), document.addEventListener("visibilitychange", this.scheduleMotion), this.reduced?.addEventListener("change", this.scheduleMotion), o.addEventListener("pointerdown", this.onPointerDown), o.addEventListener("pointermove", this.onPointerMove), o.addEventListener("pointerup", this.onPointerUp), o.addEventListener("pointercancel", this.onPointerCancel), o.addEventListener("pointerleave", this.onPointerLeave), o.addEventListener("webglcontextlost", this.onContextLost), this.observer = new ResizeObserver(this.resize), this.observer.observe(e), this.resize();
+		o.style.width = "100%", o.style.height = "100%", o.style.display = "block", o.setAttribute("aria-label", "3D house. Drag to rotate; use the camera controls and group list for keyboard access."), o.setAttribute("role", "img"), this.host.append(o), this.controls = new Q(this.camera, o), this.controls.enableDamping = !1, this.controls.maxPolarAngle = Math.PI * .49, this.controls.addEventListener("change", this.draw), this.controls.addEventListener("start", this.pauseMotion), document.addEventListener("visibilitychange", this.scheduleMotion), this.reduced?.addEventListener("change", this.scheduleMotion), o.addEventListener("pointerdown", this.onPointerDown), o.addEventListener("pointermove", this.onPointerMove), o.addEventListener("pointerup", this.onPointerUp), o.addEventListener("pointercancel", this.onPointerCancel), o.addEventListener("pointerleave", this.onPointerLeave), o.addEventListener("webglcontextlost", this.onContextLost), this.observer = new ResizeObserver(this.resize), this.observer.observe(e), this.resize();
 	}
 	setParts(e, t, n, r) {
 		if (this.clearParts(), this.coverageRooms = e.filter((e) => !e.container), this.focusTarget = void 0, this.focusEvents.clear(), !e.length && !n?.features.length) {
 			this.draw();
 			return;
 		}
-		let i = new M();
-		for (let t of e) for (let [e, n] of t.footprint) i.expandByPoint(new g(e, t.low, -n)), i.expandByPoint(new g(e, t.high, -n));
+		let a = new N();
+		for (let t of e) for (let [e, n] of t.footprint) a.expandByPoint(new y(e, t.low, -n)), a.expandByPoint(new y(e, t.high, -n));
 		t ??= n?.ground_z;
-		for (let e of n?.features ?? []) for (let [t, r] of e.points) i.expandByPoint(new g(t, n.ground_z, -r));
-		t !== void 0 && (i.expandByPoint(new g(i.min.x, t, i.min.z)), i.expandByPoint(new g(i.max.x, t, i.max.z)));
-		let a = e.find((e) => e.id === r), o = a ? new M().setFromPoints(a.footprint.flatMap(([e, t]) => [new g(e, a.low, -t), new g(e, a.high, -t)])) : i, s = JSON.stringify([
-			o.min.toArray(),
-			o.max.toArray(),
+		for (let e of n?.features ?? []) for (let [t, r] of e.points) a.expandByPoint(new y(t, n.ground_z, -r));
+		t !== void 0 && (a.expandByPoint(new y(a.min.x, t, a.min.z)), a.expandByPoint(new y(a.max.x, t, a.max.z)));
+		let o = e.find((e) => e.id === r), s = o ? new N().setFromPoints(o.footprint.flatMap(([e, t]) => [new y(e, o.low, -t), new y(e, o.high, -t)])) : a, c = JSON.stringify([
+			s.min.toArray(),
+			s.max.toArray(),
 			r
-		]), c = this.boundsKey !== s;
-		this.boundsKey = s;
-		let d = o.getCenter(new g());
-		this.origin.copy(d), this.radius = Math.max(o.getSize(new g()).length() / 2, .1);
+		]), l = this.boundsKey !== c;
+		this.boundsKey = c;
+		let u = s.getCenter(new y());
+		this.origin.copy(u), this.radius = Math.max(s.getSize(new y()).length() / 2, .1);
 		for (let t of e) {
-			let e = fe(t, d), n = new u(e, new p({
+			let e = he(t, u), n = new p(e, new g({
 				color: 6342885,
 				transparent: !0,
 				opacity: .025,
 				side: 2,
 				depthWrite: !1
-			})), r = new l(new R(e), new m({
+			})), r = new f(new z(e), new _({
 				color: 9545396,
 				transparent: !0,
 				opacity: .4,
 				depthWrite: !1
 			}));
 			t.container && (n.material.opacity = 0), this.scene.add(n, r);
-			let i = t.low - d.y, a = {
+			let a = t.low - u.y, o = {
 				part: t,
 				mesh: n,
 				edges: r,
-				targetColor: new O(),
+				targetColor: new j(),
 				targetOpacity: .015
 			};
 			if (n.material.opacity = 0, !t.container) {
-				a.liquid = new u(e.clone(), new p({
+				o.liquid = new p(e.clone(), new g({
 					transparent: !0,
 					opacity: .015,
 					side: 2,
 					depthWrite: !1
-				})), a.ceiling = new u($(t, d), new p({
+				})), o.ceiling = new p($(t, u), new g({
 					transparent: !0,
 					opacity: 0,
 					side: 2,
 					depthWrite: !1
-				})), a.ceiling.position.y = t.high - d.y;
-				let n = a.ceiling.geometry;
+				})), o.ceiling.position.y = t.high - u.y;
+				let n = o.ceiling.geometry;
 				n.computeBoundingBox();
-				let r = n.boundingBox, o = n.getAttribute("position"), s = n.getAttribute("uv");
-				for (let e = 0; e < s.count; e++) s.setXY(e, (o.getX(e) - r.min.x) / (r.max.x - r.min.x), (o.getZ(e) - r.min.z) / (r.max.z - r.min.z));
-				a.ceiling.material.map = pe();
-				let c = e.clone(), l = c.getAttribute("position"), f = [];
+				let r = n.boundingBox, i = n.getAttribute("position"), s = n.getAttribute("uv");
+				for (let e = 0; e < s.count; e++) s.setXY(e, (i.getX(e) - r.min.x) / (r.max.x - r.min.x), (i.getZ(e) - r.min.z) / (r.max.z - r.min.z));
+				o.ceiling.material.map = ge();
+				let c = e.clone(), l = c.getAttribute("position"), d = [];
 				for (let e = 0; e < l.count; e++) {
-					let n = Math.max(0, Math.min(1, (l.getY(e) - i) / (t.high - t.low)));
-					f.push(1, 1, 1, n * n);
+					let n = Math.max(0, Math.min(1, (l.getY(e) - a) / (t.high - t.low)));
+					d.push(1, 1, 1, n * n);
 				}
-				c.setAttribute("color", new _(f, 4)), a.wash = new u(c, new p({
+				c.setAttribute("color", new b(d, 4)), o.wash = new p(c, new g({
 					transparent: !0,
 					opacity: 0,
 					side: 2,
 					depthWrite: !1,
 					vertexColors: !0
-				})), a.liquid.name = "activity-volume", a.ceiling.name = "light-ceiling", a.wash.name = "light-wash", a.liquid.visible = !1, this.scene.add(a.liquid, a.ceiling, a.wash);
+				})), o.liquid.name = "activity-volume", o.ceiling.name = "light-ceiling", o.wash.name = "light-wash", o.liquid.visible = !1, this.scene.add(o.liquid, o.ceiling, o.wash);
 			}
-			this.volumes.push(a);
+			this.volumes.push(o);
 			for (let e of t.fixtures ?? []) {
-				let n = new u(e.kind === "window" ? new T(e.width ?? 1, e.height ?? 1.2, .06) : new j(Math.min(.15, Math.max(this.radius * .008, .06)), 12, 8), new p({
+				let n = new p(e.kind === "window" ? new O(e.width ?? 1, e.height ?? 1.2, .06) : new te(Math.min(.15, Math.max(this.radius * .008, .06)), 12, 8), new g({
 					color: 8572379,
 					transparent: !0,
 					opacity: e.kind === "window" ? .35 : 1
 				}));
-				e.kind === "window" && (n.rotation.y = e.yaw * Math.PI / 180), n.position.set(e.position[0] - d.x, e.position[2] - d.y, -e.position[1] - d.z), n.name = e.kind === "window" ? "room-window" : "room-fixture", this.scene.add(n);
-				let r, i;
-				e.range > 0 && (e.kind === "motion" || e.kind === "occupancy") && (r = new u(new A(), new p({
+				e.kind === "window" && (n.rotation.y = e.yaw * Math.PI / 180), n.position.set(e.position[0] - u.x, e.position[2] - u.y, -e.position[1] - u.z), n.name = e.kind === "window" ? "room-window" : "room-fixture", this.scene.add(n);
+				let r, a;
+				e.range > 0 && (e.kind === "motion" || e.kind === "occupancy") && (r = new p(new M(), new g({
 					color: 5486286,
 					transparent: !0,
 					opacity: 0,
 					side: 2,
 					depthWrite: !1
-				})), i = new l(new A(), new h({
+				})), a = new f(new M(), new v({
 					color: 5486286,
 					dashSize: .06,
 					gapSize: .08,
 					transparent: !0,
 					opacity: .65,
 					depthWrite: !1
-				})), r.name = "sensor-coverage", i.name = "sensor-boundary", this.scene.add(r, i)), e.kind === "window" && (i = new l(new R(n.geometry), new h({
+				})), r.name = "sensor-coverage", a.name = "sensor-boundary", this.scene.add(r, a)), e.kind === "window" && (a = new f(new z(n.geometry), new v({
 					color: 5486286,
 					dashSize: 1,
 					gapSize: 0,
 					transparent: !0,
 					opacity: .65,
 					depthWrite: !1
-				})), i.computeLineDistances(), i.position.copy(n.position), i.quaternion.copy(n.quaternion), i.name = "window-boundary", this.scene.add(i)), this.markers.push({
+				})), a.computeLineDistances(), a.position.copy(n.position), a.quaternion.copy(n.quaternion), a.name = "window-boundary", this.scene.add(a)), this.markers.push({
 					room: t.id,
 					fixture: e,
 					marker: n,
 					coverage: r,
-					boundary: i
+					boundary: a,
+					invalid: e.kind === "window" && !i({
+						points: t.footprint,
+						bounds: [[
+							0,
+							0,
+							t.low
+						], [
+							0,
+							0,
+							t.high
+						]]
+					}, e)
 				});
 			}
 		}
 		for (let e of this.coverageRooms) for (let t of e.openings ?? []) {
-			let n = new u(new A(), new p({
+			let n = new p(new M(), new g({
 				color: 7917245,
 				transparent: !0,
 				opacity: .22,
 				side: 2,
 				depthWrite: !1
-			})), r = new l(new A(), new m({
+			})), r = new f(new M(), new _({
 				color: 8907464,
 				transparent: !0,
 				opacity: .8,
 				depthWrite: !1
-			})), i = new l(new A(), new m({
+			})), i = new f(new M(), new _({
 				color: 8907464,
 				transparent: !0,
 				opacity: .35,
@@ -674,7 +686,7 @@ var me = class {
 				arc: i
 			}), this.scene.add(n, r, i);
 		}
-		let f = {
+		let d = {
 			property: 4345924,
 			lawn: 5270336,
 			driveway: 6910329,
@@ -682,71 +694,71 @@ var me = class {
 			pool: 3570843
 		};
 		[...n?.features ?? []].sort((e, t) => Number(t.kind === "property") - Number(e.kind === "property")).forEach((e, t) => {
-			let r = $({ footprint: e.points }, d), i = new u(r, new p({
-				color: f[e.kind],
+			let r = $({ footprint: e.points }, u), i = new p(r, new g({
+				color: d[e.kind],
 				side: 2,
 				transparent: !0,
 				opacity: .5,
 				depthWrite: !1
 			}));
-			i.position.y = n.ground_z - d.y + t * .002, i.name = "site-feature", this.scene.add(i), this.siteMeshes.push(i);
-		}), this.grid = new D(this.radius * 2.8, 16, 6914446, 6914446), this.grid.position.y = (t ?? i.min.y - this.radius * .015) - d.y, t !== void 0 && (this.ground = new u(new k(this.radius * 2.8, this.radius * 2.8), new p({
+			i.position.y = n.ground_z - u.y + t * .002, i.name = "site-feature", this.scene.add(i), this.siteMeshes.push(i);
+		}), this.grid = new A(this.radius * 2.8, 16, 6914446, 6914446), this.grid.position.y = (t ?? a.min.y - this.radius * .015) - u.y, t !== void 0 && (this.ground = new p(new ee(this.radius * 2.8, this.radius * 2.8), new g({
 			color: 7700874,
 			transparent: !0,
 			opacity: 0,
 			side: 2,
 			depthWrite: !1
-		})), this.ground.rotation.x = -Math.PI / 2, this.ground.position.y = this.grid.position.y, this.scene.add(this.ground)), this.grid.material.transparent = !0, this.grid.material.opacity = .14, this.scene.add(this.grid), this.camera.near = Math.max(this.radius / 1e3, .001), this.camera.far = this.radius * 100, this.controls.minDistance = this.radius * .1, this.controls.maxDistance = this.radius * 30, c ? (this.cameraAction("reset"), this.pauseUntil = 0) : this.draw();
+		})), this.ground.rotation.x = -Math.PI / 2, this.ground.position.y = this.grid.position.y, this.scene.add(this.ground)), this.grid.material.transparent = !0, this.grid.material.opacity = .14, this.scene.add(this.grid), this.camera.near = Math.max(this.radius / 1e3, .001), this.camera.far = this.radius * 100, this.controls.minDistance = this.radius * .1, this.controls.maxDistance = this.radius * 30, l ? (this.cameraAction("reset"), this.pauseUntil = 0) : this.draw();
 	}
-	setActivity(t, l, u, d = n(), f = {}, p, m = {}) {
-		u !== this.lastSelected && (this.pauseMotion(), this.lastSelected = u), this.options = d, d.focus_activity || (this.focusTarget = void 0);
-		for (let n of this.volumes) {
-			let { part: r, edges: i, liquid: a, ceiling: s, wash: c } = n, m = e(t, r.id, l), h = r.id === u || r.ancestors.includes(u), g = p && (!p.group || r.id === p.group || r.ancestors.includes(p.group));
-			if (i.material.color.set(g && p.color ? p.color : h ? "#d7e8f1" : "#8596a1"), i.material.opacity = h || g ? .9 : r.container ? .07 : .24, !a || !s || !c) continue;
-			let _ = a.visible, v = m.status === "stale" ? 0 : m.ratio;
-			if (a.visible = v !== null, v !== null) {
+	setActivity(e, n, i, u = r(), f = {}, p, m = {}) {
+		i !== this.lastSelected && (this.pauseMotion(), this.lastSelected = i), this.options = u, u.focus_activity || (this.focusTarget = void 0);
+		for (let r of this.volumes) {
+			let { part: a, edges: o, liquid: c, ceiling: l, wash: d } = r, m = t(e, a.id, n), h = a.id === i || a.ancestors.includes(i), g = p && (!p.group || a.id === p.group || a.ancestors.includes(p.group));
+			if (o.material.color.set(g && p.color ? p.color : h ? "#d7e8f1" : "#8596a1"), o.material.opacity = h || g ? .9 : a.container ? .07 : .24, !c || !l || !d) continue;
+			let _ = c.visible, v = m.status === "stale" ? 0 : m.ratio;
+			if (c.visible = v !== null, v !== null) {
 				let e = m.status === "stale" ? 0 : m.value;
-				n.targetColor.set(o(e, d)), n.targetOpacity = .015 + .225 * Math.min(1, Math.max(0, e / 5)), (!_ || this.reduced?.matches) && (a.material.color.copy(n.targetColor), a.material.opacity = n.targetOpacity), this.updateColor(n, 0);
+				r.targetColor.set(s(e, u)), r.targetOpacity = .015 + .225 * Math.min(1, Math.max(0, e / 5)), (!_ || this.reduced?.matches) && (c.material.color.copy(r.targetColor), c.material.opacity = r.targetOpacity), this.updateColor(r, 0);
 			}
-			let y = f[r.id], b = d.light_fill ? (y?.brightness ?? 0) * d.fill_brightness : 0;
-			s.material.color.setRGB(...y?.rgb ?? [
+			let y = f[a.id], b = u.light_fill ? (y?.brightness ?? 0) * u.fill_brightness : 0;
+			l.material.color.setRGB(...y?.rgb ?? [
 				0,
 				0,
 				0
-			]), c.material.color.copy(s.material.color), s.material.opacity = Math.min(1, b * 3), c.material.opacity = b * .25, s.visible = c.visible = b > 0;
+			]), d.material.color.copy(l.material.color), l.material.opacity = Math.min(1, b * 3), d.material.opacity = b * .25, l.visible = d.visible = b > 0;
 		}
-		let h = this.lastFocus, v = p ? `${p.entity}:${p.state}:${p.group ?? ""}` : "", y = v && v !== this.alertKey ? this.volumes.find((e) => e.part.id === p?.group) : void 0, b = [];
-		for (let n of this.volumes) {
-			let r = t?.groups[n.part.id]?.last_activity;
-			if (r != null && Number.isFinite(r)) {
-				let i = this.focusEvents.get(n.part.id);
-				this.focusEvents.set(n.part.id, r), !n.part.container && i !== void 0 && r > i && l - r < 10 && e(t, n.part.id, l).status === "live" && b.push({
-					volume: n,
-					event: r
+		let h = this.lastFocus, g = p ? `${p.entity}:${p.state}:${p.group ?? ""}` : "", _ = g && g !== this.alertKey ? this.volumes.find((e) => e.part.id === p?.group) : void 0, v = [];
+		for (let r of this.volumes) {
+			let i = e?.groups[r.part.id]?.last_activity;
+			if (i != null && Number.isFinite(i)) {
+				let a = this.focusEvents.get(r.part.id);
+				this.focusEvents.set(r.part.id, i), !r.part.container && a !== void 0 && i > a && n - i < 10 && t(e, r.part.id, n).status === "live" && v.push({
+					volume: r,
+					event: i
 				});
 			}
 		}
-		p || (y ??= b.sort((e, t) => t.event - e.event)[0]?.volume);
+		p || (_ ??= v.sort((e, t) => t.event - e.event)[0]?.volume);
 		let x;
-		if (v && v !== this.alertKey) {
+		if (g && g !== this.alertKey) {
 			let e = this.volumes.filter((e) => !p?.group || e.part.id === p.group || e.part.ancestors.includes(p.group));
 			if (e.length) {
-				x = new M();
+				x = new N();
 				for (let { mesh: t } of e) t.geometry.computeBoundingBox(), x.union(t.geometry.boundingBox);
 			}
 		}
-		if (this.alertKey = v, (y || x) && d.focus_activity && !this.reduced?.matches && Date.now() >= this.pauseUntil && (v || l - this.lastFocus >= 12)) {
-			y?.mesh.geometry.computeBoundingBox();
-			let e = x ?? y.mesh.geometry.boundingBox;
-			this.focusTarget = e.getCenter(new g()), this.focusDistance = Math.min(this.fitDistance(), Math.max(e.getSize(new g()).length() * 2, this.radius)), this.focusUntil = Date.now() + 8e3, this.lastFocus = l;
+		if (this.alertKey = g, (_ || x) && u.focus_activity && !this.reduced?.matches && Date.now() >= this.pauseUntil && (g || n - this.lastFocus >= 12)) {
+			_?.mesh.geometry.computeBoundingBox();
+			let e = x ?? _.mesh.geometry.boundingBox;
+			this.focusTarget = e.getCenter(new y()), this.focusDistance = Math.min(this.fitDistance(), Math.max(e.getSize(new y()).length() * 2, this.radius)), this.focusUntil = Date.now() + 8e3, this.lastFocus = n;
 		}
-		let S = JSON.stringify(this.coverageRooms.flatMap((e) => (e.openings ?? []).map((e) => r(e, m))));
+		let S = JSON.stringify(this.coverageRooms.flatMap((e) => (e.openings ?? []).map((e) => l(e, m))));
 		for (let e of this.doors) this.updateDoor(e, m);
 		let C;
 		for (let e of this.markers) {
-			let t = m[e.fixture.entity], n = t?.state === "on" || t?.state === "off", r = t?.state === "on", o = a(e.fixture.kind, t?.state);
-			if (e.marker.material.color.set(o.color), e.fixture.kind === "light" && r) {
-				let t = i([e.fixture.entity], m);
+			let t = m[e.fixture.entity], n = t?.state === "on" || t?.state === "off", r = t?.state === "on", i = o(e.fixture.kind, t?.state);
+			if (e.invalid && (i.color = "#ff3535"), e.marker.material.color.set(i.color), e.fixture.kind === "light" && r) {
+				let t = a([e.fixture.entity], m);
 				e.marker.material.color.setRGB(...t.rgb);
 			}
 			if (e.coverage && e.boundary && e.coverageKey !== S) {
@@ -755,60 +767,62 @@ var me = class {
 					e[2] - this.origin.y,
 					-e[1] - this.origin.z
 				];
-				for (let i of c(e.fixture, this.coverageRooms, m)) for (let e = 0; e < i.rim.length; e++) {
+				for (let i of d(e.fixture, this.coverageRooms, m)) for (let e = 0; e < i.rim.length; e++) {
 					let a = i.rim[e], o = i.rim[(e + 1) % i.rim.length];
 					t.push(...r(i.origin), ...r(a), ...r(o), ...r(i.center), ...r(o), ...r(a)), n.push(...r(a), ...r(o)), e % 8 == 0 && n.push(...r(i.origin), ...r(a));
 				}
-				e.coverage.geometry.dispose(), e.boundary.geometry.dispose(), e.coverage.geometry = new A().setAttribute("position", new _(t, 3)), e.boundary.geometry = new A().setAttribute("position", new _(n, 3)), e.boundary.computeLineDistances(), e.coverageKey = S;
+				e.coverage.geometry.dispose(), e.boundary.geometry.dispose(), e.coverage.geometry = new M().setAttribute("position", new b(t, 3)), e.boundary.geometry = new M().setAttribute("position", new b(n, 3)), e.boundary.computeLineDistances(), e.coverageKey = S;
 			}
-			e.coverage && (e.coverage.material.color.copy(e.marker.material.color), e.coverage.material.opacity = o.opacity), e.boundary && (e.boundary.material.color.set(o.color), e.boundary.material.opacity = n ? .65 : .25), (e.fixture.kind === "motion" || e.fixture.kind === "occupancy") && e.previous === "off" && r && (C = e), e.previous = t?.state;
+			e.coverage && (e.coverage.material.color.copy(e.marker.material.color), e.coverage.material.opacity = i.opacity), e.boundary && (e.boundary.material.color.set(i.color), e.boundary.material.opacity = n ? .65 : .25), (e.fixture.kind === "motion" || e.fixture.kind === "occupancy") && e.previous === "off" && r && (C = e), e.previous = t?.state;
 		}
-		if (C && d.focus_activity && !p && !this.reduced?.matches && Date.now() >= this.pauseUntil && l - h >= 12) {
-			let e = new g(...s(C.fixture));
-			this.focusTarget = C.marker.position.clone().addScaledVector(e, Math.min(C.fixture.range, 3) * .5), this.focusDistance = Math.max(this.radius * .6, 2), this.focusUntil = Date.now() + 8e3, this.lastFocus = l;
+		if (C && u.focus_activity && !p && !this.reduced?.matches && Date.now() >= this.pauseUntil && n - h >= 12) {
+			let e = new y(...c(C.fixture));
+			this.focusTarget = C.marker.position.clone().addScaledVector(e, Math.min(C.fixture.range, 3) * .5), this.focusDistance = Math.max(this.radius * .6, 2), this.focusUntil = Date.now() + 8e3, this.lastFocus = n;
 		}
 		this.scheduleMotion(), this.draw();
 	}
-	updateDoor(e, n) {
-		let i = r(e.opening, n);
-		if (e.key === i) return;
-		e.key = i;
-		let a = e.part, o = e.opening, s = {
-			points: a.footprint,
+	updateDoor(t, r) {
+		let i = l(t.opening, r), a = u(t.opening, r), o = `${i}:${a}`;
+		if (t.key === o) return;
+		t.key = o;
+		let s = t.part, c = t.opening, d = {
+			points: s.footprint,
 			bounds: [[
-				Math.min(...a.footprint.map((e) => e[0])),
-				Math.min(...a.footprint.map((e) => e[1])),
-				a.low
+				Math.min(...s.footprint.map((e) => e[0])),
+				Math.min(...s.footprint.map((e) => e[1])),
+				s.low
 			], [
-				Math.max(...a.footprint.map((e) => e[0])),
-				Math.max(...a.footprint.map((e) => e[1])),
-				a.high
+				Math.max(...s.footprint.map((e) => e[0])),
+				Math.max(...s.footprint.map((e) => e[1])),
+				s.high
 			]]
-		}, c = t(s, o), l = i ? c.open : c.closed, u = (e, t) => [
+		}, f = !e(d, c) || a === "on" ? 16725301 : a === "unknown" ? 8030096 : 5486286;
+		t.frame.material.color.setHex(f), t.leaf.material.color.setHex(f), t.arc.material.color.setHex(f);
+		let p = n(d, c), m = i ? p.open : p.closed, h = (e, t) => [
 			e[0] - this.origin.x,
 			t - this.origin.y,
 			-e[1] - this.origin.z
-		], d = o.position[2], f = d + o.height, p = u(c.hinge, d), m = u(c.closed, d), h = u(c.closed, f), g = u(c.hinge, f), v = u(l, d), y = u(l, f);
-		e.frame.geometry.dispose(), e.leaf.geometry.dispose(), e.arc.geometry.dispose(), e.frame.geometry = new A().setAttribute("position", new _([
-			...p,
-			...m,
-			...m,
-			...h,
-			...h,
-			...g,
-			...g,
-			...p
-		], 3)), e.leaf.geometry = new A().setAttribute("position", new _([
-			...p,
+		], g = c.position[2], _ = g + c.height, v = h(p.hinge, g), y = h(p.closed, g), x = h(p.closed, _), S = h(p.hinge, _), C = h(m, g), w = h(m, _);
+		t.frame.geometry.dispose(), t.leaf.geometry.dispose(), t.arc.geometry.dispose(), t.frame.geometry = new M().setAttribute("position", new b([
 			...v,
 			...y,
-			...p,
 			...y,
-			...g
-		], 3)), e.leaf.visible = o.kind !== "open_wall";
-		let b = Math.atan2(c.closed[1] - c.hinge[1], c.closed[0] - c.hinge[0]), x = Math.atan2(c.open[1] - c.hinge[1], c.open[0] - c.hinge[0]), S = Math.atan2(Math.sin(x - b), Math.cos(x - b)), C = [];
-		for (let e = 0; e < 16; e++) for (let t of [e / 16, (e + 1) / 16]) C.push(...u([c.hinge[0] + o.width * Math.cos(b + S * t), c.hinge[1] + o.width * Math.sin(b + S * t)], d + .01));
-		e.arc.geometry = new A().setAttribute("position", new _(C, 3)), e.arc.visible = o.kind !== "open_wall";
+			...x,
+			...x,
+			...S,
+			...S,
+			...v
+		], 3)), t.leaf.geometry = new M().setAttribute("position", new b([
+			...v,
+			...C,
+			...w,
+			...v,
+			...w,
+			...S
+		], 3)), t.leaf.visible = c.kind !== "open_wall";
+		let T = Math.atan2(p.closed[1] - p.hinge[1], p.closed[0] - p.hinge[0]), E = Math.atan2(p.open[1] - p.hinge[1], p.open[0] - p.hinge[0]), D = Math.atan2(Math.sin(E - T), Math.cos(E - T)), O = [];
+		for (let e = 0; e < 16; e++) for (let t of [e / 16, (e + 1) / 16]) O.push(...h([p.hinge[0] + c.width * Math.cos(T + D * t), p.hinge[1] + c.width * Math.sin(T + D * t)], g + .01));
+		t.arc.geometry = new M().setAttribute("position", new b(O, 3)), t.arc.visible = c.kind !== "open_wall" && c.kind !== "window";
 	}
 	setPlacement(e) {
 		this.placementHeight = e;
@@ -833,7 +847,7 @@ var me = class {
 		if (this.pauseMotion(), e === "reset" || e === "top") {
 			let t = this.camera.fov * Math.PI / 360, n = Math.min(t, Math.atan(Math.tan(t) * this.camera.aspect)), r = this.radius / Math.sin(n) * 1.2;
 			this.controls.target.set(0, 0, 0);
-			let i = e === "top" ? new g(0, 1, 1e-4) : new g(1, .8, 1);
+			let i = e === "top" ? new y(0, 1, 1e-4) : new y(1, .8, 1);
 			this.camera.position.copy(i.normalize().multiplyScalar(r)), this.camera.updateProjectionMatrix();
 		} else e === "left" || e === "right" ? this.controls.rotateLeft(e === "left" ? .2 : -.2) : e === "up" || e === "down" ? this.controls.rotateUp(e === "up" ? .15 : -.15) : e === "in" ? this.controls.dollyIn(1 / 1.2) : this.controls.dollyOut(1 / 1.2);
 		this.controls.update(), this.draw();
@@ -872,4 +886,4 @@ var me = class {
 	}
 };
 //#endregion
-export { me as FloorplanRenderer };
+export { _e as FloorplanRenderer };

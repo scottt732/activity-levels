@@ -1076,7 +1076,8 @@
                 "enum": [
                   "interior_door",
                   "exterior_door",
-                  "open_wall"
+                  "open_wall",
+                  "window"
                 ]
               },
               "position": {
@@ -1126,6 +1127,15 @@
               "entity": {
                 "type": "string",
                 "pattern": "^binary_sensor\\.[a-z0-9_]+$"
+              },
+              "entities": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^binary_sensor\\.[a-z0-9_]+$"
+                },
+                "uniqueItems": true,
+                "maxItems": 128
               }
             },
             "required": [

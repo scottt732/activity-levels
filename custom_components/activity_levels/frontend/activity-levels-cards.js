@@ -1,4 +1,4 @@
-import { At as e, Ft as t, Lt as n, Mt as r, Nt as i, i as a, jt as o, kt as s, pt as c, t as l, v as u, y as d } from "./shared-BEZOj5n-.js";
+import { Ft as e, It as t, Lt as n, Rt as r, T as i, Vt as a, Wt as o, i as s, t as c, w as l, yt as u, zt as d } from "./shared-BYgiAqxy.js";
 //#region src/presence-card-model.ts
 var f = (e, t) => e === "watch" ? t ? "Wearing" : "Not wearing" : t ? "Carrying" : "Not carrying", p = (e) => ({
 	watch: "mdi:watch",
@@ -67,7 +67,7 @@ var y = class extends r {
 		super(...e), this.adding = !1, this.destination = "", this.pending = !1, this.correctionError = "", this.notice = "", this.failedImages = /* @__PURE__ */ new Set();
 	}
 	static {
-		this.styles = [u, n`
+		this.styles = [l, o`
     :host { display: block; color: var(--primary-text-color); }
     ha-card { display: block; padding: 12px 16px; }
     h2 { font-size: 1.1em; margin-bottom: 12px; }
@@ -156,7 +156,7 @@ var y = class extends r {
 		if (!(!this.hass || !this.selected || this.pending || !this.canCorrect)) {
 			this.pending = !0, this.correctionError = "";
 			try {
-				await c(this.hass, this.selected.person, {
+				await u(this.hass, this.selected.person, {
 					...e,
 					...this.selected.device ? { device: this.selected.device } : {}
 				}), this.notice = t, this.closeDialog(), await this.source?.refresh();
@@ -179,51 +179,51 @@ var y = class extends r {
 		this.correct(this.locationRequest(e, t, n), `${this.selected?.person}: ${n ? "not in" : t === "probable" ? "probably in" : "confirmed in"} ${r}.`);
 	}
 	renderDialog() {
-		let e = this.selected, n = e ? this.data?.people[e.person] : void 0, r = e?.device ? n?.devices[e.device] : void 0, a = new Set(this.data && this.group ? m(this.data, this.group, this.config?.min_probability ?? .1).map((e) => e.name) : []);
-		return t`<dialog @close=${() => {
+		let e = this.selected, t = e ? this.data?.people[e.person] : void 0, n = e?.device ? t?.devices[e.device] : void 0, r = new Set(this.data && this.group ? m(this.data, this.group, this.config?.min_probability ?? .1).map((e) => e.name) : []);
+		return a`<dialog @close=${() => {
 			this.selected = void 0, this.adding = !1;
 		}} @cancel=${(e) => {
 			this.pending && e.preventDefault();
-		}} aria-label=${r?.name ?? e?.person ?? "Add person"}>
-      <header><h2>${r?.name ?? e?.person ?? "Who is here?"}</h2><button ?disabled=${this.pending} aria-label="Close" @click=${() => this.closeDialog()}>×</button></header>
-      ${this.adding ? t`<div class="choices">${Object.keys(this.data?.people ?? {}).filter((e) => !a.has(e)).map((e) => t`<button @click=${() => {
+		}} aria-label=${n?.name ?? e?.person ?? "Add person"}>
+      <header><h2>${n?.name ?? e?.person ?? "Who is here?"}</h2><button ?disabled=${this.pending} aria-label="Close" @click=${() => this.closeDialog()}>×</button></header>
+      ${this.adding ? a`<div class="choices">${Object.keys(this.data?.people ?? {}).filter((e) => !r.has(e)).map((e) => a`<button @click=${() => {
 			this.selected = { person: e }, this.adding = !1;
-		}}>${e}</button>`)}</div>` : r ? t`
-        <p class="hint">${e?.person} · ${this.data?.groups.find((e) => e.id === r.room)?.name ?? r.room ?? "Location unknown"}</p>
-        <div class="choices">${[!1, !0].map((e) => t`<button ?disabled=${this.pending || !this.canCorrect} @click=${() => void this.correct({ carried: e }, `${r.name}: ${f(r.kind, e).toLowerCase()}.`)}>${f(r.kind, e)}</button>`)}</div>
-      ` : n ? t`<p class="hint">${this.group?.name} · ${Math.round((this.data && this.group ? m(this.data, this.group, 0).find((t) => t.name === e?.person)?.probability ?? 0 : 0) * 100)}%</p><div class="choices">
+		}}>${e}</button>`)}</div>` : n ? a`
+        <p class="hint">${e?.person} · ${this.data?.groups.find((e) => e.id === n.room)?.name ?? n.room ?? "Location unknown"}</p>
+        <div class="choices">${[!1, !0].map((e) => a`<button ?disabled=${this.pending || !this.canCorrect} @click=${() => void this.correct({ carried: e }, `${n.name}: ${f(n.kind, e).toLowerCase()}.`)}>${f(n.kind, e)}</button>`)}</div>
+      ` : t ? a`<p class="hint">${this.group?.name} · ${Math.round((this.data && this.group ? m(this.data, this.group, 0).find((t) => t.name === e?.person)?.probability ?? 0 : 0) * 100)}%</p><div class="choices">
         <button class="primary" ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.config.group)}>Definitely here</button>
         <button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.config.group, "probable")}>Probably here</button>
         <button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.config.group, "definite", !0)}>Not here</button>
-      </div>` : i}
-      ${e ? t`<label>${r ? "Device location" : "Somewhere else"}<select .value=${this.destination} ?disabled=${this.pending || !this.canCorrect} @change=${(e) => {
+      </div>` : d}
+      ${e ? a`<label>${n ? "Device location" : "Somewhere else"}<select .value=${this.destination} ?disabled=${this.pending || !this.canCorrect} @change=${(e) => {
 			this.destination = e.target.value;
 		}}>
-        ${(this.data?.groups ?? []).filter((e) => !r || e.kind !== "floor").map((e) => t`<option value=${e.id}>${e.kind === "floor" ? "Floor: " : ""}${e.name}</option>`)}
+        ${(this.data?.groups ?? []).filter((e) => !n || e.kind !== "floor").map((e) => a`<option value=${e.id}>${e.kind === "floor" ? "Floor: " : ""}${e.name}</option>`)}
         <option value="away">Away</option>
-      </select></label><div class="actions"><button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.destination)}>Definitely</button>${r ? i : t`<button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.destination, "probable")}>Probably</button>`}
-      <button ?disabled=${this.pending || !this.canCorrect} @click=${() => void this.correct({ clear: !0 }, "Using automatic estimate.")}>Use automatic estimate</button></div>` : i}
-      ${this.canCorrect ? i : t`<p class="hint">An administrator can correct estimates.</p>`}
-      ${this.correctionError ? t`<p class="error" role="alert">${this.correctionError}</p>` : i}
+      </select></label><div class="actions"><button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.destination)}>Definitely</button>${n ? d : a`<button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.destination, "probable")}>Probably</button>`}
+      <button ?disabled=${this.pending || !this.canCorrect} @click=${() => void this.correct({ clear: !0 }, "Using automatic estimate.")}>Use automatic estimate</button></div>` : d}
+      ${this.canCorrect ? d : a`<p class="hint">An administrator can correct estimates.</p>`}
+      ${this.correctionError ? a`<p class="error" role="alert">${this.correctionError}</p>` : d}
     </dialog>`;
 	}
 	render() {
-		let e = this.group, n = this.data && e ? m(this.data, e, this.config?.min_probability ?? .1) : [];
-		return t`<ha-card>${this.config?.title ? t`<h2>${this.config.title}</h2>` : i}
-      ${this.data ? this.data.enabled ? e ? t`<div class="people">${n.map(({ name: n, person: r, probability: i }) => {
-			let a = r.person ? this.hass?.states[r.person]?.attributes.entity_picture : void 0;
-			return t`<div class="person"><button class="avatar ${i >= .6 ? "" : "possible"}" aria-label=${`${n}, ${Math.round(i * 100)}% in ${e.name}`} title=${`${n} · ${Math.round(i * 100)}%`} @click=${(e) => void this.openDialog(e, n)}>
-          ${typeof a == "string" && !this.failedImages.has(a) ? t`<img src=${a} alt="" @error=${() => {
-				this.failedImages = /* @__PURE__ */ new Set([...this.failedImages, a]);
-			}} />` : n.slice(0, 1)}
-        </button><div class="devices">${h(r, e).map(([e, r]) => t`<button class="device" aria-label=${`${n}: ${r.name}`} title=${`${r.name} · ${Math.round((r.confidence ?? 0) * 100)}%`} @click=${(t) => void this.openDialog(t, n, e)}><ha-icon .icon=${p(r.kind)}></ha-icon></button>`)}</div></div>`;
-		})}${this.canCorrect && n.length < Object.keys(this.data.people ?? {}).length ? t`<button class="add" aria-label="Add person" @click=${(e) => void this.openDialog(e)}>+</button>` : i}</div>` : t`<span class="error">Select a valid room or floor in the card settings.</span>` : t`<span class="hint">Presence is not enabled.</span>` : t`<span class="hint">Loading presence…</span>`}
-      ${this.error ? t`<p class="error" role="alert">Could not refresh presence: ${this.error}</p>` : i}
-      ${this.notice ? t`<p class="notice" role="status">${this.notice}</p>` : i}${this.renderDialog()}
+		let e = this.group, t = this.data && e ? m(this.data, e, this.config?.min_probability ?? .1) : [];
+		return a`<ha-card>${this.config?.title ? a`<h2>${this.config.title}</h2>` : d}
+      ${this.data ? this.data.enabled ? e ? a`<div class="people">${t.map(({ name: t, person: n, probability: r }) => {
+			let i = n.person ? this.hass?.states[n.person]?.attributes.entity_picture : void 0;
+			return a`<div class="person"><button class="avatar ${r >= .6 ? "" : "possible"}" aria-label=${`${t}, ${Math.round(r * 100)}% in ${e.name}`} title=${`${t} · ${Math.round(r * 100)}%`} @click=${(e) => void this.openDialog(e, t)}>
+          ${typeof i == "string" && !this.failedImages.has(i) ? a`<img src=${i} alt="" @error=${() => {
+				this.failedImages = /* @__PURE__ */ new Set([...this.failedImages, i]);
+			}} />` : t.slice(0, 1)}
+        </button><div class="devices">${h(n, e).map(([e, n]) => a`<button class="device" aria-label=${`${t}: ${n.name}`} title=${`${n.name} · ${Math.round((n.confidence ?? 0) * 100)}%`} @click=${(n) => void this.openDialog(n, t, e)}><ha-icon .icon=${p(n.kind)}></ha-icon></button>`)}</div></div>`;
+		})}${this.canCorrect && t.length < Object.keys(this.data.people ?? {}).length ? a`<button class="add" aria-label="Add person" @click=${(e) => void this.openDialog(e)}>+</button>` : d}</div>` : a`<span class="error">Select a valid room or floor in the card settings.</span>` : a`<span class="hint">Presence is not enabled.</span>` : a`<span class="hint">Loading presence…</span>`}
+      ${this.error ? a`<p class="error" role="alert">Could not refresh presence: ${this.error}</p>` : d}
+      ${this.notice ? a`<p class="notice" role="status">${this.notice}</p>` : d}${this.renderDialog()}
     </ha-card>`;
 	}
 };
-d([e({ attribute: !1 })], y.prototype, "hass", void 0), d([s()], y.prototype, "config", void 0), d([s()], y.prototype, "data", void 0), d([s()], y.prototype, "error", void 0), d([s()], y.prototype, "selected", void 0), d([s()], y.prototype, "adding", void 0), d([s()], y.prototype, "destination", void 0), d([s()], y.prototype, "pending", void 0), d([s()], y.prototype, "correctionError", void 0), d([s()], y.prototype, "notice", void 0), d([s()], y.prototype, "failedImages", void 0), y = d([o("activity-levels-presence-card")], y);
+i([t({ attribute: !1 })], y.prototype, "hass", void 0), i([e()], y.prototype, "config", void 0), i([e()], y.prototype, "data", void 0), i([e()], y.prototype, "error", void 0), i([e()], y.prototype, "selected", void 0), i([e()], y.prototype, "adding", void 0), i([e()], y.prototype, "destination", void 0), i([e()], y.prototype, "pending", void 0), i([e()], y.prototype, "correctionError", void 0), i([e()], y.prototype, "notice", void 0), i([e()], y.prototype, "failedImages", void 0), y = i([n("activity-levels-presence-card")], y);
 //#endregion
 //#region src/al-presence-card-editor.ts
 var b = class extends r {
@@ -234,7 +234,7 @@ var b = class extends r {
 		};
 	}
 	static {
-		this.styles = u;
+		this.styles = l;
 	}
 	setConfig(e) {
 		this.config = { ...e };
@@ -264,12 +264,12 @@ var b = class extends r {
 		}));
 	}
 	render() {
-		return t`<label>Room or floor <select aria-label="Room or floor" .value=${this.config.group} @change=${(e) => this.change(e.target.value)}>
-      <option value="">Choose a room or floor…</option>${this.data?.groups.map((e) => t`<option value=${e.id}>${e.kind === "floor" ? "Floor: " : ""}${e.name}</option>`)}
-    </select></label>${this.error ? t`<p role="alert">${this.error}</p>` : ""}`;
+		return a`<label>Room or floor <select aria-label="Room or floor" .value=${this.config.group} @change=${(e) => this.change(e.target.value)}>
+      <option value="">Choose a room or floor…</option>${this.data?.groups.map((e) => a`<option value=${e.id}>${e.kind === "floor" ? "Floor: " : ""}${e.name}</option>`)}
+    </select></label>${this.error ? a`<p role="alert">${this.error}</p>` : ""}`;
 	}
 };
-d([e({ attribute: !1 })], b.prototype, "hass", void 0), d([s()], b.prototype, "config", void 0), d([s()], b.prototype, "data", void 0), d([s()], b.prototype, "error", void 0), b = d([o("activity-levels-presence-card-editor")], b);
+i([t({ attribute: !1 })], b.prototype, "hass", void 0), i([e()], b.prototype, "config", void 0), i([e()], b.prototype, "data", void 0), i([e()], b.prototype, "error", void 0), b = i([n("activity-levels-presence-card-editor")], b);
 //#endregion
 //#region src/al-floorplan-card.ts
 var x = class extends r {
@@ -277,10 +277,10 @@ var x = class extends r {
 		super(...e), this.settings = {}, this.snapshot = {};
 	}
 	static {
-		this.styles = n`:host { display:block; min-width:0; } .error {padding:12px;color:var(--error-color,#ff7365);} `;
+		this.styles = o`:host { display:block; min-width:0; } .error {padding:12px;color:var(--error-color,#ff7365);} `;
 	}
 	setConfig(e) {
-		a(e), this.settings = { ...e };
+		s(e), this.settings = { ...e };
 	}
 	static getStubConfig() {
 		return { type: "custom:activity-levels-floorplan-card" };
@@ -305,22 +305,22 @@ var x = class extends r {
 	}
 	connect() {
 		if (!this.hass || !this.isConnected) return;
-		let e = l(this.hass);
+		let e = c(this.hass);
 		e === this.source && this.unsubscribe || (this.unsubscribe?.(), this.source = e, this.unsubscribe = e.subscribe((e) => {
 			this.snapshot = e;
 		}));
 	}
 	render() {
-		let { data: e, error: n } = this.snapshot;
-		return t`${n ? t`<p class="error" role="alert">${n}</p>` : i}
-      ${e ? t`<al-floorplan-viewer .dashboard=${!0} .config=${e.config} .live=${e.live}
-        .telemetry=${n ? void 0 : e.telemetry} .hass=${this.hass} .lights=${e.lights} .settings=${this.settings}
+		let { data: e, error: t } = this.snapshot;
+		return a`${t ? a`<p class="error" role="alert">${t}</p>` : d}
+      ${e ? a`<al-floorplan-viewer .dashboard=${!0} .config=${e.config} .live=${e.live}
+        .telemetry=${t ? void 0 : e.telemetry} .hass=${this.hass} .lights=${e.lights} .settings=${this.settings}
         @al-viewer-settings=${(e) => {
 			this.settings = e.detail;
-		}}></al-floorplan-viewer>` : t`<p role="status">Loading floorplan…</p>`}`;
+		}}></al-floorplan-viewer>` : a`<p role="status">Loading floorplan…</p>`}`;
 	}
 };
-d([e({ attribute: !1 })], x.prototype, "hass", void 0), d([s()], x.prototype, "settings", void 0), d([s()], x.prototype, "snapshot", void 0), x = d([o("activity-levels-floorplan-card")], x);
+i([t({ attribute: !1 })], x.prototype, "hass", void 0), i([e()], x.prototype, "settings", void 0), i([e()], x.prototype, "snapshot", void 0), x = i([n("activity-levels-floorplan-card")], x);
 //#endregion
 //#region src/cards.ts
 var S = window;
