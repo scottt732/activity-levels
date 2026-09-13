@@ -160,3 +160,20 @@ it("converts an edited legacy window without losing its position or contact",asy
   expect(room.fixtures).toEqual([]);expect(room.openings[0]).toMatchObject({kind:"window",name:"Bay",position:[0,2,.9],width:1.1,height:1.2,entities:["binary_sensor.window"]});
   expect(config.groups[0]!.fixtures).toHaveLength(1);
 });
+
+it("uses category pages and replaces the object list with the selected form",async()=>{
+ const el=new AlRoomDeviceEditor();el.workspace=true;el.section="openings";el.room="room";el.config=roomsConfig();el.config.groups=[{...newGroup("room","area"),bounds:[[0,0,0],[4,4,3]]}];
+ document.body.append(el);await el.updateComplete;
+ expect(el.shadowRoot!.querySelectorAll(".object-category")).toHaveLength(3);
+ const button=(text:string)=>[...el.shadowRoot!.querySelectorAll("button")].find(b=>b.textContent?.trim()===text)!;
+ button("+ Add").click();await el.updateComplete;
+ expect(el.shadowRoot!.querySelector(".object-category")).toBeNull();
+ button("Add door").click();await el.updateComplete;
+ expect(el.shadowRoot!.querySelector("#save-opening")).not.toBeNull();
+ expect(el.shadowRoot!.querySelector(".add-menu")).toBeNull();
+ button("← List").click();await el.updateComplete;
+ expect(el.shadowRoot!.querySelector("#save-opening")).toBeNull();
+ el.section="sensors";await el.updateComplete;
+ expect(el.shadowRoot!.querySelectorAll(".object-category")).toHaveLength(2);
+ expect(el.shadowRoot!.textContent).not.toContain("Windows (0)");
+});

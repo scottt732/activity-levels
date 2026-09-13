@@ -7,20 +7,45 @@ export type CameraAction = "reset" | "top" | "left" | "right" | "up" | "down" | 
 @customElement("al-camera-control")
 export class AlCameraControl extends LitElement {
   static styles = css`
-    :host { display:block; }
-    .controls { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-    .orbit { width:144px; height:144px; position:relative; border-radius:50%; border:1px solid #658d9f; background:radial-gradient(#244859,#102633); touch-action:none; cursor:grab; }
-    .orbit.active { cursor:grabbing; outline:2px solid #ffcd69; }
-    .orbit button { position:absolute; width:44px; height:44px; padding:0; border-radius:50%; }
-    .up { top:1px; left:50px; } .down { bottom:1px; left:50px; }
-    .left { left:1px; top:50px; } .right { right:1px; top:50px; }
-    .reset { left:50px; top:50px; }
-    .extras { display:flex; flex-direction:column; gap:6px; }
-    .zoom { display:flex; gap:6px; }
-    button { min-width:44px; min-height:44px; border:1px solid #638b9e; border-radius:8px; background:var(--secondary-background-color,#243c4b); color:var(--primary-text-color,#fff); cursor:pointer; font-size:18px; }
+    :host { display:block; --orbit-size:108px; --target-size:30px; color:#c9edf3; }
+    .controls { display:flex; align-items:center; gap:6px; width:max-content; }
+    .orbit {
+      width:var(--orbit-size); height:var(--orbit-size); position:relative; box-sizing:border-box;
+      border-radius:50%; border:1px solid #78b9c55c;
+      background:radial-gradient(circle, #14303ddb 0 29%, transparent 30% 54%, #14303d80 55% 57%, transparent 58%), #091f2bd9;
+      box-shadow:inset 0 0 18px #79c6d00a; touch-action:none; cursor:grab;
+    }
+    .orbit::before, .orbit::after {
+      content:""; position:absolute; pointer-events:none; background:#8edbea30;
+      top:50%; left:8%; width:84%; height:1px;
+    }
+    .orbit::after { transform:rotate(90deg); }
+    .orbit.active { cursor:grabbing; outline:1px solid #ffcd69; box-shadow:0 0 14px #ffcd6926; }
+    .orbit button {
+      position:absolute; z-index:1; width:var(--target-size); height:var(--target-size);
+      padding:0; border-radius:50%; border-color:transparent; background:#102b39b8;
+    }
+    .up { top:2px; left:calc((100% - var(--target-size)) / 2); }
+    .down { bottom:2px; left:calc((100% - var(--target-size)) / 2); }
+    .left { left:2px; top:calc((100% - var(--target-size)) / 2); }
+    .right { right:2px; top:calc((100% - var(--target-size)) / 2); }
+    .reset { left:calc((100% - var(--target-size)) / 2); top:calc((100% - var(--target-size)) / 2); }
+    .extras, .zoom { display:flex; flex-direction:column; gap:3px; }
+    button {
+      box-sizing:border-box; min-width:var(--target-size); min-height:var(--target-size);
+      padding:0 5px; border:1px solid #78b9c54d; border-radius:3px; background:#0b2431e6;
+      color:inherit; cursor:pointer; font:18px/1 system-ui,sans-serif;
+    }
+    button:hover:not(:disabled) { border-color:#94e7ef; background:#215267; color:#fff; }
     button:focus-visible { outline:2px solid #ffcd69; outline-offset:2px; }
     button:disabled, .orbit[aria-disabled="true"] { opacity:.45; cursor:default; }
-    p { margin:6px 0; font-size:12px; color:var(--secondary-text-color,#bdd7e0); }
+    .top { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+    .status { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+    @media (pointer:coarse) {
+      :host { --orbit-size:144px; --target-size:44px; }
+      .controls { gap:8px; }
+      .top { font-size:12px; }
+    }
   `;
   @property({ type:Boolean }) disabled = false;
   @state() private dragging = false;
@@ -81,7 +106,7 @@ export class AlCameraControl extends LitElement {
 
   protected override render() {
     return html`<div class="controls">
-      <div class=${`orbit${this.dragging ? " active" : ""}`} role="group" aria-label="Camera orbit" aria-disabled=${this.disabled ? "true" : "false"}
+      <div class=${`orbit${this.dragging ? " active" : ""}`} role="group" aria-label="Camera orbit" title="Drag to orbit, or use the directional buttons" aria-disabled=${this.disabled ? "true" : "false"}
         @pointerdown=${this.start} @pointermove=${this.move} @pointerup=${this.finish} @pointercancel=${this.finish} @lostpointercapture=${this.finish}
         @click=${{handleEvent:(event:MouseEvent) => this.handleClick(event),capture:true}}>
         <button class="up" aria-label="Tilt up" title="Tilt up" ?disabled=${this.disabled} @click=${() => this.action("up")}>↑</button>
@@ -93,7 +118,7 @@ export class AlCameraControl extends LitElement {
       <div class="extras"><div class="zoom">
         <button aria-label="Zoom out" title="Zoom out" ?disabled=${this.disabled} @click=${() => {this.suppressClick=false;this.action("out");}}>−</button>
         <button aria-label="Zoom in" title="Zoom in" ?disabled=${this.disabled} @click=${() => {this.suppressClick=false;this.action("in");}}>+</button>
-      </div><button aria-label="Top view" ?disabled=${this.disabled} @click=${() => {this.suppressClick=false;this.action("top");}}>Top</button></div>
-    </div><p role="status">${this.dragging ? "Orbiting — drag to rotate or tilt" : "Drag the orbit pad or use its buttons."}</p>`;
+      </div><button class="top" aria-label="Top view" title="Top view" ?disabled=${this.disabled} @click=${() => {this.suppressClick=false;this.action("top");}}>Top</button></div>
+    </div><span class="status" role="status">${this.dragging ? "Orbiting — drag to rotate or tilt" : ""}</span>`;
   }
 }

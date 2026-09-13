@@ -1961,20 +1961,45 @@ var Q = class extends F {
 	}
 	static {
 		this.styles = o`
-    :host { display:block; }
-    .controls { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-    .orbit { width:144px; height:144px; position:relative; border-radius:50%; border:1px solid #658d9f; background:radial-gradient(#244859,#102633); touch-action:none; cursor:grab; }
-    .orbit.active { cursor:grabbing; outline:2px solid #ffcd69; }
-    .orbit button { position:absolute; width:44px; height:44px; padding:0; border-radius:50%; }
-    .up { top:1px; left:50px; } .down { bottom:1px; left:50px; }
-    .left { left:1px; top:50px; } .right { right:1px; top:50px; }
-    .reset { left:50px; top:50px; }
-    .extras { display:flex; flex-direction:column; gap:6px; }
-    .zoom { display:flex; gap:6px; }
-    button { min-width:44px; min-height:44px; border:1px solid #638b9e; border-radius:8px; background:var(--secondary-background-color,#243c4b); color:var(--primary-text-color,#fff); cursor:pointer; font-size:18px; }
+    :host { display:block; --orbit-size:108px; --target-size:30px; color:#c9edf3; }
+    .controls { display:flex; align-items:center; gap:6px; width:max-content; }
+    .orbit {
+      width:var(--orbit-size); height:var(--orbit-size); position:relative; box-sizing:border-box;
+      border-radius:50%; border:1px solid #78b9c55c;
+      background:radial-gradient(circle, #14303ddb 0 29%, transparent 30% 54%, #14303d80 55% 57%, transparent 58%), #091f2bd9;
+      box-shadow:inset 0 0 18px #79c6d00a; touch-action:none; cursor:grab;
+    }
+    .orbit::before, .orbit::after {
+      content:""; position:absolute; pointer-events:none; background:#8edbea30;
+      top:50%; left:8%; width:84%; height:1px;
+    }
+    .orbit::after { transform:rotate(90deg); }
+    .orbit.active { cursor:grabbing; outline:1px solid #ffcd69; box-shadow:0 0 14px #ffcd6926; }
+    .orbit button {
+      position:absolute; z-index:1; width:var(--target-size); height:var(--target-size);
+      padding:0; border-radius:50%; border-color:transparent; background:#102b39b8;
+    }
+    .up { top:2px; left:calc((100% - var(--target-size)) / 2); }
+    .down { bottom:2px; left:calc((100% - var(--target-size)) / 2); }
+    .left { left:2px; top:calc((100% - var(--target-size)) / 2); }
+    .right { right:2px; top:calc((100% - var(--target-size)) / 2); }
+    .reset { left:calc((100% - var(--target-size)) / 2); top:calc((100% - var(--target-size)) / 2); }
+    .extras, .zoom { display:flex; flex-direction:column; gap:3px; }
+    button {
+      box-sizing:border-box; min-width:var(--target-size); min-height:var(--target-size);
+      padding:0 5px; border:1px solid #78b9c54d; border-radius:3px; background:#0b2431e6;
+      color:inherit; cursor:pointer; font:18px/1 system-ui,sans-serif;
+    }
+    button:hover:not(:disabled) { border-color:#94e7ef; background:#215267; color:#fff; }
     button:focus-visible { outline:2px solid #ffcd69; outline-offset:2px; }
     button:disabled, .orbit[aria-disabled="true"] { opacity:.45; cursor:default; }
-    p { margin:6px 0; font-size:12px; color:var(--secondary-text-color,#bdd7e0); }
+    .top { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+    .status { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+    @media (pointer:coarse) {
+      :host { --orbit-size:144px; --target-size:44px; }
+      .controls { gap:8px; }
+      .top { font-size:12px; }
+    }
   `;
 	}
 	action(e) {
@@ -2006,7 +2031,7 @@ var Q = class extends F {
 	}
 	render() {
 		return D`<div class="controls">
-      <div class=${`orbit${this.dragging ? " active" : ""}`} role="group" aria-label="Camera orbit" aria-disabled=${this.disabled ? "true" : "false"}
+      <div class=${`orbit${this.dragging ? " active" : ""}`} role="group" aria-label="Camera orbit" title="Drag to orbit, or use the directional buttons" aria-disabled=${this.disabled ? "true" : "false"}
         @pointerdown=${this.start} @pointermove=${this.move} @pointerup=${this.finish} @pointercancel=${this.finish} @lostpointercapture=${this.finish}
         @click=${{
 			handleEvent: (e) => this.handleClick(e),
@@ -2025,10 +2050,10 @@ var Q = class extends F {
         <button aria-label="Zoom in" title="Zoom in" ?disabled=${this.disabled} @click=${() => {
 			this.suppressClick = !1, this.action("in");
 		}}>+</button>
-      </div><button aria-label="Top view" ?disabled=${this.disabled} @click=${() => {
+      </div><button class="top" aria-label="Top view" title="Top view" ?disabled=${this.disabled} @click=${() => {
 			this.suppressClick = !1, this.action("top");
 		}}>Top</button></div>
-    </div><p role="status">${this.dragging ? "Orbiting — drag to rotate or tilt" : "Drag the orbit pad or use its buttons."}</p>`;
+    </div><span class="status" role="status">${this.dragging ? "Orbiting — drag to rotate or tilt" : ""}</span>`;
 	}
 };
 G([L({ type: Boolean })], Q.prototype, "disabled", void 0), G([R()], Q.prototype, "dragging", void 0), Q = G([I("al-camera-control")], Q);
@@ -2036,7 +2061,7 @@ G([L({ type: Boolean })], Q.prototype, "disabled", void 0), G([R()], Q.prototype
 //#region src/al-floorplan-viewer.ts
 var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 	constructor(...e) {
-		super(...e), this.context = !1, this.room = "", this.hovered = "", this.lights = {}, this.settings = {}, this.dashboard = !1, this.controlsVisible = !1, this.fullscreen = !1, this.settingsError = "", this.options = J(), this.live = null, this.scope = "", this.selected = "", this.now = Date.now() / 1e3, this.loading = !1, this.error = "", this.model = {
+		super(...e), this.workspace = !1, this.settingsOpen = !1, this.hideHud = !1, this.roomsOpen = !1, this.context = !1, this.room = "", this.hovered = "", this.lights = {}, this.settings = {}, this.dashboard = !1, this.controlsVisible = !1, this.fullscreen = !1, this.settingsError = "", this.options = J(), this.live = null, this.scope = "", this.selected = "", this.now = Date.now() / 1e3, this.loading = !1, this.error = "", this.model = {
 			parts: [],
 			groups: [],
 			scopes: [],
@@ -2045,7 +2070,7 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 			let e = this.fullscreen;
 			this.fullscreen = this.ownsFullscreen(), e && !this.fullscreen && this.settings.ambient && this.leaveAmbient();
 		}, this.escapeView = (e) => {
-			e.key === "Escape" && (this.settings.ambient || this.ownsFullscreen()) && (e.preventDefault(), this.exitView());
+			!this.workspace && e.key === "Escape" && (this.settings.ambient || this.ownsFullscreen()) && (e.preventDefault(), this.exitView());
 		};
 	}
 	static {
@@ -2103,6 +2128,42 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
     :host([ambient]:not([show-controls])) .toolbar, :host([ambient]:not([show-controls])) aside,
     :host([ambient]:not([show-controls])) .settings, :host([ambient]:not([show-controls])) .issues { display:none; }
     :host([ambient]:not([show-controls])) .legend { opacity:.6; }
+    :host([workspace]) { position:relative; padding:0; height:100%; min-height:0; color:#d2e8ef; }
+    :host([workspace]) .viewer { display:block; height:100%; }
+    :host([workspace]) .viewport { height:100%; border:0; border-radius:0; }
+    :host([workspace]) h2, :host([workspace]) > p:not(.alert):not(.sensor-status),
+    :host([workspace]) .view-actions, :host([workspace]) .issues { display:none; }
+    :host([workspace]) .toolbar { position:absolute; inset:0; z-index:3; margin:0; pointer-events:none; }
+    :host([workspace]) .toolbar label { position:absolute; left:70px; top:12px; pointer-events:auto; }
+    :host([workspace]) .toolbar al-camera-control { position:absolute; right:12px; top:54px; pointer-events:auto; }
+    :host([workspace]) button, :host([workspace]) select { color:#d2e8ef; background:#112734eb; border-color:#446779; border-radius:4px; padding:5px 8px; font-size:12px; }
+    :host([workspace][editing-preview]) .room-toggle { display:none; }
+    :host([workspace]) .room-toggle { position:absolute; right:12px; top:12px; z-index:5; min-width:32px; min-height:32px; }
+    :host([workspace]) aside { position:absolute; z-index:4; right:12px; top:54px; width:260px; max-height:calc(100% - 76px); overflow:auto; padding:12px; box-sizing:border-box; background:#102431f5; border:1px solid #446779; border-radius:8px; }
+    :host([workspace]) aside[hidden] { display:none; }
+    :host([workspace]) .groups { max-height:none; }
+    :host([workspace]) .group { min-height:30px; margin:2px 0; }
+    :host([workspace]) .selection { font-size:12px; }
+    :host([workspace]) .settings { position:absolute; left:60px; top:60px; z-index:4; width:280px; max-width:calc(100% - 84px); max-height:calc(100% - 84px); overflow:auto; margin:0; padding:12px; box-sizing:border-box; background:#102431f5; border:1px solid #446779; border-radius:8px; font-size:12px; }
+    :host([workspace]) .settings > summary { display:none; }
+    :host([workspace]) .settings:not([open]) { display:none; }
+    :host([workspace]) .settings label { display:flex; flex-wrap:wrap; margin:8px 0; }
+    :host([workspace]) al-room-hud { top:60px; left:60px; width:min(280px,calc(100% - 84px)); max-height:calc(100% - 100px); }
+    :host([workspace]) .legend { left:70px; font-size:10px; opacity:.65; }
+    :host([workspace]) .alert, :host([workspace]) .sensor-status { position:absolute; left:70px; bottom:42px; z-index:2; font-size:12px; }
+    :host([workspace]) .sensor-status { bottom:64px; }
+    .scope-label-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+    @media (pointer:coarse) {
+      :host([workspace]) button, :host([workspace]) select { min-height:44px; font-size:14px; }
+      :host([workspace]) .toolbar al-camera-control, :host([workspace]) aside { top:64px; }
+    }
+    @media (max-width:600px) {
+      :host([workspace]) .toolbar label { left:76px; top:60px; max-width:calc(100% - 88px); }
+      :host([workspace]) .toolbar al-camera-control { top:auto; bottom:20px; }
+      :host([workspace]) #scope { max-width:100%; }
+      :host([workspace]) .settings, :host([workspace]) al-room-hud { top:116px; left:76px; max-width:calc(100% - 88px); }
+      :host([workspace]) .legend { display:none; }
+    }
     @media (max-width: 760px) { .viewer { grid-template-columns: minmax(0, 1fr); } .groups { max-height: 220px; } }
   `];
 	}
@@ -2137,7 +2198,7 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 		t?.scheme && (this.options = J({
 			...this.settings,
 			scheme: t.scheme
-		})), this.toggleAttribute("ambient", this.options.ambient), this.setAttribute("scheme", this.options.scheme), e.has("config") && (this.model = this.config ? Cn(this.config) : {
+		})), this.toggleAttribute("ambient", this.options.ambient && !this.workspace), this.setAttribute("scheme", this.options.scheme), e.has("config") && (this.model = this.config ? Cn(this.config) : {
 			parts: [],
 			groups: [],
 			scopes: [],
@@ -2172,11 +2233,11 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 		let e = ++this.sequence;
 		this.loading = !0;
 		try {
-			let { FloorplanRenderer: t } = await import("./shared-BNIwuGV3.js");
+			let { FloorplanRenderer: t } = await import("./shared-DsgBC7qj.js");
 			if (e !== this.sequence || !this.isConnected) return;
 			let n = this.renderRoot.querySelector("#scene");
 			this.renderer = new t(n, (e) => {
-				this.selected = e;
+				this.selectRoom(e);
 			}, (e) => {
 				this.stopRenderer(), this.error = e;
 			}, (e) => {
@@ -2210,15 +2271,15 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 		}
 	}
 	settingsControl() {
-		return D`<details class="settings"><summary>Viewer settings</summary>
+		return D`<details class="settings" .open=${this.workspace ? this.settingsOpen : void 0}><summary>Viewer settings</summary>
       <p class="muted">Settings apply to this display. Ground Z uses your floorplan's coordinates.</p>
-      <button type="button" @click=${async () => {
+      ${this.workspace ? k : D`<button type="button" @click=${async () => {
 			try {
 				await this.requestFullscreen();
 			} catch {
 				this.settingsError = "Fullscreen is unavailable here. Use your dashboard's kiosk layout.";
 			}
-		}}>Enter fullscreen</button>
+		}}>Enter fullscreen</button>`}
       <label>Scheme <select .value=${this.settings.scheme ?? "standard"} @change=${(e) => this.changeSettings({
 			...this.settings,
 			scheme: e.target.value
@@ -2249,7 +2310,7 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 			"ambient",
 			"auto_rotate",
 			"focus_activity"
-		].map((e) => D`<label><input type="checkbox" .checked=${this.options[e]}
+		].filter((e) => !this.workspace || e !== "ambient").map((e) => D`<label><input type="checkbox" .checked=${this.options[e]}
         @change=${(t) => this.changeSettings({
 			...this.settings,
 			[e]: t.target.checked
@@ -2285,6 +2346,13 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 		let t = bn(this.live, e.id, this.now);
 		return t.status === "live" ? `${Pn(t.value)} / ${Pn(t.max)}` : t.status === "stale" ? "Stale" : "No reading";
 	}
+	selectRoom(e) {
+		this.selected = e, this.roomsOpen = !1, this.dispatchEvent(new CustomEvent("al-room-selected", {
+			detail: e,
+			bubbles: !0,
+			composed: !0
+		}));
+	}
 	openGroup(e) {
 		this.dispatchEvent(new CustomEvent("al-open-group", {
 			detail: e.path,
@@ -2296,7 +2364,7 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 		let e = this.visibleParts, t = wn(this.model.groups, this.scope), n = this.model.groups.find((e) => e.id === this.selected), r = kn(this.options.rules, this.hass?.states ?? {}), i = this.live && this.now - this.live.now > 10;
 		return D`
       <div class="view-actions">
-      ${this.options.ambient || this.fullscreen ? D`<button id="exit-view" type="button" @click=${() => void this.exitView()}>${this.options.ambient ? "Exit ambient" : "Exit fullscreen"}</button>` : k}
+      ${!this.workspace && (this.options.ambient || this.fullscreen) ? D`<button id="exit-view" type="button" @click=${() => void this.exitView()}>${this.options.ambient ? "Exit ambient" : "Exit fullscreen"}</button>` : k}
       <button class="ambient-toggle" type="button" @click=${() => {
 			this.controlsVisible = !this.controlsVisible, this.toggleAttribute("show-controls", this.controlsVisible);
 		}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
@@ -2304,8 +2372,8 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
       <h2>${this.room ? this.model.groups.find((e) => e.id === this.room)?.label ?? "Room preview" : "Your home, live"}</h2>
       <p class="muted">Room color shows activity from blue (0) to red (5). Ceiling glow shows your lights.</p>
       <div class="toolbar">
-        <label>Floor or building <select id="scope" .value=${this.scope} @change=${(e) => {
-			this.scope = e.target.value, this.selected = "";
+        <label><span class=${this.workspace ? "scope-label-hidden" : ""}>Floor or building</span> <select aria-label="Floor or building" id="scope" .value=${this.scope} @change=${(e) => {
+			this.scope = e.target.value, this.selectRoom("");
 		}}>
           <option value="" .selected=${this.scope === ""}>Whole home</option>
           ${this.model.scopes.map((e) => D`<option value=${e.id} .selected=${this.scope === e.id}>
@@ -2317,11 +2385,14 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
       <p role="status" class=${`muted live-status ${i || !this.live ? "stale" : ""}`}>${i ? "Activity readings are stale. Waiting for a fresh update…" : this.live ? "Live activity · updates every 2 seconds" : "Waiting for live activity readings…"}</p>
       ${r ? D`<p class="alert" role="status">${r.label ?? r.entity}</p>` : k}
       ${this.options.rules.some((e) => !["on", "off"].includes(this.hass?.states[e.entity]?.state ?? "")) ? D`<p class="sensor-status" role="status">Some alert sensors are unavailable</p>` : k}
+      ${this.workspace ? D`<button type="button" class="room-toggle" aria-label="Rooms" title="Rooms" aria-expanded=${String(this.roomsOpen)} aria-controls="room-drawer" @click=${() => {
+			this.roomsOpen = !this.roomsOpen;
+		}}>☷</button>` : k}
       <div class="viewer">
         <div class="viewport" aria-describedby="floorplan-help">
           <div id="scene"></div>
-          ${!this.room && (this.hovered || this.selected) ? D`<al-room-hud .room=${this.model.parts.find((e) => e.id === (this.hovered || this.selected))} .live=${this.live} .telemetry=${this.telemetry} .hass=${this.hass} .now=${this.now} @al-dismiss-hud=${() => {
-			this.selected = "", this.hovered = "";
+          ${!this.room && !this.hideHud && !(this.workspace && this.settingsOpen) && (this.hovered || this.selected) ? D`<al-room-hud .room=${this.model.parts.find((e) => e.id === (this.hovered || this.selected))} .live=${this.live} .telemetry=${this.telemetry} .hass=${this.hass} .now=${this.now} @al-dismiss-hud=${() => {
+			this.selectRoom(""), this.hovered = "";
 		}}></al-room-hud>` : k}
           ${!e.length && !this.config?.site?.features.length ? D`<div class="overlay"><p>${this.model.groups.length ? "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>` : this.error ? D`<div class="overlay"><p role="alert">${this.error}</p>
               <button id="retry" type="button" @click=${() => {
@@ -2330,12 +2401,12 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
           ${e.length && !this.error ? D`<div class="legend">${this.options.color_thresholds.map((e) => D`<span style=${`color:${e.color};margin-right:12px`}>● ${e.value}</span>`)} · no fill = unknown
             <br>${(this.options.ground_z ?? this.config?.site?.ground_z) === void 0 ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z ?? this.config?.site?.ground_z} m`}</div>` : k}
         </div>
-        <aside aria-label="Floorplan groups">
+        <aside id="room-drawer" aria-label="Floorplan groups" ?hidden=${this.workspace && !this.roomsOpen}>
           <div class="groups" aria-label="Select a group">
             ${t.map((e) => D`<button type="button" class="group" data-group=${e.id}
               aria-pressed=${e.id === this.selected ? "true" : "false"}
               @click=${() => {
-			this.selected = e.id;
+			this.selectRoom(e.id);
 		}}>
               <span class="group-name" style=${`padding-inline-start:${Math.min(e.ancestors.length, 5) * 8}px`}>${e.label}</span>
               <span class="reading">${this.reading(e)}</span>
@@ -2362,7 +2433,14 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
     `;
 	}
 };
-G([L({ attribute: !1 })], $.prototype, "telemetry", void 0), G([L({ type: Boolean })], $.prototype, "context", void 0), G([L({
+G([L({
+	type: Boolean,
+	reflect: !0
+})], $.prototype, "workspace", void 0), G([L({
+	type: Boolean,
+	reflect: !0,
+	attribute: "settings-open"
+})], $.prototype, "settingsOpen", void 0), G([L({ type: Boolean })], $.prototype, "hideHud", void 0), G([R()], $.prototype, "roomsOpen", void 0), G([L({ attribute: !1 })], $.prototype, "telemetry", void 0), G([L({ type: Boolean })], $.prototype, "context", void 0), G([L({
 	type: String,
 	reflect: !0
 })], $.prototype, "room", void 0), G([L({ attribute: !1 })], $.prototype, "placementHeight", void 0), G([R()], $.prototype, "hovered", void 0), G([L({ attribute: !1 })], $.prototype, "config", void 0), G([L({ attribute: !1 })], $.prototype, "hass", void 0), G([L({ attribute: !1 })], $.prototype, "lights", void 0), G([L({ attribute: !1 })], $.prototype, "settings", void 0), G([L({ type: Boolean })], $.prototype, "dashboard", void 0), G([R()], $.prototype, "controlsVisible", void 0), G([R()], $.prototype, "fullscreen", void 0), G([R()], $.prototype, "settingsError", void 0), G([L({ attribute: !1 })], $.prototype, "live", void 0), G([R()], $.prototype, "scope", void 0), G([R()], $.prototype, "selected", void 0), G([R()], $.prototype, "now", void 0), G([R()], $.prototype, "loading", void 0), G([R()], $.prototype, "error", void 0), $ = G([I("al-floorplan-viewer")], $);

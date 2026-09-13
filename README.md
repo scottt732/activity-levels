@@ -541,7 +541,7 @@ count.
 
 ## Importing floorplans
 
-Open **Floorplans → Import or update floorplan** in the Activity Levels panel and paste an ESPresense configuration,
+Open **Floorplans → Import floorplan** in the Activity Levels panel and paste an ESPresense configuration,
 or choose a YAML/JSON file. You can import the whole file: only root `gps` and `floors`
 are used. MQTT settings, scanners, devices and other root sections are ignored. Ordinary
 YAML is the primary format; encoded line breaks from an editor paste are also recognized.
@@ -587,8 +587,14 @@ instead of guessed. Imports are limited to 1 MB of text, 128 floors and 2,048 ro
 
 ### Viewing live activity in 3D
 
-The **Floorplans** tab renders supplied room outlines and heights as a rotatable house
-wireframe. Drag to orbit, scroll to zoom, or use the camera buttons, **Top** and **Reset**.
+The **Floorplans** tab opens a full-window workspace with room outlines and heights
+rendered as a rotatable house wireframe. The left icon rail opens live telemetry,
+doors/windows, motion/occupancy, lights, property layout, import, and viewer settings.
+Each editor has its own object list and **+ Add** page; selecting an object replaces
+the list with its form. **← List** returns to the list. The top-right **Rooms** icon
+reveals the room list. Save/Discard stays at the top, and the back arrow exits to the
+mixer. Desktop controls are compact; touch devices get larger targets. Narrow screens
+can switch the editor between 2D and 3D. Drag to orbit, scroll to zoom, or use the camera buttons, **Top** and **Reset**.
 Choose a property, structure or floor to isolate its current descendants. Geometry keeps
 its imported coordinates; GPS and changes to the group hierarchy do not reposition it.
 
@@ -979,10 +985,10 @@ For a standalone preview with sample structures, run the frontend dev server and
 
 ### Visual room placement and sensor models
 
-In **Floorplans → Place devices & windows**, choose a room, or select one in the
-live view and use its **Place devices & windows** button. Select a
-sensor or light from the room's **Devices & windows** list. **Add…** offers doors, open
-walls, windows, motion sensors, occupancy sensors, and lights; choose a room entity
+In **Floorplans**, select the **Doors & windows**, **Motion & occupancy**, or **Lights**
+icon and choose a room. Selecting a room in the live view carries it into the editor.
+Select an existing object from that editor's list, or use **+ Add** to choose a type.
+The doors/windows editor offers doors, open walls, and windows; choose a room entity
 for a sensor or light. New devices start inside the selected room, including its floor
 elevation. An out-of-room saved placement offers **Move into room** for recovery.
 Click inside the outline to place it, or

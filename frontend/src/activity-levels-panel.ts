@@ -732,7 +732,10 @@ export class ActivityLevelsPanel extends LitElement {
         ></al-code>`;
       case "floorplans":
         return html`<al-floorplans .hass=${this.hass} .config=${d.config} .live=${this.live}
-          .disabled=${this.busy} @al-change=${this.onChange} @al-open-group=${this.openMixerGroup}></al-floorplans>`;
+          .disabled=${this.busy} .dirty=${d.dirty} .blocked=${this.blocked} .status=${this.banner?.text ?? ""}
+          @al-save-config=${()=>void this.save()} @al-discard-config=${()=>this.discard()}
+          @al-exit-floorplan=${()=>this.selectTab(this.tabs.indexOf("mixer"))}
+          @al-change=${this.onChange} @al-open-group=${this.openMixerGroup}></al-floorplans>`;
       case "paths":
         return html`<al-paths .hass=${this.hass} .config=${d.config} .narrow=${this.narrow}></al-paths>`;
       case "presence":

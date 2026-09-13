@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,"><title>Floorplan workspace preview</title>
+<style>body{margin:0;font:14px system-ui;background:#111f2a;color:#e1eef6}</style>
+<al-floorplans></al-floorplans>
+<script type="module">
+import '../src/al-floorplans.ts';
+import {newGroup,newStimulus} from '../src/model.ts';
+import {newFixture} from '../src/room-fixtures.ts';
+import {roomsConfig} from '../test/fixtures.ts';
+let config=roomsConfig();
+config.groups=[{...newGroup('house','structure'),name:'House',bounds:[[0,0,0],[10,7,3]],children:[
+ {...newGroup('living','area'),name:'Living room',bounds:[[0,0,0],[6,7,3]],openings:[{id:'door',name:'Office door',kind:'interior_door',position:[6,3.5,0],yaw:90,width:1,height:2.1,hinge:'left',swing:'in',open:true}],fixtures:[
+ {...newFixture('binary_sensor.corner'),name:'Corner motion',mount:'Corner',technology:'Z-Wave',position:[.15,.15,2.3],look_down:true,yaw:45,pitch:-15,fov:75,vertical_fov:45,range:4},
+ {...newFixture('binary_sensor.window','window'),name:'Window contact',position:[0,3.5,1.5],yaw:90,width:1.4,height:1.2},
+ {...newFixture('light.living','light'),name:'Ceiling light',position:[3,3.5,2.95]}]},
+ {...newGroup('office','area'),name:'Office',bounds:[[6,0,0],[10,7,3]],fixtures:[
+ {...newFixture('binary_sensor.occupancy','occupancy'),name:'Desk occupancy',technology:'Screek 2A',position:[9.9,3.5,1.2],yaw:180,fov:70,vertical_fov:35,range:3}]}]}];
+let motion=false,last=Date.now()/1000;
+const states={};
+for(const [entity,state] of [['binary_sensor.corner','off'],['binary_sensor.window','off'],['binary_sensor.occupancy','on'],['light.living','on']])states[entity]={entity_id:entity,state,attributes:{brightness:180,rgb_color:[255,220,170]},last_changed:new Date().toISOString()};
+const registry=[
+ {entity:"binary_sensor.window",area_id:"living",manufacturer:"Sample maker",model:"Contact",platform:"alarm_bridge",device_class:"window",entity_name:"Window contact"},
+ {entity:'binary_sensor.corner',area_id:'living',manufacturer:'Sample maker',model:'PIR A',platform:'zwave_js',device_class:'motion',entity_name:'Motion'},
+ {entity:'binary_sensor.occupancy',area_id:'office',manufacturer:'SCREEK',model:'Human Sensor 2A',platform:'esphome',device_class:'occupancy',entity_name:'Any Presence'},
+ {entity:'light.living',area_id:'living',manufacturer:null,model:null,platform:'demo',device_class:null,entity_name:'Ceiling light'},
+ {entity:'binary_sensor.wall',area_id:'living',manufacturer:'Sample maker',model:'PIR A',platform:'zwave_js',device_class:'motion',entity_name:'Motion'}];
+config.groups[0].children[0].stimuli=[newStimulus('binary_sensor.corner')];config.groups[0].children[0].area_id='living';config.groups[0].children[1].area_id='office';
+
+const app=document.querySelector('al-floorplans');
+const live={now:Date.now()/1000,groups:{living:{value:3.7,max_value:5,last_activity:last},office:{value:1.4,max_value:5,last_activity:last}},voices:{}};
+const hass={config:{unit_system:{length:"mi"}},states,callWS:async(message)=>message.type==='activity_levels/floorplan/dashboard'?{entry_id:'preview',config,lights:{living:['light.living']},live}:registry};
+app.config=config;app.hass=hass;app.live=live;
+app.addEventListener('al-change',e=>{config=e.detail;app.config=config;app.dirty=true;});
+app.addEventListener('al-save-config',()=>{app.dirty=false;app.status='Preview saved (sample data only)';});
+app.addEventListener('al-discard-config',()=>{app.dirty=false;app.status='Preview only';});
+app.addEventListener('al-exit-floorplan',()=>{app.status='Exit returns to the mixer in Home Assistant';});
+</script></html>

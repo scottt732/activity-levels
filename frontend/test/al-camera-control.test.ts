@@ -11,6 +11,10 @@ function pointer(target: HTMLElement, type: string, x: number, y: number, id = 1
 
 it("provides all camera actions as accessible buttons", async () => {
   const element = new AlCameraControl();document.body.append(element);await element.updateComplete;
+  expect([...element.shadowRoot!.querySelectorAll("button")].map(button => button.getAttribute("aria-label"))).toEqual([
+    "Tilt up", "Rotate left", "Reset view", "Rotate right", "Tilt down", "Zoom out", "Zoom in", "Top view",
+  ]);
+  expect(element.shadowRoot!.querySelector('[role="status"]')!.textContent).toBe("");
   const actions:string[] = [];
   element.addEventListener("al-camera-action", event => actions.push((event as CustomEvent<string>).detail));
   for (const button of element.shadowRoot!.querySelectorAll("button")) button.click();
@@ -27,6 +31,9 @@ it("orbits continuously after a drag threshold and suppresses the following clic
   Object.defineProperties(orbit, {setPointerCapture:{value:vi.fn()},hasPointerCapture:{value:() => true},releasePointerCapture:{value:release}});
   const actions = vi.fn();element.addEventListener("al-camera-action", actions);
   pointer(orbit, "pointerdown", 50, 50);
+  await element.updateComplete;
+  expect(orbit.classList.contains("active")).toBe(true);
+  expect(element.shadowRoot!.querySelector('[role="status"]')!.textContent).toContain("Orbiting");
   pointer(orbit, "pointermove", 60, 50);
   expect(actions).not.toHaveBeenCalled();
   pointer(orbit, "pointermove", 74, 50);
@@ -35,6 +42,9 @@ it("orbits continuously after a drag threshold and suppresses the following clic
   pointer(orbit, "pointermove", 74, 26);
   expect(actions.mock.lastCall![0].detail).toBe("up");
   pointer(orbit, "pointerup", 74, 26);
+  await element.updateComplete;
+  expect(orbit.classList.contains("active")).toBe(false);
+  expect(element.shadowRoot!.querySelector('[role="status"]')!.textContent).toBe("");
   expect(release).toHaveBeenCalledWith(1);
   element.shadowRoot!.querySelector("button")!.dispatchEvent(new MouseEvent("click", {bubbles:true,detail:1}));
   expect(actions).toHaveBeenCalledTimes(4);

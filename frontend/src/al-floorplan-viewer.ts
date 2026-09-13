@@ -72,9 +72,49 @@ export class AlFloorplanViewer extends LitElement {
     :host([ambient]:not([show-controls])) .toolbar, :host([ambient]:not([show-controls])) aside,
     :host([ambient]:not([show-controls])) .settings, :host([ambient]:not([show-controls])) .issues { display:none; }
     :host([ambient]:not([show-controls])) .legend { opacity:.6; }
+    :host([workspace]) { position:relative; padding:0; height:100%; min-height:0; color:#d2e8ef; }
+    :host([workspace]) .viewer { display:block; height:100%; }
+    :host([workspace]) .viewport { height:100%; border:0; border-radius:0; }
+    :host([workspace]) h2, :host([workspace]) > p:not(.alert):not(.sensor-status),
+    :host([workspace]) .view-actions, :host([workspace]) .issues { display:none; }
+    :host([workspace]) .toolbar { position:absolute; inset:0; z-index:3; margin:0; pointer-events:none; }
+    :host([workspace]) .toolbar label { position:absolute; left:70px; top:12px; pointer-events:auto; }
+    :host([workspace]) .toolbar al-camera-control { position:absolute; right:12px; top:54px; pointer-events:auto; }
+    :host([workspace]) button, :host([workspace]) select { color:#d2e8ef; background:#112734eb; border-color:#446779; border-radius:4px; padding:5px 8px; font-size:12px; }
+    :host([workspace][editing-preview]) .room-toggle { display:none; }
+    :host([workspace]) .room-toggle { position:absolute; right:12px; top:12px; z-index:5; min-width:32px; min-height:32px; }
+    :host([workspace]) aside { position:absolute; z-index:4; right:12px; top:54px; width:260px; max-height:calc(100% - 76px); overflow:auto; padding:12px; box-sizing:border-box; background:#102431f5; border:1px solid #446779; border-radius:8px; }
+    :host([workspace]) aside[hidden] { display:none; }
+    :host([workspace]) .groups { max-height:none; }
+    :host([workspace]) .group { min-height:30px; margin:2px 0; }
+    :host([workspace]) .selection { font-size:12px; }
+    :host([workspace]) .settings { position:absolute; left:60px; top:60px; z-index:4; width:280px; max-width:calc(100% - 84px); max-height:calc(100% - 84px); overflow:auto; margin:0; padding:12px; box-sizing:border-box; background:#102431f5; border:1px solid #446779; border-radius:8px; font-size:12px; }
+    :host([workspace]) .settings > summary { display:none; }
+    :host([workspace]) .settings:not([open]) { display:none; }
+    :host([workspace]) .settings label { display:flex; flex-wrap:wrap; margin:8px 0; }
+    :host([workspace]) al-room-hud { top:60px; left:60px; width:min(280px,calc(100% - 84px)); max-height:calc(100% - 100px); }
+    :host([workspace]) .legend { left:70px; font-size:10px; opacity:.65; }
+    :host([workspace]) .alert, :host([workspace]) .sensor-status { position:absolute; left:70px; bottom:42px; z-index:2; font-size:12px; }
+    :host([workspace]) .sensor-status { bottom:64px; }
+    .scope-label-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+    @media (pointer:coarse) {
+      :host([workspace]) button, :host([workspace]) select { min-height:44px; font-size:14px; }
+      :host([workspace]) .toolbar al-camera-control, :host([workspace]) aside { top:64px; }
+    }
+    @media (max-width:600px) {
+      :host([workspace]) .toolbar label { left:76px; top:60px; max-width:calc(100% - 88px); }
+      :host([workspace]) .toolbar al-camera-control { top:auto; bottom:20px; }
+      :host([workspace]) #scope { max-width:100%; }
+      :host([workspace]) .settings, :host([workspace]) al-room-hud { top:116px; left:76px; max-width:calc(100% - 88px); }
+      :host([workspace]) .legend { display:none; }
+    }
     @media (max-width: 760px) { .viewer { grid-template-columns: minmax(0, 1fr); } .groups { max-height: 220px; } }
   `];
 
+  @property({type:Boolean,reflect:true}) workspace=false;
+  @property({type:Boolean,reflect:true,attribute:"settings-open"}) settingsOpen=false;
+  @property({type:Boolean}) hideHud=false;
+  @state() private roomsOpen=false;
   @property({ attribute: false }) telemetry?: FloorplanTelemetry;
   @property({type:Boolean}) context=false;
   @property({type:String,reflect:true}) room = "";
@@ -128,7 +168,7 @@ export class AlFloorplanViewer extends LitElement {
     if(wasFullscreen && !this.fullscreen && this.settings.ambient) this.leaveAmbient();
   };
   private readonly escapeView = (event: KeyboardEvent): void => {
-    if(event.key === "Escape" && (this.settings.ambient || this.ownsFullscreen())) {
+    if(!this.workspace && event.key === "Escape" && (this.settings.ambient || this.ownsFullscreen())) {
       event.preventDefault();void this.exitView();
     }
   };
@@ -150,7 +190,7 @@ export class AlFloorplanViewer extends LitElement {
     this.options = viewerOptions(this.settings);
     const alert = activeRule(this.options.rules,this.hass?.states ?? {});
     if (alert?.scheme) this.options=viewerOptions({...this.settings,scheme:alert.scheme});
-    this.toggleAttribute("ambient",this.options.ambient);
+    this.toggleAttribute("ambient",this.options.ambient && !this.workspace);
     this.setAttribute("scheme",this.options.scheme);
     if (changed.has("config")) {
       this.model = this.config ? floorplanModel(this.config) : { parts: [], groups: [], scopes: [], issues: [] };
@@ -195,7 +235,7 @@ export class AlFloorplanViewer extends LitElement {
       const { FloorplanRenderer } = await import("./floorplan-renderer");
       if (sequence !== this.sequence || !this.isConnected) return;
       const host = this.renderRoot.querySelector<HTMLElement>("#scene")!;
-      this.renderer = new FloorplanRenderer(host, (id) => { this.selected = id; }, (message) => {
+      this.renderer = new FloorplanRenderer(host, (id) => { this.selectRoom(id); }, (message) => {
         this.stopRenderer(); this.error = message;
       }, (id)=>{this.hovered=id;}, (position)=>{this.dispatchEvent(new CustomEvent("al-fixture-position",{detail:position,bubbles:true,composed:true}));});
       this.renderer.setParts(this.visibleParts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined);
@@ -225,16 +265,16 @@ export class AlFloorplanViewer extends LitElement {
     } catch(error) {this.settingsError=String((error as Error).message);}
   }
   private settingsControl() {
-    return html`<details class="settings"><summary>Viewer settings</summary>
+    return html`<details class="settings" .open=${this.workspace ? this.settingsOpen : undefined}><summary>Viewer settings</summary>
       <p class="muted">Settings apply to this display. Ground Z uses your floorplan's coordinates.</p>
-      <button type="button" @click=${async()=>{try{await this.requestFullscreen();}catch{this.settingsError="Fullscreen is unavailable here. Use your dashboard's kiosk layout.";}}}>Enter fullscreen</button>
+      ${!this.workspace ? html`<button type="button" @click=${async()=>{try{await this.requestFullscreen();}catch{this.settingsError="Fullscreen is unavailable here. Use your dashboard's kiosk layout.";}}}>Enter fullscreen</button>` : nothing}
       <label>Scheme <select .value=${this.settings.scheme ?? "standard"} @change=${(e:Event)=>this.changeSettings({...this.settings,scheme:(e.target as HTMLSelectElement).value as ViewerOptions["scheme"]})}>
         ${["standard","night","security"].map(s=>html`<option value=${s} .selected=${s===(this.settings.scheme ?? "standard")}>${s}</option>`)}
       </select></label>
       <label>Ground Z <input type="number" step="any" .value=${this.settings.ground_z?.toString() ?? ""} placeholder="Not specified"
         @change=${(e:Event)=>{const v=(e.target as HTMLInputElement).value;this.changeSettings({...this.settings,ground_z:v===""?undefined:Number(v)});}}></label>
       <button type="button" @click=${()=>{const lowest=[...inScope(this.model.parts,this.scope)].sort((a,b)=>a.low-b.low)[0];if(lowest)this.changeSettings({...this.settings,ground_z:Number((lowest.high-0.9144).toFixed(3))});}}>Basement top 3 ft above ground</button>
-      ${(["light_fill","ambient","auto_rotate","focus_activity"] as const).map(key=>html`<label><input type="checkbox" .checked=${this.options[key]}
+      ${(["light_fill","ambient","auto_rotate","focus_activity"] as const).filter(key=>!this.workspace || key!=="ambient").map(key=>html`<label><input type="checkbox" .checked=${this.options[key]}
         @change=${(e:Event)=>this.changeSettings({...this.settings,[key]:(e.target as HTMLInputElement).checked})}>${{light_fill:"Ceiling glow from lights",ambient:"Ambient fullscreen layout",auto_rotate:"Slow orbit",focus_activity:"Focus on new activity"}[key]}</label>`)}
       <label>Seconds per rotation <input id="rotation-period" type="number" min="1" step="any" .value=${String(this.options.rotation_period)}
         @change=${(e:Event)=>this.changeSettings({...this.settings,rotation_period:Number((e.target as HTMLInputElement).value)})}></label>
@@ -253,6 +293,12 @@ export class AlFloorplanViewer extends LitElement {
       reading.status === "stale" ? "Stale" : "No reading";
   }
 
+  private selectRoom(id:string):void {
+    this.selected=id;
+    this.roomsOpen=false;
+    this.dispatchEvent(new CustomEvent("al-room-selected",{detail:id,bubbles:true,composed:true}));
+  }
+
   private openGroup(group: FloorplanGroup): void {
     this.dispatchEvent(new CustomEvent("al-open-group", { detail: group.path, bubbles: true, composed: true }));
   }
@@ -265,14 +311,14 @@ export class AlFloorplanViewer extends LitElement {
     const stale = this.live && this.now - this.live.now > STALE_SECONDS;
     return html`
       <div class="view-actions">
-      ${this.options.ambient || this.fullscreen ? html`<button id="exit-view" type="button" @click=${()=>void this.exitView()}>${this.options.ambient ? "Exit ambient" : "Exit fullscreen"}</button>` : nothing}
+      ${!this.workspace && (this.options.ambient || this.fullscreen) ? html`<button id="exit-view" type="button" @click=${()=>void this.exitView()}>${this.options.ambient ? "Exit ambient" : "Exit fullscreen"}</button>` : nothing}
       <button class="ambient-toggle" type="button" @click=${()=>{this.controlsVisible=!this.controlsVisible;this.toggleAttribute("show-controls",this.controlsVisible);}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
       </div>
       <h2>${this.room ? this.model.groups.find(g=>g.id===this.room)?.label ?? "Room preview" : "Your home, live"}</h2>
       <p class="muted">Room color shows activity from blue (0) to red (5). Ceiling glow shows your lights.</p>
       <div class="toolbar">
-        <label>Floor or building <select id="scope" .value=${this.scope} @change=${(event: Event) => {
-          this.scope = (event.target as HTMLSelectElement).value; this.selected = "";
+        <label><span class=${this.workspace ? "scope-label-hidden" : ""}>Floor or building</span> <select aria-label="Floor or building" id="scope" .value=${this.scope} @change=${(event: Event) => {
+          this.scope = (event.target as HTMLSelectElement).value; this.selectRoom("");
         }}>
           <option value="" .selected=${this.scope === ""}>Whole home</option>
           ${this.model.scopes.map((group) => html`<option value=${group.id} .selected=${this.scope === group.id}>
@@ -285,10 +331,11 @@ export class AlFloorplanViewer extends LitElement {
         this.live ? "Live activity · updates every 2 seconds" : "Waiting for live activity readings…"}</p>
       ${alert ? html`<p class="alert" role="status">${alert.label ?? alert.entity}</p>` : nothing}
       ${this.options.rules.some(r=>!["on","off"].includes(this.hass?.states[r.entity]?.state ?? "")) ? html`<p class="sensor-status" role="status">Some alert sensors are unavailable</p>` : nothing}
+      ${this.workspace ? html`<button type="button" class="room-toggle" aria-label="Rooms" title="Rooms" aria-expanded=${String(this.roomsOpen)} aria-controls="room-drawer" @click=${()=>{this.roomsOpen=!this.roomsOpen;}}>☷</button>` : nothing}
       <div class="viewer">
         <div class="viewport" aria-describedby="floorplan-help">
           <div id="scene"></div>
-          ${!this.room && (this.hovered || this.selected) ? html`<al-room-hud .room=${this.model.parts.find(p=>p.id===(this.hovered || this.selected))} .live=${this.live} .telemetry=${this.telemetry} .hass=${this.hass} .now=${this.now} @al-dismiss-hud=${()=>{this.selected="";this.hovered="";}}></al-room-hud>` : nothing}
+          ${!this.room && !this.hideHud && !(this.workspace && this.settingsOpen) && (this.hovered || this.selected) ? html`<al-room-hud .room=${this.model.parts.find(p=>p.id===(this.hovered || this.selected))} .live=${this.live} .telemetry=${this.telemetry} .hass=${this.hass} .now=${this.now} @al-dismiss-hud=${()=>{this.selectRoom("");this.hovered="";}}></al-room-hud>` : nothing}
           ${!parts.length && !this.config?.site?.features.length ? html`<div class="overlay"><p>${this.model.groups.length ?
             "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>` :
             this.error ? html`<div class="overlay"><p role="alert">${this.error}</p>
@@ -297,11 +344,11 @@ export class AlFloorplanViewer extends LitElement {
           ${parts.length && !this.error ? html`<div class="legend">${this.options.color_thresholds.map(t=>html`<span style=${`color:${t.color};margin-right:12px`}>● ${t.value}</span>`)} · no fill = unknown
             <br>${(this.options.ground_z ?? this.config?.site?.ground_z) === undefined ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z ?? this.config?.site?.ground_z} m`}</div>` : nothing}
         </div>
-        <aside aria-label="Floorplan groups">
+        <aside id="room-drawer" aria-label="Floorplan groups" ?hidden=${this.workspace && !this.roomsOpen}>
           <div class="groups" aria-label="Select a group">
             ${groups.map((group) => html`<button type="button" class="group" data-group=${group.id}
               aria-pressed=${group.id === this.selected ? "true" : "false"}
-              @click=${() => { this.selected = group.id; }}>
+              @click=${() => { this.selectRoom(group.id); }}>
               <span class="group-name" style=${`padding-inline-start:${Math.min(group.ancestors.length, 5) * 8}px`}>${group.label}</span>
               <span class="reading">${this.reading(group)}</span>
             </button>`)}
