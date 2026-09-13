@@ -130,3 +130,14 @@ Don't edit `CHANGELOG.md` or any `version` field by hand — release-please owns
 
 To force a particular version for one release, put `Release-As: 1.2.3` in a commit
 footer.
+
+### Automatic releases
+
+Development PRs marked `automerge` use GitHub squash auto-merge after required CI.
+The label documents intent; the GitHub auto-merge setting performs the merge.
+Release-please reads Conventional Commit titles after merge and opens or updates
+its release PR. The workflow labels that PR `automerge` and enables native auto-merge
+using `RELEASE_PLEASE_TOKEN`, so required CI still runs before publication. Its merge
+triggers the version tag, GitHub release, and HACS ZIP attachment. Release-please owns
+its `autorelease: pending` and `autorelease: tagged` lifecycle labels; do not apply
+those to ordinary development PRs.
