@@ -1022,8 +1022,10 @@ central alarm-panel circuits or shared zones. Unlinked objects support a manual 
 Existing single-entity window placements retain their geometry and contact when edited
 and saved as independent windows.
 
-Use **Add door**, **Add window**, or **Add open wall**, then click near a wall to snap
-its position. Set width, height, and bottom elevation. Door hinge left/right is viewed
+Use **Add door**, **Add window**, or **Add open wall**, then drag the opening or its
+marker to position it. Background clicks do not move openings; click another opening
+or neighboring room to select it. Dragging snaps to the nearest wall that fits its
+full width, including perpendicular walls at corners. Set width, height, and bottom elevation. Door hinge left/right is viewed
 from inside the selected room facing the doorway; swing can be inward or outward.
 Out-of-bounds objects remain visible in red in both previews; adjust them before saving.
 Open walls always pass coverage; closed doors and windows block it. A shared circuit's

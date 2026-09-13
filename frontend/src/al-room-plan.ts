@@ -18,6 +18,8 @@ export class AlRoomPlan extends LitElement {
     .marker { fill:#8ed9ea; stroke:#102330; stroke-width:2; vector-effect:non-scaling-stroke; cursor:grab; }
     .selected { fill:#ffcd69; } .marker:focus, .opening-marker:focus { stroke:white; stroke-width:2; vector-effect:non-scaling-stroke; outline:none; }
     .coverage { fill:#ffcd6929; stroke:#ffcd6988; vector-effect:non-scaling-stroke; }
+    .coverage, .aim, text { pointer-events:none; }
+    .neighbor:focus { stroke:white;stroke-width:2;vector-effect:non-scaling-stroke; }
     .aim { stroke:#ffcd69; stroke-width:2; vector-effect:non-scaling-stroke; }
     [hidden] { display:none!important; }
     p { color:var(--secondary-text-color); font-size:13px; } .error { color:var(--error-color,#f77); }
@@ -35,6 +37,14 @@ export class AlRoomPlan extends LitElement {
   @state() private aimingHandle=false;
   @state() private error="";
   private drag?:number;
+  private dragStart?:[number,number];
+  private beginDrag(e:PointerEvent):void {
+    this.drag=e.pointerId;this.dragged=false;this.dragStart=[e.clientX,e.clientY];
+    this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);
+  }
+  private selectPlan(room:string,opening?:string):void {
+    if(!this.disabled)this.emit("al-plan-select",{room,opening});
+  }
   private movingMarker=false;
   private dragged=false;
   private suppressClick=false;
@@ -75,12 +85,12 @@ export class AlRoomPlan extends LitElement {
       coverage=svg`<polygon class="coverage" style=${`fill:${appearance.color};fill-opacity:${appearance.opacity};stroke:${appearance.color};stroke-dasharray:4 4`} points=${arc.map(([x,y])=>`${x},${-y}`).join(" ")} />`;
     }
     return html`<svg viewBox=${`${b[0][0]-pad} ${-b[1][1]-pad} ${width+pad*2} ${height+pad*2}`} aria-label="Top-down room placement" role="group" class=${this.aimingHandle || this.mode==="aim"?"aiming":""}
-      @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;this.movingMarker=false;this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);this.place(e);}}
-      @click=${(e:MouseEvent)=>{if(this.suppressClick){this.suppressClick=false;return;}this.place(e);}}
-      @pointermove=${(e:PointerEvent)=>{if(this.drag===e.pointerId){this.dragged=true;this.place(e);}}}
+      @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0 || this.opening || this.fixture?.kind==="window")return;this.movingMarker=false;this.beginDrag(e);this.place(e);}}
+      @click=${(e:MouseEvent)=>{if(this.suppressClick){this.suppressClick=false;return;}if(!this.opening && this.fixture?.kind!=="window")this.place(e);}}
+      @pointermove=${(e:PointerEvent)=>{if(this.drag===e.pointerId){if(!this.dragged && this.dragStart && Math.hypot(e.clientX-this.dragStart[0],e.clientY-this.dragStart[1])<4)return;this.dragged=true;this.place(e);}}}
       @pointerup=${()=>{this.suppressClick=this.dragged || this.aimingHandle || !!this.resizeSide;this.resizeSide=undefined;this.aimingHandle=false;this.drag=undefined;this.dragged=false;this.movingMarker=false;}}
       @pointercancel=${()=>{this.aimingHandle=false;this.resizeSide=undefined;this.drag=undefined;this.dragged=false;this.movingMarker=false;}}>
-      ${this.neighbors.filter(g=>g.id!==group.id && g.bounds).map(g=>svg`<polygon fill="#25374444" stroke="#607584" stroke-width="1" vector-effect="non-scaling-stroke" points=${footprint(g).map(([x,y])=>`${x},${-y}`).join(" ")}/><text fill="#94acb7" text-anchor="middle" font-size=${radius*1.8} x=${(g.bounds![0][0]+g.bounds![1][0])/2} y=${-(g.bounds![0][1]+g.bounds![1][1])/2}>${g.name || g.id}</text>`)}
+      ${this.neighbors.filter(g=>g.id!==group.id && g.bounds).map(g=>svg`<polygon class="neighbor" role="button" tabindex=${this.disabled?-1:0} aria-label=${`Select room ${g.name || g.id}`} style="outline:none;cursor:pointer" @pointerdown=${(e:Event)=>e.stopPropagation()} @click=${(e:Event)=>{e.stopPropagation();this.selectPlan(g.id);}} @keydown=${(e:KeyboardEvent)=>{if(["Enter"," "].includes(e.key)){e.preventDefault();this.selectPlan(g.id);}}} fill="#25374444" stroke="#607584" stroke-width="1" vector-effect="non-scaling-stroke" points=${footprint(g).map(([x,y])=>`${x},${-y}`).join(" ")}/><text style="pointer-events:none" fill="#94acb7" text-anchor="middle" font-size=${radius*1.8} x=${(g.bounds![0][0]+g.bounds![1][0])/2} y=${-(g.bounds![0][1]+g.bounds![1][1])/2}>${g.name || g.id}</text>`)}
       <polygon class="outline" points=${points.map(([x,y])=>`${x},${-y}`).join(" ")} />
       ${coverage}
       ${(this.neighbors.length?this.neighbors:[group]).flatMap(g=>(g.openings ?? []).filter(o=>o.id!==this.opening?.id).map(o=>({g,o}))).concat(this.opening?[{g:group,o:this.opening}]:[]).map(({g,o})=>{
@@ -89,27 +99,27 @@ export class AlRoomPlan extends LitElement {
         const a=Math.atan2(shape.closed[1]-shape.hinge[1],shape.closed[0]-shape.hinge[0]),b=Math.atan2(shape.open[1]-shape.hinge[1],shape.open[0]-shape.hinge[0]);
         const delta=Math.atan2(Math.sin(b-a),Math.cos(b-a));
         const arc=Array.from({length:17},(_,i)=>`${shape.hinge[0]+o.width*Math.cos(a+delta*i/16)},${-shape.hinge[1]-o.width*Math.sin(a+delta*i/16)}`).join(" ");
-        return svg`<g><line x1=${shape.hinge[0]} y1=${-shape.hinge[1]} x2=${shape.closed[0]} y2=${-shape.closed[1]} stroke="#102330" stroke-width="8" vector-effect="non-scaling-stroke"/>
+        return svg`<g @pointerdown=${(e:PointerEvent)=>{e.stopPropagation();if(this.disabled || e.button!==0)return;if(g.id===group.id){this.emit("al-opening-select",o.id);this.beginDrag(e);}}} @click=${(e:Event)=>{e.stopPropagation();if(!this.dragged)this.selectPlan(g.id,o.id);}}><line x1=${shape.hinge[0]} y1=${-shape.hinge[1]} x2=${shape.closed[0]} y2=${-shape.closed[1]} stroke="#102330" stroke-width="8" vector-effect="non-scaling-stroke"/>
           <line x1=${shape.hinge[0]} y1=${-shape.hinge[1]} x2=${o.kind==="open_wall"?shape.closed[0]:end[0]} y2=${-(o.kind==="open_wall"?shape.closed[1]:end[1])} stroke=${color} stroke-width="3" stroke-dasharray=${o.kind==="open_wall"?"4 4":"none"} vector-effect="non-scaling-stroke"/>
           ${o.kind!=="open_wall" && o.kind!=="window"?svg`<polyline points=${arc} fill="none" stroke=${color} stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`:nothing}
-          ${g.id===group.id?svg`<circle class="opening-marker" cx=${o.position[0]} cy=${-o.position[1]} r=${radius} fill=${color} role="button" tabindex=${this.disabled?-1:0} aria-label=${`Select ${o.name || o.kind}`} @pointerdown=${(e:PointerEvent)=>{if(this.disabled)return;e.stopPropagation();this.emit("al-opening-select",o.id);this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}} @click=${(e:Event)=>{e.stopPropagation();if(!this.disabled)this.emit("al-opening-select",o.id);}} @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-opening-select",o.id);}}}/>`:nothing}</g>`;
+          ${g.id===group.id?svg`<circle class="opening-marker" cx=${o.position[0]} cy=${-o.position[1]} r=${radius} fill=${color} role="button" tabindex=${this.disabled?-1:0} aria-label=${`Select ${o.name || o.kind}`} @pointerdown=${(e:PointerEvent)=>{if(this.disabled)return;e.stopPropagation();this.emit("al-opening-select",o.id);this.beginDrag(e);}} @click=${(e:Event)=>{e.stopPropagation();if(!this.disabled)this.emit("al-opening-select",o.id);}} @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-opening-select",o.id);}}}/>`:nothing}</g>`;
       })}
       ${fixtures.filter(item=>item.position.every(Number.isFinite)).map(item=>svg`<g>
         ${item.kind==="window"?svg`<line class="window" stroke=${windowFitsRoom(group,item)?fixtureAppearance(item.kind,this.hass?.states[item.entity]?.state).color:"#ff3535"} stroke-width="7" vector-effect="non-scaling-stroke"
           x1=${item.position[0]-(item.width ?? 1)/2*Math.cos(item.yaw*Math.PI/180)} y1=${-item.position[1]+(item.width ?? 1)/2*Math.sin(item.yaw*Math.PI/180)}
           x2=${item.position[0]+(item.width ?? 1)/2*Math.cos(item.yaw*Math.PI/180)} y2=${-item.position[1]-(item.width ?? 1)/2*Math.sin(item.yaw*Math.PI/180)}/>`:nothing}
         <circle class=${`marker ${item.entity===f?.entity?"selected":""}`} cx=${item.position[0]} cy=${-item.position[1]} r=${radius} role="button" tabindex=${this.disabled?-1:0} aria-label=${`Select ${item.name || item.entity}`}
-          @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.emit("al-fixture-select",item.entity);this.movingMarker=true;this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}}
+          @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.emit("al-fixture-select",item.entity);this.movingMarker=true;this.beginDrag(e);}}
           @click=${(e:Event)=>{e.stopPropagation();if(!this.disabled)this.emit("al-fixture-select",item.entity);}}
           @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["Enter"," "].includes(e.key)){e.preventDefault();this.emit("al-fixture-select",item.entity);}}}><title>${item.name || item.entity}</title></circle>
         ${item.entity===f?.entity && item.kind!=="window"?svg`<line class="aim" x1=${item.position[0]} y1=${-item.position[1]} x2=${item.position[0]+radius*5*Math.cos(item.yaw*Math.PI/180)} y2=${-item.position[1]-radius*5*Math.sin(item.yaw*Math.PI/180)}/>`:nothing}
       </g>`)}
-      ${this.opening?svg`<g>${([-1,1] as const).map(side=>svg`<circle class="marker selected" cx=${this.opening!.position[0]+side*this.opening!.width/2*Math.cos(this.opening!.yaw*Math.PI/180)} cy=${-this.opening!.position[1]-side*this.opening!.width/2*Math.sin(this.opening!.yaw*Math.PI/180)} r=${radius} aria-label=${side<0?"Resize opening start":"Resize opening end"} @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.resizeSide=side;this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}} @click=${(e:Event)=>e.stopPropagation()}/>`)}<text x=${this.opening.position[0]} y=${-this.opening.position[1]-radius*3} fill="#d8edf2" font-size=${radius*2} text-anchor="middle">${formatLengthInput(this.opening.width,this.unit)}</text></g>`:nothing}
+      ${this.opening?svg`<g>${([-1,1] as const).map(side=>svg`<circle class="marker selected" cx=${this.opening!.position[0]+side*this.opening!.width/2*Math.cos(this.opening!.yaw*Math.PI/180)} cy=${-this.opening!.position[1]-side*this.opening!.width/2*Math.sin(this.opening!.yaw*Math.PI/180)} r=${radius} aria-label=${side<0?"Resize opening start":"Resize opening end"} @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.resizeSide=side;this.beginDrag(e);}} @click=${(e:Event)=>e.stopPropagation()}/>`)}<text x=${this.opening.position[0]} y=${-this.opening.position[1]-radius*3} fill="#d8edf2" font-size=${radius*2} text-anchor="middle">${formatLengthInput(this.opening.width,this.unit)}</text></g>`:nothing}
       ${f?.entity && !this.opening && ["motion","occupancy"].includes(f.kind)?svg`<circle class="marker selected" role="button" tabindex=${this.disabled?-1:0} aria-label="Aim sensor" cx=${f.position[0]+radius*5*Math.cos(f.yaw*Math.PI/180)} cy=${-f.position[1]-radius*5*Math.sin(f.yaw*Math.PI/180)} r=${radius*.75}
-        @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.aimingHandle=true;this.movingMarker=false;this.drag=e.pointerId;this.dragged=false;this.renderRoot.querySelector("svg")!.setPointerCapture(e.pointerId);}}
+        @pointerdown=${(e:PointerEvent)=>{if(this.disabled || e.button!==0)return;e.stopPropagation();this.aimingHandle=true;this.movingMarker=false;this.beginDrag(e);}}
         @click=${(e:Event)=>e.stopPropagation()}
         @keydown=${(e:KeyboardEvent)=>{if(!this.disabled && ["ArrowLeft","ArrowRight"].includes(e.key)){e.preventDefault();this.emit("al-fixture-aim",f.yaw+(e.key==="ArrowLeft"?1:-1)*(e.shiftKey?15:1));}}}><title>Drag to aim</title></circle>`:nothing}
-    </svg><p ?hidden=${this.minimal}>${this.opening?"Place opening: click near a wall or drag its marker":this.fixture?.entity?(this.fixture.kind==="window"?"Click near a wall to place a window · drag its marker to move it":this.mode==="place"?"Click to place · drag a marker to move it · select Aim to set direction":"AIM MODE — press and drag toward the direction the sensor faces"):"Select a device to start placing it."} · Top = +Y</p>
+    </svg><p ?hidden=${this.minimal}>${this.opening?"Drag the opening or its marker to move it; drag either end to resize":this.fixture?.entity?(this.fixture.kind==="window"?"Click near a wall to place a window · drag its marker to move it":this.mode==="place"?"Click to place · drag a marker to move it · select Aim to set direction":"AIM MODE — press and drag toward the direction the sensor faces"):"Select a device to start placing it."} · Top = +Y</p>
     ${this.error?html`<p class="error" role="alert">${this.error}</p>`:nothing}`;
   }
 }
