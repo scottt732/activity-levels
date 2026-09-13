@@ -2,13 +2,14 @@ import {readArchitecture} from "./architecture";
 import { readOpening } from "./room-openings";
 import { readFixture } from "./room-fixtures";
 import type { Kind } from "./kinds";
-import type { ArchitecturalObject, Bounds, GroupLive, Path, SiteLayout, RoomOpening, RoomFixture } from "./types";
+import type { ArchitecturalObject, Bounds, GroupLive, Path, SiteLayout, RoomOpening, RoomFixture, FloorplanSpace } from "./types";
 
 export interface ActivityFrame { now: number; groups: Record<string, Pick<GroupLive,"value" | "max_value"> & Partial<Pick<GroupLive,"last_activity">>> }
-export interface FloorplanNode { architecture?:ArchitecturalObject[]; id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[]; fixtures?: RoomFixture[]; openings?:RoomOpening[] }
-export interface FloorplanConfig { gps?: {rotation?:number}; site?: SiteLayout; groups: FloorplanNode[] }
+export interface FloorplanNode { geometry_only?:boolean; architecture?:ArchitecturalObject[]; id: string; name: string | null; kind: Kind; bounds?: Bounds; points?: [number,number][]; children: FloorplanNode[]; fixtures?: RoomFixture[]; openings?:RoomOpening[] }
+export interface FloorplanConfig { spaces?:FloorplanSpace[]; gps?: {rotation?:number}; site?: SiteLayout; groups: FloorplanNode[] }
 
 export interface FloorplanGroup {
+  geometry_only?:boolean;
   id: string;
   label: string;
   kind: Kind;
@@ -79,11 +80,17 @@ export function floorplanModel(config: FloorplanConfig): FloorplanModel {
     groups.forEach((group, i) => { const here = [...path, i]; entries.push({group,path:here,parent}); visit(group.children, [...here,"children"], group); });
   };
   visit(config.groups, ["groups"], null);
+  for(const [i,space] of (config.spaces??[]).entries()) {
+    if(entries.some(e=>e.group.id===space.id))continue;
+    const parent=entries.find(e=>e.group.id===space.parent_id)?.group;
+    if(!parent){issues.push({id:space.id,label:space.name,reason:"The floorplan space has no parent floor or room."});continue;}
+    entries.push({group:{...space,kind:"area",geometry_only:true,children:[]},path:["spaces",i],parent});
+  }
   const all = new Map<string, FloorplanGroup>();
   const relevant = new Set<string>();
   for (const { group, path, parent } of entries) {
     const ancestors = parent ? [...all.get(parent.id)!.ancestors, parent.id] : [];
-    const info = { id: group.id, label: group.name ?? group.id, kind: group.kind, path, ancestors };
+    const info = { ...(group.geometry_only?{geometry_only:true}:{}), id: group.id, label: group.name ?? group.id, kind: group.kind, path, ancestors };
     all.set(group.id, info);
     if (group.bounds === undefined && group.points === undefined) continue;
     [group.id, ...ancestors].forEach((id) => relevant.add(id));

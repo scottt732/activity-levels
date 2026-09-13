@@ -32,6 +32,7 @@ export class AlRoomHud extends LitElement {
   protected override render() {
     const room=this.room;
     if(!room) return nothing;
+    if(room.geometry_only)return html`<section aria-label="Floorplan space"><button type="button" aria-label="Dismiss room details" @click=${()=>this.dispatchEvent(new CustomEvent("al-dismiss-hud",{bubbles:true,composed:true}))}>×</button><div class="eyebrow">Floorplan space</div><h3>${room.label}</h3><p>No activity association</p></section>`;
     const reading=activityReading(this.live,room.id,this.now);
     const fresh=this.telemetry && Number.isFinite(this.telemetry.now) && Math.abs(this.now-this.telemetry.now)<=STALE_SECONDS;
     const detail=fresh ? this.telemetry?.rooms[room.id] : undefined;

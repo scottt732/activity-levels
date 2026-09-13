@@ -1857,9 +1857,32 @@ function Mn(e) {
 		});
 	};
 	i(e.groups, ["groups"], null);
+	for (let [t, i] of (e.spaces ?? []).entries()) {
+		if (r.some((e) => e.group.id === i.id)) continue;
+		let e = r.find((e) => e.group.id === i.parent_id)?.group;
+		if (!e) {
+			n.push({
+				id: i.id,
+				label: i.name,
+				reason: "The floorplan space has no parent floor or room."
+			});
+			continue;
+		}
+		r.push({
+			group: {
+				...i,
+				kind: "area",
+				geometry_only: !0,
+				children: []
+			},
+			path: ["spaces", t],
+			parent: e
+		});
+	}
 	let a = /* @__PURE__ */ new Map(), o = /* @__PURE__ */ new Set();
 	for (let { group: e, path: i, parent: s } of r) {
 		let r = s ? [...a.get(s.id).ancestors, s.id] : [], c = {
+			...e.geometry_only ? { geometry_only: !0 } : {},
 			id: e.id,
 			label: e.name ?? e.id,
 			kind: e.kind,
@@ -2087,6 +2110,10 @@ var Hn = (e) => e < 60 ? `${Math.ceil(e)}s` : e < 3600 ? `${Math.ceil(e / 60)}m`
 	render() {
 		let e = this.room;
 		if (!e) return k;
+		if (e.geometry_only) return E`<section aria-label="Floorplan space"><button type="button" aria-label="Dismiss room details" @click=${() => this.dispatchEvent(new CustomEvent("al-dismiss-hud", {
+			bubbles: !0,
+			composed: !0
+		}))}>×</button><div class="eyebrow">Floorplan space</div><h3>${e.label}</h3><p>No activity association</p></section>`;
 		let t = kn(this.live, e.id, this.now), n = this.telemetry && Number.isFinite(this.telemetry.now) && Math.abs(this.now - this.telemetry.now) <= 10 ? this.telemetry?.rooms[e.id] : void 0, r = this.live?.groups[e.id]?.last_activity, i = n?.people ?? [];
 		return E`<section aria-label="Room telemetry">
       <button type="button" aria-label="Dismiss room details" @click=${() => this.dispatchEvent(new CustomEvent("al-dismiss-hud", {
@@ -2512,7 +2539,7 @@ var Un = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends P {
 		let e = ++this.sequence;
 		this.loading = !0;
 		try {
-			let { FloorplanRenderer: t } = await import("./shared-2hXMatgl.js");
+			let { FloorplanRenderer: t } = await import("./shared-BpzXoWwD.js");
 			if (e !== this.sequence || !this.isConnected) return;
 			let n = this.renderRoot.querySelector("#scene");
 			this.renderer = new t(n, (e) => {
@@ -2628,6 +2655,7 @@ var Un = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends P {
     </details>`;
 	}
 	reading(e) {
+		if (e.geometry_only) return "Floorplan only";
 		let t = kn(this.live, e.id, this.now);
 		return t.status === "live" ? `${Un(t.value)} / ${Un(t.max)}` : t.status === "stale" ? "Stale" : "No reading";
 	}
@@ -2699,13 +2727,13 @@ var Un = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends P {
           </div>
           ${n ? E`<section class="selection" aria-label="Selected group">
             <h3>${n.label}</h3><p>${rt[n.kind]?.label ?? "Group"} · ${n.id}</p>
-            <p>Activity: <strong>${this.reading(n)}</strong></p>
+            <p>${n.geometry_only ? "Floorplan only" : E`Activity: <strong>${this.reading(n)}</strong>`}</p>
             <p>${X(this.lights[n.id], this.hass?.states ?? {}).unknown ? "Some light readings unavailable" : `Lights: ${Math.round(X(this.lights[n.id], this.hass?.states ?? {}).brightness * 100)}%`}</p>
             ${this.dashboard ? k : E`<button id="edit-room" type="button" @click=${() => this.dispatchEvent(new CustomEvent("al-edit-room", {
 			detail: n.id,
 			bubbles: !0,
 			composed: !0
-		}))}>Place devices & windows</button><button id="open-group" type="button" @click=${() => this.openGroup(n)}>Open group settings</button>`}
+		}))}>Place devices & windows</button>${n.geometry_only ? k : E`<button id="open-group" type="button" @click=${() => this.openGroup(n)}>Open group settings</button>`}`}
           </section>` : E`<p class="muted">Select a room in the scene or a group in this list.</p>`}
         </aside>
       </div>

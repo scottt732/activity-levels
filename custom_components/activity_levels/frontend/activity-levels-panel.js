@@ -1,4 +1,4 @@
-import { $ as e, $t as t, A as n, At as r, B as i, Bt as a, Ct as o, D as s, Dt as c, E as l, Et as u, F as d, Ft as f, G as p, Gt as m, H as h, Ht as ee, I as te, It as ne, J as re, Jt as g, K as ie, Kt as _, L as ae, Lt as oe, M as se, Mt as ce, N as le, Nt as ue, O as de, Ot as fe, P as v, Pt as pe, Q as me, Qt as y, R as he, Rt as ge, S as _e, St as ve, Tt as ye, U as b, Ut as be, V as xe, Vt as Se, W as Ce, Wt as x, X as we, Xt as S, Y as Te, Yt as Ee, Z as De, Zt as Oe, _ as ke, _t as Ae, at as je, b as Me, bt as Ne, c as Pe, ct as Fe, d as Ie, dt as Le, et as Re, f as ze, ft as Be, g as Ve, gt as He, h as Ue, ht as We, i as Ge, it as Ke, j as qe, jt as Je, k as Ye, kt as Xe, l as Ze, lt as Qe, m as $e, mt as et, nt as tt, o as nt, ot as rt, p as it, pt as at, q as ot, qt as C, rt as st, s as ct, st as lt, t as ut, tt as dt, u as ft, ut as w, v as pt, vt as mt, w as ht, wt as T, x as gt, xt as _t, y as vt, yt as E, z as yt, zt as bt } from "./shared-C0J-jiaM.js";
+import { $ as e, $t as t, A as n, At as r, B as i, Bt as a, Ct as o, D as s, Dt as c, E as l, Et as u, F as d, Ft as f, G as p, Gt as m, H as h, Ht as ee, I as te, It as ne, J as re, Jt as g, K as ie, Kt as _, L as ae, Lt as oe, M as se, Mt as ce, N as le, Nt as ue, O as de, Ot as fe, P as v, Pt as pe, Q as me, Qt as y, R as he, Rt as ge, S as _e, St as ve, Tt as ye, U as b, Ut as be, V as xe, Vt as Se, W as Ce, Wt as x, X as we, Xt as S, Y as Te, Yt as Ee, Z as De, Zt as Oe, _ as ke, _t as Ae, at as je, b as Me, bt as Ne, c as Pe, ct as Fe, d as Ie, dt as Le, et as Re, f as ze, ft as Be, g as Ve, gt as He, h as Ue, ht as We, i as Ge, it as Ke, j as qe, jt as Je, k as Ye, kt as Xe, l as Ze, lt as Qe, m as $e, mt as et, nt as tt, o as nt, ot as rt, p as it, pt as at, q as ot, qt as C, rt as st, s as ct, st as lt, t as ut, tt as dt, u as ft, ut as w, v as pt, vt as mt, w as ht, wt as T, x as gt, xt as _t, y as vt, yt as E, z as yt, zt as bt } from "./shared-C6Iuja60.js";
 import { t as xt } from "./shared-BBNy9uad.js";
 //#region src/entities.ts
 var St = (e) => `switch.${e}_presence_simulation`, Ct = (e) => `sensor.${e}_expected_activity`, wt = (e) => `sensor.${e}_activity_anomaly`, Tt = [
@@ -7202,12 +7202,58 @@ var ls = class extends C {
 };
 v([m({ attribute: !1 })], ls.prototype, "hass", void 0), v([m({ attribute: !1 })], ls.prototype, "config", void 0), v([m({ attribute: !1 })], ls.prototype, "errors", void 0), v([m({ type: Boolean })], ls.prototype, "available", void 0), v([x()], ls.prototype, "parseError", void 0), v([x()], ls.prototype, "validating", void 0), v([x()], ls.prototype, "validationFailure", void 0), ls = v([_("al-code")], ls);
 //#endregion
+//#region src/floorplan-spaces.ts
+var us = /* @__PURE__ */ new WeakMap();
+function ds(e) {
+	if (!e.spaces?.length) return e;
+	let t = us.get(e);
+	if (t) return t;
+	let n = structuredClone(e), r = /* @__PURE__ */ new Map(), i = (e) => {
+		r.set(e.id, e), e.children.forEach(i);
+	};
+	n.groups.forEach(i);
+	let a = [];
+	for (let e of n.spaces ?? []) {
+		let t = r.get(e.parent_id);
+		if (!t || r.has(e.id)) {
+			a.push(e);
+			continue;
+		}
+		let { parent_id: n, ...i } = e, o = {
+			...ie(e.id, "area"),
+			...i,
+			geometry_only: !0
+		};
+		t.children.push(o), r.set(e.id, o);
+	}
+	return a.length ? n.spaces = a : delete n.spaces, us.set(e, n), n;
+}
+function fs(e) {
+	let t = [...e.spaces ?? []], n = (e, r) => e.flatMap((e) => e.geometry_only && r && e.bounds ? (t.push({
+		id: e.id,
+		name: e.name ?? "Space",
+		parent_id: r.id,
+		bounds: e.bounds,
+		...e.points ? { points: e.points } : {},
+		...e.fixtures ? { fixtures: e.fixtures } : {},
+		...e.openings ? { openings: e.openings } : {},
+		...e.architecture ? { architecture: e.architecture } : {}
+	}), []) : [{
+		...e,
+		children: n(e.children, e)
+	}]), r = n(e.groups), i = {
+		...e,
+		groups: r
+	};
+	return t.length ? i.spaces = t : delete i.spaces, i;
+}
+//#endregion
 //#region src/floorplan-import.ts
-var us = (e) => e.trim().toLocaleLowerCase();
-function ds(e, t) {
+var ps = (e) => e.trim().toLocaleLowerCase();
+function ms(e, t) {
 	let n = w(e).map(({ group: e }) => e), r = {}, i = /* @__PURE__ */ new Map();
 	for (let e of t.items) {
-		let t = e.source_id ? n.filter((t) => t.id === e.source_id) : [], a = t.length ? t : n.filter((t) => us(t.name ?? t.id) === us(e.name)), o = a.length === 1 ? a[0] : void 0;
+		let t = e.source_id ? n.filter((t) => t.id === e.source_id) : [], a = t.length ? t : n.filter((t) => ps(t.name ?? t.id) === ps(e.name)), o = a.length === 1 ? a[0] : void 0;
 		r[e.key] = o ? {
 			action: "existing",
 			id: o.id
@@ -7216,7 +7262,7 @@ function ds(e, t) {
 	for (let [e, t] of Object.entries(r)) t.action === "existing" && i.get(t.id) > 1 && (r[e] = { action: "skip" });
 	return r;
 }
-function fs(e, t, n) {
+function hs(e, t, n) {
 	let r = new Set(w(e).map(({ group: e }) => e.id));
 	Object.values(n).forEach((e) => {
 		e.action === "create" && r.add(e.id);
@@ -7233,7 +7279,7 @@ function fs(e, t, n) {
 		parent: null
 	};
 }
-function ps(e, t, n, r) {
+function gs(e, t, n, r) {
 	let i = structuredClone(e), a = new Map(w(i).map(({ group: e }) => [e.id, e])), o = new Map(t.items.map((e) => [e.key, e])), s = [], c = /* @__PURE__ */ new Set(), l = /* @__PURE__ */ new Set(), d = /* @__PURE__ */ new Map(), f = /* @__PURE__ */ new Set();
 	for (let [e, t] of Object.entries(n)) {
 		if (!o.has(e)) throw Error("Source changed. Parse the configuration again.");
@@ -7285,7 +7331,7 @@ function ps(e, t, n, r) {
 }
 //#endregion
 //#region src/al-floorplan-import.ts
-var ms = 1e6, hs = (e) => typeof e == "object" && e && "message" in e ? String(e.message) : "Import failed. Try again.", G = class extends C {
+var _s = 1e6, vs = (e) => typeof e == "object" && e && "message" in e ? String(e.message) : "Import failed. Try again.", G = class extends C {
 	constructor(...e) {
 		super(...e), this.disabled = !1, this.text = "", this.source = null, this.choices = {}, this.importGps = !1, this.busy = null, this.error = "", this.notice = "", this.sequence = 0;
 	}
@@ -7323,7 +7369,7 @@ var ms = 1e6, hs = (e) => typeof e == "object" && e && "message" in e ? String(e
 		if (!n) return;
 		this.resetPreview();
 		let r = this.sequence;
-		if (n.size > ms) {
+		if (n.size > _s) {
 			this.error = "File is too large (maximum 1 MB).", t.value = "";
 			return;
 		}
@@ -7339,7 +7385,7 @@ var ms = 1e6, hs = (e) => typeof e == "object" && e && "message" in e ? String(e
 	}
 	async parse() {
 		if (!this.hass || !this.config || this.disabled || this.busy) return;
-		if (this.resetPreview(), this.text.length > ms) {
+		if (this.resetPreview(), this.text.length > _s) {
 			this.error = "Paste is too large (maximum 1 MB of text).";
 			return;
 		}
@@ -7352,9 +7398,9 @@ var ms = 1e6, hs = (e) => typeof e == "object" && e && "message" in e ? String(e
 				this.error = "The draft changed. Parse again to review matches.";
 				return;
 			}
-			this.source = n, this.snapshot = t, this.choices = ds(t, n);
+			this.source = n, this.snapshot = t, this.choices = ms(t, n);
 		} catch (t) {
-			e === this.sequence && (this.error = hs(t));
+			e === this.sequence && (this.error = vs(t));
 		} finally {
 			e === this.sequence && (this.busy = null);
 		}
@@ -7367,7 +7413,7 @@ var ms = 1e6, hs = (e) => typeof e == "object" && e && "message" in e ? String(e
 	}
 	destination(e, t) {
 		let n = t.target.value;
-		this.choose(e.key, n === "create" ? fs(this.config, e, this.choices) : n === "skip" ? { action: "skip" } : {
+		this.choose(e.key, n === "create" ? hs(this.config, e, this.choices) : n === "skip" ? { action: "skip" } : {
 			action: "existing",
 			id: n.slice(9)
 		});
@@ -7375,9 +7421,9 @@ var ms = 1e6, hs = (e) => typeof e == "object" && e && "message" in e ? String(e
 	preview() {
 		if (!this.config || !this.source) return {};
 		try {
-			return { result: ps(this.config, this.source, this.choices, this.importGps) };
+			return { result: gs(this.config, this.source, this.choices, this.importGps) };
 		} catch (e) {
-			return { error: hs(e) };
+			return { error: vs(e) };
 		}
 	}
 	async apply() {
@@ -7395,7 +7441,7 @@ var ms = 1e6, hs = (e) => typeof e == "object" && e && "message" in e ? String(e
 			}
 			this.resetPreview(), this.notice = "Import applied to the draft. Use Save to persist it, or Undo to revert the import.", this.dispatchEvent(M(e.config, void 0, e.created ? !0 : void 0));
 		} catch (e) {
-			t === this.sequence && (this.error = hs(e));
+			t === this.sequence && (this.error = vs(e));
 		} finally {
 			t === this.sequence && (this.busy = null);
 		}
@@ -7492,23 +7538,23 @@ var ms = 1e6, hs = (e) => typeof e == "object" && e && "message" in e ? String(e
 v([m({ attribute: !1 })], G.prototype, "hass", void 0), v([m({ attribute: !1 })], G.prototype, "config", void 0), v([m({ type: Boolean })], G.prototype, "disabled", void 0), v([x()], G.prototype, "text", void 0), v([x()], G.prototype, "source", void 0), v([x()], G.prototype, "choices", void 0), v([x()], G.prototype, "importGps", void 0), v([x()], G.prototype, "busy", void 0), v([x()], G.prototype, "error", void 0), v([x()], G.prototype, "notice", void 0), G = v([_("al-floorplan-import")], G);
 //#endregion
 //#region src/property-layout.ts
-var gs = 6378137, K = Math.PI / 180;
-function _s(e) {
+var ys = 6378137, K = Math.PI / 180;
+function bs(e) {
 	return Number.isFinite(e.latitude) && Math.abs(e.latitude) < 85 && Number.isFinite(e.longitude) && Math.abs(e.longitude) <= 180 && Number.isFinite(e.rotation ?? 0) && Number.isFinite(e.elevation ?? 0);
 }
-function vs([e, t], n) {
+function xs([e, t], n) {
 	let r = (n.rotation ?? 0) * K, i = e * Math.cos(r) - t * Math.sin(r), a = e * Math.sin(r) + t * Math.cos(r);
-	return [n.longitude + i / (gs * Math.cos(n.latitude * K)) / K, n.latitude + a / gs / K];
+	return [n.longitude + i / (ys * Math.cos(n.latitude * K)) / K, n.latitude + a / ys / K];
 }
-function ys([e, t], n) {
-	let r = (e - n.longitude) * K * gs * Math.cos(n.latitude * K), i = (t - n.latitude) * K * gs, a = (n.rotation ?? 0) * K;
+function Ss([e, t], n) {
+	let r = (e - n.longitude) * K * ys * Math.cos(n.latitude * K), i = (t - n.latitude) * K * ys, a = (n.rotation ?? 0) * K;
 	return [r * Math.cos(a) + i * Math.sin(a), -r * Math.sin(a) + i * Math.cos(a)];
 }
-function bs([e, t], n) {
+function Cs([e, t], n) {
 	let r = 256 * 2 ** n, i = Math.sin(Math.max(-85, Math.min(85, t)) * K);
 	return [(e + 180) / 360 * r, (.5 - Math.log((1 + i) / (1 - i)) / (4 * Math.PI)) * r];
 }
-function xs([e, t], n) {
+function ws([e, t], n) {
 	let r = 256 * 2 ** n;
 	return [e / r * 360 - 180, Math.atan(Math.sinh(Math.PI * (1 - 2 * t / r))) / K];
 }
@@ -7523,7 +7569,7 @@ function q(e) {
 		[t, i]
 	];
 }
-function Ss(e, t, n, r, i) {
+function Ts(e, t, n, r, i) {
 	if (![
 		n,
 		r,
@@ -7571,7 +7617,7 @@ function Ss(e, t, n, r, i) {
 	};
 	return m(o), a;
 }
-function Cs(e) {
+function Es(e) {
 	let t = e.trim().split(/\n/).filter(Boolean).map((e) => e.trim().split(/[,\s]+/).map(Number));
 	if (t.length < 3 || t.length > 4096 || t.some((e) => e.length !== 2 || !e.every(Number.isFinite))) throw Error("Enter at least three X,Y coordinate pairs, one per line.");
 	let n = t.reduce((e, n, r) => {
@@ -7583,7 +7629,7 @@ function Cs(e) {
 }
 //#endregion
 //#region src/al-property-layout.ts
-var ws = {
+var Ds = {
 	property: "#74836b",
 	lawn: "#65964d",
 	driveway: "#89919a",
@@ -7622,7 +7668,7 @@ var ws = {
 			this.busy = !0, this.error = "";
 			try {
 				let e = await this.hass.callWS({ type: "get_config" });
-				if (!_s(e)) throw Error("Home Assistant location is outside the supported map range. Edit Home information first.");
+				if (!bs(e)) throw Error("Home Assistant location is outside the supported map range. Edit Home information first.");
 				this.latitude = String(e.latitude), this.longitude = String(e.longitude), this.elevation = String(e.elevation ?? 0), this.loadedLocation = !0;
 			} catch (e) {
 				this.error = e instanceof Error ? e.message : String(e);
@@ -7639,7 +7685,7 @@ var ws = {
 				longitude: Number(this.longitude),
 				rotation: Number(this.rotation)
 			};
-			if (this.elevation.trim() && (e.elevation = Number(this.elevation)), !_s(e)) throw Error("Enter valid coordinates (latitude between −85 and 85) and finite elevation/rotation.");
+			if (this.elevation.trim() && (e.elevation = Number(this.elevation)), !bs(e)) throw Error("Enter valid coordinates (latitude between −85 and 85) and finite elevation/rotation.");
 			this.dispatchEvent(M({
 				...this.config,
 				gps: e
@@ -7650,7 +7696,7 @@ var ws = {
 	}
 	loadMap() {
 		try {
-			if (!this.config?.gps || !_s(this.config.gps)) throw Error("Apply a valid geographic origin first.");
+			if (!this.config?.gps || !bs(this.config.gps)) throw Error("Apply a valid geographic origin first.");
 			if (new URL(this.provider).protocol !== "https:" || ![
 				"{x}",
 				"{y}",
@@ -7662,25 +7708,25 @@ var ws = {
 		}
 	}
 	originPixel() {
-		return bs(this.center, this.zoom);
+		return Cs(this.center, this.zoom);
 	}
 	screen(e) {
-		let t = bs(vs(e, this.config.gps), this.zoom), n = this.originPixel();
+		let t = Cs(xs(e, this.config.gps), this.zoom), n = this.originPixel();
 		return [t[0] - n[0] + J / 2, t[1] - n[1] + J / 2];
 	}
 	pan(e, t) {
 		let n = this.originPixel();
-		this.center = xs([n[0] + e * 128, n[1] + t * 128], this.zoom);
+		this.center = ws([n[0] + e * 128, n[1] + t * 128], this.zoom);
 	}
 	addVertex(e) {
 		if (this.disabled || !this.config?.gps) return;
-		let t = e.currentTarget.getBoundingClientRect(), n = this.originPixel(), r = ys(xs([n[0] + (e.clientX - t.left) / t.width * J - J / 2, n[1] + (e.clientY - t.top) / t.height * J - J / 2], this.zoom), this.config.gps);
+		let t = e.currentTarget.getBoundingClientRect(), n = this.originPixel(), r = Ss(ws([n[0] + (e.clientX - t.left) / t.width * J - J / 2, n[1] + (e.clientY - t.top) / t.height * J - J / 2], this.zoom), this.config.gps);
 		this.vertices = [this.vertices.trim(), r.map((e) => e.toFixed(3)).join(", ")].filter(Boolean).join("\n");
 	}
 	addFeature() {
 		if (!(!this.config || this.disabled)) try {
 			if (!this.name.trim()) throw Error("Give the feature a name.");
-			let e = Cs(this.vertices), t = this.config.site ?? {
+			let e = Es(this.vertices), t = this.config.site ?? {
 				ground_z: 0,
 				features: []
 			};
@@ -7712,7 +7758,7 @@ var ws = {
 	}
 	place() {
 		if (!(!this.config || this.disabled)) try {
-			this.dispatchEvent(M(Ss(this.config, this.structure, Number(this.dx), Number(this.dy), Number(this.angle)))), this.dx = this.dy = this.angle = "0", this.error = "";
+			this.dispatchEvent(M(Ts(this.config, this.structure, Number(this.dx), Number(this.dy), Number(this.angle)))), this.dx = this.dy = this.angle = "0", this.error = "";
 		} catch (e) {
 			this.error = e.message;
 		}
@@ -7778,7 +7824,7 @@ var ws = {
         <p>Click the map to add outline vertices, or enter local coordinates below.</p>
         <div class="map"><svg viewBox=${`0 0 ${J} ${J}`} role="img" aria-label="Property map; use coordinate fields below for keyboard editing" @click=${this.addVertex}>
           ${this.tiles()}
-          ${this.config.site?.features.map((e) => y`<polygon points=${this.polygon(e.points)} fill=${ws[e.kind]} fill-opacity="0.35" stroke=${ws[e.kind]} stroke-width="2"></polygon>`)}
+          ${this.config.site?.features.map((e) => y`<polygon points=${this.polygon(e.points)} fill=${Ds[e.kind]} fill-opacity="0.35" stroke=${Ds[e.kind]} stroke-width="2"></polygon>`)}
           ${t.map((e) => y`<polygon points=${this.polygon(q(e))} fill="#46b6ff" fill-opacity="0.15" stroke="#159ce9" stroke-width="2"></polygon>`)}
           <polyline points=${this.polygon(n)} fill="#ffcc55" fill-opacity="0.2" stroke="#ffcc55" stroke-width="3"></polyline>
           ${n.map((e) => {
@@ -7805,7 +7851,7 @@ var ws = {
 		}}></label>
           <label>Type<select .value=${this.kind} @change=${(e) => {
 			this.kind = e.target.value;
-		}}>${Object.keys(ws).map((e) => S`<option value=${e}>${e}</option>`)}</select></label></div>
+		}}>${Object.keys(Ds).map((e) => S`<option value=${e}>${e}</option>`)}</select></label></div>
         <label>Outline coordinates (X, Y metres; one vertex per line)<textarea .value=${this.vertices} @input=${(e) => {
 			this.vertices = e.target.value;
 		}}></textarea></label>
@@ -7836,7 +7882,7 @@ var ws = {
 v([m({ attribute: !1 })], Y.prototype, "config", void 0), v([m({ attribute: !1 })], Y.prototype, "hass", void 0), v([m({ type: Boolean })], Y.prototype, "disabled", void 0), v([x()], Y.prototype, "latitude", void 0), v([x()], Y.prototype, "longitude", void 0), v([x()], Y.prototype, "elevation", void 0), v([x()], Y.prototype, "rotation", void 0), v([x()], Y.prototype, "loadedLocation", void 0), v([x()], Y.prototype, "error", void 0), v([x()], Y.prototype, "mapOpen", void 0), v([x()], Y.prototype, "tileError", void 0), v([x()], Y.prototype, "zoom", void 0), v([x()], Y.prototype, "center", void 0), v([x()], Y.prototype, "provider", void 0), v([x()], Y.prototype, "attribution", void 0), v([x()], Y.prototype, "editing", void 0), v([x()], Y.prototype, "name", void 0), v([x()], Y.prototype, "kind", void 0), v([x()], Y.prototype, "vertices", void 0), v([x()], Y.prototype, "structure", void 0), v([x()], Y.prototype, "dx", void 0), v([x()], Y.prototype, "dy", void 0), v([x()], Y.prototype, "angle", void 0), v([x()], Y.prototype, "busy", void 0), Y = v([_("al-property-layout")], Y);
 //#endregion
 //#region node_modules/.pnpm/lit-html@3.3.3/node_modules/lit-html/directive-helpers.js
-var { I: Ts } = Oe, Es = {}, Ds = (e, t = Es) => e._$AH = t, Os = Ea(class extends Da {
+var { I: Os } = Oe, ks = {}, As = (e, t = ks) => e._$AH = t, js = Ea(class extends Da {
 	constructor() {
 		super(...arguments), this.key = g;
 	}
@@ -7844,20 +7890,20 @@ var { I: Ts } = Oe, Es = {}, Ds = (e, t = Es) => e._$AH = t, Os = Ea(class exten
 		return this.key = e, t;
 	}
 	update(e, [t, n]) {
-		return t !== this.key && (Ds(e), this.key = t), n;
+		return t !== this.key && (As(e), this.key = t), n;
 	}
-}), ks = [
+}), Ms = [
 	"manufacturer",
 	"model",
 	"platform",
 	"device_class",
 	"entity_name"
-], As = (e) => e.trim().toLowerCase();
-function js(e, t) {
-	let n = ks.filter((t) => e.match[t]);
-	return !!e.match.model && !!(e.match.manufacturer || e.match.platform) && n.every((n) => n === "entity_name" ? As(t[n] ?? "").includes(As(e.match[n])) : As(t[n] ?? "") === As(e.match[n]));
+], Ns = (e) => e.trim().toLowerCase();
+function Ps(e, t) {
+	let n = Ms.filter((t) => e.match[t]);
+	return !!e.match.model && !!(e.match.manufacturer || e.match.platform) && n.every((n) => n === "entity_name" ? Ns(t[n] ?? "").includes(Ns(e.match[n])) : Ns(t[n] ?? "") === Ns(e.match[n]));
 }
-function Ms(e, t) {
+function Fs(e, t) {
 	return {
 		...e,
 		coverage_shape: t.coverage_shape ?? "cone",
@@ -7871,7 +7917,7 @@ function Ms(e, t) {
 		mount: t.mount
 	};
 }
-function Ns(e) {
+function Is(e) {
 	if (e.length > 5e5) throw Error("Profile file is too large.");
 	let t = JSON.parse(e);
 	if (!Array.isArray(t) || t.length > 128) throw Error("Expected an array of at most 128 profiles.");
@@ -7913,7 +7959,7 @@ function Ns(e) {
 			...t
 		}) || n.has(t.id)) throw Error("Invalid coverage or duplicate profile id.");
 		if (!t.match || typeof t.match != "object" || Array.isArray(t.match)) throw Error("Invalid identification rules.");
-		for (let [e, n] of Object.entries(t.match)) if (!ks.includes(e) || typeof n != "string" || !n.trim() || n.length > 200) throw Error("Invalid identification rule.");
+		for (let [e, n] of Object.entries(t.match)) if (!Ms.includes(e) || typeof n != "string" || !n.trim() || n.length > 200) throw Error("Invalid identification rule.");
 		return n.add(t.id), {
 			...t.coverage_shape === void 0 ? {} : { coverage_shape: t.coverage_shape },
 			...t.look_down === void 0 ? {} : { look_down: t.look_down },
@@ -7931,7 +7977,7 @@ function Ns(e) {
 		};
 	});
 }
-function Ps(e, t, n, r, i) {
+function Ls(e, t, n, r, i) {
 	let a = w(e), o = a.find((e) => e.group.id === t);
 	if (!o) return [];
 	let s = o.group.area_id;
@@ -7962,19 +8008,19 @@ function Ps(e, t, n, r, i) {
 }
 //#endregion
 //#region src/measurement-units.ts
-function Fs(e) {
+function Rs(e) {
 	let t = e?.config?.unit_system?.length?.toLowerCase();
 	return t === "mi" || t === "ft" || t === "in" ? "ft" : "m";
 }
-function Is(e, t) {
+function zs(e, t) {
 	return t === "ft" ? e * .3048 : e;
 }
-function Ls(e, t) {
+function Bs(e, t) {
 	let n = e.trim().toLowerCase().replace(/[′’]/g, "'").replace(/[″“”]/g, "\"");
 	if (!n) return null;
 	let r = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
 	if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(n)) {
-		let e = Is(Number(n), t);
+		let e = zs(Number(n), t);
 		return Number.isFinite(e) ? e : null;
 	}
 	let i = /^([+-]?)\s*(?:(\d+(?:\.\d*)?|\.\d+)\s*(?:'|feet|foot|ft)\s*)?(?:(\d+(?:\.\d*)?|\.\d+|\d+\s+\d+\/\d+|\d+\/\d+)\s*(?:"|inches|inch|in))?$/.exec(n);
@@ -7989,14 +8035,14 @@ function Ls(e, t) {
 	let s = (Number(i[2] ?? 0) * 12 + o) * .0254 * (i[1] === "-" ? -1 : 1);
 	return Number.isFinite(s) ? s : null;
 }
-function Rs(e, t) {
+function Vs(e, t) {
 	if (t === "m") return String(Number(e.toFixed(4)));
 	let n = Number((Math.abs(e) / .0254).toFixed(4)), r = Math.floor(n / 12), i = Number((n - r * 12).toFixed(4));
 	return `${e < 0 ? "-" : ""}${r}'${i}"`;
 }
 //#endregion
 //#region src/al-orientation-control.ts
-var zs = class extends C {
+var Hs = class extends C {
 	constructor(...e) {
 		super(...e), this.yaw = 0, this.pitch = 0, this.disabled = !1, this.snap = 0, this.aiming = !1;
 	}
@@ -8080,10 +8126,10 @@ var zs = class extends C {
     </div><p role="status">${this.aiming ? "Aiming — drag to rotate" : "Drag the dial to aim. Arrow keys adjust direction and tilt; Shift makes larger steps."}</p>`;
 	}
 };
-v([m({ type: Number })], zs.prototype, "yaw", void 0), v([m({ type: Number })], zs.prototype, "pitch", void 0), v([m({ type: Boolean })], zs.prototype, "disabled", void 0), v([m({ type: Number })], zs.prototype, "snap", void 0), v([x()], zs.prototype, "aiming", void 0), zs = v([_("al-orientation-control")], zs);
+v([m({ type: Number })], Hs.prototype, "yaw", void 0), v([m({ type: Number })], Hs.prototype, "pitch", void 0), v([m({ type: Boolean })], Hs.prototype, "disabled", void 0), v([m({ type: Number })], Hs.prototype, "snap", void 0), v([x()], Hs.prototype, "aiming", void 0), Hs = v([_("al-orientation-control")], Hs);
 //#endregion
 //#region src/sensor-catalog.ts
-var Bs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intruder-detector/co-289-ga/BlueLine_Gen_2_Data_sheet_enUS_2603228171.pdf", Vs = [{
+var Us = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intruder-detector/co-289-ga/BlueLine_Gen_2_Data_sheet_enUS_2603228171.pdf", Ws = [{
 	id: "community:screek-2a",
 	name: "SCREEK Human Sensor 2A · identification starter",
 	kind: "occupancy",
@@ -8130,7 +8176,7 @@ var Bs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 		model: n
 	},
 	notes: r + " Bosch specifies 12 m × 12 m coverage; the coverage diagram shows a 94° horizontal spread. Mount level on a wall or in a corner, 2.2–2.75 m above the floor; set your actual height and aim separately. The fan extends downward 75° from its level top as an illustrative envelope, not a Bosch-specified vertical angle. The overlay approximates the footprint, not the individual segmented PIR beams or a pet exclusion volume. A separate look-down lobe is an illustrative near-floor approximation: confirm the physical look-down lens setting and toggle it to match your installation. Select the alarm/motion binary sensor, not tamper. Wired alarm/ESPHome bridges may expose their own manufacturer and model, so confirm the label and select this profile manually when needed. ",
-	source: Bs
+	source: Us
 }))], X = class extends C {
 	constructor(...e) {
 		super(...e), this.neighbors = [], this.mode = "place", this.disabled = !1, this.minimal = !1, this.unit = "m", this.aimingHandle = !1, this.error = "", this.movingMarker = !1, this.dragged = !1, this.suppressClick = !1;
@@ -8313,7 +8359,7 @@ var Bs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
       </g>`)}
       ${this.opening ? y`<g>${[-1, 1].map((e) => y`<circle class="marker selected" cx=${this.opening.position[0] + e * this.opening.width / 2 * Math.cos(this.opening.yaw * Math.PI / 180)} cy=${-this.opening.position[1] - e * this.opening.width / 2 * Math.sin(this.opening.yaw * Math.PI / 180)} r=${o} aria-label=${e < 0 ? "Resize opening start" : "Resize opening end"} @pointerdown=${(t) => {
 			this.disabled || t.button !== 0 || (t.stopPropagation(), this.resizeSide = e, this.beginDrag(t));
-		}} @click=${(e) => e.stopPropagation()}/>`)}<text x=${this.opening.position[0]} y=${-this.opening.position[1] - o * 3} fill="#d8edf2" font-size=${o * 2} text-anchor="middle">${Rs(this.opening.width, this.unit)}</text></g>` : g}
+		}} @click=${(e) => e.stopPropagation()}/>`)}<text x=${this.opening.position[0]} y=${-this.opening.position[1] - o * 3} fill="#d8edf2" font-size=${o * 2} text-anchor="middle">${Vs(this.opening.width, this.unit)}</text></g>` : g}
       ${c?.entity && !this.opening && ["motion", "occupancy"].includes(c.kind) ? y`<circle class="marker selected" role="button" tabindex=${this.disabled ? -1 : 0} aria-label="Aim sensor" cx=${c.position[0] + o * 5 * Math.cos(c.yaw * Math.PI / 180)} cy=${-c.position[1] - o * 5 * Math.sin(c.yaw * Math.PI / 180)} r=${o * .75}
         @pointerdown=${(e) => {
 			this.disabled || e.button !== 0 || (e.stopPropagation(), this.aimingHandle = !0, this.movingMarker = !1, this.beginDrag(e));
@@ -8329,7 +8375,7 @@ var Bs = "https://www.sourcesecurity.com/datasheets/bosch-isc-bpr2-w12-chi-intru
 v([m({ attribute: !1 })], X.prototype, "hass", void 0), v([m({ attribute: !1 })], X.prototype, "group", void 0), v([m({ attribute: !1 })], X.prototype, "neighbors", void 0), v([m({ attribute: !1 })], X.prototype, "opening", void 0), v([m({ attribute: !1 })], X.prototype, "fixture", void 0), v([m({ type: String })], X.prototype, "mode", void 0), v([m({ type: Boolean })], X.prototype, "disabled", void 0), v([m({ type: Boolean })], X.prototype, "minimal", void 0), v([m({ type: String })], X.prototype, "unit", void 0), v([x()], X.prototype, "aimingHandle", void 0), v([x()], X.prototype, "error", void 0), X = v([_("al-room-plan")], X);
 //#endregion
 //#region src/al-wall-elevation.ts
-var Hs = class extends C {
+var Gs = class extends C {
 	constructor(...e) {
 		super(...e), this.unit = "m", this.disabled = !1;
 	}
@@ -8468,18 +8514,18 @@ var Hs = class extends C {
 			]
 		].map(([e, t, n]) => y`<circle class="grip" cx=${t} cy=${n} r=".06" aria-label=${`Resize ${e}`} @pointerdown=${(t) => this.start(t, e)}/>`)}
       <text x=${r} y=${-i - e.height - .15}>
-        ${Rs(e.width, this.unit)}
+        ${Vs(e.width, this.unit)}
       </text>
       <text x=${(r - e.width / 2) / 2} y=${-a + .2}>
-        ${Rs(r - e.width / 2, this.unit)}
+        ${Vs(r - e.width / 2, this.unit)}
       </text>
       <text x=${r + e.width / 2 + .3} y=${-i - e.height / 2}>
-        ${Rs(e.height, this.unit)}
+        ${Vs(e.height, this.unit)}
       </text>
     </svg>`;
 	}
 };
-v([m({ attribute: !1 })], Hs.prototype, "group", void 0), v([m({ attribute: !1 })], Hs.prototype, "opening", void 0), v([m({ type: String })], Hs.prototype, "unit", void 0), v([m({ type: Boolean })], Hs.prototype, "disabled", void 0), Hs = v([_("al-wall-elevation")], Hs);
+v([m({ attribute: !1 })], Gs.prototype, "group", void 0), v([m({ attribute: !1 })], Gs.prototype, "opening", void 0), v([m({ type: String })], Gs.prototype, "unit", void 0), v([m({ type: Boolean })], Gs.prototype, "disabled", void 0), Gs = v([_("al-wall-elevation")], Gs);
 //#endregion
 //#region src/al-room-device-editor.ts
 var Z = class extends C {
@@ -8536,10 +8582,10 @@ var Z = class extends C {
   `;
 	}
 	get unit() {
-		return this.unitChoice === "auto" ? Fs(this.hass) : this.unitChoice;
+		return this.unitChoice === "auto" ? Rs(this.hass) : this.unitChoice;
 	}
 	length(e) {
-		return Rs(e, this.unit);
+		return Vs(e, this.unit);
 	}
 	validLengths() {
 		let e = this.renderRoot.querySelector("input[data-length]:invalid");
@@ -8547,10 +8593,10 @@ var Z = class extends C {
 	}
 	lengthInput(e, t, n, r = -Infinity, i = Infinity, a = "", o = "") {
 		let s = (e) => {
-			let t = Ls(e.value, this.unit);
+			let t = Bs(e.value, this.unit);
 			return e.setCustomValidity(t === null ? "Enter a length, such as 2.5, 2′6″, or 30″." : t < r || t > i ? "Length is outside the allowed range." : ""), t;
 		};
-		return Os(JSON.stringify([
+		return js(JSON.stringify([
 			this.room,
 			this.fixture.entity,
 			this.opening?.id,
@@ -8566,10 +8612,10 @@ var Z = class extends C {
 		return this.config && w(this.config).find((e) => e.group.id === this.room)?.group;
 	}
 	get candidates() {
-		return this.config ? Ps(this.config, this.room, this.registry, this.hass, this.live) : [];
+		return this.config ? Ls(this.config, this.room, this.registry, this.hass, this.live) : [];
 	}
 	get profiles() {
-		return [...this.config?.sensor_profiles ?? [], ...Vs];
+		return [...this.config?.sensor_profiles ?? [], ...Ws];
 	}
 	willUpdate(e) {
 		if ((e.has("room") || e.has("section")) && this.reset(), this.config && [
@@ -8664,7 +8710,7 @@ var Z = class extends C {
 			...this.fixture,
 			...qe(this.group, this.fixture.position, this.fixture.width)
 		}), !this.profile) {
-			let t = this.candidates.find((t) => t.entity === e), n = t ? this.profiles.filter((e) => e.kind === "light" == (this.fixture.kind === "light") && js(e, t)) : [];
+			let t = this.candidates.find((t) => t.entity === e), n = t ? this.profiles.filter((e) => e.kind === "light" == (this.fixture.kind === "light") && Ps(e, t)) : [];
 			this.profile = n.length === 1 ? n[0].id : "";
 		}
 		this.addKind = "", this.error = "", this.notice = "", this.profileName = "", this.mode = "place", this.workspace && this.flushDraft();
@@ -8707,7 +8753,7 @@ var Z = class extends C {
 				this.error = "Choose a profile matching this entity's domain.";
 				return;
 			}
-			this.patch(Ms(this.fixture, e)), this.profileName = e.name;
+			this.patch(Fs(this.fixture, e)), this.profileName = e.name;
 		}
 	}
 	saveProfile() {
@@ -8720,7 +8766,7 @@ var Z = class extends C {
 				"device_class",
 				"entity_name"
 			]) e?.[t] && (n[t] = e[t]);
-			let r = Ns(JSON.stringify([{
+			let r = Is(JSON.stringify([{
 				id: t?.id ?? `personal:${crypto.randomUUID()}`,
 				name: this.profileName,
 				coverage_shape: this.fixture.coverage_shape,
@@ -8735,7 +8781,7 @@ var Z = class extends C {
 				source: t?.source ?? "",
 				match: t?.match ?? n
 			}]))[0], i = [...(this.config.sensor_profiles ?? []).filter((e) => e.id !== r.id), r];
-			Ns(JSON.stringify(i)), this.dispatchEvent(M({
+			Is(JSON.stringify(i)), this.dispatchEvent(M({
 				...this.config,
 				sensor_profiles: i
 			})), this.profile = r.id, this.notice = "Model profile added to draft. Apply it to any matching device.", this.error = "";
@@ -8745,9 +8791,9 @@ var Z = class extends C {
 	}
 	importProfiles() {
 		if (!(!this.config || this.disabled)) try {
-			let e = Ns(this.profileText), t = new Set(e.map((e) => e.id));
+			let e = Is(this.profileText), t = new Set(e.map((e) => e.id));
 			if (e.some((e) => e.id.startsWith("community:"))) throw Error("Use personal profile ids when importing; community ids are reserved.");
-			let n = Ns(JSON.stringify([...(this.config.sensor_profiles ?? []).filter((e) => !t.has(e.id)), ...e]));
+			let n = Is(JSON.stringify([...(this.config.sensor_profiles ?? []).filter((e) => !t.has(e.id)), ...e]));
 			this.dispatchEvent(M({
 				...this.config,
 				sensor_profiles: n
@@ -8925,11 +8971,11 @@ var Z = class extends C {
 			"property",
 			"structure",
 			"floor"
-		].includes(e.kind) && (!n || e.bounds[0][2] < n[1][2] - .01 && e.bounds[1][2] > n[0][2] + .01)) : [], i = r.find((e) => e.id === this.room) ?? t, a = this.candidates.filter((e) => !e.placed && (!this.addKind || this.addKind === "light" === e.entity.startsWith("light."))).filter((e) => `${e.name} ${e.entity}`.toLowerCase().includes(this.search.toLowerCase())), o = this.candidates.find((e) => e.entity === this.fixture.entity), c = o ? this.profiles.filter((e) => js(e, o)) : [], u = this.profiles.find((e) => e.id === this.profile);
+		].includes(e.kind) && (!n || e.bounds[0][2] < n[1][2] - .01 && e.bounds[1][2] > n[0][2] + .01)) : [], i = r.find((e) => e.id === this.room) ?? t, a = this.candidates.filter((e) => !e.placed && (!this.addKind || this.addKind === "light" === e.entity.startsWith("light."))).filter((e) => `${e.name} ${e.entity}`.toLowerCase().includes(this.search.toLowerCase())), o = this.candidates.find((e) => e.entity === this.fixture.entity), c = o ? this.profiles.filter((e) => Ps(e, o)) : [], u = this.profiles.find((e) => e.id === this.profile);
 		return S`<fieldset ?disabled=${this.disabled}>
       ${this.workspace ? g : S`      <label>Measurements<select id="length-unit" .value=${this.unitChoice} @change=${(e) => {
 			this.unitChoice = e.target.value;
-		}}><option value="auto" .selected=${this.unitChoice === "auto"}>HA (${Fs(this.hass)})</option><option value="m" .selected=${this.unitChoice === "m"}>Meters</option><option value="ft" .selected=${this.unitChoice === "ft"}>Feet & inches</option></select></label>
+		}}><option value="auto" .selected=${this.unitChoice === "auto"}>HA (${Rs(this.hass)})</option><option value="m" .selected=${this.unitChoice === "m"}>Meters</option><option value="ft" .selected=${this.unitChoice === "ft"}>Feet & inches</option></select></label>
       ${this.unit === "ft" ? S`<p class="muted">Enter feet and inches (2′6″), inches (30″), or decimal feet (2.5).</p>` : g}
       <label>Room<select id="device-room" .value=${this.room} @change=${(e) => {
 			this.room = e.target.value, this.reset(), this.dispatchEvent(new CustomEvent("al-editor-room", {
@@ -8977,7 +9023,7 @@ var Z = class extends C {
         <option value="" disabled>Choose a room</option>${e.map((e) => S`<option value=${e.group.id} .selected=${e.group.id === this.room}>${e.group.name || e.group.id}</option>`)}</select></label>
       <label><select aria-label="Measurements" id="length-unit" .value=${this.unitChoice} @change=${(e) => {
 			this.unitChoice = e.target.value;
-		}}><option value="auto" .selected=${this.unitChoice === "auto"}>HA (${Fs(this.hass)})</option><option value="m" .selected=${this.unitChoice === "m"}>Meters</option><option value="ft" .selected=${this.unitChoice === "ft"}>Feet & inches</option></select></label>
+		}}><option value="auto" .selected=${this.unitChoice === "auto"}>HA (${Rs(this.hass)})</option><option value="m" .selected=${this.unitChoice === "m"}>Meters</option><option value="ft" .selected=${this.unitChoice === "ft"}>Feet & inches</option></select></label>
 </div><button type="button" class="view-toggle" aria-label="Toggle 2D view on narrow screens" @click=${() => this.toggleAttribute("plan-view")}>2D / 3D</button>` : this.workspace ? g : S`<h3>Room editor</h3>`}
         <div class="page-heading">${this.workspace && this.original ? S`<button type="button" aria-label="Delete device" title="Delete device" @click=${() => this.removeFixture()}>⌫</button>` : g}<h3>${this.section === "openings" ? "Doors & windows" : this.section === "sensors" ? "Motion & occupancy" : this.section === "lights" ? "Lights" : "Devices & windows"}</h3>
           ${this.workspace && (this.fixture.entity || this.opening || this.adding || this.profilesPage) ? S`<button type="button" aria-label="Close object editor" @click=${() => this.reset()}>×</button>` : this.workspace ? S`<button type="button" @click=${() => {
@@ -9081,7 +9127,7 @@ var Z = class extends C {
 			this.profileText = e.target.value;
 		}}></textarea>
         <button type="button" @click=${() => {
-			this.profileText = JSON.stringify(Ns(JSON.stringify(this.config?.sensor_profiles ?? [])), null, 2);
+			this.profileText = JSON.stringify(Is(JSON.stringify(this.config?.sensor_profiles ?? [])), null, 2);
 		}}>Export personal profiles</button>
         <button type="button" @click=${() => this.importProfiles()}>Import profiles to draft</button>
       </details></div>
@@ -9098,7 +9144,7 @@ v([m({
 })], Z.prototype, "workspace", void 0), v([m({ type: String })], Z.prototype, "section", void 0), v([x()], Z.prototype, "wallView", void 0), v([x()], Z.prototype, "aimSnap", void 0), v([x()], Z.prototype, "information", void 0), v([x()], Z.prototype, "adding", void 0), v([x()], Z.prototype, "profilesPage", void 0), v([m({ attribute: !1 })], Z.prototype, "config", void 0), v([m({ attribute: !1 })], Z.prototype, "lights", void 0), v([m({ attribute: !1 })], Z.prototype, "hass", void 0), v([m({ attribute: !1 })], Z.prototype, "live", void 0), v([m({ type: Boolean })], Z.prototype, "disabled", void 0), v([m({ type: String })], Z.prototype, "room", void 0), v([x()], Z.prototype, "unitChoice", void 0), v([x()], Z.prototype, "contactSearch", void 0), v([x()], Z.prototype, "allContacts", void 0), v([x()], Z.prototype, "legacyWindow", void 0), v([x()], Z.prototype, "addKind", void 0), v([x()], Z.prototype, "opening", void 0), v([x()], Z.prototype, "originalOpening", void 0), v([x()], Z.prototype, "fixture", void 0), v([x()], Z.prototype, "original", void 0), v([x()], Z.prototype, "mode", void 0), v([x()], Z.prototype, "error", void 0), v([x()], Z.prototype, "notice", void 0), v([x()], Z.prototype, "registry", void 0), v([x()], Z.prototype, "registryError", void 0), v([x()], Z.prototype, "loading", void 0), v([x()], Z.prototype, "search", void 0), v([x()], Z.prototype, "profile", void 0), v([x()], Z.prototype, "profileName", void 0), v([x()], Z.prototype, "profileText", void 0), Z = v([_("al-room-device-editor")], Z);
 //#endregion
 //#region src/plan-snapping.ts
-function Us(e, t, n, r) {
+function Ks(e, t, n, r) {
 	let i = t.flat(), a = i.reduce((t, r) => Math.hypot(r[0] - e[0], r[1] - e[1]) <= n && (!t || Math.hypot(r[0] - e[0], r[1] - e[1]) < Math.hypot(t[0] - e[0], t[1] - e[1])) ? r : t, void 0);
 	if (a && (!r || Math.min(Math.abs(a[0] - r[0]), Math.abs(a[1] - r[1])) < 1e-6)) return [...a];
 	let o = [...e];
@@ -9110,7 +9156,7 @@ function Us(e, t, n, r) {
 	}
 	return o;
 }
-function Ws(e, t, n, r, i) {
+function qs(e, t, n, r, i) {
 	let a = q(e).map((e) => [...e]), o = a[t], s = a[(t + 1) % a.length], c = Math.hypot(s[0] - o[0], s[1] - o[1]);
 	if (!c) return e;
 	let l = [-(s[1] - o[1]) / c, (s[0] - o[0]) / c], u = n[0] * l[0] + n[1] * l[1], d = i;
@@ -9147,7 +9193,7 @@ function Ws(e, t, n, r, i) {
 //#region src/al-architecture-editor.ts
 var Q = class extends C {
 	constructor(...e) {
-		super(...e), this.live = null, this.disabled = !1, this.room = "", this.selected = "", this.drawing = !1, this.points = [], this.name = "New room", this.error = "", this.planOnly = !1, this.snap = !0, this.rectangle = !0, this.ceilingKind = "recessed_light", this.rows = 2, this.columns = 2, this.scale = 1, this.suppressClick = !1;
+		super(...e), this.live = null, this.disabled = !1, this.room = "", this.selected = "", this.drawing = !1, this.points = [], this.name = "New room", this.association = "none", this.error = "", this.planOnly = !1, this.snap = !0, this.rectangle = !0, this.ceilingKind = "recessed_light", this.rows = 2, this.columns = 2, this.scale = 1, this.suppressClick = !1;
 	}
 	static {
 		this.styles = t`
@@ -9344,16 +9390,16 @@ var Q = class extends C {
 		return this.group?.architecture?.find((e) => e.id === this.selected);
 	}
 	get unit() {
-		return Fs(this.hass);
+		return Rs(this.hass);
 	}
 	length(e) {
-		return Rs(e, this.unit);
+		return Vs(e, this.unit);
 	}
 	commit(e) {
 		this.disabled || (this.config = e, this.dispatchEvent(M(e)), this.error = "");
 	}
 	resetDraft() {
-		this.selected = "", this.drawing = !1, this.points = [], this.error = "";
+		this.selected = "", this.association = "none", this.drawing = !1, this.points = [], this.error = "";
 	}
 	flushDraft() {
 		return !this.drawing && !this.error;
@@ -9364,7 +9410,7 @@ var Q = class extends C {
         aria-label=${e}
         .value=${this.length(t)}
         @change=${(e) => {
-			let t = e.target, r = Ls(t.value, this.unit);
+			let t = e.target, r = Bs(t.value, this.unit);
 			if (r === null) {
 				this.error = "Enter a valid length.";
 				return;
@@ -9436,18 +9482,57 @@ var Q = class extends C {
 		let r = n.children.find((e) => e.kind === "structure");
 		return r || (r = ie(`building_${crypto.randomUUID().slice(0, 8)}`, "structure"), r.name = "Building", n.children.push(r)), r;
 	}
+	associationPicker() {
+		let e = this.groups.filter((e) => !e.group.geometry_only && ["area", "outside"].includes(e.group.kind));
+		return S`<label>Activity association<select aria-label="Activity association" .value=${this.association} @change=${(e) => {
+			this.association = e.target.value, this.name === "New room" && this.association.startsWith("area:") && (this.name = this.hass?.areas[this.association.slice(5)]?.name ?? this.name);
+		}}>
+      <option value="none">None · floorplan only</option>
+      <optgroup label="Existing Activity Levels groups">${e.map(({ group: e }) => S`<option value=${`group:${e.id}`}>${e.name ?? e.id}</option>`)}</optgroup>
+      <optgroup label="Home Assistant areas">${Object.values(this.hass?.areas ?? {}).map((e) => S`<option value=${`area:${e.area_id}`}>${e.name}</option>`)}</optgroup>
+    </select></label>${this.association === "none" ? g : S`<p class="note">Uses this outline for the selected group or area. Existing activity inputs are preserved.</p>`}`;
+	}
+	associatedGroup(e) {
+		if (this.association.startsWith("group:")) return w(e).find((e) => e.group.id === this.association.slice(6) && !e.group.geometry_only)?.group;
+		if (this.association.startsWith("area:")) return w(e).find((e) => e.group.area_id === this.association.slice(5) && !e.group.geometry_only)?.group;
+	}
+	selectedRoom(e) {
+		this.room = e, this.selected = "", this.association = "none", this.dispatchEvent(new CustomEvent("al-editor-room", {
+			detail: e,
+			bubbles: !0,
+			composed: !0
+		}));
+	}
 	finishRoom() {
 		if (this.config) try {
-			let e = structuredClone(this.config), t = this.roomParent(e), n = this.group?.bounds?.[0][2] ?? 0, r = {
-				...ie(`room_${crypto.randomUUID().slice(0, 8)}`, "area"),
-				name: this.name,
-				points: this.drawnPoints(),
-				bounds: gt(this.drawnPoints(), n, n + 2.4)
-			};
-			t.children.push(r), this.room = r.id, this.drawing = !1, this.points = [], this.commit(e);
+			let e = structuredClone(this.config), t = this.associatedGroup(e);
+			if (this.association.startsWith("group:") && !t) throw Error("Choose an existing activity group.");
+			let n = t?.bounds?.[0][2] ?? this.group?.bounds?.[0][2] ?? 0, r = t?.bounds?.[1][2] ?? this.group?.bounds?.[1][2] ?? n + 2.4, i = this.drawnPoints(), a = gt(i, n, r), o = t;
+			if (o) o.points = i, o.bounds = a;
+			else {
+				let t = this.roomParent(e), n = this.association.startsWith("area:") ? this.association.slice(5) : null;
+				o = {
+					...ie(`room_${crypto.randomUUID().slice(0, 8)}`, "area"),
+					name: this.name,
+					points: i,
+					bounds: a,
+					area_id: n,
+					...n ? {} : { geometry_only: !0 }
+				}, t.children.push(o);
+			}
+			this.drawing = !1, this.points = [], this.selectedRoom(o.id), this.commit(e);
 		} catch (e) {
 			this.error = e.message;
 		}
+	}
+	associateSpace() {
+		if (!this.config || !this.group?.geometry_only || this.association === "none") return;
+		let e = structuredClone(this.config), t = w(e).find((e) => e.group.id === this.room), n = t.group, r = this.associatedGroup(e);
+		if (this.association.startsWith("group:") && !r) {
+			this.error = "Choose an existing activity group.";
+			return;
+		}
+		r ? (r.bounds = n.bounds, r.points = n.points, r.openings = [...new Map([...r.openings ?? [], ...n.openings ?? []].map((e) => [e.id, e])).values()], r.fixtures = [...new Map([...r.fixtures ?? [], ...n.fixtures ?? []].map((e) => [e.entity, e])).values()], r.architecture = [...new Map([...r.architecture ?? [], ...n.architecture ?? []].map((e) => [e.id, e])).values()], t.parent.children = t.parent.children.filter((e) => e.id !== n.id)) : (delete n.geometry_only, n.area_id = this.association.slice(5), r = n), this.selectedRoom(r.id), this.commit(e);
 	}
 	underRoom() {
 		if (!this.config || !this.object) return;
@@ -9521,7 +9606,7 @@ var Q = class extends C {
 		let t = this.point(e);
 		if (!t) return;
 		let n = [...this.neighbors(), ...this.group ? [q(this.group)] : []];
-		t = Us(t, n, this.tolerance(), this.snap && !this.rectangle ? this.points.at(-1) : void 0), this.points = this.rectangle && this.points.length === 2 ? [t] : [...this.points, t];
+		t = Ks(t, n, this.tolerance(), this.snap && !this.rectangle ? this.points.at(-1) : void 0), this.points = this.rectangle && this.points.length === 2 ? [t] : [...this.points, t];
 	}
 	move(e) {
 		if (this.disabled || this.drag?.pointer !== e.pointerId) return;
@@ -9529,9 +9614,9 @@ var Q = class extends C {
 		if (t) {
 			if (this.drag.corner !== void 0 && this.group) {
 				let e = q(this.group).map((e) => [...e]);
-				e[this.drag.corner] = Us(t, this.neighbors(), this.tolerance()), this.suppressClick = !0, this.saveOutline(e);
+				e[this.drag.corner] = Ks(t, this.neighbors(), this.tolerance()), this.suppressClick = !0, this.saveOutline(e);
 			} else if (this.drag.wall !== void 0 && this.drag.original && this.drag.start) {
-				let e = Ws(this.drag.original, this.drag.wall, [t[0] - this.drag.start[0], t[1] - this.drag.start[1]], this.neighbors(), this.tolerance());
+				let e = qs(this.drag.original, this.drag.wall, [t[0] - this.drag.start[0], t[1] - this.drag.start[1]], this.neighbors(), this.tolerance());
 				this.suppressClick = !0, this.saveOutline(e.points, e);
 			} else this.drag.object && this.object && this.patch({ position: [
 				t[0] - (this.drag.offset?.[0] ?? 0),
@@ -9575,7 +9660,7 @@ var Q = class extends C {
 				t.stopPropagation(), this.suppressClick = !1;
 				return;
 			}
-			this.drawing || (t.stopPropagation(), this.room = e.id, this.selected = "");
+			this.drawing || (t.stopPropagation(), this.selectedRoom(e.id));
 		}} />`)}
           ${e?.bounds && !this.drawing && !t ? q(e).map((t, n, r) => {
 			let i = r[(n + 1) % r.length];
@@ -9583,7 +9668,7 @@ var Q = class extends C {
 				let a = r.key === "ArrowUp" || r.key === "ArrowRight" ? .01 : r.key === "ArrowDown" || r.key === "ArrowLeft" ? -.01 : 0;
 				if (!a || this.disabled) return;
 				r.preventDefault();
-				let o = Math.hypot(i[0] - t[0], i[1] - t[1]), s = Ws(e, n, [-(i[1] - t[1]) / o * a, (i[0] - t[0]) / o * a], [], 0);
+				let o = Math.hypot(i[0] - t[0], i[1] - t[1]), s = qs(e, n, [-(i[1] - t[1]) / o * a, (i[0] - t[0]) / o * a], [], 0);
 				this.saveOutline(s.points, s);
 			}} @pointerdown=${(t) => {
 				this.disabled || (t.stopPropagation(), this.drag = {
@@ -9660,7 +9745,7 @@ var Q = class extends C {
               aria-label="Architecture room"
               .value=${this.room}
               @change=${(e) => {
-			this.room = e.target.value, this.resetDraft();
+			this.selectedRoom(e.target.value), this.resetDraft();
 		}}
             >
               <option value="">Choose…</option>
@@ -9688,7 +9773,7 @@ var Q = class extends C {
              @input=${(e) => {
 			this.name = e.target.value;
 		}} /></label
-         ><label><input type="checkbox" .checked=${this.rectangle} @change=${(e) => {
+         >${this.associationPicker()}<label><input type="checkbox" .checked=${this.rectangle} @change=${(e) => {
 			this.rectangle = e.target.checked, this.points = [];
 		}} />Rectangle · pick opposite corners</label><label
            ><input
@@ -9789,11 +9874,17 @@ var Q = class extends C {
              Delete object
            </button> ` : S`<button
              @click=${() => {
-			this.drawing = !0, this.points = [];
+			this.drawing = !0, this.association = "none", this.points = [];
 		}}
            >
              Draw room</button
-           >${e?.bounds ? S`<div class="tools">
+           >${e?.bounds ? S`${e.geometry_only ? S`<label>Space name<input aria-label="Space name" .value=${e.name ?? ""} @change=${(t) => {
+			let n = structuredClone(this.config), r = w(n).find((t) => t.group.id === e.id).group;
+			r.name = t.target.value, this.commit(n);
+		}} /></label>${this.associationPicker()}<button ?disabled=${this.association === "none"} @click=${() => this.associateSpace()}>Associate space</button><button @click=${() => {
+			let t = structuredClone(this.config), n = w(t).find((t) => t.group.id === e.id);
+			n.parent.children = n.parent.children.filter((t) => t.id !== e.id), this.selectedRoom(n.parent.id), this.commit(t);
+		}}>Delete floorplan space</button>` : g}<div class="tools">
                      ${[
 			"stairs",
 			"chimney",
@@ -9873,7 +9964,7 @@ var Q = class extends C {
     </div>`;
 	}
 };
-v([m({ attribute: !1 })], Q.prototype, "config", void 0), v([m({ attribute: !1 })], Q.prototype, "hass", void 0), v([m({ attribute: !1 })], Q.prototype, "live", void 0), v([m({ type: Boolean })], Q.prototype, "disabled", void 0), v([m({ type: String })], Q.prototype, "room", void 0), v([x()], Q.prototype, "selected", void 0), v([x()], Q.prototype, "drawing", void 0), v([x()], Q.prototype, "points", void 0), v([x()], Q.prototype, "name", void 0), v([x()], Q.prototype, "error", void 0), v([x()], Q.prototype, "planOnly", void 0), v([x()], Q.prototype, "snap", void 0), v([x()], Q.prototype, "rectangle", void 0), v([x()], Q.prototype, "ceilingKind", void 0), v([x()], Q.prototype, "rows", void 0), v([x()], Q.prototype, "columns", void 0), v([x()], Q.prototype, "scale", void 0), Q = v([_("al-architecture-editor")], Q);
+v([m({ attribute: !1 })], Q.prototype, "config", void 0), v([m({ attribute: !1 })], Q.prototype, "hass", void 0), v([m({ attribute: !1 })], Q.prototype, "live", void 0), v([m({ type: Boolean })], Q.prototype, "disabled", void 0), v([m({ type: String })], Q.prototype, "room", void 0), v([x()], Q.prototype, "selected", void 0), v([x()], Q.prototype, "drawing", void 0), v([x()], Q.prototype, "points", void 0), v([x()], Q.prototype, "name", void 0), v([x()], Q.prototype, "association", void 0), v([x()], Q.prototype, "error", void 0), v([x()], Q.prototype, "planOnly", void 0), v([x()], Q.prototype, "snap", void 0), v([x()], Q.prototype, "rectangle", void 0), v([x()], Q.prototype, "ceilingKind", void 0), v([x()], Q.prototype, "rows", void 0), v([x()], Q.prototype, "columns", void 0), v([x()], Q.prototype, "scale", void 0), Q = v([_("al-architecture-editor")], Q);
 //#endregion
 //#region src/al-floorplans.ts
 var $ = class extends C {
@@ -9941,13 +10032,16 @@ var $ = class extends C {
 			"lights",
 			"architecture"
 		].includes(e) && this.config) {
-			let t = w(this.config).filter((e) => e.group.bounds && ![
+			let t = w(ds(this.config)).filter((e) => e.group.bounds && ![
 				"property",
 				"structure",
 				"floor"
 			].includes(e.group.kind));
 			t.some((e) => e.group.id === this.editRoom) || (this.editRoom = t[0]?.group.id ?? ""), !this.editRoom && e !== "architecture" && (this.page = "import");
 		}
+	}
+	editorChange(e) {
+		e.stopPropagation(), this.dispatchEvent(M(fs(e.detail), e.coalesceKey, e.structural));
 	}
 	action(e) {
 		let t = this.renderRoot.querySelector("al-room-device-editor,al-architecture-editor");
@@ -9975,10 +10069,12 @@ var $ = class extends C {
           .config=${this.config} .live=${this.live} .hass=${this.hass} .lights=${this.lights}
           .telemetry=${this.error ? void 0 : this.telemetry} .settings=${this.settings} @al-viewer-settings=${this.saveSettings}></al-floorplan-viewer>
       </div>
-      ${e ? S`<al-room-device-editor @al-editor-room=${(e) => {
+      ${e ? S`<al-room-device-editor @al-change=${this.editorChange} @al-editor-room=${(e) => {
 			this.editRoom = e.detail;
-		}} workspace .section=${this.page} .room=${this.editRoom} .lights=${this.lights} .live=${this.live} .config=${this.config} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor>` : g}
-      ${this.page === "architecture" ? S`<al-architecture-editor .room=${this.editRoom} .config=${this.config} .hass=${this.hass} .live=${this.live} .disabled=${this.disabled}></al-architecture-editor>` : g}
+		}} workspace .section=${this.page} .room=${this.editRoom} .lights=${this.lights} .live=${this.live} .config=${ds(this.config)} .hass=${this.hass} .disabled=${this.disabled}></al-room-device-editor>` : g}
+      ${this.page === "architecture" ? S`<al-architecture-editor @al-change=${this.editorChange} @al-editor-room=${(e) => {
+			this.editRoom = e.detail;
+		}} .room=${this.editRoom} .config=${ds(this.config)} .hass=${this.hass} .live=${this.live} .disabled=${this.disabled}></al-architecture-editor>` : g}
       <button class="fullscreen" aria-label="Toggle fullscreen" title="Fullscreen" @click=${async () => {
 			try {
 				this.matches(":fullscreen") ? await document.exitFullscreen() : await this.requestFullscreen();
@@ -10032,7 +10128,7 @@ var $ = class extends C {
 		].map(([e, t, n]) => S`<button aria-label=${n} title=${n} aria-pressed=${this.page === e} @click=${() => this.navigate(e)}>${t}</button>`)}
       </nav>
       <div class="save"><button ?disabled=${!this.dirty || this.disabled} @click=${() => this.action("al-discard-config")}>Discard</button><button ?disabled=${!this.dirty || this.disabled || this.blocked} @click=${() => this.action("al-save-config")}>${this.disabled ? "Saving…" : this.dirty ? "Save changes" : "Saved"}</button></div>
-      <section class="page" aria-label="Property layout" ?hidden=${this.page !== "property"}><header>Property layout<button aria-label="Close property layout" @click=${() => this.navigate("live")}>×</button></header><al-property-layout .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-property-layout></section>
+      <section class="page" aria-label="Property layout" ?hidden=${this.page !== "property"}><header>Property layout<button aria-label="Close property layout" @click=${() => this.navigate("live")}>×</button></header><al-property-layout @al-change=${this.editorChange} .hass=${this.hass} .config=${ds(this.config)} .disabled=${this.disabled}></al-property-layout></section>
       <section class="page" aria-label="Import floorplan" ?hidden=${this.page !== "import"}><header>Import floorplan<button aria-label="Close import" @click=${() => this.navigate("live")}>×</button></header><al-floorplan-import .hass=${this.hass} .config=${this.config} .disabled=${this.disabled}></al-floorplan-import></section>
       ${this.error || this.preferenceError || this.status || this.blocked ? S`<div class="status" role="status">${this.error || this.preferenceError || this.status || "Configuration needs attention before saving. Exit to review validation errors."}</div>` : g}`;
 	}

@@ -528,10 +528,27 @@ GROUP_SCHEMA = vol.Schema(
 )
 
 
+# Spaces deliberately live outside the recursive group schema. A closet outline must
+# never become an activity node or acquire integration entities merely by being drawn.
+SPACE_SCHEMA = vol.Schema(
+    {
+        vol.Required("id"): _group_id,
+        vol.Required("name"): vol.All(str, vol.Length(min=1, max=100)),
+        vol.Required("parent_id"): _group_id,
+        vol.Required(CONF_BOUNDS): bounds,
+        vol.Optional(CONF_POINTS): points,
+        vol.Optional("fixtures"): fixtures,
+        vol.Optional("openings"): openings,
+        vol.Optional("architecture"): architecture,
+    }
+)
+
+
 CONFIG_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_GPS): GPS_SCHEMA,
         vol.Optional("site"): SITE_SCHEMA,
+        vol.Optional("spaces"): vol.All([SPACE_SCHEMA], vol.Length(max=512)),
         vol.Optional("sensor_profiles"): vol.All([SENSOR_PROFILE_SCHEMA], vol.Length(max=128)),
         vol.Required(CONF_VERSION): vol.All(int, vol.In([1])),
         vol.Optional(CONF_DEFAULTS, default=dict): DEFAULTS_SCHEMA,
@@ -806,6 +823,18 @@ def _cross_checks(cfg: dict[str, Any], inferred: frozenset[str]) -> list[dict[st
     # forwards, at a room the walk has not reached yet.
     kind_of = {group["id"]: group[CONF_KIND] for _, group in walked}
     path_of = {group["id"]: at for at, group in walked}
+    space_ids: set[str] = set()
+    for i, space in enumerate(cfg.get("spaces", [])):
+        if space["id"] in seen_groups or space["id"] in space_ids:
+            errors.append({"path": f"spaces/{i}/id", "message": "duplicate floorplan id"})
+        space_ids.add(space["id"])
+        if kind_of.get(space["parent_id"]) not in {"floor", "structure", "area"}:
+            errors.append(
+                {
+                    "path": f"spaces/{i}/parent_id",
+                    "message": "space parent must be an existing floor, structure or area group",
+                }
+            )
     for at, group in walked:
         seen_edges: set[str] = set()
         for j, edge in enumerate(group["adjacent"]):

@@ -70,3 +70,21 @@ it('selects chimney floors even when floor bounds are inferred from rooms',async
  const chimney=walkGroups(el.config!).find(e=>e.group.id==='room')!.group.architecture![0]!;
  expect(chimney.floors).toEqual(['ground','upper']);expect(chimney.position[2]).toBe(0);expect(chimney.height).toBe(6);
 });
+
+import {expandSpaces,collapseSpaces} from '../src/floorplan-spaces';
+it('associates a drawn space with an existing activity group without duplicating it or losing inputs',async()=>{
+ const el=new AlArchitectureEditor(),config=roomsConfig(),target={...newGroup('bathroom','area'),area_id:'ha_bath',name:'Bathroom',gain:2};
+ config.groups=[{...newGroup('floor','floor'),children:[target]}];config.spaces=[{id:'space',name:'Bathroom outline',parent_id:'floor',bounds:[[1,2,0],[3,4,3]]}];
+ el.config=expandSpaces(config);el.room='space';document.body.append(el);await el.updateComplete;
+ const association=el.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Activity association"]')!;association.value='group:bathroom';association.dispatchEvent(new Event('change'));await el.updateComplete;
+ [...el.shadowRoot!.querySelectorAll('button')].find(b=>b.textContent?.trim()==='Associate space')!.click();await el.updateComplete;
+ const saved=collapseSpaces(el.config!),groups=walkGroups(saved);expect(groups).toHaveLength(2);expect(saved.spaces).toBeUndefined();
+ expect(groups[1]!.group).toMatchObject({id:'bathroom',area_id:'ha_bath',gain:2,bounds:[[1,2,0],[3,4,3]]});expect(el.room).toBe('bathroom');
+});
+it('converts a space to a newly associated Home Assistant area only when explicitly chosen',async()=>{
+ const el=new AlArchitectureEditor(),config=roomsConfig();config.groups=[newGroup('floor','floor')];config.spaces=[{id:'closet',name:'Closet',parent_id:'floor',bounds:[[0,0,0],[1,1,3]]}];el.config=expandSpaces(config);el.room='closet';
+ el.hass={states:{},areas:{linen:{area_id:'linen',name:'Linen closet'}},callWS:vi.fn()} as unknown as import('../src/types').HomeAssistant;document.body.append(el);await el.updateComplete;
+ const picker=el.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Activity association"]')!;expect(picker.value).toBe('none');picker.value='area:linen';picker.dispatchEvent(new Event('change'));await el.updateComplete;
+ [...el.shadowRoot!.querySelectorAll('button')].find(b=>b.textContent?.trim()==='Associate space')!.click();await el.updateComplete;
+ const saved=collapseSpaces(el.config!);expect(saved.spaces).toBeUndefined();expect(saved.groups[0]!.children[0]).toMatchObject({id:'closet',area_id:'linen'});
+});

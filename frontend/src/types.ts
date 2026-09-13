@@ -104,7 +104,13 @@ export interface ArchitecturalObject {
  position:[number,number,number];yaw:number;width:number;run:number;height:number;
  steps:number;landing_bottom:number;landing_top:number;under_room?:string;to_floor?:string;
 }
+export interface FloorplanSpace {
+  id:string; name:string; parent_id:string; bounds:Bounds; points?:[number,number][];
+  fixtures?:RoomFixture[]; openings?:RoomOpening[]; architecture?:ArchitecturalObject[];
+}
 export interface Group {
+  /** Editor-only adapter flag; geometry spaces are persisted outside the activity tree. */
+  geometry_only?:boolean;
   architecture?:ArchitecturalObject[];
   openings?:RoomOpening[];
   fixtures?: RoomFixture[];
@@ -199,6 +205,7 @@ export interface SiteFeature { name: string; kind: SiteKind; points: [number, nu
 export interface SiteLayout { ground_z: number; features: SiteFeature[] }
 
 export interface Config {
+  spaces?:FloorplanSpace[];
   sensor_profiles?:SensorProfile[];
   site?: SiteLayout;
   gps?: Gps;

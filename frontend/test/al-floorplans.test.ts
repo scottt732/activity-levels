@@ -19,3 +19,14 @@ it("keeps import drafts mounted, selects an eligible editor room, and exposes sa
  el.blocked=true;await el.updateComplete;expect(saveButton.disabled).toBe(true);
  await click("Exit floorplan");expect(exit).toHaveBeenCalledOnce();
 });
+
+it('saves geometry-only editor changes outside the activity tree and retains the space across tools',async()=>{
+ const el=new AlFloorplans();el.config=roomsConfig();el.config.groups=[{...newGroup('floor','floor'),children:[{...newGroup('room','area'),bounds:[[0,0,0],[4,4,3]]}]}];
+ el.config.spaces=[{id:'closet',name:'Closet',parent_id:'floor',bounds:[[1,1,0],[2,2,3]]}];document.body.append(el);await el.updateComplete;
+ el.shadowRoot!.querySelector('al-floorplan-viewer')!.dispatchEvent(new CustomEvent('al-room-selected',{detail:'closet'}));
+ el.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Doors & windows"]')!.click();await el.updateComplete;
+ const editor=el.shadowRoot!.querySelector<AlRoomDeviceEditor>('al-room-device-editor')!;expect(editor.room).toBe('closet');
+ const changed=vi.fn();el.addEventListener('al-change',changed);
+ editor.dispatchEvent(new CustomEvent('al-change',{detail:editor.config,bubbles:true,composed:true}));
+ expect(changed).toHaveBeenCalledOnce();expect(changed.mock.calls[0]![0].detail).toEqual(el.config);
+});
