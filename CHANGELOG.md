@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0](https://github.com/scottt732/activity-levels/compare/v0.22.0...v0.23.0) (2026-09-13)
+
+
+### Added
+
+* **panel:** full-window floorplan workspace with compact editor pages ([#63](https://github.com/scottt732/activity-levels/issues/63)) ([1bc3b09](https://github.com/scottt732/activity-levels/commit/1bc3b09ba5ba80fd07962654bb531b705bd216a4))
+
 ## [0.22.0](https://github.com/scottt732/activity-levels/compare/v0.21.0...v0.22.0) (2026-09-13)
 
 
