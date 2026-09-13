@@ -115,3 +115,34 @@ GitHub squash auto-merge when opening it, unless the user asks to hold it. Requi
 CI checks remain the merge gate; never use `--admin` or bypass checks. Continue to
 watch and address failures. The release-please workflow enables auto-merge on its
 generated release PRs, then publishes the release and HACS ZIP after they merge.
+
+## Follow through to the Home Assistant installation
+
+When the user asks to ship a change through HACS, finish the entire sequence below.
+An existing request to install the release and restart Home Assistant authorizes
+those steps throughout the session; do not ask for the same permission again.
+
+1. Watch the feature PR on its exact head commit. Address failing checks or review
+   findings, then let squash auto-merge complete under the required checks.
+2. Wait for release-please to create or update its release PR. Confirm it includes
+   the feature merge, keep auto-merge enabled, and wait for its required checks and
+   merge. Do not hand-edit versions or the changelog.
+3. Wait for the release workflow to finish successfully and verify the published
+   tag has the `activity_levels.zip` HACS asset. A merged release PR alone does not
+   mean the installable release is ready.
+4. Using the connected Home Assistant MCP, refresh the repository with
+   `ha_manage_hacs(action="update_information", repository_id="scottt732/activity-levels")`.
+   Install the verified tag with `action="download"` and an explicit `version`.
+   Check the tool result before continuing; do not install an older cached release.
+5. Tell the user immediately before restarting, then call `ha_restart(confirm=true)`.
+   That tool validates Home Assistant configuration before restarting. If validation
+   or installation fails, resolve the concrete failure before proceeding.
+6. Wait for Home Assistant to return. Verify HACS reports the requested installed
+   version and `ha_get_integration(domain="activity_levels")` reports `loaded`.
+   Report the version, installation/restart outcome, and any remaining limitation.
+
+Keep merge, published release, installed files, restart, and successful integration
+loading as separate verified milestones. If CI is queued or a service is unavailable,
+report the actual pending step and continue monitoring when the tools permit it;
+do not describe the release as installed. Avoid dumping full integration options or
+HACS READMEs into tool output: project only the version and state fields needed.
