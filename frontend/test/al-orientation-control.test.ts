@@ -63,3 +63,15 @@ it("supports keyboard precision, bounded tilt, reset, and disabled controls", as
   expect(dial.getAttribute("tabindex")).toBe("-1");
   expect([...element.shadowRoot!.querySelectorAll("button")].every(button => button.disabled)).toBe(true);
 });
+
+
+it("snaps direction to selected increments without changing the other axis",async()=>{
+ const el=await setup();el.yaw=7;el.pitch=-8;await el.updateComplete;
+ const select=el.shadowRoot!.querySelector<HTMLSelectElement>('[aria-label="Aim snap"]')!;
+ select.value="15";select.dispatchEvent(new Event("change"));await el.updateComplete;
+ el.shadowRoot!.querySelector<HTMLButtonElement>('[aria-label="Increase direction"]')!.click();
+ expect(el.yaw).toBe(15);expect(el.pitch).toBe(-8);
+ select.value="45";select.dispatchEvent(new Event("change"));await el.updateComplete;
+ el.shadowRoot!.querySelector("svg")!.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowLeft"}));
+ expect(el.yaw).toBe(45);expect(el.pitch).toBe(-8);
+});

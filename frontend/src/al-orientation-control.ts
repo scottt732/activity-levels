@@ -17,18 +17,22 @@ export class AlOrientationControl extends LitElement {
     .buttons { display:grid; gap:8px; }
     .row { display:flex; align-items:center; gap:8px; }
     output { min-width:92px; font-variant-numeric:tabular-nums; }
-    button { min-width:44px; min-height:44px; border:1px solid #638b9e; border-radius:8px; background:var(--secondary-background-color,#243c4b); color:var(--primary-text-color,#fff); cursor:pointer; }
+    button { min-width:28px; min-height:28px; border:1px solid #638b9e; border-radius:8px; background:var(--secondary-background-color,#243c4b); color:var(--primary-text-color,#fff); cursor:pointer; }
     button:disabled, [aria-disabled="true"] { opacity:.45; cursor:default; }
+    select { font:inherit; color:inherit; background:#16313f; border:1px solid #638b9e; margin:6px; }
+    @media(pointer:coarse){button{min-width:44px;min-height:44px;}}
     p { margin:8px 0; font-size:12px; color:var(--secondary-text-color,#bdd7e0); }
   `;
   @property({ type:Number }) yaw = 0;
   @property({ type:Number }) pitch = 0;
   @property({ type:Boolean }) disabled = false;
+  @property({type:Number}) snap=0;
   @state() private aiming = false;
   private pointer?: number;
 
   private change(yaw: number, pitch: number): void {
     if (this.disabled) return;
+    if(this.snap){if(yaw!==this.yaw)yaw=Math.round(yaw/this.snap)*this.snap;if(pitch!==this.pitch)pitch=Math.round(pitch/this.snap)*this.snap;}
     this.yaw = ((yaw % 360) + 360) % 360;
     this.pitch = Math.max(-90, Math.min(90, pitch));
     this.dispatchEvent(new CustomEvent("al-orientation-change", {
@@ -63,7 +67,7 @@ export class AlOrientationControl extends LitElement {
 
   private key(event: KeyboardEvent): void {
     if (this.disabled) return;
-    const step = event.shiftKey ? 15 : 1;
+    const step = this.snap || (event.shiftKey ? 15 : 1);
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
       this.change(this.yaw + (event.key === "ArrowLeft" ? step : -step), this.pitch);
@@ -79,7 +83,7 @@ export class AlOrientationControl extends LitElement {
   protected override render() {
     const radians = this.yaw * Math.PI / 180;
     const x = 66 + 42 * Math.cos(radians), y = 66 - 42 * Math.sin(radians);
-    return html`<div class="controls">
+    return html`<label>Snap <select aria-label="Aim snap" .value=${String(this.snap)} @change=${(e:Event)=>{this.snap=Number((e.target as HTMLSelectElement).value);this.dispatchEvent(new CustomEvent("al-aim-snap",{detail:this.snap,bubbles:true,composed:true}));}}><option value="0">Free</option><option value="15">15°</option><option value="45">45°</option></select></label><div class="controls">
       <svg viewBox="0 0 132 132" role="slider" tabindex=${this.disabled ? -1 : 0}
         aria-label="Sensor direction" aria-valuemin="0" aria-valuemax="359" aria-valuenow=${Math.round(this.yaw)}
         aria-valuetext=${`${Math.round(this.yaw)} degrees; tilt ${Math.round(this.pitch)} degrees`}
@@ -92,10 +96,10 @@ export class AlOrientationControl extends LitElement {
         <line x1="66" y1="66" x2=${x} y2=${y} /><circle class="tip" cx=${x} cy=${y} r="5" />
       </svg>
       <div class="buttons">
-        <div class="row"><button aria-label="Decrease direction" ?disabled=${this.disabled} @click=${() => this.change(this.yaw - 5, this.pitch)}>−</button>
-          <output>Yaw ${Math.round(this.yaw)}°</output><button aria-label="Increase direction" ?disabled=${this.disabled} @click=${() => this.change(this.yaw + 5, this.pitch)}>+</button></div>
-        <div class="row"><button aria-label="Tilt down" ?disabled=${this.disabled} @click=${() => this.change(this.yaw, this.pitch - 5)}>−</button>
-          <output>Tilt ${Math.round(this.pitch)}°</output><button aria-label="Tilt up" ?disabled=${this.disabled} @click=${() => this.change(this.yaw, this.pitch + 5)}>+</button></div>
+        <div class="row"><button aria-label="Decrease direction" ?disabled=${this.disabled} @click=${() => this.change(this.yaw - (this.snap || 5), this.pitch)}>−</button>
+          <output>Yaw ${Math.round(this.yaw)}°</output><button aria-label="Increase direction" ?disabled=${this.disabled} @click=${() => this.change(this.yaw + (this.snap || 5), this.pitch)}>+</button></div>
+        <div class="row"><button aria-label="Tilt down" ?disabled=${this.disabled} @click=${() => this.change(this.yaw, this.pitch - (this.snap || 5))}>−</button>
+          <output>Tilt ${Math.round(this.pitch)}°</output><button aria-label="Tilt up" ?disabled=${this.disabled} @click=${() => this.change(this.yaw, this.pitch + (this.snap || 5))}>+</button></div>
         <button ?disabled=${this.disabled} @click=${() => this.change(0, 0)}>Reset aim</button>
       </div>
     </div><p role="status">${this.aiming ? "Aiming — drag to rotate" : "Drag the dial to aim. Arrow keys adjust direction and tilt; Shift makes larger steps."}</p>`;

@@ -75,12 +75,19 @@ function c(e, n, a = {}) {
 			let f = d * Math.PI / 16;
 			return o(e.position, s((e.yaw + Math.cos(f) * i / 2) * t, (r + Math.sin(f) * c / 2) * t), l, n, a);
 		})
-	}), l = [c(e.pitch, e.fov, e.vertical_fov, e.range)];
+	}), l = {
+		origin: [...e.position],
+		center: o(e.position, s(e.yaw * t, (e.pitch - e.vertical_fov / 2) * t), e.range, n, a),
+		rim: Array.from({ length: 64 }, (r, i) => {
+			let c = Math.floor(i / 16), l = i % 16 / 16, u = c === 0 ? -.5 + l : c === 1 ? .5 : c === 2 ? .5 - l : -.5, d = c === 0 ? 0 : c === 1 ? l : c === 2 ? 1 : 1 - l;
+			return o(e.position, s((e.yaw + u * e.fov) * t, Math.max(-90, Math.min(90, e.pitch - d * e.vertical_fov)) * t), e.range, n, a);
+		})
+	}, u = [e.coverage_shape === "fan" ? l : c(e.pitch, e.fov, e.vertical_fov, e.range)];
 	if (e.look_down) {
 		let a = n.find((t) => r(t, e.position) || e.position[2] >= t.low && e.position[2] <= t.high && t.footprint.some((n, r) => i(e.position, n, t.footprint[(r + 1) % t.footprint.length]))), o = Math.max(0, e.position[2] - (a?.low ?? e.position[2]));
-		o > 0 && l.push(c(e.pitch - 70, Math.min(e.fov, 70), 30, Math.min(e.range, o / Math.sin(55 * t))));
+		o > 0 && u.push(c(e.pitch - 70, Math.min(e.fov, 70), 30, Math.min(e.range, o / Math.sin(55 * t))));
 	}
-	return l;
+	return u;
 }
 function l(e, n, r = {}) {
 	return e.range <= 0 ? [] : [[e.position[0], e.position[1]], ...Array.from({ length: 33 }, (i, a) => {

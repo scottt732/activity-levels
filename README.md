@@ -587,13 +587,17 @@ instead of guessed. Imports are limited to 1 MB of text, 128 floors and 2,048 ro
 
 ### Viewing live activity in 3D
 
-The **Floorplans** tab opens a full-window workspace with room outlines and heights
+The **Floorplans** tab opens an ambient workspace within Home Assistant, keeping HA navigation visible.
+Use the top-right fullscreen button to fill the screen. The workspace shows room outlines and heights
 rendered as a rotatable house wireframe. The left icon rail opens live telemetry,
 doors/windows, motion/occupancy, lights, property layout, import, and viewer settings.
 Each editor has its own object list and **+ Add** page; selecting an object replaces
-the list with its form. **← List** returns to the list. The top-right **Rooms** icon
+the list with its form. **×** returns to the list. Valid object edits update the draft immediately; the workspace
+Save/Discard controls persist or discard them. Device profile notes open in a separate
+**Device information** panel. The top-right **Rooms** icon
 reveals the room list. Save/Discard stays at the top, and the back arrow exits to the
-mixer. Desktop controls are compact; touch devices get larger targets. Narrow screens
+mixer. The orientation cube follows camera rotation; a north indicator appears when GPS rotation is configured.
+Desktop controls are compact; touch devices get larger targets. Narrow screens
 can switch the editor between 2D and 3D. Drag to orbit, scroll to zoom, or use the camera buttons, **Top** and **Reset**.
 Choose a property, structure or floor to isolate its current descendants. Geometry keeps
 its imported coordinates; GPS and changes to the group hierarchy do not reposition it.
@@ -993,7 +997,7 @@ for a sensor or light. New devices start inside the selected room, including its
 elevation. An out-of-room saved placement offers **Move into room** for recovery.
 Click inside the outline to place it, or
 drag a marker to move it. **Aim** updates direction continuously while pressing and dragging. A radial control
-also adjusts direction and tilt with touch, mouse, or keyboard. Measurements default to
+also adjusts direction and tilt with touch, mouse, or keyboard, with Free, 15°, or 45° snapping. Measurements default to
 Home Assistant’s unit system; choose meters or feet and inches without changing stored
 geometry. Imperial fields accept `2'6"`, `30"`, or decimal feet such as `2.5` (all the
 same length), plus fractional inches such as `2'6 1/2"`. Finish editing a field to apply
@@ -1059,3 +1063,9 @@ a source for measured/specification values, and conservative identification hint
 Manufacturer/model/platform matches are literal (case-insensitive); `entity_name` is a
 literal substring of the original entity name. Suggestions require a model plus a
 manufacturer or platform. Do not infer a unique model from generic ESPHome board data.
+
+
+Bosch profiles use an approximate downward fan envelope (94° horizontal, 12 m range),
+with separately selectable look-down coverage in either pet mode. Reapply the updated
+profile to an existing placement to use this shape; saved geometry is not silently changed.
+The 75° downward extent is an illustration, not a manufacturer-specified detection boundary.

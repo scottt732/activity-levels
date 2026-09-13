@@ -111,6 +111,7 @@ export class AlFloorplanViewer extends LitElement {
     @media (max-width: 760px) { .viewer { grid-template-columns: minmax(0, 1fr); } .groups { max-height: 220px; } }
   `];
 
+  private cameraMatrix:number[]=[];
   @property({type:Boolean,reflect:true}) workspace=false;
   @property({type:Boolean,reflect:true,attribute:"settings-open"}) settingsOpen=false;
   @property({type:Boolean}) hideHud=false;
@@ -237,7 +238,7 @@ export class AlFloorplanViewer extends LitElement {
       const host = this.renderRoot.querySelector<HTMLElement>("#scene")!;
       this.renderer = new FloorplanRenderer(host, (id) => { this.selectRoom(id); }, (message) => {
         this.stopRenderer(); this.error = message;
-      }, (id)=>{this.hovered=id;}, (position)=>{this.dispatchEvent(new CustomEvent("al-fixture-position",{detail:position,bubbles:true,composed:true}));});
+      }, (id)=>{this.hovered=id;}, (position)=>{this.dispatchEvent(new CustomEvent("al-fixture-position",{detail:position,bubbles:true,composed:true}));},matrix=>{if(matrix.some((v,i)=>Math.abs(v-(this.cameraMatrix[i] ?? Infinity))>1e-7)){this.cameraMatrix=matrix;const control=this.renderRoot.querySelector("al-camera-control") as import("./al-camera-control").AlCameraControl|null;if(control)control.matrix=matrix;}});
       this.renderer.setParts(this.visibleParts,this.options.ground_z,this.context?undefined:this.config?.site,this.context?this.room:undefined);
       this.groundZ=this.options.ground_z;
       this.updateAppearance();
@@ -325,7 +326,7 @@ export class AlFloorplanViewer extends LitElement {
             ${group.label} (${KIND_DEFS[group.kind]?.label ?? "Group"})
           </option>`)}
         </select></label>
-        <al-camera-control .disabled=${!this.renderer || !!this.error} @al-camera-action=${(e:CustomEvent<CameraAction>)=>this.renderer?.cameraAction(e.detail)}></al-camera-control>
+        <al-camera-control .matrix=${this.cameraMatrix} .north=${this.config?.gps?.rotation} .disabled=${!this.renderer || !!this.error} @al-camera-action=${(e:CustomEvent<CameraAction>)=>this.renderer?.cameraAction(e.detail)}></al-camera-control>
       </div>
       <p role="status" class=${`muted live-status ${stale || !this.live ? "stale" : ""}`}>${stale ? "Activity readings are stale. Waiting for a fresh update…" :
         this.live ? "Live activity · updates every 2 seconds" : "Waiting for live activity readings…"}</p>

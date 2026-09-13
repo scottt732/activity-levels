@@ -11,7 +11,7 @@ export function matchesProfile(profile:SensorProfile,device:RoomDevice):boolean 
     : norm(device[key] ?? "")===norm(profile.match[key]!));
 }
 export function applyProfile(fixture:RoomFixture,profile:SensorProfile):RoomFixture {
-  return {...fixture,look_down:profile.look_down ?? false,profile_id:profile.id,kind:profile.kind,fov:profile.fov,vertical_fov:profile.vertical_fov,
+  return {...fixture,coverage_shape:profile.coverage_shape ?? "cone",look_down:profile.look_down ?? false,profile_id:profile.id,kind:profile.kind,fov:profile.fov,vertical_fov:profile.vertical_fov,
     range:profile.range,technology:profile.technology,mount:profile.mount};
 }
 export function parseProfiles(text:string):SensorProfile[] {
@@ -34,7 +34,7 @@ export function parseProfiles(text:string):SensorProfile[] {
     for(const [key,value] of Object.entries(p.match))if(!matchKeys.includes(key as typeof matchKeys[number]) || typeof value!=="string" || !value.trim() || value.length>200)throw new Error("Invalid identification rule.");
     ids.add(p.id);
     // Export/import only characteristics and identification rules, never installation data.
-    return {...(p.look_down===undefined?{}:{look_down:p.look_down}),id:p.id,name:p.name,kind:p.kind,fov:p.fov,vertical_fov:p.vertical_fov,range:p.range,
+    return {...(p.coverage_shape===undefined?{}:{coverage_shape:p.coverage_shape}),...(p.look_down===undefined?{}:{look_down:p.look_down}),id:p.id,name:p.name,kind:p.kind,fov:p.fov,vertical_fov:p.vertical_fov,range:p.range,
       technology:p.technology,mount:p.mount,notes:p.notes,source:p.source,match:{...p.match}};
   });
 }

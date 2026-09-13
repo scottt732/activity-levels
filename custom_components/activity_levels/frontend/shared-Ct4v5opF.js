@@ -29,11 +29,11 @@ var e = globalThis, t = e.ShadowRoot && (e.ShadyCSS === void 0 || e.ShadyCSS.nat
 	let t = "";
 	for (let n of e.cssRules) t += n.cssText;
 	return a(t);
-})(e) : e, { is: l, defineProperty: u, getOwnPropertyDescriptor: d, getOwnPropertyNames: f, getOwnPropertySymbols: p, getPrototypeOf: m } = Object, h = globalThis, ee = h.trustedTypes, te = ee ? ee.emptyScript : "", ne = h.reactiveElementPolyfillSupport, g = (e, t) => e, _ = {
+})(e) : e, { is: l, defineProperty: u, getOwnPropertyDescriptor: d, getOwnPropertyNames: f, getOwnPropertySymbols: p, getPrototypeOf: ee } = Object, m = globalThis, te = m.trustedTypes, ne = te ? te.emptyScript : "", re = m.reactiveElementPolyfillSupport, h = (e, t) => e, g = {
 	toAttribute(e, t) {
 		switch (t) {
 			case Boolean:
-				e = e ? te : null;
+				e = e ? ne : null;
 				break;
 			case Object:
 			case Array: e = e == null ? e : JSON.stringify(e);
@@ -58,23 +58,23 @@ var e = globalThis, t = e.ShadowRoot && (e.ShadyCSS === void 0 || e.ShadyCSS.nat
 		}
 		return n;
 	}
-}, re = (e, t) => !l(e, t), ie = {
+}, ie = (e, t) => !l(e, t), ae = {
 	attribute: !0,
 	type: String,
-	converter: _,
+	converter: g,
 	reflect: !1,
 	useDefault: !1,
-	hasChanged: re
+	hasChanged: ie
 };
-Symbol.metadata ??= Symbol("metadata"), h.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
-var v = class extends HTMLElement {
+Symbol.metadata ??= Symbol("metadata"), m.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
+var _ = class extends HTMLElement {
 	static addInitializer(e) {
 		this._$Ei(), (this.l ??= []).push(e);
 	}
 	static get observedAttributes() {
 		return this.finalize(), this._$Eh && [...this._$Eh.keys()];
 	}
-	static createProperty(e, t = ie) {
+	static createProperty(e, t = ae) {
 		if (t.state && (t.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((t = Object.create(t)).wrapped = !0), this.elementProperties.set(e, t), !t.noAccessor) {
 			let n = Symbol(), r = this.getPropertyDescriptor(e, n, t);
 			r !== void 0 && u(this.prototype, e, r);
@@ -100,16 +100,16 @@ var v = class extends HTMLElement {
 		};
 	}
 	static getPropertyOptions(e) {
-		return this.elementProperties.get(e) ?? ie;
+		return this.elementProperties.get(e) ?? ae;
 	}
 	static _$Ei() {
-		if (this.hasOwnProperty(g("elementProperties"))) return;
-		let e = m(this);
+		if (this.hasOwnProperty(h("elementProperties"))) return;
+		let e = ee(this);
 		e.finalize(), e.l !== void 0 && (this.l = [...e.l]), this.elementProperties = new Map(e.elementProperties);
 	}
 	static finalize() {
-		if (this.hasOwnProperty(g("finalized"))) return;
-		if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(g("properties"))) {
+		if (this.hasOwnProperty(h("finalized"))) return;
+		if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(h("properties"))) {
 			let e = this.properties, t = [...f(e), ...p(e)];
 			for (let n of t) this.createProperty(n, e[n]);
 		}
@@ -171,14 +171,14 @@ var v = class extends HTMLElement {
 	_$ET(e, t) {
 		let n = this.constructor.elementProperties.get(e), r = this.constructor._$Eu(e, n);
 		if (r !== void 0 && !0 === n.reflect) {
-			let i = (n.converter?.toAttribute === void 0 ? _ : n.converter).toAttribute(t, n.type);
+			let i = (n.converter?.toAttribute === void 0 ? g : n.converter).toAttribute(t, n.type);
 			this._$Em = e, i == null ? this.removeAttribute(r) : this.setAttribute(r, i), this._$Em = null;
 		}
 	}
 	_$AK(e, t) {
 		let n = this.constructor, r = n._$Eh.get(e);
 		if (r !== void 0 && this._$Em !== r) {
-			let e = n.getPropertyOptions(r), i = typeof e.converter == "function" ? { fromAttribute: e.converter } : e.converter?.fromAttribute === void 0 ? _ : e.converter;
+			let e = n.getPropertyOptions(r), i = typeof e.converter == "function" ? { fromAttribute: e.converter } : e.converter?.fromAttribute === void 0 ? g : e.converter;
 			this._$Em = r;
 			let a = i.fromAttribute(t, e.type);
 			this[r] = a ?? this._$Ej?.get(r) ?? a, this._$Em = null;
@@ -187,7 +187,7 @@ var v = class extends HTMLElement {
 	requestUpdate(e, t, n, r = !1, i) {
 		if (e !== void 0) {
 			let a = this.constructor;
-			if (!1 === r && (i = this[e]), n ??= a.getPropertyOptions(e), !((n.hasChanged ?? re)(i, t) || n.useDefault && n.reflect && i === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, n)))) return;
+			if (!1 === r && (i = this[e]), n ??= a.getPropertyOptions(e), !((n.hasChanged ?? ie)(i, t) || n.useDefault && n.reflect && i === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, n)))) return;
 			this.C(e, t, n);
 		}
 		!1 === this.isUpdatePending && (this._$ES = this._$EP());
@@ -251,28 +251,28 @@ var v = class extends HTMLElement {
 	updated(e) {}
 	firstUpdated(e) {}
 };
-v.elementStyles = [], v.shadowRootOptions = { mode: "open" }, v[g("elementProperties")] = /* @__PURE__ */ new Map(), v[g("finalized")] = /* @__PURE__ */ new Map(), ne?.({ ReactiveElement: v }), (h.reactiveElementVersions ??= []).push("2.1.2");
+_.elementStyles = [], _.shadowRootOptions = { mode: "open" }, _[h("elementProperties")] = /* @__PURE__ */ new Map(), _[h("finalized")] = /* @__PURE__ */ new Map(), re?.({ ReactiveElement: _ }), (m.reactiveElementVersions ??= []).push("2.1.2");
 //#endregion
 //#region node_modules/.pnpm/lit-html@3.3.3/node_modules/lit-html/lit-html.js
-var y = globalThis, ae = (e) => e, b = y.trustedTypes, oe = b ? b.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, se = "$lit$", x = `lit$${Math.random().toFixed(9).slice(2)}$`, ce = "?" + x, le = `<${ce}>`, S = document, C = () => S.createComment(""), w = (e) => e === null || typeof e != "object" && typeof e != "function", ue = Array.isArray, de = (e) => ue(e) || typeof e?.[Symbol.iterator] == "function", fe = "[ 	\n\f\r]", T = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, pe = /-->/g, me = />/g, E = RegExp(`>|${fe}(?:([^\\s"'>=/]+)(${fe}*=${fe}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), he = /'/g, ge = /"/g, _e = /^(?:script|style|textarea|title)$/i, ve = (e) => (t, ...n) => ({
+var oe = globalThis, se = (e) => e, v = oe.trustedTypes, ce = v ? v.createPolicy("lit-html", { createHTML: (e) => e }) : void 0, le = "$lit$", y = `lit$${Math.random().toFixed(9).slice(2)}$`, ue = "?" + y, de = `<${ue}>`, b = document, x = () => b.createComment(""), S = (e) => e === null || typeof e != "object" && typeof e != "function", C = Array.isArray, fe = (e) => C(e) || typeof e?.[Symbol.iterator] == "function", pe = "[ 	\n\f\r]", w = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, me = /-->/g, he = />/g, T = RegExp(`>|${pe}(?:([^\\s"'>=/]+)(${pe}*=${pe}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`, "g"), ge = /'/g, _e = /"/g, ve = /^(?:script|style|textarea|title)$/i, ye = (e) => (t, ...n) => ({
 	_$litType$: e,
 	strings: t,
 	values: n
-}), D = ve(1), ye = ve(2), O = Symbol.for("lit-noChange"), k = Symbol.for("lit-nothing"), be = /* @__PURE__ */ new WeakMap(), A = S.createTreeWalker(S, 129);
+}), E = ye(1), D = ye(2), O = Symbol.for("lit-noChange"), k = Symbol.for("lit-nothing"), be = /* @__PURE__ */ new WeakMap(), A = b.createTreeWalker(b, 129);
 function xe(e, t) {
-	if (!ue(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
-	return oe === void 0 ? t : oe.createHTML(t);
+	if (!C(e) || !e.hasOwnProperty("raw")) throw Error("invalid template strings array");
+	return ce === void 0 ? t : ce.createHTML(t);
 }
 var Se = (e, t) => {
-	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = T;
+	let n = e.length - 1, r = [], i, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = w;
 	for (let t = 0; t < n; t++) {
 		let n = e[t], s, c, l = -1, u = 0;
-		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === T ? c[1] === "!--" ? o = pe : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = E) : (_e.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = E) : o = me : o === E ? c[0] === ">" ? (o = i ?? T, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? E : c[3] === "\"" ? ge : he) : o === ge || o === he ? o = E : o === pe || o === me ? o = T : (o = E, i = void 0);
-		let d = o === E && e[t + 1].startsWith("/>") ? " " : "";
-		a += o === T ? n + le : l >= 0 ? (r.push(s), n.slice(0, l) + se + n.slice(l) + x + d) : n + x + (l === -2 ? t : d);
+		for (; u < n.length && (o.lastIndex = u, c = o.exec(n), c !== null);) u = o.lastIndex, o === w ? c[1] === "!--" ? o = me : c[1] === void 0 ? c[2] === void 0 ? c[3] !== void 0 && (o = T) : (ve.test(c[2]) && (i = RegExp("</" + c[2], "g")), o = T) : o = he : o === T ? c[0] === ">" ? (o = i ?? w, l = -1) : c[1] === void 0 ? l = -2 : (l = o.lastIndex - c[2].length, s = c[1], o = c[3] === void 0 ? T : c[3] === "\"" ? _e : ge) : o === _e || o === ge ? o = T : o === me || o === he ? o = w : (o = T, i = void 0);
+		let d = o === T && e[t + 1].startsWith("/>") ? " " : "";
+		a += o === w ? n + de : l >= 0 ? (r.push(s), n.slice(0, l) + le + n.slice(l) + y + d) : n + y + (l === -2 ? t : d);
 	}
 	return [xe(e, a + (e[n] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), r];
-}, Ce = class e {
+}, j = class e {
 	constructor({ strings: t, _$litType$: n }, r) {
 		let i;
 		this.parts = [];
@@ -283,57 +283,57 @@ var Se = (e, t) => {
 		}
 		for (; (i = A.nextNode()) !== null && c.length < s;) {
 			if (i.nodeType === 1) {
-				if (i.hasAttributes()) for (let e of i.getAttributeNames()) if (e.endsWith(se)) {
-					let t = u[o++], n = i.getAttribute(e).split(x), r = /([.?@])?(.*)/.exec(t);
+				if (i.hasAttributes()) for (let e of i.getAttributeNames()) if (e.endsWith(le)) {
+					let t = u[o++], n = i.getAttribute(e).split(y), r = /([.?@])?(.*)/.exec(t);
 					c.push({
 						type: 1,
 						index: a,
 						name: r[2],
 						strings: n,
-						ctor: r[1] === "." ? Te : r[1] === "?" ? Ee : r[1] === "@" ? De : N
+						ctor: r[1] === "." ? we : r[1] === "?" ? Te : r[1] === "@" ? Ee : P
 					}), i.removeAttribute(e);
-				} else e.startsWith(x) && (c.push({
+				} else e.startsWith(y) && (c.push({
 					type: 6,
 					index: a
 				}), i.removeAttribute(e));
-				if (_e.test(i.tagName)) {
-					let e = i.textContent.split(x), t = e.length - 1;
+				if (ve.test(i.tagName)) {
+					let e = i.textContent.split(y), t = e.length - 1;
 					if (t > 0) {
-						i.textContent = b ? b.emptyScript : "";
-						for (let n = 0; n < t; n++) i.append(e[n], C()), A.nextNode(), c.push({
+						i.textContent = v ? v.emptyScript : "";
+						for (let n = 0; n < t; n++) i.append(e[n], x()), A.nextNode(), c.push({
 							type: 2,
 							index: ++a
 						});
-						i.append(e[t], C());
+						i.append(e[t], x());
 					}
 				}
 			} else if (i.nodeType === 8) {
-				if (i.data === ce) c.push({
+				if (i.data === ue) c.push({
 					type: 2,
 					index: a
 				});
 				else {
 					let e = -1;
-					for (; (e = i.data.indexOf(x, e + 1)) !== -1;) c.push({
+					for (; (e = i.data.indexOf(y, e + 1)) !== -1;) c.push({
 						type: 7,
 						index: a
-					}), e += x.length - 1;
+					}), e += y.length - 1;
 				}
 			}
 			a++;
 		}
 	}
 	static createElement(e, t) {
-		let n = S.createElement("template");
+		let n = b.createElement("template");
 		return n.innerHTML = e, n;
 	}
 };
-function j(e, t, n = e, r) {
+function M(e, t, n = e, r) {
 	if (t === O) return t;
-	let i = r === void 0 ? n._$Cl : n._$Co?.[r], a = w(t) ? void 0 : t._$litDirective$;
-	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = j(e, i._$AS(e, t.values), i, r)), t;
+	let i = r === void 0 ? n._$Cl : n._$Co?.[r], a = S(t) ? void 0 : t._$litDirective$;
+	return i?.constructor !== a && (i?._$AO?.(!1), a === void 0 ? i = void 0 : (i = new a(e), i._$AT(e, n, r)), r === void 0 ? n._$Cl = i : (n._$Co ??= [])[r] = i), i !== void 0 && (t = M(e, i._$AS(e, t.values), i, r)), t;
 }
-var we = class {
+var Ce = class {
 	constructor(e, t) {
 		this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
 	}
@@ -344,23 +344,23 @@ var we = class {
 		return this._$AM._$AU;
 	}
 	u(e) {
-		let { el: { content: t }, parts: n } = this._$AD, r = (e?.creationScope ?? S).importNode(t, !0);
+		let { el: { content: t }, parts: n } = this._$AD, r = (e?.creationScope ?? b).importNode(t, !0);
 		A.currentNode = r;
 		let i = A.nextNode(), a = 0, o = 0, s = n[0];
 		for (; s !== void 0;) {
 			if (a === s.index) {
 				let t;
-				s.type === 2 ? t = new M(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new Oe(i, this, e)), this._$AV.push(t), s = n[++o];
+				s.type === 2 ? t = new N(i, i.nextSibling, this, e) : s.type === 1 ? t = new s.ctor(i, s.name, s.strings, this, e) : s.type === 6 && (t = new De(i, this, e)), this._$AV.push(t), s = n[++o];
 			}
 			a !== s?.index && (i = A.nextNode(), a++);
 		}
-		return A.currentNode = S, r;
+		return A.currentNode = b, r;
 	}
 	p(e) {
 		let t = 0;
 		for (let n of this._$AV) n !== void 0 && (n.strings === void 0 ? n._$AI(e[t]) : (n._$AI(e, n, t), t += n.strings.length - 2)), t++;
 	}
-}, M = class e {
+}, N = class e {
 	get _$AU() {
 		return this._$AM?._$AU ?? this._$Cv;
 	}
@@ -378,7 +378,7 @@ var we = class {
 		return this._$AB;
 	}
 	_$AI(e, t = this) {
-		e = j(this, e, t), w(e) ? e === k || e == null || e === "" ? (this._$AH !== k && this._$AR(), this._$AH = k) : e !== this._$AH && e !== O && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? de(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
+		e = M(this, e, t), S(e) ? e === k || e == null || e === "" ? (this._$AH !== k && this._$AR(), this._$AH = k) : e !== this._$AH && e !== O && this._(e) : e._$litType$ === void 0 ? e.nodeType === void 0 ? fe(e) ? this.k(e) : this._(e) : this.T(e) : this.$(e);
 	}
 	O(e) {
 		return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -387,36 +387,36 @@ var we = class {
 		this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
 	}
 	_(e) {
-		this._$AH !== k && w(this._$AH) ? this._$AA.nextSibling.data = e : this.T(S.createTextNode(e)), this._$AH = e;
+		this._$AH !== k && S(this._$AH) ? this._$AA.nextSibling.data = e : this.T(b.createTextNode(e)), this._$AH = e;
 	}
 	$(e) {
-		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = Ce.createElement(xe(n.h, n.h[0]), this.options)), n);
+		let { values: t, _$litType$: n } = e, r = typeof n == "number" ? this._$AC(e) : (n.el === void 0 && (n.el = j.createElement(xe(n.h, n.h[0]), this.options)), n);
 		if (this._$AH?._$AD === r) this._$AH.p(t);
 		else {
-			let e = new we(r, this), n = e.u(this.options);
+			let e = new Ce(r, this), n = e.u(this.options);
 			e.p(t), this.T(n), this._$AH = e;
 		}
 	}
 	_$AC(e) {
 		let t = be.get(e.strings);
-		return t === void 0 && be.set(e.strings, t = new Ce(e)), t;
+		return t === void 0 && be.set(e.strings, t = new j(e)), t;
 	}
 	k(t) {
-		ue(this._$AH) || (this._$AH = [], this._$AR());
+		C(this._$AH) || (this._$AH = [], this._$AR());
 		let n = this._$AH, r, i = 0;
-		for (let a of t) i === n.length ? n.push(r = new e(this.O(C()), this.O(C()), this, this.options)) : r = n[i], r._$AI(a), i++;
+		for (let a of t) i === n.length ? n.push(r = new e(this.O(x()), this.O(x()), this, this.options)) : r = n[i], r._$AI(a), i++;
 		i < n.length && (this._$AR(r && r._$AB.nextSibling, i), n.length = i);
 	}
 	_$AR(e = this._$AA.nextSibling, t) {
 		for (this._$AP?.(!1, !0, t); e !== this._$AB;) {
-			let t = ae(e).nextSibling;
-			ae(e).remove(), e = t;
+			let t = se(e).nextSibling;
+			se(e).remove(), e = t;
 		}
 	}
 	setConnected(e) {
 		this._$AM === void 0 && (this._$Cv = e, this._$AP?.(e));
 	}
-}, N = class {
+}, P = class {
 	get tagName() {
 		return this.element.tagName;
 	}
@@ -428,43 +428,43 @@ var we = class {
 	}
 	_$AI(e, t = this, n, r) {
 		let i = this.strings, a = !1;
-		if (i === void 0) e = j(this, e, t, 0), a = !w(e) || e !== this._$AH && e !== O, a && (this._$AH = e);
+		if (i === void 0) e = M(this, e, t, 0), a = !S(e) || e !== this._$AH && e !== O, a && (this._$AH = e);
 		else {
 			let r = e, o, s;
-			for (e = i[0], o = 0; o < i.length - 1; o++) s = j(this, r[n + o], t, o), s === O && (s = this._$AH[o]), a ||= !w(s) || s !== this._$AH[o], s === k ? e = k : e !== k && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
+			for (e = i[0], o = 0; o < i.length - 1; o++) s = M(this, r[n + o], t, o), s === O && (s = this._$AH[o]), a ||= !S(s) || s !== this._$AH[o], s === k ? e = k : e !== k && (e += (s ?? "") + i[o + 1]), this._$AH[o] = s;
 		}
 		a && !r && this.j(e);
 	}
 	j(e) {
 		e === k ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
 	}
-}, Te = class extends N {
+}, we = class extends P {
 	constructor() {
 		super(...arguments), this.type = 3;
 	}
 	j(e) {
 		this.element[this.name] = e === k ? void 0 : e;
 	}
-}, Ee = class extends N {
+}, Te = class extends P {
 	constructor() {
 		super(...arguments), this.type = 4;
 	}
 	j(e) {
 		this.element.toggleAttribute(this.name, !!e && e !== k);
 	}
-}, De = class extends N {
+}, Ee = class extends P {
 	constructor(e, t, n, r, i) {
 		super(e, t, n, r, i), this.type = 5;
 	}
 	_$AI(e, t = this) {
-		if ((e = j(this, e, t, 0) ?? k) === O) return;
+		if ((e = M(this, e, t, 0) ?? k) === O) return;
 		let n = this._$AH, r = e === k && n !== k || e.capture !== n.capture || e.once !== n.once || e.passive !== n.passive, i = e !== k && (n === k || r);
 		r && this.element.removeEventListener(this.name, this, n), i && this.element.addEventListener(this.name, this, e), this._$AH = e;
 	}
 	handleEvent(e) {
 		typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
 	}
-}, Oe = class {
+}, De = class {
 	constructor(e, t, n) {
 		this.element = e, this.type = 6, this._$AN = void 0, this._$AM = t, this.options = n;
 	}
@@ -472,33 +472,33 @@ var we = class {
 		return this._$AM._$AU;
 	}
 	_$AI(e) {
-		j(this, e);
+		M(this, e);
 	}
-}, ke = {
-	M: se,
-	P: x,
-	A: ce,
+}, Oe = {
+	M: le,
+	P: y,
+	A: ue,
 	C: 1,
 	L: Se,
-	R: we,
-	D: de,
-	V: j,
-	I: M,
-	H: N,
-	N: Ee,
-	U: De,
-	B: Te,
-	F: Oe
-}, Ae = y.litHtmlPolyfillSupport;
-Ae?.(Ce, M), (y.litHtmlVersions ??= []).push("3.3.3");
-var je = (e, t, n) => {
+	R: Ce,
+	D: fe,
+	V: M,
+	I: N,
+	H: P,
+	N: Te,
+	U: Ee,
+	B: we,
+	F: De
+}, ke = oe.litHtmlPolyfillSupport;
+ke?.(j, N), (oe.litHtmlVersions ??= []).push("3.3.3");
+var Ae = (e, t, n) => {
 	let r = n?.renderBefore ?? t, i = r._$litPart$;
 	if (i === void 0) {
 		let e = n?.renderBefore ?? null;
-		r._$litPart$ = i = new M(t.insertBefore(C(), e), e, void 0, n ?? {});
+		r._$litPart$ = i = new N(t.insertBefore(x(), e), e, void 0, n ?? {});
 	}
 	return i._$AI(e), i;
-}, P = globalThis, F = class extends v {
+}, F = globalThis, I = class extends _ {
 	constructor() {
 		super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
 	}
@@ -508,7 +508,7 @@ var je = (e, t, n) => {
 	}
 	update(e) {
 		let t = this.render();
-		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = je(t, this.renderRoot, this.renderOptions);
+		this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Ae(t, this.renderRoot, this.renderOptions);
 	}
 	connectedCallback() {
 		super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -520,22 +520,22 @@ var je = (e, t, n) => {
 		return O;
 	}
 };
-F._$litElement$ = !0, F.finalized = !0, P.litElementHydrateSupport?.({ LitElement: F });
-var Me = P.litElementPolyfillSupport;
-Me?.({ LitElement: F }), (P.litElementVersions ??= []).push("4.2.2");
+I._$litElement$ = !0, I.finalized = !0, F.litElementHydrateSupport?.({ LitElement: I });
+var je = F.litElementPolyfillSupport;
+je?.({ LitElement: I }), (F.litElementVersions ??= []).push("4.2.2");
 //#endregion
 //#region node_modules/.pnpm/@lit+reactive-element@2.1.2/node_modules/@lit/reactive-element/decorators/custom-element.js
-var I = (e) => (t, n) => {
+var L = (e) => (t, n) => {
 	n === void 0 ? customElements.define(e, t) : n.addInitializer(() => {
 		customElements.define(e, t);
 	});
-}, Ne = {
+}, Me = {
 	attribute: !0,
 	type: String,
-	converter: _,
+	converter: g,
 	reflect: !1,
-	hasChanged: re
-}, Pe = (e = Ne, t, n) => {
+	hasChanged: ie
+}, Ne = (e = Me, t, n) => {
 	let { kind: r, metadata: i } = n, a = globalThis.litPropertyMetadata.get(i);
 	if (a === void 0 && globalThis.litPropertyMetadata.set(i, a = /* @__PURE__ */ new Map()), r === "setter" && ((e = Object.create(e)).wrapped = !0), a.set(n.name, e), r === "accessor") {
 		let { name: r } = n;
@@ -558,16 +558,16 @@ var I = (e) => (t, n) => {
 	}
 	throw Error("Unsupported decorator location: " + r);
 };
-function L(e) {
-	return (t, n) => typeof n == "object" ? Pe(e, t, n) : ((e, t, n) => {
+function R(e) {
+	return (t, n) => typeof n == "object" ? Ne(e, t, n) : ((e, t, n) => {
 		let r = t.hasOwnProperty(n);
 		return t.constructor.createProperty(n, e), r ? Object.getOwnPropertyDescriptor(t, n) : void 0;
 	})(e, t, n);
 }
 //#endregion
 //#region node_modules/.pnpm/@lit+reactive-element@2.1.2/node_modules/@lit/reactive-element/decorators/state.js
-function R(e) {
-	return L({
+function z(e) {
+	return R({
 		...e,
 		state: !0,
 		attribute: !1
@@ -575,23 +575,23 @@ function R(e) {
 }
 //#endregion
 //#region src/api.ts
-var Fe = (e, t) => e.callWS({
+var Pe = (e, t) => e.callWS({
 	type: "activity_levels/floorplan/parse",
 	text: t
-}), Ie = (e) => ({
+}), Fe = (e) => ({
 	ok: e.ok,
 	errors: e.errors ?? []
-}), Le = (e) => e.callWS({ type: "activity_levels/config/get" }).then((e) => ({
+}), Ie = (e) => e.callWS({ type: "activity_levels/config/get" }).then((e) => ({
 	config: e.config,
 	inferred: e.inferred ?? [],
 	warnings: e.warnings ?? []
-})), Re = (e, t) => e.callWS({
+})), Le = (e, t) => e.callWS({
 	type: "activity_levels/config/validate",
 	config: t
-}).then(Ie);
-async function ze(e, t) {
+}).then(Fe);
+async function Re(e, t) {
 	try {
-		return Ie(await e.callWS({
+		return Fe(await e.callWS({
 			type: "activity_levels/config/save",
 			config: t
 		}));
@@ -605,47 +605,47 @@ async function ze(e, t) {
 		};
 	}
 }
-var Be = (e) => e.callWS({ type: "activity_levels/state" }), Ve = (e, t) => e.callWS({
+var ze = (e) => e.callWS({ type: "activity_levels/state" }), Be = (e, t) => e.callWS({
 	type: "activity_levels/timeseries",
 	...t
-}), He = (e) => e.callWS({ type: "activity_levels/profile/get" }), Ue = (e, t = !1) => e.callWS({
+}), Ve = (e) => e.callWS({ type: "activity_levels/profile/get" }), He = (e, t = !1) => e.callWS({
 	type: "activity_levels/profile/rebuild",
 	force: t
-}), We = (e, t, n = 50) => e.callWS({
+}), Ue = (e, t, n = 50) => e.callWS({
 	type: "activity_levels/simulation/log",
 	...t === void 0 ? {} : { group_id: t },
 	limit: n
-}), Ge = (e, t, n) => e.callWS({
+}), We = (e, t, n) => e.callWS({
 	type: "activity_levels/level/set",
 	group_id: t,
 	value: n
-}).then((e) => e.value), Ke = (e, t, n) => e.callWS({
+}).then((e) => e.value), Ge = (e, t, n) => e.callWS({
 	type: "activity_levels/mute",
 	group_id: t,
 	muted: n
-}).then((e) => e.muted), qe = (e, t) => e.callWS({
+}).then((e) => e.muted), Ke = (e, t) => e.callWS({
 	type: "activity_levels/reset",
 	group_id: t
-}).then(() => void 0), Je = (e) => e.callWS({ type: "activity_levels/topology" }), Ye = (e, t, n) => e.callWS({
+}).then(() => void 0), qe = (e) => e.callWS({ type: "activity_levels/topology" }), Je = (e, t, n) => e.callWS({
 	type: "activity_levels/topology/paths",
 	from: t,
 	to: n
-}).then((e) => e.paths), Xe = (e) => e.callWS({ type: "activity_levels/presence/state" }), Ze = (e, t, n) => e.callWS({
+}).then((e) => e.paths), Ye = (e) => e.callWS({ type: "activity_levels/presence/state" }), Xe = (e, t, n) => e.callWS({
 	type: "activity_levels/presence/correct",
 	person: t,
 	...typeof n == "string" ? { room: n } : n
-}), Qe = (e, t, n, r) => e.callService(t, n, r), $e = [
+}), Ze = (e, t, n, r) => e.callService(t, n, r), Qe = [
 	"property",
 	"structure",
 	"floor",
 	"area",
 	"outside"
-], et = [
+], $e = [
 	"open",
 	"door",
 	"stairs",
 	"exterior_door"
-], tt = "door", nt = {
+], et = "door", tt = {
 	property: {
 		label: "Property",
 		icon: "mdi:home-city",
@@ -671,12 +671,12 @@ var Be = (e) => e.callWS({ type: "activity_levels/state" }), Ve = (e, t) => e.ca
 		icon: "mdi:tree",
 		definition: "An outdoor area — a yard, a patio, the driveway. Outside areas can lead off the property."
 	}
-}, rt = {
+}, nt = {
 	open: "Open (no door)",
 	door: "Door",
 	stairs: "Stairs",
 	exterior_door: "Exterior door"
-}, it = {
+}, rt = {
 	property: [
 		"property",
 		"structure",
@@ -686,13 +686,13 @@ var Be = (e) => e.callWS({ type: "activity_levels/state" }), Ve = (e, t) => e.ca
 	floor: ["area"],
 	area: ["area"],
 	outside: ["outside"]
-}, at = ["property"], ot = /* @__PURE__ */ new Set(["area", "outside"]), st = (e) => e === null ? at : it[e];
-function ct(e, t) {
+}, it = ["property"], at = /* @__PURE__ */ new Set(["area", "outside"]), ot = (e) => e === null ? it : rt[e];
+function st(e, t) {
 	return t.length <= e.length ? !1 : e.every((e, n) => t[n] === e);
 }
 //#endregion
 //#region src/store.ts
-function z(e, t) {
+function B(e, t) {
 	let n = e;
 	for (let e of t) {
 		if (n == null) return;
@@ -700,43 +700,43 @@ function z(e, t) {
 	}
 	return n;
 }
-function lt(e) {
+function ct(e) {
 	return Array.isArray(e) ? [...e] : { ...e };
 }
-function B(e, t, n) {
+function V(e, t, n) {
 	if (t.length === 0) throw Error("empty path");
-	let r = lt(e), i = r;
+	let r = ct(e), i = r;
 	for (let e = 0; e < t.length - 1; e++) {
-		let n = t[e], r = lt(i[n]);
+		let n = t[e], r = ct(i[n]);
 		i[n] = r, i = r;
 	}
 	return n(i, t[t.length - 1]), r;
 }
-function ut(e, t, n) {
-	return B(e, t, (e, t) => {
+function lt(e, t, n) {
+	return V(e, t, (e, t) => {
 		e[t] = n;
 	});
 }
-function dt(e, t) {
-	return B(e, t, (e, t) => {
+function ut(e, t) {
+	return V(e, t, (e, t) => {
 		Array.isArray(e) ? e.splice(t, 1) : delete e[t];
 	});
 }
-function ft(e, t, n, r) {
-	return B(e, [...t, n], (e) => {
+function dt(e, t, n, r) {
+	return V(e, [...t, n], (e) => {
 		e.splice(n, 0, r);
 	});
 }
-function pt(e, t, n, r) {
-	return B(e, [...t, n], (e) => {
+function ft(e, t, n, r) {
+	return V(e, [...t, n], (e) => {
 		let t = e, [i] = t.splice(n, 1);
 		t.splice(r, 0, i);
 	});
 }
-function mt(e, t, n, r) {
-	return r === n || r === n + 1 ? e : pt(e, t, n, r > n ? r - 1 : r);
+function pt(e, t, n, r) {
+	return r === n || r === n + 1 ? e : ft(e, t, n, r > n ? r - 1 : r);
 }
-var ht = 1e3, gt = class {
+var mt = 1e3, ht = class {
 	constructor(e) {
 		this.past = [], this.future = [], this.coalesceKey = null, this.coalesceAt = 0, this.original = e, this.config = e;
 	}
@@ -751,7 +751,7 @@ var ht = 1e3, gt = class {
 	}
 	set(e, t) {
 		let n = Date.now();
-		t !== void 0 && t === this.coalesceKey && n - this.coalesceAt < ht || this.past.push(this.config), this.future = [], this.config = e, this.coalesceKey = t ?? null, this.coalesceAt = n;
+		t !== void 0 && t === this.coalesceKey && n - this.coalesceAt < mt || this.past.push(this.config), this.future = [], this.config = e, this.coalesceKey = t ?? null, this.coalesceAt = n;
 	}
 	undo() {
 		this.coalesceKey = null;
@@ -766,50 +766,50 @@ var ht = 1e3, gt = class {
 	reset(e) {
 		this.original = e, this.config = e, this.past = [], this.future = [], this.coalesceKey = null;
 	}
-}, V = (e) => ({
+}, H = (e) => ({
 	ok: !1,
 	reason: e
-}), H = (e) => ({
+}), U = (e) => ({
 	list: e.slice(0, -1),
 	index: e[e.length - 1]
-}), _t = (e) => e[e.length - 1] === "stimuli";
-function vt(e, t, n, r) {
-	let i = z(e, t);
-	if (i === void 0) return V("that node is gone");
-	let a = z(e, n);
-	if (!Array.isArray(a)) return V("there is nothing to drop into there");
-	if (r < 0 || r > a.length) return V("that is not a slot in this list");
-	let o = _t(H(t).list);
-	if (o !== _t(n)) return V(o ? "a stimulus belongs to a group, not beside one" : "that is not a stimulus");
+}), gt = (e) => e[e.length - 1] === "stimuli";
+function _t(e, t, n, r) {
+	let i = B(e, t);
+	if (i === void 0) return H("that node is gone");
+	let a = B(e, n);
+	if (!Array.isArray(a)) return H("there is nothing to drop into there");
+	if (r < 0 || r > a.length) return H("that is not a slot in this list");
+	let o = gt(U(t).list);
+	if (o !== gt(n)) return H(o ? "a stimulus belongs to a group, not beside one" : "that is not a stimulus");
 	if (o) return { ok: !0 };
 	let s = i;
-	if (ct(t, n) || U(t, n.slice(0, -1))) return V("a group cannot go into itself");
+	if (st(t, n) || W(t, n.slice(0, -1))) return H("a group cannot go into itself");
 	let c = n.slice(0, -1), l;
 	if (n.length === 1) l = null;
 	else {
-		let t = z(e, c);
-		if (t === void 0) return V("that group is gone");
+		let t = B(e, c);
+		if (t === void 0) return H("that group is gone");
 		l = t.kind;
 	}
-	return st(l).includes(s.kind) ? { ok: !0 } : V(l === null ? "every root group is a property" : `a ${l} cannot contain a ${s.kind}`);
+	return ot(l).includes(s.kind) ? { ok: !0 } : H(l === null ? "every root group is a property" : `a ${l} cannot contain a ${s.kind}`);
 }
-var U = (e, t) => e.length === t.length && e.every((e, n) => t[n] === e);
-function yt(e, t, n) {
-	let { list: r, index: i } = H(e), a = [...t], o = a[r.length];
-	return r.length < a.length && U(r, a.slice(0, r.length)) && typeof o == "number" && o > i && (a[r.length] = o - 1), {
+var W = (e, t) => e.length === t.length && e.every((e, n) => t[n] === e);
+function vt(e, t, n) {
+	let { list: r, index: i } = U(e), a = [...t], o = a[r.length];
+	return r.length < a.length && W(r, a.slice(0, r.length)) && typeof o == "number" && o > i && (a[r.length] = o - 1), {
 		parent: a,
-		index: U(r, t) && n > i ? n - 1 : n
+		index: W(r, t) && n > i ? n - 1 : n
 	};
 }
-function bt(e, t, n, r) {
-	let { index: i } = H(t);
-	if (U(H(t).list, n) && (r === i || r === i + 1)) return e;
-	let a = z(e, t), o = dt(e, t), { parent: s, index: c } = yt(t, n, r);
-	return ft(o, s, c, a);
+function yt(e, t, n, r) {
+	let { index: i } = U(t);
+	if (W(U(t).list, n) && (r === i || r === i + 1)) return e;
+	let a = B(e, t), o = ut(e, t), { parent: s, index: c } = vt(t, n, r);
+	return dt(o, s, c, a);
 }
 //#endregion
 //#region src/model.ts
-var xt = (e, t) => ({
+var bt = (e, t) => ({
 	id: e,
 	name: null,
 	kind: t,
@@ -822,10 +822,10 @@ var xt = (e, t) => ({
 	gain: 1,
 	adjacent: [],
 	exit: !1,
-	presence: Ct(),
+	presence: St(),
 	stimuli: [],
 	children: []
-}), St = "presence", Ct = () => ({
+}), xt = "presence", St = () => ({
 	gain: 1,
 	envelope: null,
 	activity_floor: null,
@@ -838,8 +838,8 @@ var xt = (e, t) => ({
 	stack: null,
 	unavailable: null,
 	debounce: null
-}), wt = (e) => typeof e == "string" ? e : e.id, Tt = (e) => typeof e != "string" && e.one_way, Et = (e) => typeof e == "string" ? tt : e.connection;
-function W(e) {
+}), Ct = (e) => typeof e == "string" ? e : e.id, wt = (e) => typeof e != "string" && e.one_way, Tt = (e) => typeof e == "string" ? et : e.connection;
+function G(e) {
 	let t = [], n = (e, r, i) => {
 		t.push({
 			group: e,
@@ -853,19 +853,19 @@ function W(e) {
 	};
 	return e.groups.forEach((e, t) => n(e, ["groups", t], null)), t;
 }
-function Dt(e, t) {
+function Et(e, t) {
 	let n = [];
-	for (let { group: r } of W(e)) if (r.id !== t) for (let e of r.adjacent ?? []) wt(e) === t && n.push({
+	for (let { group: r } of G(e)) if (r.id !== t) for (let e of r.adjacent ?? []) Ct(e) === t && n.push({
 		group: r,
 		edge: {
 			id: t,
-			connection: Et(e),
-			one_way: Tt(e)
+			connection: Tt(e),
+			one_way: wt(e)
 		}
 	});
 	return n;
 }
-var Ot = {
+var Dt = {
 	enabled: !1,
 	devices: [],
 	envelope: null,
@@ -890,7 +890,7 @@ var Ot = {
 		}
 	},
 	scanner_areas: {}
-}, kt = (e) => ({
+}, Ot = (e) => ({
 	tracker: e,
 	name: null,
 	kind: "other",
@@ -900,14 +900,14 @@ var Ot = {
 		steps: null,
 		battery_state: null
 	}
-}), At = () => ({
+}), kt = () => ({
 	name: null,
 	person: null,
 	devices: []
-}), jt = (e) => ({
-	...Ot,
+}), At = (e) => ({
+	...Dt,
 	...e.presence ?? {}
-}), Mt = (e) => ({
+}), jt = (e) => ({
 	id: e,
 	label: null,
 	attack: 0,
@@ -919,7 +919,7 @@ var Ot = {
 	stack: null,
 	unavailable: null,
 	debounce: null
-}), Nt = (e) => e.label !== null && e.label.trim() !== "" ? e.label : e.id, Pt = (e) => ({
+}), Mt = (e) => e.label !== null && e.label.trim() !== "" ? e.label : e.id, Nt = (e) => ({
 	entity: e,
 	to: ["on"],
 	mode: "sustained",
@@ -936,32 +936,32 @@ var Ot = {
 	stack: null,
 	unavailable: null,
 	debounce: null
-}), Ft = (e, t) => t.precision ?? e.defaults.precision;
-function It(e, t) {
+}), Pt = (e, t) => t.precision ?? e.defaults.precision;
+function Ft(e, t) {
 	return e.toFixed(Math.min(100, Math.max(0, Math.trunc(t))));
 }
-function Lt(e) {
+function It(e) {
 	let t = /* @__PURE__ */ new Set(), n = (e) => {
 		t.add(e.id), e.children.forEach(n);
 	};
 	return e.groups.forEach(n), t;
 }
-function Rt(e) {
-	return new Set(W(e).filter(({ group: e }) => ot.has(e.kind)).map(({ group: e }) => e.id));
+function Lt(e) {
+	return new Set(G(e).filter(({ group: e }) => at.has(e.kind)).map(({ group: e }) => e.id));
 }
-function zt(e) {
+function Rt(e) {
 	return e.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").replace(/^[^a-z]+/, "") || "group";
 }
-var Bt = (e) => new Set(e.envelopes.map((e) => e.id));
-function Vt(e, t) {
-	let n = zt(t);
+var zt = (e) => new Set(e.envelopes.map((e) => e.id));
+function Bt(e, t) {
+	let n = Rt(t);
 	if (!e.has(n)) return n;
 	let r = 2;
 	for (; e.has(`${n}_${r}`);) r++;
 	return `${n}_${r}`;
 }
-var Ht = (e, t) => Vt(Lt(e), t), Ut = (e, t) => Vt(Bt(e), t);
-function Wt(e, t) {
+var Vt = (e, t) => Bt(It(e), t), Ht = (e, t) => Bt(zt(e), t);
+function Ut(e, t) {
 	let n = [], r = (e) => {
 		e.stimuli.some((e) => e.envelope === t) && n.push(e.id), e.children.forEach(r);
 	};
@@ -970,7 +970,7 @@ function Wt(e, t) {
 		groups: n
 	};
 }
-function Gt(e, t, n) {
+function Wt(e, t, n) {
 	let r = e.envelopes[t];
 	if (!r || r.id === n) return e;
 	let i = r.id, a = e.envelopes.map((e, r) => r === t ? {
@@ -999,9 +999,9 @@ function Gt(e, t, n) {
 		groups: e.groups.map(o)
 	};
 }
-var Kt = (e, t) => z(e, t), qt = (e, t) => z(e, t), Jt = (e) => e.slice(0, -2), Yt = (e) => e[e.length - 2] === "stimuli" ? Jt(e) : e, Xt = (e, t) => e.envelopes.find((n) => n.id === (t ?? e.defaults.envelope));
-function Zt(e, t) {
-	let n = Xt(e, t.envelope), r = e.defaults, i = (e, t, n) => e ?? t ?? n;
+var Gt = (e, t) => B(e, t), Kt = (e, t) => B(e, t), qt = (e) => e.slice(0, -2), Jt = (e) => e[e.length - 2] === "stimuli" ? qt(e) : e, Yt = (e, t) => e.envelopes.find((n) => n.id === (t ?? e.defaults.envelope));
+function Xt(e, t) {
+	let n = Yt(e, t.envelope), r = e.defaults, i = (e, t, n) => e ?? t ?? n;
 	return {
 		attack: i(t.attack, n?.attack, 0),
 		decay: i(t.decay, n?.decay, 0),
@@ -1016,7 +1016,7 @@ function Zt(e, t) {
 }
 //#endregion
 //#region src/styles.ts
-var Qt = o`
+var Zt = o`
   :host {
     display: block;
     color: var(--primary-text-color);
@@ -1293,7 +1293,7 @@ var Qt = o`
 `;
 //#endregion
 //#region \0@oxc-project+runtime@0.147.0/helpers/esm/decorate.js
-function G(e, t, n, r) {
+function K(e, t, n, r) {
 	var i = arguments.length, a = i < 3 ? t : r === null ? r = Object.getOwnPropertyDescriptor(t, n) : r, o;
 	if (typeof Reflect == "object" && typeof Reflect.decorate == "function") a = Reflect.decorate(e, t, n, r);
 	else for (var s = e.length - 1; s >= 0; s--) (o = e[s]) && (a = (i < 3 ? o(a) : i > 3 ? o(t, n, a) : o(t, n)) || a);
@@ -1301,7 +1301,7 @@ function G(e, t, n, r) {
 }
 //#endregion
 //#region src/presence-styles.ts
-var $t = o`
+var Qt = o`
   :host {
     --al-control-border: color-mix(in srgb, var(--primary-text-color) 55%, var(--card-background-color));
   }
@@ -1347,7 +1347,7 @@ var $t = o`
 `;
 //#endregion
 //#region src/room-openings.ts
-function en(e = "interior_door") {
+function $t(e = "interior_door") {
 	return {
 		id: crypto.randomUUID(),
 		name: "",
@@ -1365,7 +1365,7 @@ function en(e = "interior_door") {
 		open: e === "open_wall"
 	};
 }
-function tn(e) {
+function en(e) {
 	if (!e || typeof e != "object") return null;
 	let t = {
 		name: "",
@@ -1389,10 +1389,10 @@ function tn(e) {
 		t.height
 	].every((e) => typeof e == "number" && Number.isFinite(e)) || Math.abs(t.yaw) > 360 || t.width < .1 || t.width > 20 || t.height < .1 || t.height > 20 || t.entity !== void 0 && (typeof t.entity != "string" || !/^binary_sensor\.[a-z0-9_]+$/.test(t.entity)) || t.entities !== void 0 && (!Array.isArray(t.entities) || t.entities.length > 128 || new Set(t.entities).size !== t.entities.length || t.entities.some((e) => typeof e != "string" || !/^binary_sensor\.[a-z0-9_]+$/.test(e))) ? null : t;
 }
-function nn(e, t) {
-	return e.kind === "open_wall" || e.kind !== "window" && fn(e, t) === "on";
+function tn(e, t) {
+	return e.kind === "open_wall" || e.kind !== "window" && dn(e, t) === "on";
 }
-function rn(e) {
+function nn(e) {
 	let t = e.bounds, n = e.points ?? (t ? [
 		[t[0][0], t[0][1]],
 		[t[1][0], t[0][1]],
@@ -1413,12 +1413,12 @@ function rn(e) {
 		}] : [];
 	});
 }
-function an(e, t, n = .9) {
+function rn(e, t, n = .9) {
 	let r = {
 		position: t,
 		yaw: 0
 	}, i = Infinity;
-	for (let a of rn(e)) {
+	for (let a of nn(e)) {
 		if (a.length + 1e-6 < n) continue;
 		let e = Math.max(n / 2, Math.min(a.length - n / 2, (t[0] - a.a[0]) * a.dx + (t[1] - a.a[1]) * a.dy)), o = a.a[0] + e * a.dx, s = a.a[1] + e * a.dy, c = Math.hypot(o - t[0], s - t[1]);
 		c < i && (i = c, r = {
@@ -1432,14 +1432,14 @@ function an(e, t, n = .9) {
 	}
 	return r;
 }
-function on(e, t) {
-	return rn(e).find((e) => {
+function an(e, t) {
+	return nn(e).find((e) => {
 		let n = t.position[0] - e.a[0], r = t.position[1] - e.a[1], i = n * e.dx + r * e.dy;
 		return Math.abs(n * e.dy - r * e.dx) < 1e-5 && i >= t.width / 2 - 1e-5 && i <= e.length - t.width / 2 + 1e-5 && Math.abs(Math.sin(t.yaw * Math.PI / 180) * e.dx - Math.cos(t.yaw * Math.PI / 180) * e.dy) < 1e-5;
 	});
 }
-function sn(e, t) {
-	let n = on(e, t) ?? rn(e).sort((e, n) => {
+function on(e, t) {
+	let n = an(e, t) ?? nn(e).sort((e, n) => {
 		let r = (e) => {
 			let n = t.position[0] - e.a[0], r = t.position[1] - e.a[1], i = Math.max(0, Math.min(e.length, n * e.dx + r * e.dy));
 			return Math.hypot(n - i * e.dx, r - i * e.dy);
@@ -1448,39 +1448,39 @@ function sn(e, t) {
 	})[0];
 	return n ? [-n.dy * n.sign, n.dx * n.sign] : [0, 0];
 }
-function cn(e, t) {
-	let [n, r] = sn(e, t), i = t.hinge === "left" ? 1 : -1, a = r, o = -n, s = [t.position[0] + i * a * t.width / 2, t.position[1] + i * o * t.width / 2], c = [t.position[0] - i * a * t.width / 2, t.position[1] - i * o * t.width / 2], l = t.swing === "in" ? 1 : -1;
+function sn(e, t) {
+	let [n, r] = on(e, t), i = t.hinge === "left" ? 1 : -1, a = r, o = -n, s = [t.position[0] + i * a * t.width / 2, t.position[1] + i * o * t.width / 2], c = [t.position[0] - i * a * t.width / 2, t.position[1] - i * o * t.width / 2], l = t.swing === "in" ? 1 : -1;
 	return {
 		hinge: s,
 		closed: c,
 		open: [s[0] + l * n * t.width, s[1] + l * r * t.width]
 	};
 }
-function ln(e, t, n, r) {
-	let i = tn(n);
+function cn(e, t, n, r) {
+	let i = en(n);
 	if (!i) throw Error("Check the opening dimensions, type, and contact sensor.");
-	let a = structuredClone(e), o = W(a).find((e) => e.group.id === t)?.group;
+	let a = structuredClone(e), o = G(a).find((e) => e.group.id === t)?.group;
 	if (!o?.bounds) throw Error("Choose a placed room.");
 	if (i.position[2] < o.bounds[0][2] - 1e-6 || i.position[2] + i.height > o.bounds[1][2] + 1e-6) throw Error("Keep the whole opening between the floor and ceiling.");
-	if (!on(o, i)) throw Error("Place and align the whole opening on one wall; reduce its width if needed.");
+	if (!an(o, i)) throw Error("Place and align the whole opening on one wall; reduce its width if needed.");
 	let s = o.openings ?? [], c = s.findIndex((e) => e.id === r);
 	if (s.some((e, t) => e.id === i.id && t !== c)) throw Error("This opening already exists in the room.");
 	if (c < 0 && s.length >= 128) throw Error("Maximum 128 openings per room.");
 	return o.openings = c < 0 ? [...s, structuredClone(i)] : s.map((e, t) => t === c ? structuredClone(i) : e), a;
 }
-function un(e, t) {
-	return !!e.bounds && !!on(e, t) && t.position[2] >= e.bounds[0][2] - 1e-6 && t.position[2] + t.height <= e.bounds[1][2] + 1e-6;
+function ln(e, t) {
+	return !!e.bounds && !!an(e, t) && t.position[2] >= e.bounds[0][2] - 1e-6 && t.position[2] + t.height <= e.bounds[1][2] + 1e-6;
 }
-function dn(e) {
+function un(e) {
 	return [.../* @__PURE__ */ new Set([...e.entities ?? [], ...e.entity ? [e.entity] : []])];
 }
-function fn(e, t) {
-	let n = dn(e);
+function dn(e, t) {
+	let n = un(e);
 	return n.length ? n.some((e) => t[e]?.state === "on") ? "on" : n.every((e) => t[e]?.state === "off") ? "off" : "unknown" : e.open ? "on" : "off";
 }
 //#endregion
 //#region src/room-fixtures.ts
-function pn(e = "", t = "motion") {
+function fn(e = "", t = "motion") {
 	return {
 		entity: e,
 		kind: t,
@@ -1499,7 +1499,7 @@ function pn(e = "", t = "motion") {
 		technology: ""
 	};
 }
-function mn(e) {
+function pn(e) {
 	let t = e.yaw * Math.PI / 180, n = e.pitch * Math.PI / 180;
 	return [
 		Math.cos(t) * Math.cos(n),
@@ -1507,7 +1507,7 @@ function mn(e) {
 		-Math.sin(t) * Math.cos(n)
 	];
 }
-function hn(e, t, n = 1) {
+function mn(e, t, n = 1) {
 	let r = e.bounds;
 	if (!r) return {
 		position: t,
@@ -1525,18 +1525,18 @@ function hn(e, t, n = 1) {
 	return i.forEach((e, r) => {
 		let s = i[(r + 1) % i.length], c = s[0] - e[0], l = s[1] - e[1], u = c * c + l * l;
 		if (!u) return;
-		let d = Math.min(.5, n / (2 * Math.sqrt(u))), f = Math.max(d, Math.min(1 - d, ((t[0] - e[0]) * c + (t[1] - e[1]) * l) / u)), p = e[0] + f * c, m = e[1] + f * l, h = Math.hypot(p - t[0], m - t[1]);
-		h < o && (o = h, a = {
+		let d = Math.min(.5, n / (2 * Math.sqrt(u))), f = Math.max(d, Math.min(1 - d, ((t[0] - e[0]) * c + (t[1] - e[1]) * l) / u)), p = e[0] + f * c, ee = e[1] + f * l, m = Math.hypot(p - t[0], ee - t[1]);
+		m < o && (o = m, a = {
 			position: [
 				p,
-				m,
+				ee,
 				t[2]
 			],
 			yaw: Math.atan2(l, c) * 180 / Math.PI
 		});
 	}), a;
 }
-function gn(e, t) {
+function hn(e, t) {
 	return t !== "on" && t !== "off" ? {
 		color: "#7a8790",
 		opacity: 0
@@ -1545,8 +1545,8 @@ function gn(e, t) {
 		opacity: t === "on" ? .16 : 0
 	};
 }
-function _n(e, t, n, r) {
-	let i = structuredClone(e), a = W(i).find((e) => e.group.id === t)?.group;
+function gn(e, t, n, r) {
+	let i = structuredClone(e), a = G(i).find((e) => e.group.id === t)?.group;
 	if (!a?.bounds) throw Error("Choose a placed room.");
 	if (!/^(binary_sensor|light)\.[a-z0-9_]+$/.test(n.entity) || n.entity.startsWith("light.") !== (n.kind === "light")) throw Error("Choose a binary sensor for motion/occupancy/window or a light entity for a light.");
 	if (![
@@ -1557,15 +1557,15 @@ function _n(e, t, n, r) {
 		n.vertical_fov,
 		n.range
 	].every(Number.isFinite) || Math.abs(n.yaw) > 360 || Math.abs(n.pitch) > 90 || n.range < 0 || n.range > 100 || n.fov < 1 || n.fov > 170 || n.vertical_fov < 1 || n.vertical_fov > 170) throw Error("Check position, angles, field of view (1–170°), and range (0–100 m).");
-	if (!K(a, n.position)) throw Error("Place the device inside this room, including its floor-to-ceiling height.");
-	if (!q(n)) throw Error("Check device type and window dimensions (0.1–20 m).");
+	if (!q(a, n.position)) throw Error("Place the device inside this room, including its floor-to-ceiling height.");
+	if (!_n(n)) throw Error("Check device type and window dimensions (0.1–20 m).");
 	if (n.kind === "window") {
 		let e = (n.height ?? 1.2) / 2;
 		if (n.position[2] - e < a.bounds[0][2] || n.position[2] + e > a.bounds[1][2]) throw Error("Keep the whole window between the floor and ceiling; height is measured at its center.");
-		let t = hn(a, n.position, n.width ?? 1);
+		let t = mn(a, n.position, n.width ?? 1);
 		if (Math.hypot(t.position[0] - n.position[0], t.position[1] - n.position[1]) > .01 || Math.abs(Math.sin((t.yaw - n.yaw) * Math.PI / 180)) > .001) throw Error("Place and align the whole window on a wall using the 2D plan.");
 		let r = (n.width ?? 1) / 2, i = n.yaw * Math.PI / 180;
-		if (![-1, 1].every((e) => K(a, [
+		if (![-1, 1].every((e) => q(a, [
 			n.position[0] + e * r * Math.cos(i),
 			n.position[1] + e * r * Math.sin(i),
 			n.position[2]
@@ -1577,7 +1577,7 @@ function _n(e, t, n, r) {
 	if (s < 0 && o.length >= 128) throw Error("Maximum 128 placements per room.");
 	return a.fixtures = s < 0 ? [...o, structuredClone(n)] : o.map((e, t) => t === s ? structuredClone(n) : e), i;
 }
-function K(e, [t, n, r]) {
+function q(e, [t, n, r]) {
 	let i = e.bounds;
 	if (!i || r < i[0][2] - 1e-6 || r > i[1][2] + 1e-6) return !1;
 	let a = e.points ?? [
@@ -1593,10 +1593,10 @@ function K(e, [t, n, r]) {
 	}
 	return o;
 }
-function q(e) {
+function _n(e) {
 	if (!e || typeof e != "object") return null;
 	let t = {
-		...pn(),
+		...fn(),
 		...e
 	};
 	return typeof t.entity != "string" || !/^(binary_sensor|light)\.[a-z0-9_]+$/.test(t.entity) || ![
@@ -1611,7 +1611,7 @@ function q(e) {
 		t.fov,
 		t.vertical_fov,
 		t.range
-	].every((e) => typeof e == "number" && Number.isFinite(e)) || Math.abs(t.yaw) > 360 || Math.abs(t.pitch) > 90 || t.fov < 1 || t.fov > 170 || t.vertical_fov < 1 || t.vertical_fov > 170 || t.range < 0 || t.range > 100 || typeof t.name != "string" || typeof t.mount != "string" || typeof t.technology != "string" || t.look_down !== void 0 && typeof t.look_down != "boolean" || [t.width, t.height].some((e) => e !== void 0 && (typeof e != "number" || !Number.isFinite(e) || e < .1 || e > 20)) ? null : t;
+	].every((e) => typeof e == "number" && Number.isFinite(e)) || Math.abs(t.yaw) > 360 || Math.abs(t.pitch) > 90 || t.fov < 1 || t.fov > 170 || t.vertical_fov < 1 || t.vertical_fov > 170 || t.range < 0 || t.range > 100 || typeof t.name != "string" || typeof t.mount != "string" || typeof t.technology != "string" || t.coverage_shape !== void 0 && !["cone", "fan"].includes(t.coverage_shape) || t.look_down !== void 0 && typeof t.look_down != "boolean" || [t.width, t.height].some((e) => e !== void 0 && (typeof e != "number" || !Number.isFinite(e) || e < .1 || e > 20)) ? null : t;
 }
 function vn(e) {
 	let t = e.bounds;
@@ -1625,7 +1625,7 @@ function vn(e) {
 		(t[0][1] + t[1][1]) / 2,
 		n
 	];
-	if (K(e, r)) return r;
+	if (q(e, r)) return r;
 	let i = e.points ?? [], a = [...new Set(i.map((e) => e[1]))].sort((e, t) => e - t), o = r, s = 0;
 	for (let e = 1; e < a.length; e++) {
 		let t = (a[e - 1] + a[e]) / 2, r = [];
@@ -1642,9 +1642,9 @@ function vn(e) {
 	return o;
 }
 function yn(e, t) {
-	if (!e.bounds || !K(e, t.position)) return !1;
-	let n = t.width ?? 1, r = t.height ?? 1.2, i = t.yaw * Math.PI / 180, a = hn(e, t.position, n);
-	return t.position[2] - r / 2 >= e.bounds[0][2] && t.position[2] + r / 2 <= e.bounds[1][2] && Math.hypot(a.position[0] - t.position[0], a.position[1] - t.position[1]) <= .01 && Math.abs(Math.sin((a.yaw - t.yaw) * Math.PI / 180)) <= .001 && [-1, 1].every((r) => K(e, [
+	if (!e.bounds || !q(e, t.position)) return !1;
+	let n = t.width ?? 1, r = t.height ?? 1.2, i = t.yaw * Math.PI / 180, a = mn(e, t.position, n);
+	return t.position[2] - r / 2 >= e.bounds[0][2] && t.position[2] + r / 2 <= e.bounds[1][2] && Math.hypot(a.position[0] - t.position[0], a.position[1] - t.position[1]) <= .01 && Math.abs(Math.sin((a.yaw - t.yaw) * Math.PI / 180)) <= .001 && [-1, 1].every((r) => q(e, [
 		t.position[0] + r * n / 2 * Math.cos(i),
 		t.position[1] + r * n / 2 * Math.sin(i),
 		t.position[2]
@@ -1731,9 +1731,9 @@ function Cn(e) {
 			l("Invalid footprint in the draft.");
 			continue;
 		}
-		let f = Array.isArray(e.fixtures) ? e.fixtures.slice(0, 128).map(q).filter((e) => e !== null) : [];
+		let f = Array.isArray(e.fixtures) ? e.fixtures.slice(0, 128).map(_n).filter((e) => e !== null) : [];
 		e.fixtures !== void 0 && (!Array.isArray(e.fixtures) || f.length !== e.fixtures.length) && l("Some device placements are invalid and could not be displayed.");
-		let p = Array.isArray(e.openings) ? e.openings.slice(0, 128).map(tn).filter((e) => e !== null) : [];
+		let p = Array.isArray(e.openings) ? e.openings.slice(0, 128).map(en).filter((e) => e !== null) : [];
 		t.push({
 			...c,
 			openings: p,
@@ -1902,7 +1902,7 @@ function X(e, t) {
 }
 //#endregion
 //#region src/al-room-hud.ts
-var Nn = (e) => e < 60 ? `${Math.ceil(e)}s` : e < 3600 ? `${Math.ceil(e / 60)}m` : `${Math.ceil(e / 3600)}h`, Z = class extends F {
+var Nn = (e) => e < 60 ? `${Math.ceil(e)}s` : e < 3600 ? `${Math.ceil(e / 60)}m` : `${Math.ceil(e / 3600)}h`, Z = class extends I {
 	constructor(...e) {
 		super(...e), this.live = null, this.now = 0;
 	}
@@ -1927,7 +1927,7 @@ var Nn = (e) => e < 60 ? `${Math.ceil(e)}s` : e < 3600 ? `${Math.ceil(e / 60)}m`
 		let e = this.room;
 		if (!e) return k;
 		let t = bn(this.live, e.id, this.now), n = this.telemetry && Number.isFinite(this.telemetry.now) && Math.abs(this.now - this.telemetry.now) <= 10 ? this.telemetry?.rooms[e.id] : void 0, r = this.live?.groups[e.id]?.last_activity, i = n?.people ?? [];
-		return D`<section aria-label="Room telemetry">
+		return E`<section aria-label="Room telemetry">
       <button type="button" aria-label="Dismiss room details" @click=${() => this.dispatchEvent(new CustomEvent("al-dismiss-hud", {
 			bubbles: !0,
 			composed: !0
@@ -1938,26 +1938,26 @@ var Nn = (e) => e < 60 ? `${Math.ceil(e)}s` : e < 3600 ? `${Math.ceil(e / 60)}m`
       <div class="meter"><span style=${`width:${(t.ratio ?? 0) * 100}%`}></span></div>
       <p>Last active <strong>${r != null && Number.isFinite(r) ? `${Nn(Math.max(0, this.now - r))} ago` : "unknown"}</strong></p>
       <p>${n ? n.idle_by === null ? "Held by ongoing input" : n.idle_by <= this.now ? "Idle" : `Idle within ${Nn(n.idle_by - this.now)}` : "Idle forecast unavailable"}</p>
-      ${n && n.idle_by !== null && n.idle_by > this.now ? D`<p class="muted">Assuming no further activity</p>` : k}
+      ${n && n.idle_by !== null && n.idle_by > this.now ? E`<p class="muted">Assuming no further activity</p>` : k}
       <div class="people">${i.map((e) => {
 			let t = (e.entity ? this.hass?.states[e.entity] : void 0)?.attributes.entity_picture, n = typeof t == "string" && (t.startsWith("/") || /^https?:\/\//.test(t)) ? t : void 0;
-			return D`<div class="person">${n ? D`<img src=${n} alt="" @error=${(e) => {
+			return E`<div class="person">${n ? E`<img src=${n} alt="" @error=${(e) => {
 				e.target.hidden = !0;
-			}}>` : D`<span class="initial">${e.name.slice(0, 1)}</span>`}
+			}}>` : E`<span class="initial">${e.name.slice(0, 1)}</span>`}
           <span>${e.name}<br><span class="muted">Estimated${e.confidence === null ? "" : ` · ${Math.round(e.confidence * 100)}%`}${e.t !== null && Number.isFinite(e.t) ? ` · ${Nn(Math.max(0, this.now - e.t))} ago` : ""}</span></span></div>`;
 		})}</div>
-      ${i.length ? k : D`<p class="muted">No person estimate</p>`}
-      ${n?.devices.length ? D`<p class="eyebrow">Estimated devices</p><ul>${n.devices.map((e) => D`<li>${e.name ?? e.entity}${e.confidence === null ? "" : ` · ${Math.round(e.confidence * 100)}%`}</li>`)}</ul>` : k}
-      ${e.fixtures?.length ? D`<p class="eyebrow">Placed devices</p><ul>${e.fixtures.map((e) => D`<li>${e.name || this.hass?.states[e.entity]?.attributes.friendly_name || e.entity} · ${this.hass?.states[e.entity]?.state ?? "unavailable"}</li>`)}</ul>` : k}
+      ${i.length ? k : E`<p class="muted">No person estimate</p>`}
+      ${n?.devices.length ? E`<p class="eyebrow">Estimated devices</p><ul>${n.devices.map((e) => E`<li>${e.name ?? e.entity}${e.confidence === null ? "" : ` · ${Math.round(e.confidence * 100)}%`}</li>`)}</ul>` : k}
+      ${e.fixtures?.length ? E`<p class="eyebrow">Placed devices</p><ul>${e.fixtures.map((e) => E`<li>${e.name || this.hass?.states[e.entity]?.attributes.friendly_name || e.entity} · ${this.hass?.states[e.entity]?.state ?? "unavailable"}</li>`)}</ul>` : k}
     </section>`;
 	}
 };
-G([L({ attribute: !1 })], Z.prototype, "room", void 0), G([L({ attribute: !1 })], Z.prototype, "live", void 0), G([L({ attribute: !1 })], Z.prototype, "telemetry", void 0), G([L({ attribute: !1 })], Z.prototype, "hass", void 0), G([L({ type: Number })], Z.prototype, "now", void 0), Z = G([I("al-room-hud")], Z);
+K([R({ attribute: !1 })], Z.prototype, "room", void 0), K([R({ attribute: !1 })], Z.prototype, "live", void 0), K([R({ attribute: !1 })], Z.prototype, "telemetry", void 0), K([R({ attribute: !1 })], Z.prototype, "hass", void 0), K([R({ type: Number })], Z.prototype, "now", void 0), Z = K([L("al-room-hud")], Z);
 //#endregion
 //#region src/al-camera-control.ts
-var Q = class extends F {
+var Q = class extends I {
 	constructor(...e) {
-		super(...e), this.disabled = !1, this.dragging = !1, this.lastX = 0, this.lastY = 0, this.suppressClick = !1;
+		super(...e), this.matrix = [], this.disabled = !1, this.dragging = !1, this.lastX = 0, this.lastY = 0, this.suppressClick = !1;
 	}
 	static {
 		this.styles = o`
@@ -1993,6 +1993,8 @@ var Q = class extends F {
     button:hover:not(:disabled) { border-color:#94e7ef; background:#215267; color:#fff; }
     button:focus-visible { outline:2px solid #ffcd69; outline-offset:2px; }
     button:disabled, .orbit[aria-disabled="true"] { opacity:.45; cursor:default; }
+    .cube { position:absolute; left:calc(50% - 19px); top:calc(50% - 19px); width:38px; height:38px; pointer-events:none; }
+    .compass { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
     .top { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
     .status { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
     @media (pointer:coarse) {
@@ -2029,8 +2031,118 @@ var Q = class extends F {
 	handleClick(e) {
 		this.suppressClick && e.detail !== 0 && (e.preventDefault(), e.stopImmediatePropagation()), this.suppressClick = !1;
 	}
+	project(e, t, n) {
+		let r = this.matrix;
+		return r.length === 16 ? [
+			r[0] * e + r[4] * t + r[8] * n,
+			-(r[1] * e + r[5] * t + r[9] * n),
+			r[2] * e + r[6] * t + r[10] * n
+		] : [
+			e,
+			-t,
+			n
+		];
+	}
+	cube() {
+		let e = [
+			[
+				-1,
+				-1,
+				-1
+			],
+			[
+				1,
+				-1,
+				-1
+			],
+			[
+				1,
+				1,
+				-1
+			],
+			[
+				-1,
+				1,
+				-1
+			],
+			[
+				-1,
+				-1,
+				1
+			],
+			[
+				1,
+				-1,
+				1
+			],
+			[
+				1,
+				1,
+				1
+			],
+			[
+				-1,
+				1,
+				1
+			]
+		].map((e) => this.project(e[0], e[1], e[2]));
+		return D`<svg class="cube" viewBox="-2 -2 4 4" role="img" aria-label="Camera orientation cube">${[
+			[
+				0,
+				1,
+				2,
+				3
+			],
+			[
+				4,
+				7,
+				6,
+				5
+			],
+			[
+				0,
+				4,
+				5,
+				1
+			],
+			[
+				3,
+				2,
+				6,
+				7
+			],
+			[
+				0,
+				3,
+				7,
+				4
+			],
+			[
+				1,
+				5,
+				6,
+				2
+			]
+		].map((t, n) => ({
+			ids: t,
+			i: n,
+			depth: t.reduce((t, n) => t + e[n][2], 0)
+		})).sort((e, t) => e.depth - t.depth).map(({ ids: t, i: n }) => D`<polygon points=${t.map((t) => e[t].slice(0, 2).join(",")).join(" ")} fill=${[
+			"#26414f",
+			"#456975",
+			"#1a303b",
+			"#a2d5de",
+			"#335562",
+			"#628e9a"
+		][n]} stroke="#b5e7ec" stroke-width=".06"/>`)}</svg>`;
+	}
+	compass() {
+		if (this.north === void 0 || !Number.isFinite(this.north)) return k;
+		let e = this.north * Math.PI / 180, [t, n] = this.project(Math.sin(e), 0, -Math.cos(e)), r = Math.hypot(t, n);
+		return r < .01 ? k : D`<svg class="compass" viewBox="-60 -60 120 120" role="img" aria-label="Configured north"><text x=${t / r * 51} y=${n / r * 51 + 3} text-anchor="middle" fill="#ffce77" font-size="10">N</text></svg>`;
+	}
 	render() {
-		return D`<div class="controls">
+		return E`<div class="controls">
       <div class=${`orbit${this.dragging ? " active" : ""}`} role="group" aria-label="Camera orbit" title="Drag to orbit, or use the directional buttons" aria-disabled=${this.disabled ? "true" : "false"}
         @pointerdown=${this.start} @pointermove=${this.move} @pointerup=${this.finish} @pointercancel=${this.finish} @lostpointercapture=${this.finish}
         @click=${{
@@ -2039,7 +2151,7 @@ var Q = class extends F {
 		}}>
         <button class="up" aria-label="Tilt up" title="Tilt up" ?disabled=${this.disabled} @click=${() => this.action("up")}>↑</button>
         <button class="left" aria-label="Rotate left" title="Rotate left" ?disabled=${this.disabled} @click=${() => this.action("left")}>←</button>
-        <button class="reset" aria-label="Reset view" title="Reset view" ?disabled=${this.disabled} @click=${() => this.action("reset")}>⌂</button>
+        ${this.cube()}${this.compass()}
         <button class="right" aria-label="Rotate right" title="Rotate right" ?disabled=${this.disabled} @click=${() => this.action("right")}>→</button>
         <button class="down" aria-label="Tilt down" title="Tilt down" ?disabled=${this.disabled} @click=${() => this.action("down")}>↓</button>
       </div>
@@ -2050,18 +2162,20 @@ var Q = class extends F {
         <button aria-label="Zoom in" title="Zoom in" ?disabled=${this.disabled} @click=${() => {
 			this.suppressClick = !1, this.action("in");
 		}}>+</button>
-      </div><button class="top" aria-label="Top view" title="Top view" ?disabled=${this.disabled} @click=${() => {
+      </div><button aria-label="Reset view" title="Home view" ?disabled=${this.disabled} @click=${() => {
+			this.suppressClick = !1, this.action("reset");
+		}}>⌂</button><button class="top" aria-label="Top view" title="Top view" ?disabled=${this.disabled} @click=${() => {
 			this.suppressClick = !1, this.action("top");
 		}}>Top</button></div>
     </div><span class="status" role="status">${this.dragging ? "Orbiting — drag to rotate or tilt" : ""}</span>`;
 	}
 };
-G([L({ type: Boolean })], Q.prototype, "disabled", void 0), G([R()], Q.prototype, "dragging", void 0), Q = G([I("al-camera-control")], Q);
+K([R({ attribute: !1 })], Q.prototype, "matrix", void 0), K([R({ type: Number })], Q.prototype, "north", void 0), K([R({ type: Boolean })], Q.prototype, "disabled", void 0), K([z()], Q.prototype, "dragging", void 0), Q = K([L("al-camera-control")], Q);
 //#endregion
 //#region src/al-floorplan-viewer.ts
-var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
+var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends I {
 	constructor(...e) {
-		super(...e), this.workspace = !1, this.settingsOpen = !1, this.hideHud = !1, this.roomsOpen = !1, this.context = !1, this.room = "", this.hovered = "", this.lights = {}, this.settings = {}, this.dashboard = !1, this.controlsVisible = !1, this.fullscreen = !1, this.settingsError = "", this.options = J(), this.live = null, this.scope = "", this.selected = "", this.now = Date.now() / 1e3, this.loading = !1, this.error = "", this.model = {
+		super(...e), this.cameraMatrix = [], this.workspace = !1, this.settingsOpen = !1, this.hideHud = !1, this.roomsOpen = !1, this.context = !1, this.room = "", this.hovered = "", this.lights = {}, this.settings = {}, this.dashboard = !1, this.controlsVisible = !1, this.fullscreen = !1, this.settingsError = "", this.options = J(), this.live = null, this.scope = "", this.selected = "", this.now = Date.now() / 1e3, this.loading = !1, this.error = "", this.model = {
 			parts: [],
 			groups: [],
 			scopes: [],
@@ -2074,7 +2188,7 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 		};
 	}
 	static {
-		this.styles = [Qt, o`
+		this.styles = [Zt, o`
     :host { display: block; padding: 16px; }
     :host([editing-preview]) { padding:0; position:relative; }
     :host([editing-preview]) .viewer, :host([editing-preview]) .viewport { height:100%; }
@@ -2233,7 +2347,7 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 		let e = ++this.sequence;
 		this.loading = !0;
 		try {
-			let { FloorplanRenderer: t } = await import("./shared-DsgBC7qj.js");
+			let { FloorplanRenderer: t } = await import("./shared-2Rs3FJq-.js");
 			if (e !== this.sequence || !this.isConnected) return;
 			let n = this.renderRoot.querySelector("#scene");
 			this.renderer = new t(n, (e) => {
@@ -2248,6 +2362,12 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 					bubbles: !0,
 					composed: !0
 				}));
+			}, (e) => {
+				if (e.some((e, t) => Math.abs(e - (this.cameraMatrix[t] ?? Infinity)) > 1e-7)) {
+					this.cameraMatrix = e;
+					let t = this.renderRoot.querySelector("al-camera-control");
+					t && (t.matrix = e);
+				}
 			}), this.renderer.setParts(this.visibleParts, this.options.ground_z, this.context ? void 0 : this.config?.site, this.context ? this.room : void 0), this.groundZ = this.options.ground_z, this.updateAppearance();
 		} catch {
 			e === this.sequence && (this.renderer?.dispose(), this.renderer = void 0, this.renderRoot.querySelector("#scene")?.replaceChildren(), this.error = "The 3D view could not start. WebGL may be unavailable. Use the group list or retry.");
@@ -2271,9 +2391,9 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 		}
 	}
 	settingsControl() {
-		return D`<details class="settings" .open=${this.workspace ? this.settingsOpen : void 0}><summary>Viewer settings</summary>
+		return E`<details class="settings" .open=${this.workspace ? this.settingsOpen : void 0}><summary>Viewer settings</summary>
       <p class="muted">Settings apply to this display. Ground Z uses your floorplan's coordinates.</p>
-      ${this.workspace ? k : D`<button type="button" @click=${async () => {
+      ${this.workspace ? k : E`<button type="button" @click=${async () => {
 			try {
 				await this.requestFullscreen();
 			} catch {
@@ -2288,7 +2408,7 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 			"standard",
 			"night",
 			"security"
-		].map((e) => D`<option value=${e} .selected=${e === (this.settings.scheme ?? "standard")}>${e}</option>`)}
+		].map((e) => E`<option value=${e} .selected=${e === (this.settings.scheme ?? "standard")}>${e}</option>`)}
       </select></label>
       <label>Ground Z <input type="number" step="any" .value=${this.settings.ground_z?.toString() ?? ""} placeholder="Not specified"
         @change=${(e) => {
@@ -2310,7 +2430,7 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 			"ambient",
 			"auto_rotate",
 			"focus_activity"
-		].filter((e) => !this.workspace || e !== "ambient").map((e) => D`<label><input type="checkbox" .checked=${this.options[e]}
+		].filter((e) => !this.workspace || e !== "ambient").map((e) => E`<label><input type="checkbox" .checked=${this.options[e]}
         @change=${(t) => this.changeSettings({
 			...this.settings,
 			[e]: t.target.checked
@@ -2339,7 +2459,7 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 				this.settingsError = String(e);
 			}
 		}}>Apply viewer settings</button>
-      </details>${this.settingsError ? D`<p role="alert">${this.settingsError}</p>` : k}
+      </details>${this.settingsError ? E`<p role="alert">${this.settingsError}</p>` : k}
     </details>`;
 	}
 	reading(e) {
@@ -2362,9 +2482,9 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 	}
 	render() {
 		let e = this.visibleParts, t = wn(this.model.groups, this.scope), n = this.model.groups.find((e) => e.id === this.selected), r = kn(this.options.rules, this.hass?.states ?? {}), i = this.live && this.now - this.live.now > 10;
-		return D`
+		return E`
       <div class="view-actions">
-      ${!this.workspace && (this.options.ambient || this.fullscreen) ? D`<button id="exit-view" type="button" @click=${() => void this.exitView()}>${this.options.ambient ? "Exit ambient" : "Exit fullscreen"}</button>` : k}
+      ${!this.workspace && (this.options.ambient || this.fullscreen) ? E`<button id="exit-view" type="button" @click=${() => void this.exitView()}>${this.options.ambient ? "Exit ambient" : "Exit fullscreen"}</button>` : k}
       <button class="ambient-toggle" type="button" @click=${() => {
 			this.controlsVisible = !this.controlsVisible, this.toggleAttribute("show-controls", this.controlsVisible);
 		}}> ${this.controlsVisible ? "Hide controls" : "Show controls"}</button>
@@ -2376,34 +2496,34 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
 			this.scope = e.target.value, this.selectRoom("");
 		}}>
           <option value="" .selected=${this.scope === ""}>Whole home</option>
-          ${this.model.scopes.map((e) => D`<option value=${e.id} .selected=${this.scope === e.id}>
-            ${e.label} (${nt[e.kind]?.label ?? "Group"})
+          ${this.model.scopes.map((e) => E`<option value=${e.id} .selected=${this.scope === e.id}>
+            ${e.label} (${tt[e.kind]?.label ?? "Group"})
           </option>`)}
         </select></label>
-        <al-camera-control .disabled=${!this.renderer || !!this.error} @al-camera-action=${(e) => this.renderer?.cameraAction(e.detail)}></al-camera-control>
+        <al-camera-control .matrix=${this.cameraMatrix} .north=${this.config?.gps?.rotation} .disabled=${!this.renderer || !!this.error} @al-camera-action=${(e) => this.renderer?.cameraAction(e.detail)}></al-camera-control>
       </div>
       <p role="status" class=${`muted live-status ${i || !this.live ? "stale" : ""}`}>${i ? "Activity readings are stale. Waiting for a fresh update…" : this.live ? "Live activity · updates every 2 seconds" : "Waiting for live activity readings…"}</p>
-      ${r ? D`<p class="alert" role="status">${r.label ?? r.entity}</p>` : k}
-      ${this.options.rules.some((e) => !["on", "off"].includes(this.hass?.states[e.entity]?.state ?? "")) ? D`<p class="sensor-status" role="status">Some alert sensors are unavailable</p>` : k}
-      ${this.workspace ? D`<button type="button" class="room-toggle" aria-label="Rooms" title="Rooms" aria-expanded=${String(this.roomsOpen)} aria-controls="room-drawer" @click=${() => {
+      ${r ? E`<p class="alert" role="status">${r.label ?? r.entity}</p>` : k}
+      ${this.options.rules.some((e) => !["on", "off"].includes(this.hass?.states[e.entity]?.state ?? "")) ? E`<p class="sensor-status" role="status">Some alert sensors are unavailable</p>` : k}
+      ${this.workspace ? E`<button type="button" class="room-toggle" aria-label="Rooms" title="Rooms" aria-expanded=${String(this.roomsOpen)} aria-controls="room-drawer" @click=${() => {
 			this.roomsOpen = !this.roomsOpen;
 		}}>☷</button>` : k}
       <div class="viewer">
         <div class="viewport" aria-describedby="floorplan-help">
           <div id="scene"></div>
-          ${!this.room && !this.hideHud && !(this.workspace && this.settingsOpen) && (this.hovered || this.selected) ? D`<al-room-hud .room=${this.model.parts.find((e) => e.id === (this.hovered || this.selected))} .live=${this.live} .telemetry=${this.telemetry} .hass=${this.hass} .now=${this.now} @al-dismiss-hud=${() => {
+          ${!this.room && !this.hideHud && !(this.workspace && this.settingsOpen) && (this.hovered || this.selected) ? E`<al-room-hud .room=${this.model.parts.find((e) => e.id === (this.hovered || this.selected))} .live=${this.live} .telemetry=${this.telemetry} .hass=${this.hass} .now=${this.now} @al-dismiss-hud=${() => {
 			this.selectRoom(""), this.hovered = "";
 		}}></al-room-hud>` : k}
-          ${!e.length && !this.config?.site?.features.length ? D`<div class="overlay"><p>${this.model.groups.length ? "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>` : this.error ? D`<div class="overlay"><p role="alert">${this.error}</p>
+          ${!e.length && !this.config?.site?.features.length ? E`<div class="overlay"><p>${this.model.groups.length ? "No placed geometry in this view. See the geometry notes below." : "Import a floorplan below to see your home in 3D."}</p></div>` : this.error ? E`<div class="overlay"><p role="alert">${this.error}</p>
               <button id="retry" type="button" @click=${() => {
 			this.error = "";
-		}}>Retry 3D view</button></div>` : this.loading ? D`<div class="overlay"><p role="status">Loading 3D view…</p></div>` : k}
-          ${e.length && !this.error ? D`<div class="legend">${this.options.color_thresholds.map((e) => D`<span style=${`color:${e.color};margin-right:12px`}>● ${e.value}</span>`)} · no fill = unknown
+		}}>Retry 3D view</button></div>` : this.loading ? E`<div class="overlay"><p role="status">Loading 3D view…</p></div>` : k}
+          ${e.length && !this.error ? E`<div class="legend">${this.options.color_thresholds.map((e) => E`<span style=${`color:${e.color};margin-right:12px`}>● ${e.value}</span>`)} · no fill = unknown
             <br>${(this.options.ground_z ?? this.config?.site?.ground_z) === void 0 ? "Reference grid · outdoor ground unspecified" : `Ground Z: ${this.options.ground_z ?? this.config?.site?.ground_z} m`}</div>` : k}
         </div>
         <aside id="room-drawer" aria-label="Floorplan groups" ?hidden=${this.workspace && !this.roomsOpen}>
           <div class="groups" aria-label="Select a group">
-            ${t.map((e) => D`<button type="button" class="group" data-group=${e.id}
+            ${t.map((e) => E`<button type="button" class="group" data-group=${e.id}
               aria-pressed=${e.id === this.selected ? "true" : "false"}
               @click=${() => {
 			this.selectRoom(e.id);
@@ -2412,38 +2532,38 @@ var Pn = (e) => Number(e.toFixed(2)).toLocaleString(), $ = class extends F {
               <span class="reading">${this.reading(e)}</span>
             </button>`)}
           </div>
-          ${n ? D`<section class="selection" aria-label="Selected group">
-            <h3>${n.label}</h3><p>${nt[n.kind]?.label ?? "Group"} · ${n.id}</p>
+          ${n ? E`<section class="selection" aria-label="Selected group">
+            <h3>${n.label}</h3><p>${tt[n.kind]?.label ?? "Group"} · ${n.id}</p>
             <p>Activity: <strong>${this.reading(n)}</strong></p>
             <p>${X(this.lights[n.id], this.hass?.states ?? {}).unknown ? "Some light readings unavailable" : `Lights: ${Math.round(X(this.lights[n.id], this.hass?.states ?? {}).brightness * 100)}%`}</p>
-            ${this.dashboard ? k : D`<button id="edit-room" type="button" @click=${() => this.dispatchEvent(new CustomEvent("al-edit-room", {
+            ${this.dashboard ? k : E`<button id="edit-room" type="button" @click=${() => this.dispatchEvent(new CustomEvent("al-edit-room", {
 			detail: n.id,
 			bubbles: !0,
 			composed: !0
 		}))}>Place devices & windows</button><button id="open-group" type="button" @click=${() => this.openGroup(n)}>Open group settings</button>`}
-          </section>` : D`<p class="muted">Select a room in the scene or a group in this list.</p>`}
+          </section>` : E`<p class="muted">Select a room in the scene or a group in this list.</p>`}
         </aside>
       </div>
       ${this.settingsControl()}
       <p id="floorplan-help" class="help muted">Drag to rotate · Right-drag to pan · Scroll or pinch to zoom.
         Camera buttons and the group list also work with a keyboard. Each group shows its own activity level.</p>
-      ${this.model.issues.length ? D`<details class="issues" open><summary>Geometry notes (${this.model.issues.length})</summary>
-        <ul>${this.model.issues.map((e) => D`<li>${e.label}: ${e.reason}</li>`)}</ul>
+      ${this.model.issues.length ? E`<details class="issues" open><summary>Geometry notes (${this.model.issues.length})</summary>
+        <ul>${this.model.issues.map((e) => E`<li>${e.label}: ${e.reason}</li>`)}</ul>
       </details>` : k}
     `;
 	}
 };
-G([L({
+K([R({
 	type: Boolean,
 	reflect: !0
-})], $.prototype, "workspace", void 0), G([L({
+})], $.prototype, "workspace", void 0), K([R({
 	type: Boolean,
 	reflect: !0,
 	attribute: "settings-open"
-})], $.prototype, "settingsOpen", void 0), G([L({ type: Boolean })], $.prototype, "hideHud", void 0), G([R()], $.prototype, "roomsOpen", void 0), G([L({ attribute: !1 })], $.prototype, "telemetry", void 0), G([L({ type: Boolean })], $.prototype, "context", void 0), G([L({
+})], $.prototype, "settingsOpen", void 0), K([R({ type: Boolean })], $.prototype, "hideHud", void 0), K([z()], $.prototype, "roomsOpen", void 0), K([R({ attribute: !1 })], $.prototype, "telemetry", void 0), K([R({ type: Boolean })], $.prototype, "context", void 0), K([R({
 	type: String,
 	reflect: !0
-})], $.prototype, "room", void 0), G([L({ attribute: !1 })], $.prototype, "placementHeight", void 0), G([R()], $.prototype, "hovered", void 0), G([L({ attribute: !1 })], $.prototype, "config", void 0), G([L({ attribute: !1 })], $.prototype, "hass", void 0), G([L({ attribute: !1 })], $.prototype, "lights", void 0), G([L({ attribute: !1 })], $.prototype, "settings", void 0), G([L({ type: Boolean })], $.prototype, "dashboard", void 0), G([R()], $.prototype, "controlsVisible", void 0), G([R()], $.prototype, "fullscreen", void 0), G([R()], $.prototype, "settingsError", void 0), G([L({ attribute: !1 })], $.prototype, "live", void 0), G([R()], $.prototype, "scope", void 0), G([R()], $.prototype, "selected", void 0), G([R()], $.prototype, "now", void 0), G([R()], $.prototype, "loading", void 0), G([R()], $.prototype, "error", void 0), $ = G([I("al-floorplan-viewer")], $);
+})], $.prototype, "room", void 0), K([R({ attribute: !1 })], $.prototype, "placementHeight", void 0), K([z()], $.prototype, "hovered", void 0), K([R({ attribute: !1 })], $.prototype, "config", void 0), K([R({ attribute: !1 })], $.prototype, "hass", void 0), K([R({ attribute: !1 })], $.prototype, "lights", void 0), K([R({ attribute: !1 })], $.prototype, "settings", void 0), K([R({ type: Boolean })], $.prototype, "dashboard", void 0), K([z()], $.prototype, "controlsVisible", void 0), K([z()], $.prototype, "fullscreen", void 0), K([z()], $.prototype, "settingsError", void 0), K([R({ attribute: !1 })], $.prototype, "live", void 0), K([z()], $.prototype, "scope", void 0), K([z()], $.prototype, "selected", void 0), K([z()], $.prototype, "now", void 0), K([z()], $.prototype, "loading", void 0), K([z()], $.prototype, "error", void 0), $ = K([L("al-floorplan-viewer")], $);
 //#endregion
 //#region src/floorplan-store.ts
 var Fn = /* @__PURE__ */ new WeakMap(), In = class {
@@ -2484,4 +2604,4 @@ function Ln(e) {
 	return n || (n = new In(e), Fn.set(t, n)), n.hass = e, n;
 }
 //#endregion
-export { Ht as $, Lt as A, qe as At, At as B, O as Bt, an as C, We as Ct, St as D, Ye as Dt, Qt as E, Je as Et, Yt as F, R as Ft, Xt as G, Pt as H, ke as Ht, Tt as I, L as It, Gt as J, Nt as K, xt as L, I as Lt, Ft as M, Ge as Mt, It as N, Ke as Nt, Et as O, Fe as Ot, Kt as P, Re as Pt, qt as Q, kt as R, F as Rt, ln as S, He as St, G as T, Ve as Tt, Jt as U, ye as Ut, Mt as V, D as Vt, jt as W, o as Wt, Rt as X, Zt as Y, zt as Z, un as _, st as _t, bn as a, vt as at, cn as b, Le as bt, vn as c, dt as ct, q as d, et as dt, Ut as et, _n as f, rt as ft, dn as g, ot as gt, en as h, nt as ht, J as i, ft as it, Dt as j, ze as jt, wt as k, Ue as kt, K as l, mt as lt, yn as m, $e as mt, X as n, gt as nt, gn as o, bt as ot, hn as p, tt as pt, Wt as q, On as r, z as rt, mn as s, yt as st, Ln as t, W as tt, pn as u, ut, nn as v, Qe as vt, $t as w, Be as wt, tn as x, Xe as xt, fn as y, Ze as yt, Ct as z, k as zt };
+export { Vt as $, It as A, Ke as At, kt as B, O as Bt, rn as C, Ue as Ct, xt as D, Je as Dt, Zt as E, qe as Et, Jt as F, z as Ft, Yt as G, Nt as H, Oe as Ht, wt as I, R as It, Wt as J, Mt as K, bt as L, L as Lt, Pt as M, We as Mt, Ft as N, Ge as Nt, Tt as O, Pe as Ot, Gt as P, Le as Pt, Kt as Q, Ot as R, I as Rt, cn as S, Ve as St, K as T, Be as Tt, qt as U, D as Ut, jt as V, E as Vt, At as W, o as Wt, Lt as X, Xt as Y, Rt as Z, ln as _, ot as _t, bn as a, _t as at, sn as b, Ie as bt, vn as c, ut as ct, _n as d, $e as dt, Ht as et, gn as f, nt as ft, un as g, at as gt, $t as h, tt as ht, J as i, dt as it, Et as j, Re as jt, Ct as k, He as kt, q as l, pt as lt, yn as m, Qe as mt, X as n, ht as nt, hn as o, yt as ot, mn as p, et as pt, Ut as q, On as r, B as rt, pn as s, vt as st, Ln as t, G as tt, fn as u, lt as ut, tn as v, Ze as vt, Qt as w, ze as wt, en as x, Ye as xt, dn as y, Xe as yt, St as z, k as zt };
