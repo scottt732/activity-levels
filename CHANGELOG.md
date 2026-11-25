@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.2](https://github.com/scottt732/activity-levels/compare/v0.27.1...v0.27.2) (2026-11-25)
+
+
+### Fixed
+
+* **config:** require numpy&gt;=2.3.2 instead of pinning it ([#90](https://github.com/scottt732/activity-levels/issues/90)) ([f408397](https://github.com/scottt732/activity-levels/commit/f408397926a00f59fe251ae5ece91a90ed865281))
+
 ## [0.27.1](https://github.com/scottt732/activity-levels/compare/v0.27.0...v0.27.1) (2026-09-13)
 
 
