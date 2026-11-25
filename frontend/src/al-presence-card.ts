@@ -25,6 +25,7 @@ export class ActivityLevelsPresenceCard extends LitElement {
   @state() private correctionError = "";
   @state() private notice = "";
   @state() private failedImages = new Set<string>();
+  @state() private manual = new Set<string>();
   private source?: PresenceCardSource;
   private unsubscribe?: () => void;
   private trigger?: HTMLElement;
@@ -45,7 +46,7 @@ export class ActivityLevelsPresenceCard extends LitElement {
     .add { border: 1px dashed var(--secondary-text-color); font-size: 24px; }
     .hint { color: var(--secondary-text-color); font-size: .9em; }
     .error { color: var(--error-color); margin: 8px 0; }
-    dialog { color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 8px; padding: 20px; width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); box-sizing: border-box; }
+    dialog { color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 8px; padding: 20px; width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); box-sizing: border-box; }
     dialog::backdrop { background: rgb(0 0 0 / .45); }
     dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
     dialog h2 { margin: 0; }
@@ -55,6 +56,17 @@ export class ActivityLevelsPresenceCard extends LitElement {
     label { display: grid; gap: 6px; margin: 14px 0; }
     select { width: 100%; }
     .notice { margin-top: 8px; }
+    .split { display: grid; grid-template-columns: minmax(160px, 220px) 1fr; gap: 20px; }
+    @media (max-width: 560px) { .split { grid-template-columns: 1fr; } }
+    .people-list { display: grid; gap: 6px; align-content: start; }
+    .row { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px; text-align: left; padding: 6px 10px; }
+    .mini { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; overflow: hidden; background: var(--secondary-background-color); }
+    .mini img { width: 100%; height: 100%; object-fit: cover; }
+    .add-row .mini { border: 1px dashed var(--secondary-text-color); background: none; }
+    .detail h3 { margin: 0 0 8px; }
+    .device-list { display: grid; gap: 6px; margin-top: 14px; }
+    .device-row { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 10px; text-align: left; }
+    .device-row ha-icon { --mdc-icon-size: 18px; }
   `];
 
   setConfig(config: PresenceCardConfig): void {
@@ -82,7 +94,7 @@ export class ActivityLevelsPresenceCard extends LitElement {
   private get canCorrect(): boolean { return this.hass?.user?.is_admin === true; }
   private closeDialog(): void {
     this.renderRoot?.querySelector<HTMLDialogElement>("dialog")?.close();
-    this.selected = undefined; this.adding = false;
+    this.selected = undefined; this.adding = false; this.manual = new Set();
     this.trigger?.focus();
   }
   private async openDialog(event: Event, person?: string, device?: string): Promise<void> {
@@ -109,29 +121,53 @@ export class ActivityLevelsPresenceCard extends LitElement {
     const name = this.data?.groups.find(g => g.id === id)?.name ?? id;
     void this.correct(this.locationRequest(id, certainty, exclude), `${this.selected?.person}: ${exclude ? "not in" : certainty === "probable" ? "probably in" : "confirmed in"} ${name}.`);
   }
+  private renderDetail(selected: { person: string; device?: string }) {
+    const person = this.data?.people[selected.person];
+    if (!person) return nothing;
+    const device = selected.device ? person.devices[selected.device] : undefined;
+    const busy = this.pending || !this.canCorrect;
+    const probability = this.data && this.group ? roomPeople(this.data, this.group, 0).find(p => p.name === selected.person)?.probability ?? 0 : 0;
+    return html`<h3>${device?.name ?? selected.person}</h3>
+      ${device ? html`
+        <p class="hint">${selected.person} · ${this.data?.groups.find(g => g.id === device.room)?.name ?? device.room ?? "Location unknown"}</p>
+        <div class="choices">${[false, true].map(carried => html`<button ?disabled=${busy} @click=${() => void this.correct({ carried }, `${device.name}: ${deviceVerb(device.kind, carried).toLowerCase()}.`)}>${deviceVerb(device.kind, carried)}</button>`)}</div>
+      ` : html`<p class="hint">${this.group?.name} · ${Math.round(probability * 100)}%</p><div class="choices">
+        <button class="primary" ?disabled=${busy} @click=${() => this.location(this.config!.group)}>Definitely here</button>
+        <button ?disabled=${busy} @click=${() => this.location(this.config!.group, "probable")}>Probably here</button>
+        <button ?disabled=${busy} @click=${() => this.location(this.config!.group, "definite", true)}>Not here</button>
+      </div>
+      ${Object.keys(person.devices ?? {}).length ? html`<div class="device-list">${Object.entries(person.devices).map(([id, d]) => html`<button class="device-row" @click=${() => { this.selected = { person: selected.person, device: id }; this.destination = d.room ?? "away"; }}><ha-icon .icon=${deviceIcon(d.kind)}></ha-icon><span>${d.name}</span><span class="hint">${this.data?.groups.find(g => g.id === d.room)?.name ?? d.room ?? "Unknown"}</span></button>`)}</div>` : nothing}`}
+      <label>${device ? "Device location" : "Somewhere else"}<select .value=${this.destination} ?disabled=${busy} @change=${(e: Event) => { this.destination = (e.target as HTMLSelectElement).value; }}>
+        ${(this.data?.groups ?? []).filter(g => !device || g.kind !== "floor").map(g => html`<option value=${g.id} ?selected=${g.id === this.destination}>${g.kind === "floor" ? "Floor: " : ""}${g.name}</option>`)}
+        <option value="away" ?selected=${this.destination === "away"}>Away</option>
+      </select></label><div class="actions"><button ?disabled=${busy} @click=${() => this.location(this.destination)}>Definitely</button>${!device ? html`<button ?disabled=${busy} @click=${() => this.location(this.destination, "probable")}>Probably</button>` : nothing}
+      <button ?disabled=${busy} @click=${() => void this.correct({ clear: true }, "Using automatic estimate.")}>Use automatic estimate</button></div>`;
+  }
   private renderDialog() {
     const selected = this.selected;
-    const person = selected ? this.data?.people[selected.person] : undefined;
-    const device = selected?.device ? person?.devices[selected.device] : undefined;
-    const shown = new Set(this.data && this.group ? roomPeople(this.data, this.group, this.config?.min_probability ?? .1).map(p => p.name) : []);
-    return html`<dialog @close=${() => { this.selected = undefined; this.adding = false; }} @cancel=${(e: Event) => { if (this.pending) e.preventDefault(); }} aria-label=${device?.name ?? selected?.person ?? "Add person"}>
-      <header><h2>${device?.name ?? selected?.person ?? "Who is here?"}</h2><button ?disabled=${this.pending} aria-label="Close" @click=${() => this.closeDialog()}>×</button></header>
-      ${this.adding ? html`<div class="choices">${Object.keys(this.data?.people ?? {}).filter(name => !shown.has(name)).map(name => html`<button @click=${() => { this.selected = { person: name }; this.adding = false; }}>${name}</button>`)}</div>` : device ? html`
-        <p class="hint">${selected?.person} · ${this.data?.groups.find(g => g.id === device.room)?.name ?? device.room ?? "Location unknown"}</p>
-        <div class="choices">${[false, true].map(carried => html`<button ?disabled=${this.pending || !this.canCorrect} @click=${() => void this.correct({ carried }, `${device.name}: ${deviceVerb(device.kind, carried).toLowerCase()}.`)}>${deviceVerb(device.kind, carried)}</button>`)}</div>
-      ` : person ? html`<p class="hint">${this.group?.name} · ${Math.round((this.data && this.group ? roomPeople(this.data, this.group, 0).find(p => p.name === selected?.person)?.probability ?? 0 : 0) * 100)}%</p><div class="choices">
-        <button class="primary" ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.config!.group)}>Definitely here</button>
-        <button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.config!.group, "probable")}>Probably here</button>
-        <button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.config!.group, "definite", true)}>Not here</button>
-      </div>` : nothing}
-      ${selected ? html`<label>${device ? "Device location" : "Somewhere else"}<select .value=${this.destination} ?disabled=${this.pending || !this.canCorrect} @change=${(e: Event) => { this.destination = (e.target as HTMLSelectElement).value; }}>
-        ${(this.data?.groups ?? []).filter(g => !device || g.kind !== "floor").map(g => html`<option value=${g.id}>${g.kind === "floor" ? "Floor: " : ""}${g.name}</option>`)}
-        <option value="away">Away</option>
-      </select></label><div class="actions"><button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.destination)}>Definitely</button>${!device ? html`<button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.destination, "probable")}>Probably</button>` : nothing}
-      <button ?disabled=${this.pending || !this.canCorrect} @click=${() => void this.correct({ clear: true }, "Using automatic estimate.")}>Use automatic estimate</button></div>` : nothing}
-      ${!this.canCorrect ? html`<p class="hint">An administrator can correct estimates.</p>` : nothing}
-      ${this.correctionError ? html`<p class="error" role="alert">${this.correctionError}</p>` : nothing}
+    const listed = this.data && this.group ? roomPeople(this.data, this.group, this.config?.min_probability ?? .1) : [];
+    const names = [...listed.map(p => p.name), ...[...this.manual].filter(name => !listed.some(p => p.name === name) && this.data?.people[name])];
+    const others = Object.keys(this.data?.people ?? {}).filter(name => !names.includes(name));
+    const image = (name: string) => { const entity = this.data?.people[name]?.person; const src = entity ? this.hass?.states[entity]?.attributes.entity_picture : undefined; return typeof src === "string" && !this.failedImages.has(src) ? src : undefined; };
+    return html`<dialog @close=${() => { this.selected = undefined; this.adding = false; }} @cancel=${(e: Event) => { if (this.pending) e.preventDefault(); }} aria-label=${`People in ${this.group?.name ?? "this room"}`}>
+      <header><h2>${this.group?.name ?? "People"}</h2><button ?disabled=${this.pending} aria-label="Close" @click=${() => this.closeDialog()}>×</button></header>
+      <div class="split">
+        <nav class="people-list" aria-label="People">
+          ${names.map(name => { const p = listed.find(l => l.name === name); const src = image(name); return html`<button class="row" aria-pressed=${String(!this.adding && selected?.person === name)} @click=${() => this.choose(name)}>
+            <span class="mini">${src ? html`<img src=${src} alt="" />` : name.slice(0, 1)}</span><span class="name">${name}</span><span class="hint">${p ? `${Math.round(p.probability * 100)}%` : "Added"}</span></button>`; })}
+          ${this.canCorrect && others.length ? html`<button class="row add-row" aria-pressed=${String(this.adding)} @click=${() => { this.adding = true; this.selected = undefined; }}><span class="mini">+</span><span class="name">Add person</span></button>` : nothing}
+        </nav>
+        <section class="detail">
+          ${this.adding ? html`<h3>Who else is here?</h3><div class="choices">${others.map(name => html`<button @click=${() => { this.manual = new Set([...this.manual, name]); this.choose(name); }}>${name}</button>`)}</div>`
+            : selected ? this.renderDetail(selected) : html`<p class="hint">Select a person.</p>`}
+          ${!this.canCorrect ? html`<p class="hint">An administrator can correct estimates.</p>` : nothing}
+          ${this.correctionError ? html`<p class="error" role="alert">${this.correctionError}</p>` : nothing}
+        </section>
+      </div>
     </dialog>`;
+  }
+  private choose(name: string): void {
+    this.adding = false; this.selected = { person: name }; this.destination = this.config?.group ?? ""; this.correctionError = "";
   }
   protected render() {
     const group = this.group;

@@ -64,7 +64,7 @@ function v(e) {
 //#region src/al-presence-card.ts
 var y = class extends u {
 	constructor(...e) {
-		super(...e), this.adding = !1, this.destination = "", this.pending = !1, this.correctionError = "", this.notice = "", this.failedImages = /* @__PURE__ */ new Set();
+		super(...e), this.adding = !1, this.destination = "", this.pending = !1, this.correctionError = "", this.notice = "", this.failedImages = /* @__PURE__ */ new Set(), this.manual = /* @__PURE__ */ new Set();
 	}
 	static {
 		this.styles = [i, e`
@@ -83,7 +83,7 @@ var y = class extends u {
     .add { border: 1px dashed var(--secondary-text-color); font-size: 24px; }
     .hint { color: var(--secondary-text-color); font-size: .9em; }
     .error { color: var(--error-color); margin: 8px 0; }
-    dialog { color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 8px; padding: 20px; width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); box-sizing: border-box; }
+    dialog { color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color); border-radius: 8px; padding: 20px; width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); box-sizing: border-box; }
     dialog::backdrop { background: rgb(0 0 0 / .45); }
     dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
     dialog h2 { margin: 0; }
@@ -93,6 +93,17 @@ var y = class extends u {
     label { display: grid; gap: 6px; margin: 14px 0; }
     select { width: 100%; }
     .notice { margin-top: 8px; }
+    .split { display: grid; grid-template-columns: minmax(160px, 220px) 1fr; gap: 20px; }
+    @media (max-width: 560px) { .split { grid-template-columns: 1fr; } }
+    .people-list { display: grid; gap: 6px; align-content: start; }
+    .row { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px; text-align: left; padding: 6px 10px; }
+    .mini { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; overflow: hidden; background: var(--secondary-background-color); }
+    .mini img { width: 100%; height: 100%; object-fit: cover; }
+    .add-row .mini { border: 1px dashed var(--secondary-text-color); background: none; }
+    .detail h3 { margin: 0 0 8px; }
+    .device-list { display: grid; gap: 6px; margin-top: 14px; }
+    .device-row { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 10px; text-align: left; }
+    .device-row ha-icon { --mdc-icon-size: 18px; }
   `];
 	}
 	setConfig(e) {
@@ -144,7 +155,7 @@ var y = class extends u {
 		return this.hass?.user?.is_admin === !0;
 	}
 	closeDialog() {
-		this.renderRoot?.querySelector("dialog")?.close(), this.selected = void 0, this.adding = !1, this.trigger?.focus();
+		this.renderRoot?.querySelector("dialog")?.close(), this.selected = void 0, this.adding = !1, this.manual = /* @__PURE__ */ new Set(), this.trigger?.focus();
 	}
 	async openDialog(e, t, n) {
 		this.trigger = e.currentTarget, this.selected = t ? {
@@ -178,34 +189,67 @@ var y = class extends u {
 		let r = this.data?.groups.find((t) => t.id === e)?.name ?? e;
 		this.correct(this.locationRequest(e, t, n), `${this.selected?.person}: ${n ? "not in" : t === "probable" ? "probably in" : "confirmed in"} ${r}.`);
 	}
+	renderDetail(e) {
+		let t = this.data?.people[e.person];
+		if (!t) return n;
+		let r = e.device ? t.devices[e.device] : void 0, i = this.pending || !this.canCorrect, a = this.data && this.group ? m(this.data, this.group, 0).find((t) => t.name === e.person)?.probability ?? 0 : 0;
+		return c`<h3>${r?.name ?? e.person}</h3>
+      ${r ? c`
+        <p class="hint">${e.person} · ${this.data?.groups.find((e) => e.id === r.room)?.name ?? r.room ?? "Location unknown"}</p>
+        <div class="choices">${[!1, !0].map((e) => c`<button ?disabled=${i} @click=${() => void this.correct({ carried: e }, `${r.name}: ${f(r.kind, e).toLowerCase()}.`)}>${f(r.kind, e)}</button>`)}</div>
+      ` : c`<p class="hint">${this.group?.name} · ${Math.round(a * 100)}%</p><div class="choices">
+        <button class="primary" ?disabled=${i} @click=${() => this.location(this.config.group)}>Definitely here</button>
+        <button ?disabled=${i} @click=${() => this.location(this.config.group, "probable")}>Probably here</button>
+        <button ?disabled=${i} @click=${() => this.location(this.config.group, "definite", !0)}>Not here</button>
+      </div>
+      ${Object.keys(t.devices ?? {}).length ? c`<div class="device-list">${Object.entries(t.devices).map(([t, n]) => c`<button class="device-row" @click=${() => {
+			this.selected = {
+				person: e.person,
+				device: t
+			}, this.destination = n.room ?? "away";
+		}}><ha-icon .icon=${p(n.kind)}></ha-icon><span>${n.name}</span><span class="hint">${this.data?.groups.find((e) => e.id === n.room)?.name ?? n.room ?? "Unknown"}</span></button>`)}</div>` : n}`}
+      <label>${r ? "Device location" : "Somewhere else"}<select .value=${this.destination} ?disabled=${i} @change=${(e) => {
+			this.destination = e.target.value;
+		}}>
+        ${(this.data?.groups ?? []).filter((e) => !r || e.kind !== "floor").map((e) => c`<option value=${e.id} ?selected=${e.id === this.destination}>${e.kind === "floor" ? "Floor: " : ""}${e.name}</option>`)}
+        <option value="away" ?selected=${this.destination === "away"}>Away</option>
+      </select></label><div class="actions"><button ?disabled=${i} @click=${() => this.location(this.destination)}>Definitely</button>${r ? n : c`<button ?disabled=${i} @click=${() => this.location(this.destination, "probable")}>Probably</button>`}
+      <button ?disabled=${i} @click=${() => void this.correct({ clear: !0 }, "Using automatic estimate.")}>Use automatic estimate</button></div>`;
+	}
 	renderDialog() {
-		let e = this.selected, t = e ? this.data?.people[e.person] : void 0, r = e?.device ? t?.devices[e.device] : void 0, i = new Set(this.data && this.group ? m(this.data, this.group, this.config?.min_probability ?? .1).map((e) => e.name) : []);
+		let e = this.selected, t = this.data && this.group ? m(this.data, this.group, this.config?.min_probability ?? .1) : [], r = [...t.map((e) => e.name), ...[...this.manual].filter((e) => !t.some((t) => t.name === e) && this.data?.people[e])], i = Object.keys(this.data?.people ?? {}).filter((e) => !r.includes(e)), a = (e) => {
+			let t = this.data?.people[e]?.person, n = t ? this.hass?.states[t]?.attributes.entity_picture : void 0;
+			return typeof n == "string" && !this.failedImages.has(n) ? n : void 0;
+		};
 		return c`<dialog @close=${() => {
 			this.selected = void 0, this.adding = !1;
 		}} @cancel=${(e) => {
 			this.pending && e.preventDefault();
-		}} aria-label=${r?.name ?? e?.person ?? "Add person"}>
-      <header><h2>${r?.name ?? e?.person ?? "Who is here?"}</h2><button ?disabled=${this.pending} aria-label="Close" @click=${() => this.closeDialog()}>×</button></header>
-      ${this.adding ? c`<div class="choices">${Object.keys(this.data?.people ?? {}).filter((e) => !i.has(e)).map((e) => c`<button @click=${() => {
-			this.selected = { person: e }, this.adding = !1;
-		}}>${e}</button>`)}</div>` : r ? c`
-        <p class="hint">${e?.person} · ${this.data?.groups.find((e) => e.id === r.room)?.name ?? r.room ?? "Location unknown"}</p>
-        <div class="choices">${[!1, !0].map((e) => c`<button ?disabled=${this.pending || !this.canCorrect} @click=${() => void this.correct({ carried: e }, `${r.name}: ${f(r.kind, e).toLowerCase()}.`)}>${f(r.kind, e)}</button>`)}</div>
-      ` : t ? c`<p class="hint">${this.group?.name} · ${Math.round((this.data && this.group ? m(this.data, this.group, 0).find((t) => t.name === e?.person)?.probability ?? 0 : 0) * 100)}%</p><div class="choices">
-        <button class="primary" ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.config.group)}>Definitely here</button>
-        <button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.config.group, "probable")}>Probably here</button>
-        <button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.config.group, "definite", !0)}>Not here</button>
-      </div>` : n}
-      ${e ? c`<label>${r ? "Device location" : "Somewhere else"}<select .value=${this.destination} ?disabled=${this.pending || !this.canCorrect} @change=${(e) => {
-			this.destination = e.target.value;
-		}}>
-        ${(this.data?.groups ?? []).filter((e) => !r || e.kind !== "floor").map((e) => c`<option value=${e.id}>${e.kind === "floor" ? "Floor: " : ""}${e.name}</option>`)}
-        <option value="away">Away</option>
-      </select></label><div class="actions"><button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.destination)}>Definitely</button>${r ? n : c`<button ?disabled=${this.pending || !this.canCorrect} @click=${() => this.location(this.destination, "probable")}>Probably</button>`}
-      <button ?disabled=${this.pending || !this.canCorrect} @click=${() => void this.correct({ clear: !0 }, "Using automatic estimate.")}>Use automatic estimate</button></div>` : n}
-      ${this.canCorrect ? n : c`<p class="hint">An administrator can correct estimates.</p>`}
-      ${this.correctionError ? c`<p class="error" role="alert">${this.correctionError}</p>` : n}
+		}} aria-label=${`People in ${this.group?.name ?? "this room"}`}>
+      <header><h2>${this.group?.name ?? "People"}</h2><button ?disabled=${this.pending} aria-label="Close" @click=${() => this.closeDialog()}>×</button></header>
+      <div class="split">
+        <nav class="people-list" aria-label="People">
+          ${r.map((n) => {
+			let r = t.find((e) => e.name === n), i = a(n);
+			return c`<button class="row" aria-pressed=${String(!this.adding && e?.person === n)} @click=${() => this.choose(n)}>
+            <span class="mini">${i ? c`<img src=${i} alt="" />` : n.slice(0, 1)}</span><span class="name">${n}</span><span class="hint">${r ? `${Math.round(r.probability * 100)}%` : "Added"}</span></button>`;
+		})}
+          ${this.canCorrect && i.length ? c`<button class="row add-row" aria-pressed=${String(this.adding)} @click=${() => {
+			this.adding = !0, this.selected = void 0;
+		}}><span class="mini">+</span><span class="name">Add person</span></button>` : n}
+        </nav>
+        <section class="detail">
+          ${this.adding ? c`<h3>Who else is here?</h3><div class="choices">${i.map((e) => c`<button @click=${() => {
+			this.manual = /* @__PURE__ */ new Set([...this.manual, e]), this.choose(e);
+		}}>${e}</button>`)}</div>` : e ? this.renderDetail(e) : c`<p class="hint">Select a person.</p>`}
+          ${this.canCorrect ? n : c`<p class="hint">An administrator can correct estimates.</p>`}
+          ${this.correctionError ? c`<p class="error" role="alert">${this.correctionError}</p>` : n}
+        </section>
+      </div>
     </dialog>`;
+	}
+	choose(e) {
+		this.adding = !1, this.selected = { person: e }, this.destination = this.config?.group ?? "", this.correctionError = "";
 	}
 	render() {
 		let e = this.group, t = this.data && e ? m(this.data, e, this.config?.min_probability ?? .1) : [];
@@ -223,7 +267,7 @@ var y = class extends u {
     </ha-card>`;
 	}
 };
-o([t({ attribute: !1 })], y.prototype, "hass", void 0), o([s()], y.prototype, "config", void 0), o([s()], y.prototype, "data", void 0), o([s()], y.prototype, "error", void 0), o([s()], y.prototype, "selected", void 0), o([s()], y.prototype, "adding", void 0), o([s()], y.prototype, "destination", void 0), o([s()], y.prototype, "pending", void 0), o([s()], y.prototype, "correctionError", void 0), o([s()], y.prototype, "notice", void 0), o([s()], y.prototype, "failedImages", void 0), y = o([r("activity-levels-presence-card")], y);
+o([t({ attribute: !1 })], y.prototype, "hass", void 0), o([s()], y.prototype, "config", void 0), o([s()], y.prototype, "data", void 0), o([s()], y.prototype, "error", void 0), o([s()], y.prototype, "selected", void 0), o([s()], y.prototype, "adding", void 0), o([s()], y.prototype, "destination", void 0), o([s()], y.prototype, "pending", void 0), o([s()], y.prototype, "correctionError", void 0), o([s()], y.prototype, "notice", void 0), o([s()], y.prototype, "failedImages", void 0), o([s()], y.prototype, "manual", void 0), y = o([r("activity-levels-presence-card")], y);
 //#endregion
 //#region src/al-presence-card-editor.ts
 var b = class extends u {
