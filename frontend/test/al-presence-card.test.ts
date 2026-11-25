@@ -68,3 +68,22 @@ it("validates configuration and exposes an editor that preserves options", async
   const select = editor.shadowRoot!.querySelector("select")!; select.value = "upstairs"; select.dispatchEvent(new Event("change"));
   expect(changed.mock.calls[0]![0].detail.config).toMatchObject({ group: "upstairs", title: "People" }); editor.remove();
 });
+it("lists people beside a detail pane and keeps added people in the list", async () => {
+  await settle(); await click(".avatar");
+  const rows = () => [...card.shadowRoot!.querySelectorAll("dialog .people-list .row .name")].map(r => r.textContent);
+  expect(rows()).toEqual(["Scott", "Add person"]);
+  expect(card.shadowRoot!.querySelector("dialog .detail h3")!.textContent).toBe("Scott");
+  await click("dialog .add-row"); await action("Danielle");
+  expect(rows()).toEqual(["Scott", "Danielle"]);
+  expect(card.shadowRoot!.querySelector("dialog .detail h3")!.textContent).toBe("Danielle");
+  await action("Definitely here"); expect(calls.at(-2)).toMatchObject({ person: "Danielle", room: "theater", certainty: "definite" });
+});
+it("opens a device from the person's detail pane", async () => {
+  await settle(); await click(".avatar"); await click("dialog .device-row");
+  expect(card.shadowRoot!.querySelector("dialog .detail h3")!.textContent).toBe("Apple Watch");
+  await action("Wearing"); expect(calls.at(-2)).toMatchObject({ person: "Scott", device: "watch", carried: true });
+});
+it("preselects the current room in the location picker", async () => {
+  await settle(); await click(".avatar");
+  expect(card.shadowRoot!.querySelector<HTMLOptionElement>("dialog select option[value='theater']")!.selected).toBe(true);
+});
