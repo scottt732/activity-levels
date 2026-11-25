@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/scottt732/activity-levels/compare/v0.27.2...v0.28.0) (2026-11-25)
+
+
+### Added
+
+* **frontend:** show presence corrections in a two-pane dialog ([#89](https://github.com/scottt732/activity-levels/issues/89)) ([ba15c80](https://github.com/scottt732/activity-levels/commit/ba15c80305b20b2e3dc1d23e7ef5130e0cee944f))
+
 ## [0.27.2](https://github.com/scottt732/activity-levels/compare/v0.27.1...v0.27.2) (2026-11-25)
 
 
